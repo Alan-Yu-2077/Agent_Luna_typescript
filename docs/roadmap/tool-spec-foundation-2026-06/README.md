@@ -52,15 +52,16 @@ When v0.3.0 ships, the following must be true:
 These come in initiatives 2-7. The hard rule for this initiative is: **prove the tool spec is
 stable end-to-end with the smallest possible surrounding system**.
 
-## Open questions blocking v0.1 start
+## Open questions for v0.2 / v0.3 design
 
-(From [`../../REWRITE_CONTEXT.md`](../../REWRITE_CONTEXT.md) open list — these inform v0.2 mostly,
-but v0.1 should not lock a shape that forecloses them.)
+(From [`../../REWRITE_CONTEXT.md`](../../REWRITE_CONTEXT.md) open list. v0.1 shipped without
+locking shapes that foreclose these. Must be resolved before v0.2 / v0.3 detailed design.)
 
 - Q1: Always-on `shell` tool vs judgment-gated. → Affects v0.2 mount logic.
-- Q3: Expose `set_expression` as a tool, or backend-computed? → Affects whether the 10-tool surface
-  becomes ~11.
-- Q5: Concurrency declaration — per-tool 3-state enum vs per-resource locks. v1 locked to 3-state;
-  confirm at v0.2 design review.
+- ~~Q3~~ **RESOLVED 2026-06-11 by Locked Decision #9 (everything-as-tool)**: Live2D metadata
+  lives in the `message` tool envelope (`expression`, `emotion`, `voice_params`), not a
+  separate `set_expression` tool. 10-tool surface stays at 10. Introduction at v0.6.
+- Q5: Concurrency declaration — per-tool 3-state enum vs per-resource locks. v1 locked to
+  3-state; confirm at v0.2 design review.
 
-Not blocking v0.1 (skeleton phase). Must be resolved before v0.2 detailed design.
+Not blocking v0.1 (already shipped). Q1 and Q5 must be resolved before v0.2 detailed design.
