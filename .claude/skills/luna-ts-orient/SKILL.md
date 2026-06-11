@@ -28,15 +28,98 @@ every decision here.
 
 ## Current state (read this first)
 
-> Repo is **scaffolding only**. No runtime code yet. First initiative (tool spec foundation,
-> v0.1.0–v0.3.0) is planned in `docs/roadmap/tool-spec-foundation-2026-06/`. Until v0.1 ships,
-> there is no `packages/`, no `package.json`, no `tsconfig`. Don't grep for code that doesn't
-> exist — read the roadmap plan files instead.
+> **Shipped head: v0.3.6** (2026-06-11). Initiatives 1 (tool spec) and 1.5 (observability) are
+> complete. Next up: Initiative 2 — memory substrate (v0.4.0). The agent core works end-to-end:
+> a WS client sends `chat.send`, a real LLM turn streams back through a StateGraph with
+> interleaved tool calls, and every turn is traced to SQLite and browsable at `/_trace`.
 
-Verify current version state by reading the top of
-[`docs/history/DEVELOPMENT.md`](../../../docs/history/DEVELOPMENT.md). If that file says any
-version > pre-v0.1.0, the **Once code exists** section below applies and this skill needs to
-grow into a real ground-truth map of what shipped.
+Always confirm the head by reading the top of
+[`docs/history/DEVELOPMENT.md`](../../../docs/history/DEVELOPMENT.md) — it is the truth source,
+not this skill. The file map below is current as of v0.3.6; if DEVELOPMENT.md shows a higher
+version, trust the code and update this skill.
+
+### File map (v0.3.6)
+
+```
+packages/protocol/src/         ← the wire contract (zero runtime logic; both packages import it)
+  events.ts    ClientEvent (ping | dev.dispatch_tool | chat.send)
+               ServerEvent (pong | error | tool.started/progress/finished | turn.started | reply.token | turn.result)
+  tools.ts     ToolName enum (time_now | read_file | remember), ToolErrorCode, ToolResult (ok|err), ToolEvent, ToolCall
+  trace.ts     TraceEvent (node | tool | outbound | overflow), schema_v:1
+  utils.ts     assertNever
+packages/server/src/
+  main.ts                entry: Bun.serve; boots provider + sqlite + trace store; fetch composes viewer → WS upgrade → 426
+  ws.ts                  handleMessage exhaustive switch; chat.send → runTurn; dev.dispatch_tool (LUNA_DEV_TOOLS=1); setRuntime
+  outbound.ts            outbound(ws, event) — sole validated ServerEvent send boundary (SHIPPED, do not instrument here)
+  sql.ts                 openDb (WAL) / migrate (PRAGMA user_version) / closeDb — GENERIC, v0.4 memory reuses verbatim
+  provider/
+    types.ts             ProviderEvent union + Provider interface
+    anthropic.ts         AnthropicProvider — @anthropic-ai/sdk@0.104.1, adaptive thinking, finalMessage()-based tool extraction
+    mock.ts              MockProvider — scripted rounds for tests
+  turn/
+    graph.ts             inline 7-node StateGraph + runGraph(onTransition)
+    runTurn.ts           node implementations; MAX_TOOL_ITERATIONS=8; trace instrumentation (guarded by traceEnabled())
+    session.ts           in-memory Session (history/turnSeq/activeTurn/mutex); getSession('default')
+  tools/
+    defineTool.ts        ToolSpec<I,O> generic factory → concrete Tool interface (any-bivariance, documented)
+    registry.ts          builtinRegistry: Record<ToolName, Tool>
+    dispatcher.ts        dispatchToolCalls — concurrency + AbortController + MAX_CONCURRENT=8 (SHIPPED, don't instrument here)
+    mutex.ts             FIFO async mutex, AbortSignal-aware
+    mergeAsync.ts        source-tagged sparse-array merger
+    builtin/             time_now (safe-parallel) · read_file (Bun.file, ENOENT→recoverable) · remember (session-serial, in-mem Map)
+    README.md            tool-author contract + abort discipline
+  trace/
+    store.ts             per-turn buffer, single-tx flush, 500-cap + overflow, 4KB structured truncation, listTurns/getEventsByTurn
+    instrument.ts        trace() single entry; traceEnabled() (default ON unless LUNA_TRACE=0); getTraceStore()
+    viewer.ts            traceViewerHandler(req, store) — /_trace HTML + /api/turns + /api/events, or null to fall through
+    viewer/index.html    vanilla 2-pane viewer, 2s refresh
+    migrations/0001_traces.sql
+    README.md            instrumentation + migration discipline (v0.4 reads this)
+  scripts/
+    smoke-yunwu.ts       2-round gateway smoke (real API)
+    trace-latency.ts     trace overhead bench
+```
+
+### The hot path (chat turn)
+
+`ws.ts:handleMessage` (chat.send) → `runTurn` (`turn/runTurn.ts`) drives the StateGraph:
+`parse_input → build_request → open_stream → dispatch_tools → append_results → finalize`.
+`open_stream` iterates `provider.chatStream` (`provider/anthropic.ts`), emits `reply.token`,
+accumulates text + thinking summary; on `message_stop` with `tool_use` → `dispatch_tools` runs
+`dispatchToolCalls` (`tools/dispatcher.ts`) and forwards `tool.*` events; `append_results`
+appends `finalMessage().content` verbatim (signed thinking blocks) + tool_result, loops up to
+`MAX_TOOL_ITERATIONS=8`. Every node transition / tool event / outbound event is traced (guarded
+by `traceEnabled()`) and flushed to SQLite at turn end. All wire sends go through
+`outbound.ts:outbound` (validates `ServerEvent` before send).
+
+### Run / test
+
+- `bun test` (from repo root) — 73 tests across 14 files, ~400ms.
+- `bun x tsc --noEmit -p packages/{protocol,server}/tsconfig.json` — both must be clean.
+- `bun run dev:server` — needs `.env` (gitignored; `ANTHROPIC_API_KEY`, `ANTHROPIC_BASE_URL`,
+  `LUNA_MODEL`, `LUNA_MAX_TOKENS`). **Bun lives at `/opt/homebrew/bin/bun`** — not always on the
+  non-interactive shell `PATH`; the harness shell also pre-sets `ANTHROPIC_BASE_URL=https://api.anthropic.com`,
+  so pass `ANTHROPIC_BASE_URL=https://yunwu.ai` explicitly when smoke-testing the real gateway.
+- Env flags: `LUNA_DEV_TOOLS=1` (dev.dispatch_tool), `LUNA_TRACE=0` (disable tracing — default on),
+  `LUNA_VIEWER=0` (disable /_trace → server becomes WS-only, 426), `LUNA_DB_PATH`, `LUNA_PORT`,
+  `LUNA_INTEGRATION_TESTS=1`.
+
+### Doc-vs-code traps (v0.3.6)
+
+1. **Provider gateway**: code targets `https://yunwu.ai` (Python parity) via `ANTHROPIC_BASE_URL`,
+   not `api.anthropic.com`. The SDK appends `/v1/messages`. yunwu re-serializes responses but
+   preserves signed thinking blocks (verified by `smoke-yunwu.ts`).
+2. **Thinking config diverges from Python**: Python uses `LUNA_THINKING_BUDGET_TOKENS=2048`;
+   that 400s on opus-4-8. TS uses `thinking:{type:'adaptive', display:'summarized'}`.
+3. **`reply.thinking` was planned but cut** — thinking summaries go to traces only (no frontend
+   until v0.12). Don't add a `reply.thinking` ServerEvent.
+4. **`LUNA_VIEWER=0` → 426, not 404** — viewer handler is bypassed entirely; server is WS-only.
+
+### Where the next initiative plugs in
+
+v0.4 memory: `turn/session.ts` is in-memory — swap to SQLite-backed via `sql.ts` (reuse
+`openDb`/`migrate` verbatim, add `migrations/0002_*.sql`). The `getSession`/`saveSession` seam
+and the `remember` tool's in-memory `Map` are the two swap points.
 
 ## Locked design decisions (don't re-litigate)
 

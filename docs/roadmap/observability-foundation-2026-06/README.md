@@ -84,7 +84,7 @@ rewrite adds, modeled on Mastra Telemetry / LangSmith conventions, not as a port
 | Plan | Version | Theme | Risk | Depends | Status |
 |---|---|---|---|---|---|
 | [Trace plumbing](v0.3.5-trace-plumbing.md) | v0.3.5 | `trace_id` + SQLite trace schema + auto-instrument every dispatcher / outbound / StateGraph-transition point | Medium (first `bun:sqlite` touch; establishes WAL + migration pattern) | v0.3.0 | ✅ shipped 2026-06-11 |
-| [Local viewer](v0.3.6-local-viewer.md) | v0.3.6 | Read-only HTML viewer at `/_trace` rendering per-turn timelines | Low | v0.3.5 | ⏳ planned |
+| [Local viewer](v0.3.6-local-viewer.md) | v0.3.6 | Read-only HTML viewer at `/_trace` rendering per-turn timelines | Low | v0.3.5 | ✅ shipped 2026-06-11 |
 
 ## Acceptance criteria for this initiative
 

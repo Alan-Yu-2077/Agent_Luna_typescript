@@ -7,10 +7,14 @@ export function setTraceStore(s: TraceStore | null): void {
   store = s;
 }
 
-// v0.3.5 default: writes only when LUNA_TRACE === '1'.
-// v0.3.6 flips this to "on unless LUNA_TRACE === '0'".
+export function getTraceStore(): TraceStore | null {
+  return store;
+}
+
+// Default on unless LUNA_TRACE === '0' (flipped from v0.3.5's default-off now that
+// v0.3.6 ships a viewer that makes traces useful).
 export function traceEnabled(): boolean {
-  return Bun.env['LUNA_TRACE'] === '1';
+  return Bun.env['LUNA_TRACE'] !== '0';
 }
 
 export function trace(event: TraceEvent): void {

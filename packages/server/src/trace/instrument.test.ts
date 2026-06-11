@@ -19,7 +19,7 @@ beforeEach(() => {
   db.exec(readFileSync(join(import.meta.dir, 'migrations', '0001_traces.sql'), 'utf8'));
   store = new TraceStore(db);
   setTraceStore(store);
-  Bun.env['LUNA_TRACE'] = '1';
+  delete Bun.env['LUNA_TRACE'];
   resetSessions();
 });
 
@@ -88,8 +88,8 @@ describe('trace instrumentation through runTurn', () => {
     expect(turns[0]?.turn_id).toBe('t1');
   });
 
-  test('LUNA_TRACE unset → no rows written', async () => {
-    delete Bun.env['LUNA_TRACE'];
+  test('LUNA_TRACE=0 → no rows written (explicit opt-out)', async () => {
+    Bun.env['LUNA_TRACE'] = '0';
     const session = getSession('test');
     await runTurn({
       session,

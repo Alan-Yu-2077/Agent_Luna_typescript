@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Luna · Trace Viewer</title>
+    <style>
+      :root {
+        --bg: #14110f;
+        --panel: #1d1916;
+        --line: #2c2622;
+        --text: #e8e2da;
+        --muted: #998d80;
+        --accent: #d98c5f;
+        --node: #6b8cae;
+        --tool: #c98a3c;
+        --outbound: #7aa37a;
+        --overflow: #c25b5b;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+        background: var(--bg);
+        color: var(--text);
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+      header {
+        padding: 10px 16px;
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      header h1 { margin: 0; font-size: 14px; font-weight: 600; }
+      header .accent { color: var(--accent); }
+      header .muted { color: var(--muted); font-size: 11px; }
+      main { flex: 1; display: flex; min-height: 0; }
+      #turns {
+        width: 320px;
+        border-right: 1px solid var(--line);
+        overflow-y: auto;
+        flex-shrink: 0;
+      }
+      .turn {
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--line);
+        cursor: pointer;
+      }
+      .turn:hover { background: var(--panel); }
+      .turn.sel { background: var(--panel); border-left: 3px solid var(--accent); padding-left: 11px; }
+      .turn .id { font-weight: 600; }
+      .turn .meta { color: var(--muted); font-size: 11px; margin-top: 2px; }
+      #detail { flex: 1; overflow-y: auto; padding: 14px 18px; }
+      #detail .empty { color: var(--muted); margin-top: 40px; text-align: center; }
+      .ev {
+        border-left: 3px solid var(--line);
+        padding: 6px 0 6px 12px;
+        margin-bottom: 4px;
+      }
+      .ev.node { border-color: var(--node); }
+      .ev.tool { border-color: var(--tool); }
+      .ev.outbound { border-color: var(--outbound); }
+      .ev.overflow { border-color: var(--overflow); }
+      .ev .row { display: flex; gap: 10px; align-items: baseline; cursor: pointer; }
+      .ev .kind { text-transform: uppercase; font-size: 10px; letter-spacing: 0.05em; width: 70px; flex-shrink: 0; }
+      .ev.node .kind { color: var(--node); }
+      .ev.tool .kind { color: var(--tool); }
+      .ev.outbound .kind { color: var(--outbound); }
+      .ev.overflow .kind { color: var(--overflow); }
+      .ev .summary { flex: 1; }
+      .ev .dt { color: var(--muted); font-size: 11px; }
+      .ev pre {
+        margin: 6px 0 0;
+        padding: 8px 10px;
+        background: var(--panel);
+        border-radius: 4px;
+        overflow-x: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+        display: none;
+        color: var(--muted);
+      }
+      .ev.open pre { display: block; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Luna <span class="accent">·</span> Trace Viewer</h1>
+      <span class="muted" id="status">loading…</span>
+    </header>
+    <main>
+      <div id="turns"></div>
+      <div id="detail"><div class="empty">Select a turn to inspect its timeline.</div></div>
+    </main>
+    <script>
+      let selected = null;
+      let firstMs = 0;
+
+      function fmtSummary(kind, p) {
+        if (kind === 'node') return `${p.node_from} → ${p.node_to}`;
+        if (kind === 'tool') return `${p.tool_name} · ${p.phase}`;
+        if (kind === 'outbound') return p.server_event_type;
+        if (kind === 'overflow') return `dropped ${p.dropped_count} events`;
+        return kind;
+      }
+
+      async function loadTurns() {
+        try {
+          const res = await fetch('/_trace/api/turns?limit=50');
+          const { turns } = await res.json();
+          document.getElementById('status').textContent = `${turns.length} turns`;
+          const el = document.getElementById('turns');
+          el.innerHTML = '';
+          for (const t of turns) {
+            const dur = t.ended_ms - t.started_ms;
+            const div = document.createElement('div');
+            div.className = 'turn' + (t.turn_id === selected ? ' sel' : '');
+            div.innerHTML =
+              `<div class="id"></div><div class="meta">${t.event_count} events · ${dur}ms</div>`;
+            div.querySelector('.id').textContent = t.turn_id;
+            div.onclick = () => selectTurn(t.turn_id);
+            el.appendChild(div);
+          }
+        } catch (e) {
+          document.getElementById('status').textContent = 'error';
+        }
+      }
+
+      async function selectTurn(turnId) {
+        selected = turnId;
+        await loadTurns();
+        const res = await fetch('/_trace/api/events?turn_id=' + encodeURIComponent(turnId));
+        const { events } = await res.json();
+        firstMs = events.length ? events[0].t_ms : 0;
+        const el = document.getElementById('detail');
+        el.innerHTML = '';
+        for (const ev of events) {
+          const div = document.createElement('div');
+          div.className = 'ev ' + ev.kind;
+          const dt = ev.t_ms - firstMs;
+          const row = document.createElement('div');
+          row.className = 'row';
+          const k = document.createElement('span');
+          k.className = 'kind';
+          k.textContent = ev.kind;
+          const s = document.createElement('span');
+          s.className = 'summary';
+          s.textContent = fmtSummary(ev.kind, ev.payload);
+          const d = document.createElement('span');
+          d.className = 'dt';
+          d.textContent = '+' + dt + 'ms';
+          row.append(k, s, d);
+          const pre = document.createElement('pre');
+          pre.textContent = JSON.stringify(ev.payload, null, 2);
+          row.onclick = () => div.classList.toggle('open');
+          div.append(row, pre);
+          el.appendChild(div);
+        }
+        if (!events.length) {
+          el.innerHTML = '<div class="empty">No events for this turn.</div>';
+        }
+      }
+
+      loadTurns();
+      setInterval(() => {
+        if (selected) selectTurn(selected);
+        else loadTurns();
+      }, 2000);
+    </script>
+  </body>
+</html>

@@ -5,13 +5,17 @@ import { builtinRegistry } from './tools/registry';
 import { closeDb, migrate, openDb } from './sql';
 import { TraceStore } from './trace/store';
 import { setTraceStore } from './trace/instrument';
+import { traceViewerHandler } from './trace/viewer';
 
 const port = Number(process.env['LUNA_PORT'] ?? 8787);
 
 const db = openDb(Bun.env['LUNA_DB_PATH'] ?? './luna.sqlite');
 const version = migrate(db, join(import.meta.dir, 'trace', 'migrations'));
-setTraceStore(new TraceStore(db));
+const traceStore = new TraceStore(db);
+setTraceStore(traceStore);
 console.log(`[luna-server] sqlite ready (schema v${version})`);
+
+const viewerEnabled = Bun.env['LUNA_VIEWER'] !== '0';
 
 process.on('SIGTERM', () => {
   closeDb(db);
@@ -30,6 +34,10 @@ if (Bun.env['ANTHROPIC_API_KEY']) {
 const server = Bun.serve<WSData>({
   port,
   fetch(req, srv) {
+    if (viewerEnabled) {
+      const viewerResponse = traceViewerHandler(req, traceStore);
+      if (viewerResponse) return viewerResponse;
+    }
     if (srv.upgrade(req, { data: { sessionId: 'default' } })) return;
     return new Response('luna-server: WebSocket only', { status: 426 });
   },

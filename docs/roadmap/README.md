@@ -4,16 +4,16 @@ Forward development plan for the TypeScript rewrite. Each initiative is a folder
 self-contained version plans, executed one at a time. Version numbers reserve across initiatives so
 they never overlap.
 
-> **Current shipped head: v0.3.5** (2026-06-11, trace plumbing — first `bun:sqlite`).
-> Initiative 1 ✅ complete. Initiative 1.5 (observability) in progress — v0.3.6 (viewer) is
-> the last unshipped version in it. See [`../history/DEVELOPMENT.md`](../history/DEVELOPMENT.md).
+> **Current shipped head: v0.3.6** (2026-06-11, local trace viewer). Initiatives 1 and 1.5
+> ✅ complete. **Next up: Initiative 2 — memory substrate (v0.4.0–v0.5.0).** See
+> [`../history/DEVELOPMENT.md`](../history/DEVELOPMENT.md).
 
 ## Planned initiatives (execution order)
 
 | Order | Version range | Initiative | Folder | Status |
 |---|---|---|---|---|
 | 1 | v0.1.0 – v0.3.0 | **Tool spec foundation** — Bun skeleton + WS server + typed tool registry + `Result<T>` + 3 representative tools + first end-to-end LLM round trip with Anthropic interleaved tool-use | [`tool-spec-foundation-2026-06/`](tool-spec-foundation-2026-06/) | ✅ shipped 2026-06-11 |
-| 1.5 | v0.3.5 – v0.3.6 | **Observability foundation** — `trace_id` propagation through the v0.3 StateGraph; SQLite trace table (one row per node transition + per tool call); minimal local viewer. Mastra Telemetry / LangSmith parity, table-stakes for every later initiative | [`observability-foundation-2026-06/`](observability-foundation-2026-06/) | 🚧 in progress (v0.3.5 ✅) |
+| 1.5 | v0.3.5 – v0.3.6 | **Observability foundation** — `trace_id` propagation through the v0.3 StateGraph; SQLite trace table (one row per node transition + per tool call); minimal local viewer. Mastra Telemetry / LangSmith parity, table-stakes for every later initiative | [`observability-foundation-2026-06/`](observability-foundation-2026-06/) | ✅ shipped 2026-06-11 |
 | 2 | v0.4.0 – v0.5.0 | **Memory substrate** — SQLite schema for L1 / L2 / L3; replace JSON+JSONL persistence; `sqlite-vec` for embeddings | _(folder TBD)_ | ⏳ planned |
 | 3 | v0.6.0 – v0.7.0 | **Persona + humanity guardrails** — three-layer persona resolution with file-watch cache; humanity hard caps move from streaming-layer truncation to Zod schema on `message` input. **Introduces `message_tool`** per LD #9 (everything-as-tool); frontend wire-event shape (`tool.progress{tool_name:'message'}`) is fixed here for Initiative 6 to consume | _(folder TBD)_ | ⏳ planned |
 | 4 | v0.8.0 – v0.9.0 | **Reasoning rails** — port L1/L2 contracts with Zod-structured-output decisions; full decision replay tree on top of the v0.3.5 trace plumbing | _(folder TBD)_ | ⏳ planned |
@@ -75,7 +75,7 @@ impossible to debug in proactive turns. See
 | Version | Plan | Theme |
 |---|---|---|
 | v0.3.5 ✅ | [Trace plumbing](observability-foundation-2026-06/v0.3.5-trace-plumbing.md) | `trace_id` propagation; SQLite trace table; instrument the StateGraph + dispatcher tee + outbound. First `bun:sqlite` touch; `sql.ts` WAL/migration pattern v0.4 reuses verbatim — **shipped 2026-06-11**. |
-| v0.3.6 | [Local viewer](observability-foundation-2026-06/v0.3.6-local-viewer.md) | Read-only `/_trace` HTML route over the trace table; per-turn timeline. No framework, no build step. |
+| v0.3.6 ✅ | [Local viewer](observability-foundation-2026-06/v0.3.6-local-viewer.md) | Read-only `/_trace` HTML route over the trace table; per-turn timeline; `LUNA_TRACE` default on — **shipped 2026-06-11**. |
 
 ## Initiatives 2–7 — placeholders
 

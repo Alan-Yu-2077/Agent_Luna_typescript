@@ -1,6 +1,6 @@
 # Agent_Luna (TypeScript) — Development History
 
-Last updated: 2026-06-11 (Asia/Shanghai) — v0.3.5 (Trace plumbing)
+Last updated: 2026-06-11 (Asia/Shanghai) — v0.3.6 (Local trace viewer)
 
 ## Scope
 
@@ -36,7 +36,8 @@ during the rewrite. Its version log is unrelated to this one — `v0.1` here is 
 | `v0.1.0` | 2026-06-11 | Bun skeleton + WS server | `7ebd73a` |
 | `v0.2.0` | 2026-06-11 | Typed tool registry + `Result<T>` + 3 representative tools | `14753c4` |
 | `v0.3.0` | 2026-06-11 | Anthropic interleaved tool-use end-to-end (StateGraph turn loop) | `8fbdce4` |
-| `v0.3.5` | 2026-06-11 | Trace plumbing — first `bun:sqlite`, trace_id through the graph | `working tree` |
+| `v0.3.5` | 2026-06-11 | Trace plumbing — first `bun:sqlite`, trace_id through the graph | `cbb468a` |
+| `v0.3.6` | 2026-06-11 | Local `/_trace` viewer; `LUNA_TRACE` default on | `working tree` |
 
 ## Detailed records
 
@@ -92,6 +93,50 @@ Inference:
   `defineTool`, the dispatcher, and provider logic stay in `packages/server`. Frontend
   (`packages/web`) will consume the same protocol package in Initiative 6, getting
   contract drift as a type error rather than a runtime mismatch.
+
+### `v0.3.6` — 2026-06-11 — Local trace viewer
+
+Status:
+
+- working tree (commit hash recorded post-commit)
+
+Fact:
+
+- Added `packages/server/src/trace/viewer.ts` (~45 LOC): `traceViewerHandler(req, store)`
+  returns a `Response` for `/_trace` (static HTML), `/_trace/api/turns?limit=`,
+  `/_trace/api/events?turn_id=` (parses `payload_json` on the way out), or `null` for
+  non-`/_trace` paths so the caller falls through to the WS upgrade. Read-only; shares the
+  boot `Database` via the trace store (no second connection).
+- Added `packages/server/src/trace/viewer/index.html` (~210 LOC, vanilla — no framework, no
+  build step): two-pane layout (turn list / per-turn timeline), color-coded event kinds
+  (node / tool / outbound / overflow), `+Nms` relative offsets, click-to-expand
+  `payload_json`, 2s auto-refresh.
+- `main.ts`: composes the fetch handler **before** `Bun.serve` — viewer handler first (when
+  `LUNA_VIEWER !== '0'`), then WS upgrade, then 426. `getTraceStore()` added to instrument
+  for the shared-store reference.
+- **`LUNA_TRACE` default flipped on**: `traceEnabled()` now returns true unless
+  `LUNA_TRACE === '0'` (v0.3.5 was opt-in `=== '1'`). Tracing is on by default now that a
+  viewer makes it useful.
+- Tests: 73 across 14 files (was 68). New: viewer (5 — HTML 200, turns newest-first, events
+  parsed/ascending, unknown subpath 404, non-`/_trace` → null). `instrument.test.ts` updated
+  for the default-on semantics (explicit `LUNA_TRACE=0` opt-out test).
+- Manual smoke: real LLM turn (tracing on by default) → `/_trace` serves HTML, turns API
+  shows the 22-event turn, events API returns node:9 / outbound:11 / tool:2; WS ping/pong
+  unaffected with the viewer mounted; `LUNA_VIEWER=0` makes the server WebSocket-only
+  (`/_trace` → 426).
+
+Inference:
+
+- **Initiative 1.5 (observability foundation) is complete.** Luna now has the
+  Mastra-Telemetry / LangSmith-equivalent layer the roadmap placed deliberately *before*
+  memory (v0.4): every turn is a replayable, browsable event tree. Memory bugs that ship in
+  v0.4+ now have a timeline to debug against instead of being a black box.
+- The viewer's left-list / right-detail shape is a candidate pattern for a v0.12 frontend
+  debug overlay, but nothing downstream hard-depends on it yet.
+- Deliberate divergence from the plan's acceptance: `LUNA_VIEWER=0` yields **426** (the
+  server becomes genuinely WebSocket-only — the viewer handler is bypassed entirely) rather
+  than 404. 426 is the more honest signal; the handler's own 404-for-unknown-subpath
+  contract is still unit-tested.
 
 ### `v0.3.5` — 2026-06-11 — Trace plumbing
 
