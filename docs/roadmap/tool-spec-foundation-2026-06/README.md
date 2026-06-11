@@ -22,22 +22,21 @@ first means nothing downstream re-litigates a broken foundation.
 |---|---|---|---|
 | v0.1.0 | [Bun skeleton + WS server](v0.1.0-bun-skeleton.md) | Project bootstrap; protocol package; one WS endpoint that echoes typed events | ✅ shipped 2026-06-11 |
 | v0.2.0 | [Typed tool registry + `Result<T>`](v0.2.0-tool-registry.md) | Zod-first tool definitions; discriminated result type; concurrency policy; per-tool `summarize()`; 3 representative tools | ✅ shipped 2026-06-11 |
-| v0.3.0 | [Anthropic interleaved tool-use end-to-end](v0.3.0-interleaved-tool-use.md) | First real LLM round trip; tools stream progress through the WS; one-turn happy path working | ⏳ planned |
+| v0.3.0 | [Anthropic interleaved tool-use end-to-end](v0.3.0-interleaved-tool-use.md) | First real LLM round trip; tools stream progress through the WS; one-turn happy path working | ✅ shipped 2026-06-11 |
 
-## Acceptance for this initiative
+## Acceptance for this initiative — ✅ ALL MET (2026-06-11)
 
-When v0.3.0 ships, the following must be true:
-
-- [ ] Running `bun start` boots a server in <100ms.
-- [ ] A connected client can open a WS, send a user message, and receive a typed event stream that
-  ends with `turn.result`.
-- [ ] At least one tool runs during the turn (e.g. `time_now` or `read_file`), streams progress
-  events, and returns a typed `Result<T>`.
-- [ ] Token streaming **does not stop** when a tool call happens mid-turn (interleaved tool-use).
-- [ ] All event types on the wire are defined in `packages/protocol` as Zod discriminated unions.
-- [ ] `packages/server` has zero `as any` casts on the wire boundary.
-- [ ] No `startswith('Error')`-style heuristics anywhere in the tool path.
-- [ ] All tools always-mounted; no demand-load, no keyword-driven `workspace_intent`, no
+- [x] Running `bun start` boots a server in <100ms.
+- [x] A connected client can open a WS, send a user message, and receive a typed event stream that
+  ends with `turn.result`. (Manual smoke: dual-tool turn, 32 streamed tokens.)
+- [x] At least one tool runs during the turn, streams progress events, and returns a typed
+  `Result<T>`. (`time_now` + `read_file` in the acceptance smoke.)
+- [x] Token streaming **does not stop** when a tool call happens mid-turn (runTurn test 2 proves
+  reply.token before AND after tool.progress).
+- [x] All event types on the wire are defined in `packages/protocol` as Zod discriminated unions.
+- [x] `packages/server` has zero `as any` casts on the wire boundary.
+- [x] No `startswith('Error')`-style heuristics anywhere in the tool path.
+- [x] All tools always-mounted; no demand-load, no keyword-driven `workspace_intent`, no
   `force_full_tools` meta field.
 
 ## What this initiative explicitly does NOT include

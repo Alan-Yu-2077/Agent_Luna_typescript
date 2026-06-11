@@ -1,6 +1,6 @@
 # Agent_Luna (TypeScript) — Development History
 
-Last updated: 2026-06-11 (Asia/Shanghai) — v0.2.0 (Typed tool registry + Result<T>)
+Last updated: 2026-06-11 (Asia/Shanghai) — v0.3.0 (Anthropic interleaved tool-use end-to-end)
 
 ## Scope
 
@@ -34,7 +34,8 @@ during the rewrite. Its version log is unrelated to this one — `v0.1` here is 
 | Version | Date | Theme | Evidence |
 |---|---|---|---|
 | `v0.1.0` | 2026-06-11 | Bun skeleton + WS server | `7ebd73a` |
-| `v0.2.0` | 2026-06-11 | Typed tool registry + `Result<T>` + 3 representative tools | `working tree` |
+| `v0.2.0` | 2026-06-11 | Typed tool registry + `Result<T>` + 3 representative tools | `14753c4` |
+| `v0.3.0` | 2026-06-11 | Anthropic interleaved tool-use end-to-end (StateGraph turn loop) | `working tree` |
 
 ## Detailed records
 
@@ -90,6 +91,66 @@ Inference:
   `defineTool`, the dispatcher, and provider logic stay in `packages/server`. Frontend
   (`packages/web`) will consume the same protocol package in Initiative 6, getting
   contract drift as a type error rather than a runtime mismatch.
+
+### `v0.3.0` — 2026-06-11 — Anthropic interleaved tool-use end-to-end
+
+Status:
+
+- working tree (commit hash recorded post-commit)
+
+Fact:
+
+- Added `packages/server/src/provider/` (3 files, ~140 LOC): `types.ts` (`ProviderEvent`
+  union — `text_delta` / `thinking_delta` / `tool_use_start` / `message_stop` carrying
+  `stopReason` + `toolUses` + verbatim `assistantContent` + usage), `anthropic.ts`
+  (`AnthropicProvider` over `@anthropic-ai/sdk@0.104.1` exact-pinned; `messages.stream()`
+  raw-event mapping; tool inputs taken from `finalMessage().content` — **no**
+  `input_json_delta` accumulation; `maxRetries: 2` explicit), `mock.ts` (scripted rounds,
+  per-request message snapshot).
+- Added `packages/server/src/turn/` (3 files, ~280 LOC): `graph.ts` (inline 7-node
+  StateGraph — `parse_input → build_request → open_stream → dispatch_tools →
+  append_results → finalize → end`; `runGraph` with `onTransition` hook reserved as the
+  v0.3.5 instrumentation seam), `session.ts` (in-memory `Session` with history /
+  turnSeq / activeTurn / mutex; `'default'` id), `runTurn.ts` (node implementations;
+  `MAX_TOOL_ITERATIONS = 8`; `zod-to-json-schema` with `$refStrategy: 'none'` for tool
+  definitions; assistant content appended verbatim so signed thinking blocks survive;
+  unknown tool names short-circuit to `tool_not_found` without dispatching).
+- Extended wire contract: `ClientEvent` += `chat.send {turn_id?, text}`; `ServerEvent`
+  += `turn.started`, `reply.token`, `turn.result {text, finish_reason, usage}` with
+  `FinishReason` enum (`end_turn | max_iterations | max_tokens | refusal | error`).
+- `ws.ts` gained the `chat.send` branch: one active turn per session
+  (`turn_in_progress` error), `runtime_not_configured` guard, emit wrapper that
+  swallows dead-socket sends so mid-turn disconnect cannot abort tool execution.
+- `main.ts` constructs `AnthropicProvider` + `builtinRegistry` at boot when
+  `ANTHROPIC_API_KEY` is set. Env: `ANTHROPIC_API_KEY`, `ANTHROPIC_BASE_URL`,
+  `LUNA_MODEL` (default `claude-opus-4-8`), `LUNA_MAX_TOKENS` (default 8192).
+  `.env.example` committed; real `.env` gitignored (values copied from Python Luna).
+- Provider config: yunwu.ai gateway verified by an early 2-round smoke
+  (`scripts/smoke-yunwu.ts`) — adaptive thinking with `display: 'summarized'` accepted,
+  signed thinking blocks survive the tool_result round-trip, tool_use streams.
+- **Deliberate divergence from Python**: Python Luna uses
+  `LUNA_THINKING_BUDGET_TOKENS=2048`; `budget_tokens` returns 400 on `claude-opus-4-8`.
+  TS uses `thinking: {type: 'adaptive', display: 'summarized'}`.
+- Tests: 57 across 11 files (was 49). New: runTurn (6 — spec tests 1-6 incl.
+  interleaving proof, iteration cap, dead-socket resilience, mid-stream provider
+  failure), chat.send WS round-trip (2). Manual smoke: real dual-tool turn
+  (`time_now` + `read_file`) over WS — 32 streamed tokens, 2 tool cycles, coherent
+  reply, `finish_reason: end_turn`.
+
+Inference:
+
+- **Initiative 1 (tool spec foundation) is complete.** All six Python tool-instability
+  root causes are now structurally closed: single always-mounted registry (no 5-path
+  mount logic), 3-tool closed surface, discriminated `Result<T>` (no `startswith`
+  heuristics), token streaming continues through tool calls (the perceived-latency win
+  the rewrite was started for), typed wire contract end-to-end, hard iteration cap
+  instead of reactive stall rules.
+- The StateGraph shape means v0.3.5 instrumentation is one `onTransition` wire-up, v0.6
+  `message_tool` swap is one node change, and v0.8/v0.10 insert nodes mechanically —
+  the LangGraph-style orchestration alignment is now in code, not just on the roadmap.
+- Verbatim `assistantContent` in history is load-bearing: reconstructing thinking
+  blocks from deltas would break Anthropic's signature validation on the next request.
+  The early gateway smoke de-risked this before the graph was built on top.
 
 ### `v0.2.0` — 2026-06-11 — Typed tool registry + `Result<T>`
 

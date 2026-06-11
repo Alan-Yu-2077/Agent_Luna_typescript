@@ -1,11 +1,22 @@
 import type { ServerWebSocket } from 'bun';
 import { ClientEvent, ToolName, assertNever } from '@luna/protocol';
-import type { ToolEvent } from '@luna/protocol';
+import type { ServerEvent, ToolEvent } from '@luna/protocol';
 import { outbound } from './outbound';
 import { dispatchToolCalls, getSessionMutex } from './tools/dispatcher';
-import { builtinRegistry } from './tools/registry';
+import { builtinRegistry, type ToolRegistry } from './tools/registry';
+import type { Provider } from './provider/types';
+import { getSession } from './turn/session';
+import { runTurn } from './turn/runTurn';
 
 export type WSData = { sessionId: string };
+
+export type Runtime = { provider: Provider; registry: ToolRegistry };
+
+let runtime: Runtime | null = null;
+
+export function setRuntime(r: Runtime | null): void {
+  runtime = r;
+}
 
 export function handleOpen(ws: ServerWebSocket<WSData>): void {
   console.log(`[ws] open ${ws.remoteAddress} session=${ws.data.sessionId}`);
@@ -67,6 +78,41 @@ export function handleMessage(
       }
       void runDevDispatch(ws, event.call_id, event.tool_name, event.input);
       return;
+    case 'chat.send': {
+      if (!runtime) {
+        outbound(ws, {
+          type: 'error',
+          code: 'runtime_not_configured',
+          message: 'no provider configured; chat.send unavailable',
+        });
+        return;
+      }
+      const session = getSession(ws.data.sessionId);
+      if (session.activeTurn !== null) {
+        outbound(ws, {
+          type: 'error',
+          code: 'turn_in_progress',
+          message: `turn ${session.activeTurn} is still running`,
+        });
+        return;
+      }
+      const turnId = event.turn_id ?? `${session.id}:turn:${session.turnSeq}`;
+      void runTurn({
+        session,
+        turnId,
+        userText: event.text,
+        provider: runtime.provider,
+        registry: runtime.registry,
+        emit: (e: ServerEvent) => {
+          try {
+            outbound(ws, e);
+          } catch {
+            /* socket may be gone mid-turn; turn still completes for history */
+          }
+        },
+      });
+      return;
+    }
     default:
       assertNever(event);
   }

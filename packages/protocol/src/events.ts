@@ -13,7 +13,17 @@ export const DevDispatchToolEvent = z.object({
   input: z.unknown(),
 });
 
-export const ClientEvent = z.discriminatedUnion('type', [PingEvent, DevDispatchToolEvent]);
+export const ChatSendEvent = z.object({
+  type: z.literal('chat.send'),
+  turn_id: z.string().optional(),
+  text: z.string().min(1),
+});
+
+export const ClientEvent = z.discriminatedUnion('type', [
+  PingEvent,
+  DevDispatchToolEvent,
+  ChatSendEvent,
+]);
 export type ClientEvent = z.infer<typeof ClientEvent>;
 
 export const PongEvent = z.object({
@@ -47,11 +57,45 @@ export const ToolFinishedEvent = z.object({
   result: ToolResult,
 });
 
+export const TurnStartedEvent = z.object({
+  type: z.literal('turn.started'),
+  turn_id: z.string(),
+});
+
+export const ReplyTokenEvent = z.object({
+  type: z.literal('reply.token'),
+  turn_id: z.string(),
+  text: z.string(),
+});
+
+export const FinishReason = z.enum([
+  'end_turn',
+  'max_iterations',
+  'max_tokens',
+  'refusal',
+  'error',
+]);
+export type FinishReason = z.infer<typeof FinishReason>;
+
+export const TurnResultEvent = z.object({
+  type: z.literal('turn.result'),
+  turn_id: z.string(),
+  text: z.string(),
+  finish_reason: FinishReason,
+  usage: z.object({
+    input_tokens: z.number().int().nonnegative(),
+    output_tokens: z.number().int().nonnegative(),
+  }),
+});
+
 export const ServerEvent = z.discriminatedUnion('type', [
   PongEvent,
   ErrorEvent,
   ToolStartedEvent,
   ToolProgressEvent,
   ToolFinishedEvent,
+  TurnStartedEvent,
+  ReplyTokenEvent,
+  TurnResultEvent,
 ]);
 export type ServerEvent = z.infer<typeof ServerEvent>;

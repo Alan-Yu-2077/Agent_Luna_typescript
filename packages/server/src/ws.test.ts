@@ -1,6 +1,11 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import type { Server } from 'bun';
-import { handleClose, handleMessage, handleOpen, type WSData } from './ws';
+import type Anthropic from '@anthropic-ai/sdk';
+import { handleClose, handleMessage, handleOpen, setRuntime, type WSData } from './ws';
+import { MockProvider } from './provider/mock';
+import type { ProviderEvent } from './provider/types';
+import { builtinRegistry } from './tools/registry';
+import { resetSessions } from './turn/session';
 
 let server: Server<WSData>;
 let url: string;
@@ -110,6 +115,57 @@ describe('WS round-trip', () => {
     const event = JSON.parse(response);
     expect(event.type).toBe('error');
     expect(event.code).toBe('invalid_event');
+  });
+});
+
+describe('chat.send', () => {
+  beforeEach(() => {
+    resetSessions();
+  });
+  afterEach(() => {
+    setRuntime(null);
+  });
+
+  function mockRounds(): ProviderEvent[][] {
+    const assistantContent = [
+      { type: 'text', text: 'Hi there.' },
+    ] as unknown as Anthropic.ContentBlock[];
+    return [
+      [
+        { kind: 'text_delta', text: 'Hi ' },
+        { kind: 'text_delta', text: 'there.' },
+        {
+          kind: 'message_stop',
+          stopReason: 'end_turn',
+          toolUses: [],
+          assistantContent,
+          usage: { input_tokens: 10, output_tokens: 4 },
+        },
+      ],
+    ];
+  }
+
+  test('chat.send streams turn.started → reply.token+ → turn.result', async () => {
+    setRuntime({ provider: new MockProvider(mockRounds()), registry: builtinRegistry });
+    const events = await collectUntil(
+      JSON.stringify({ type: 'chat.send', text: 'hello' }),
+      new Set(['turn.result', 'error']),
+      1000,
+    );
+    const types = events.map((e) => (e as { type: string }).type);
+    expect(types[0]).toBe('turn.started');
+    expect(types.filter((t) => t === 'reply.token').length).toBe(2);
+    expect(types.at(-1)).toBe('turn.result');
+    const result = events.at(-1) as { text: string; finish_reason: string };
+    expect(result.text).toBe('Hi there.');
+    expect(result.finish_reason).toBe('end_turn');
+  });
+
+  test('chat.send without runtime returns runtime_not_configured', async () => {
+    const response = await roundTrip(JSON.stringify({ type: 'chat.send', text: 'hello' }));
+    const event = JSON.parse(response);
+    expect(event.type).toBe('error');
+    expect(event.code).toBe('runtime_not_configured');
   });
 });
 
