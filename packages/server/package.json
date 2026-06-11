@@ -1,0 +1,15 @@
+{
+  "name": "@luna/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/main.ts",
+  "scripts": {
+    "dev": "bun --hot src/main.ts",
+    "start": "bun src/main.ts"
+  },
+  "dependencies": {
+    "@luna/protocol": "workspace:*",
+    "zod": "^3.25.0"
+  }
+}

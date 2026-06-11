@@ -20,7 +20,7 @@ first means nothing downstream re-litigates a broken foundation.
 
 | Version | Plan | Theme | Status |
 |---|---|---|---|
-| v0.1.0 | [Bun skeleton + WS server](v0.1.0-bun-skeleton.md) | Project bootstrap; protocol package; one WS endpoint that echoes typed events | ⏳ planned |
+| v0.1.0 | [Bun skeleton + WS server](v0.1.0-bun-skeleton.md) | Project bootstrap; protocol package; one WS endpoint that echoes typed events | ✅ shipped 2026-06-11 |
 | v0.2.0 | [Typed tool registry + `Result<T>`](v0.2.0-tool-registry.md) | Zod-first tool definitions; discriminated result type; concurrency policy; per-tool `summarize()`; 3 representative tools | ⏳ planned |
 | v0.3.0 | [Anthropic interleaved tool-use end-to-end](v0.3.0-interleaved-tool-use.md) | First real LLM round trip; tools stream progress through the WS; one-turn happy path working | ⏳ planned |
 

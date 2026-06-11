@@ -1,6 +1,6 @@
 # Agent_Luna (TypeScript) — Development History
 
-Last updated: 2026-06-11 (Asia/Shanghai) — pre-v0.1.0 (scaffolding only, no runtime code yet)
+Last updated: 2026-06-11 (Asia/Shanghai) — v0.1.0 (Bun skeleton + WS server)
 
 ## Scope
 
@@ -33,7 +33,62 @@ during the rewrite. Its version log is unrelated to this one — `v0.1` here is 
 
 | Version | Date | Theme | Evidence |
 |---|---|---|---|
-| _(none shipped yet)_ | | | |
+| `v0.1.0` | 2026-06-11 | Bun skeleton + WS server | `working tree` |
+
+## Detailed records
+
+### `v0.1.0` — 2026-06-11 — Bun skeleton + WS server
+
+Status:
+
+- working tree (commit hash filled in after merge to main)
+
+Fact:
+
+- Created Bun monorepo root with `package.json` (workspaces `packages/*`), `tsconfig.base.json`
+  (`strict` + `noUncheckedIndexedAccess` + `noUnusedLocals` + `noUnusedParameters`,
+  `noEmit: true`, `types: ["bun"]`), `bunfig.toml` (`[install] saveTextLockfile = true`),
+  `.gitignore` (commits `bun.lock`, ignores `bun.lockb`), `.editorconfig`, `.prettierrc`
+  (semi, single-quote, trailing-comma all, width 100), `.prettierignore`.
+- Added `packages/protocol/` (6 files, 86 lines): Zod `ClientEvent` (discriminated union of
+  `PingEvent`) and `ServerEvent` (discriminated union of `PongEvent` + `ErrorEvent`) in
+  `src/events.ts`; `assertNever` helper in `src/utils.ts`; `src/index.ts` re-exports.
+  Dependency: `zod ^3.25.0`.
+- Added `packages/server/` (6 files, 144 lines): `src/main.ts` boots `Bun.serve` on
+  `LUNA_PORT` (default 8787) with WS upgrade; `src/ws.ts` handles open/message/close with
+  Zod `safeParse` + exhaustive switch + `assertNever(event.type)`; `src/outbound.ts`
+  centralizes `ServerEvent.parse` → `ws.send` as the **sole** validated outbound boundary;
+  workspace dep `@luna/protocol: workspace:*`.
+- Added test suites: `packages/protocol/src/events.test.ts` (8 tests, ClientEvent +
+  ServerEvent parse/reject cases) and `packages/server/src/ws.test.ts` (4 tests, random-port
+  WS round-trip, malformed JSON, unknown event, invalid seq). 12/12 green in 13ms.
+- Installed dev tooling: `@types/bun`, `prettier`, `typescript`. Bun 1.3.14 (≥ 1.2 spec).
+  Text-format `bun.lock` committed; binary `bun.lockb` ignored.
+- Manual smoke against `bun run dev:server`: ping `seq:7` → pong with matching seq + valid
+  `server_time_ms`; round-trip 3ms on localhost.
+- TypeScript `tsc --noEmit` clean on both packages; no `as any`, no `as unknown`, no
+  `@ts-ignore`, no `startswith('Error')` heuristic.
+
+Inference:
+
+- Establishes the **discriminated-union wire contract** that v0.2 (`tool.started` /
+  `tool.progress` / `tool.finished`) and v0.3 (`turn.started` / `reply.token` /
+  `turn.result` / `chat.send`) extend by appending variants — no protocol rewrite needed
+  downstream. The `assertNever(event.type)` exhaustiveness pattern in `ws.ts` will catch any
+  forgotten case at compile time when new variants land.
+- Proves the locked runtime/wire choices (Bun + Zod + native WebSocket, single channel per
+  session) work end-to-end with sub-100ms cold boot and 3ms ping/pong round-trip on
+  localhost. The Python `time.sleep`-paced HTTP-thread serialization is structurally
+  impossible in this stack.
+- The `outbound()` validate-before-send wrapper is load-bearing for v0.2/v0.3: the tool
+  dispatcher and the turn loop will each be handed an `emit: (e: ServerEvent) => void`
+  callback that wraps `outbound`, so the wire boundary stays the **only** place schema
+  validation lives. Eliminates the Python "frontend handler early-returns on a frame the
+  backend assumes is consumed" silent-drift class of bugs by design.
+- Confirms file-split: only **types and wire shapes** live in `packages/protocol`;
+  `defineTool`, the dispatcher, and provider logic stay in `packages/server`. Frontend
+  (`packages/web`) will consume the same protocol package in Initiative 6, getting
+  contract drift as a type error rather than a runtime mismatch.
 
 ## Pre-history (2026-06-11)
 
