@@ -6,6 +6,7 @@ import type { ToolRegistry } from '../tools/registry';
 import { dispatchToolCalls } from '../tools/dispatcher';
 import { runGraph, type Graph, type TransitionHook, type NodeName } from './graph';
 import type { Session } from './session';
+import { trace, flushTrace, traceEnabled } from '../trace/instrument';
 
 export const MAX_TOOL_ITERATIONS = 8;
 
@@ -132,6 +133,20 @@ const graph: Graph<TurnState> = {
         { sessionId: s.session.id, sessionMutex: s.session.mutex },
         s.registry,
       )) {
+        if (traceEnabled()) {
+          trace({
+            schema_v: 1,
+            kind: 'tool',
+            trace_id: s.turnId,
+            turn_id: s.turnId,
+            session_id: s.session.id,
+            t_ms: Date.now(),
+            call_id: evt.call_id,
+            tool_name: evt.tool_name,
+            phase: evt.kind === 'started' ? 'started' : evt.kind === 'progress' ? 'progress' : 'final',
+            payload: evt.kind === 'final' ? evt.result : evt.kind === 'progress' ? evt.payload : evt.input,
+          });
+        }
         switch (evt.kind) {
           case 'started':
             s.emit({
@@ -195,13 +210,28 @@ export type RunTurnOptions = {
 };
 
 export async function runTurn(opts: RunTurnOptions): Promise<TurnState> {
+  const tracedEmit = (e: ServerEvent) => {
+    if (traceEnabled()) {
+      trace({
+        schema_v: 1,
+        kind: 'outbound',
+        trace_id: opts.turnId,
+        turn_id: opts.turnId,
+        session_id: opts.session.id,
+        t_ms: Date.now(),
+        server_event_type: e.type,
+      });
+    }
+    opts.emit(e);
+  };
+
   const state: TurnState = {
     session: opts.session,
     turnId: opts.turnId,
     userText: opts.userText,
     provider: opts.provider,
     registry: opts.registry,
-    emit: opts.emit,
+    emit: tracedEmit,
     anthropicTools: [],
     text: '',
     thinking: '',
@@ -216,9 +246,33 @@ export async function runTurn(opts: RunTurnOptions): Promise<TurnState> {
     startedMs: Date.now(),
   };
 
+  const onTransition: TransitionHook<TurnState> = (from, to, s) => {
+    if (traceEnabled()) {
+      trace({
+        schema_v: 1,
+        kind: 'node',
+        trace_id: s.turnId,
+        turn_id: s.turnId,
+        session_id: s.session.id,
+        t_ms: Date.now(),
+        node_from: from,
+        node_to: to,
+        payload:
+          from === 'open_stream'
+            ? {
+                token_count: s.tokenCount,
+                first_token_ms: s.firstTokenMs,
+                thinking_summary: s.thinking,
+              }
+            : undefined,
+      });
+    }
+    opts.onTransition?.(from, to, s);
+  };
+
   opts.session.activeTurn = opts.turnId;
   try {
-    await runGraph(graph, 'parse_input', state, opts.onTransition);
+    await runGraph(graph, 'parse_input', state, onTransition);
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     state.finishReason = 'error';
@@ -226,6 +280,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<TurnState> {
   } finally {
     opts.session.activeTurn = null;
     opts.session.turnSeq += 1;
+    flushTrace(opts.turnId);
   }
   return state;
 }

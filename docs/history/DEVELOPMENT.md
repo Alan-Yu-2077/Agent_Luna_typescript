@@ -1,6 +1,6 @@
 # Agent_Luna (TypeScript) — Development History
 
-Last updated: 2026-06-11 (Asia/Shanghai) — v0.3.0 (Anthropic interleaved tool-use end-to-end)
+Last updated: 2026-06-11 (Asia/Shanghai) — v0.3.5 (Trace plumbing)
 
 ## Scope
 
@@ -35,7 +35,8 @@ during the rewrite. Its version log is unrelated to this one — `v0.1` here is 
 |---|---|---|---|
 | `v0.1.0` | 2026-06-11 | Bun skeleton + WS server | `7ebd73a` |
 | `v0.2.0` | 2026-06-11 | Typed tool registry + `Result<T>` + 3 representative tools | `14753c4` |
-| `v0.3.0` | 2026-06-11 | Anthropic interleaved tool-use end-to-end (StateGraph turn loop) | `working tree` |
+| `v0.3.0` | 2026-06-11 | Anthropic interleaved tool-use end-to-end (StateGraph turn loop) | `8fbdce4` |
+| `v0.3.5` | 2026-06-11 | Trace plumbing — first `bun:sqlite`, trace_id through the graph | `working tree` |
 
 ## Detailed records
 
@@ -91,6 +92,59 @@ Inference:
   `defineTool`, the dispatcher, and provider logic stay in `packages/server`. Frontend
   (`packages/web`) will consume the same protocol package in Initiative 6, getting
   contract drift as a type error rather than a runtime mismatch.
+
+### `v0.3.5` — 2026-06-11 — Trace plumbing
+
+Status:
+
+- working tree (commit hash recorded post-commit)
+
+Fact:
+
+- Added `packages/protocol/src/trace.ts` (~70 LOC): Zod `TraceEvent` discriminated
+  union — `node` / `tool` / `outbound` / `overflow`, each carrying `schema_v: z.literal(1)`,
+  `trace_id`, `turn_id`, `session_id`, `t_ms`. `TRACE_SCHEMA_V = 1`.
+- Added `packages/server/src/sql.ts` (~50 LOC): generic `bun:sqlite` boilerplate —
+  `openDb` (WAL + foreign_keys + busy_timeout per connection), `migrate(db, dir)`
+  (applies `migrations/NNNN_*.sql` whose leading integer exceeds `PRAGMA user_version`,
+  each in its own transaction; PRAGMA bump interpolated since PRAGMA can't bind),
+  `closeDb`. **Zero trace-specific code — v0.4 memory substrate reuses it verbatim.**
+- Added `packages/server/src/trace/` — `migrations/0001_traces.sql` (DDL + 2 indexes,
+  no PRAGMA), `store.ts` (per-turn in-memory buffer, single-transaction flush on turn
+  end, 500-event cap + `overflow` row, 4KB structured-wrapper truncation, read API
+  `listTurns` / `getEventsByTurn`), `instrument.ts` (`trace()` single entry, `LUNA_TRACE`
+  gate — default off in v0.3.5), `README.md` (instrumentation + migration discipline).
+- Instrumented `runTurn.ts`: `onTransition` → node trace (the `open_stream` transition
+  carries `{token_count, first_token_ms, thinking_summary}`); `dispatch_tools` loop tees
+  each `ToolEvent` → tool trace; a `tracedEmit` wrapper records every `ServerEvent` as an
+  outbound trace; `flushTrace` in the `finally`. **All three construction sites guarded by
+  `traceEnabled()`** so the production default-off path builds zero discarded objects.
+  Shipped `dispatcher.ts` and `outbound.ts` untouched.
+- `main.ts`: opens SQLite at boot (`LUNA_DB_PATH`, default `./luna.sqlite`), runs
+  `migrate`, sets the trace store, closes DB on SIGTERM. `.gitignore` += `*.sqlite*`.
+- Tests: 68 across 13 files (was 57). New: sql (4 — migration idempotency/ordering/WAL,
+  tmpdir), store (5 — buffer/flush/overflow/4KB-truncation/listTurns ordering),
+  instrument (2 — full-turn node+tool+outbound rows keyed by turn_id, gate-off → no rows).
+- Latency: per-turn absolute trace cost 0.15–0.5ms on a network-free synthetic bench
+  (`scripts/trace-latency.ts`). End-to-end smoke: a real LLM turn wrote 24 rows
+  (9 node + 13 outbound + 2 tool) under one turn_id.
+
+Inference:
+
+- **First persistence layer in the rewrite.** The `sql.ts` WAL + versioned-migration
+  pattern is the one v0.4 memory work copies — getting it generic and reusable here means
+  the SQLite substrate lands once, not twice.
+- **Partially resolves Open Q #8**: every turn now carries a `trace_id` (= turn_id) and a
+  replayable event tree. The full L1/L2 reasoning-decision tree is still deferred to v0.8,
+  but the plumbing it will hang off now exists.
+- **Resolves Open Q #4**: trace `payload_json` truncates at 4KB into a structured
+  `{truncated, original_bytes, preview}` wrapper (never a byte-slice of serialized JSON).
+  The dispatcher keeps pure per-tool `summarize` with no global tripwire — the locked
+  direction from v0.2 holds.
+- The synthetic-bench 5% gate from the plan was a measurement artifact (network-free turns
+  run in ~5ms, so sub-ms persistence reads as 6–8%); the production-meaningful bound is the
+  absolute per-turn cost, which against real 1000ms+ turns is <0.05%. The bench asserts the
+  absolute budget and reports the synthetic % for transparency.
 
 ### `v0.3.0` — 2026-06-11 — Anthropic interleaved tool-use end-to-end
 
