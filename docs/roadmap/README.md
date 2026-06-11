@@ -4,15 +4,15 @@ Forward development plan for the TypeScript rewrite. Each initiative is a folder
 self-contained version plans, executed one at a time. Version numbers reserve across initiatives so
 they never overlap.
 
-> **Current shipped head: v0.1.0** (2026-06-11, Bun + WS skeleton with typed ping/pong). Initiative
-> 1 (tool spec foundation) is in progress; v0.2 / v0.3 planned. See
-> [`../history/DEVELOPMENT.md`](../history/DEVELOPMENT.md).
+> **Current shipped head: v0.2.0** (2026-06-11, typed tool registry + `Result<T>` + 3
+> representative tools). Initiative 1 (tool spec foundation) is in progress; v0.3 is the
+> last unshipped version in it. See [`../history/DEVELOPMENT.md`](../history/DEVELOPMENT.md).
 
 ## Planned initiatives (execution order)
 
 | Order | Version range | Initiative | Folder | Status |
 |---|---|---|---|---|
-| 1 | v0.1.0 – v0.3.0 | **Tool spec foundation** — Bun skeleton + WS server + typed tool registry + `Result<T>` + 3 representative tools + first end-to-end LLM round trip with Anthropic interleaved tool-use | [`tool-spec-foundation-2026-06/`](tool-spec-foundation-2026-06/) | 🚧 in progress (v0.1.0 ✅) |
+| 1 | v0.1.0 – v0.3.0 | **Tool spec foundation** — Bun skeleton + WS server + typed tool registry + `Result<T>` + 3 representative tools + first end-to-end LLM round trip with Anthropic interleaved tool-use | [`tool-spec-foundation-2026-06/`](tool-spec-foundation-2026-06/) | 🚧 in progress (v0.1.0 ✅, v0.2.0 ✅) |
 | 1.5 | v0.3.5 – v0.3.6 | **Observability foundation** — `trace_id` propagation through the v0.3 StateGraph; SQLite trace table (one row per node transition + per tool call); minimal local viewer. Mastra Telemetry / LangSmith parity, table-stakes for every later initiative | [`observability-foundation-2026-06/`](observability-foundation-2026-06/) | ⏳ planned |
 | 2 | v0.4.0 – v0.5.0 | **Memory substrate** — SQLite schema for L1 / L2 / L3; replace JSON+JSONL persistence; `sqlite-vec` for embeddings | _(folder TBD)_ | ⏳ planned |
 | 3 | v0.6.0 – v0.7.0 | **Persona + humanity guardrails** — three-layer persona resolution with file-watch cache; humanity hard caps move from streaming-layer truncation to Zod schema on `message` input. **Introduces `message_tool`** per LD #9 (everything-as-tool); frontend wire-event shape (`tool.progress{tool_name:'message'}`) is fixed here for Initiative 6 to consume | _(folder TBD)_ | ⏳ planned |
@@ -62,7 +62,7 @@ reactive stall detection). v0.1–v0.3 fix all six **by design** before any othe
 | Version | Plan | Theme |
 |---|---|---|
 | v0.1.0 ✅ | [Bun skeleton + WS server](tool-spec-foundation-2026-06/v0.1.0-bun-skeleton.md) | Project bootstrap; one WS endpoint that echoes typed events — **shipped 2026-06-11** |
-| v0.2.0 | [Typed tool registry + `Result<T>`](tool-spec-foundation-2026-06/v0.2.0-tool-registry.md) | Zod-first tool definitions; discriminated result type; concurrency policy; per-tool `summarize()` |
+| v0.2.0 ✅ | [Typed tool registry + `Result<T>`](tool-spec-foundation-2026-06/v0.2.0-tool-registry.md) | Zod-first tool definitions; discriminated `Result<T>`; 3-state concurrency policy; per-tool `summarize()`; 3 representative tools end-to-end through dispatcher — **shipped 2026-06-11** |
 | v0.3.0 | [Anthropic interleaved tool-use end-to-end](tool-spec-foundation-2026-06/v0.3.0-interleaved-tool-use.md) | First real LLM round trip; tools stream progress through the WS; one-turn happy path working. **Turn loop implemented as a small StateGraph (not sequential if/else)** so v0.3.5 trace plumbing has stable edge boundaries to instrument. |
 
 ## Initiative 1.5 — Observability foundation (v0.3.5 – v0.3.6)

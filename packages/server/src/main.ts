@@ -1,11 +1,11 @@
-import { handleOpen, handleMessage, handleClose } from './ws';
+import { handleClose, handleMessage, handleOpen, type WSData } from './ws';
 
 const port = Number(process.env['LUNA_PORT'] ?? 8787);
 
-const server = Bun.serve({
+const server = Bun.serve<WSData>({
   port,
   fetch(req, srv) {
-    if (srv.upgrade(req, { data: undefined })) return;
+    if (srv.upgrade(req, { data: { sessionId: 'default' } })) return;
     return new Response('luna-server: WebSocket only', { status: 426 });
   },
   websocket: {

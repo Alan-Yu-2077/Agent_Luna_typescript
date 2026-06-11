@@ -5,8 +5,7 @@ describe('ClientEvent', () => {
   test('parses a valid ping', () => {
     const result = ClientEvent.safeParse({ type: 'ping', seq: 0 });
     expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.type).toBe('ping');
+    if (result.success && result.data.type === 'ping') {
       expect(result.data.seq).toBe(0);
     }
   });

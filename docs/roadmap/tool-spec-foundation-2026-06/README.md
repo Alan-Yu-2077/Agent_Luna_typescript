@@ -21,7 +21,7 @@ first means nothing downstream re-litigates a broken foundation.
 | Version | Plan | Theme | Status |
 |---|---|---|---|
 | v0.1.0 | [Bun skeleton + WS server](v0.1.0-bun-skeleton.md) | Project bootstrap; protocol package; one WS endpoint that echoes typed events | ✅ shipped 2026-06-11 |
-| v0.2.0 | [Typed tool registry + `Result<T>`](v0.2.0-tool-registry.md) | Zod-first tool definitions; discriminated result type; concurrency policy; per-tool `summarize()`; 3 representative tools | ⏳ planned |
+| v0.2.0 | [Typed tool registry + `Result<T>`](v0.2.0-tool-registry.md) | Zod-first tool definitions; discriminated result type; concurrency policy; per-tool `summarize()`; 3 representative tools | ✅ shipped 2026-06-11 |
 | v0.3.0 | [Anthropic interleaved tool-use end-to-end](v0.3.0-interleaved-tool-use.md) | First real LLM round trip; tools stream progress through the WS; one-turn happy path working | ⏳ planned |
 
 ## Acceptance for this initiative
@@ -52,16 +52,18 @@ When v0.3.0 ships, the following must be true:
 These come in initiatives 2-7. The hard rule for this initiative is: **prove the tool spec is
 stable end-to-end with the smallest possible surrounding system**.
 
-## Open questions for v0.2 / v0.3 design
+## Open questions for v0.3 design
 
-(From [`../../REWRITE_CONTEXT.md`](../../REWRITE_CONTEXT.md) open list. v0.1 shipped without
-locking shapes that foreclose these. Must be resolved before v0.2 / v0.3 detailed design.)
+(From [`../../REWRITE_CONTEXT.md`](../../REWRITE_CONTEXT.md) open list. v0.1 and v0.2 shipped
+without foreclosing future shape.)
 
-- Q1: Always-on `shell` tool vs judgment-gated. → Affects v0.2 mount logic.
+- ~~Q1~~ **RESOLVED 2026-06-11 by Locked Decision #10**: shell tool always-on + deny-regex
+  inside the tool. `defineTool` has no `mountedWhen` field.
 - ~~Q3~~ **RESOLVED 2026-06-11 by Locked Decision #9 (everything-as-tool)**: Live2D metadata
   lives in the `message` tool envelope (`expression`, `emotion`, `voice_params`), not a
   separate `set_expression` tool. 10-tool surface stays at 10. Introduction at v0.6.
-- Q5: Concurrency declaration — per-tool 3-state enum vs per-resource locks. v1 locked to
-  3-state; confirm at v0.2 design review.
+- ~~Q5~~ **RESOLVED 2026-06-11 at v0.2 design review**: 3-state concurrency enum locked;
+  per-resource locks revisited only if v0.4 memory work demands finer granularity.
 
-Not blocking v0.1 (already shipped). Q1 and Q5 must be resolved before v0.2 detailed design.
+v0.3 (Anthropic interleaved tool-use) has no remaining blocking open questions; it builds on
+the v0.2 contract verbatim.

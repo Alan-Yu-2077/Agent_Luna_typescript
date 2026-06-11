@@ -42,6 +42,7 @@ verifiable against the Python source at `/Users/alanyu2077/Desktop/Agent_Luna` o
 | Frontend scope | **TS-port `agent-app.js` controller only** | Live2D rendering + audio pipeline + GPT-SoVITS proxy stay as-is (cost/benefit) |
 | Tool streaming | **Anthropic interleaved tool-use SSE** | Token streams continue through tool calls — the biggest single perceived-latency win |
 | Outbound action shape | **Everything-as-tool** (`message` tool + all side-effect tools; no top-level `text`; reasoning via Claude `thinking` blocks) | Unified action space + forcing function for tool infra quality + Live2D metadata envelope natural. **Resolves Open Q #3.** Introduction in v0.6. See LD #9 detail below. |
+| Risky-tool mount policy | **Always-on + deny-regex** inside the tool (no judgment-gated mounting; no `mountedWhen` predicate on `defineTool`) | 1 fewer LLM call per turn vs judgment-gated; matches Mastra/LangGraph/Aider; deny-regex provably testable. **Resolves Open Q #1.** Locked at v0.2 design review; applies to `shell` when it ships at v0.4+. |
 
 ### Locked decision #9 — Everything-as-tool (detail)
 
@@ -132,11 +133,11 @@ These are **explicitly out of scope** for v2. Most are dead, vestigial, or sympt
 
 These have **not** been decided. Each is parked here so future-me can pick up the thread.
 
-1. **Mount control for risky tools (`shell`)**: model judgment outputs `needs_shell:true` to unlock, or always-on with deny-regex? Trade-off is one extra judge call vs always-on safety surface.
+1. ~~**Mount control for risky tools (`shell`)**~~ — **RESOLVED 2026-06-11 by Locked Decision #10**: always-on + deny-regex inside the tool. `defineTool` has no `mountedWhen` field. Shell tool itself lands at v0.4+ when concrete need arises.
 2. **Self-continuation default behavior**: Locked to mechanical-only (no LLM call). Open: whether to ship an opt-in re-enabling path in v1.x for the "real human paused then added something" feel.
 3. ~~**Live2D command authorship**~~ — **RESOLVED 2026-06-11 by Locked Decision #9 (everything-as-tool)**: Live2D metadata travels inside the `message` tool envelope (`expression`, `emotion`, `voice_params` fields). Model-controlled, but not a separate `set_expression` tool — the 10-tool surface stays at 10. See LD #9 detail above.
 4. **Result compaction**: 100% per-tool `summarize()` with no global cap, or per-tool plus a global tripwire (e.g. 64KB hard cap with structured truncation marker). Locked direction: per-tool. Open: tripwire yes/no. **Must resolve before v0.3.5 trace schema lock** (large tool outputs touch trace storage policy too).
-5. **Concurrency declaration granularity**: per-tool `concurrency: 'safe-parallel' | 'session-serial' | 'global-serial'` (locked direction) vs per-resource locks. v1 uses the simple 3-state enum; revisit if real cases demand finer.
+5. ~~**Concurrency declaration granularity**~~ — **RESOLVED 2026-06-11 at v0.2 design review**: per-tool `concurrency: 'safe-parallel' | 'session-serial' | 'global-serial'` (3-state enum). No per-resource locks in v1. Revisit only if v0.4 memory work demands finer granularity.
 6. **Dream engine scope**: Python Luna roadmap v0.55-v0.56. In scope for this rewrite or follow-up? If in scope, what triggers a dream (fixed schedule / idle threshold / manual button only)?
 7. **Backend trigger for memory writes (separate L2 last-turn-only call)**: Python DEVELOPMENT.md hints at this; would give a hard physical guarantee but doubles per-turn LLM cost.
 8. **Reasoning audit upgrade**: every L1/L2 decision gets a `trace_id` and links into a tree so a turn can be fully replayed. **Partially scheduled**: `trace_id` propagation + per-node SQLite trace lands in v0.3.5 (Observability Foundation initiative). Full reasoning-decision replay tree TBD — likely v0.8+ alongside reasoning rails initiative.
