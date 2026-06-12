@@ -1,0 +1,305 @@
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { Database } from 'bun:sqlite';
+import { join } from 'node:path';
+import type Anthropic from '@anthropic-ai/sdk';
+import type { ServerEvent } from '@luna/protocol';
+import { MockProvider } from '../provider/mock';
+import type { CompleteRequest, ProviderEvent } from '../provider/types';
+import { builtinRegistry } from '../tools/registry';
+import { getSession, resetSessions } from '../turn/session';
+import { runTurn } from '../turn/runTurn';
+import { migrate } from '../sql';
+import { setMemoryDb } from '../memory/sessionStore';
+import { addFact, listFacts } from '../memory/l3Store';
+import { getCore } from '../memory/coreMemory';
+import { TraceStore } from '../trace/store';
+import { setTraceStore } from '../trace/instrument';
+import {
+  bootReconcile,
+  dreamStatus,
+  isDreaming,
+  resetDreamStateForTests,
+  wake,
+} from './dreamState';
+import { runDreamCycle } from './cycle';
+import { dreamCall, type DreamLLM } from './llm';
+import { memoryAuditPrompt, refineSemanticPrompt } from './prompts';
+
+let db: Database;
+
+beforeEach(() => {
+  db = new Database(':memory:', { strict: true });
+  migrate(db, join(import.meta.dir, '..', 'migrations'));
+  setMemoryDb(db);
+  setTraceStore(new TraceStore(db));
+  resetDreamStateForTests();
+  resetSessions();
+  Bun.env['LUNA_MEMORY_EMBEDDING'] = '0';
+});
+
+afterEach(() => {
+  setMemoryDb(null);
+  setTraceStore(null);
+  resetDreamStateForTests();
+  db.close(false);
+  resetSessions();
+  Bun.env['LUNA_MEMORY_EMBEDDING'] = '0';
+});
+
+const NOOP_PATCH = '{"remove_ids": [], "add": []}';
+const NOOP_PERSONA = '{"self_state": null, "relationship_status": null}';
+
+// Routes dream prompts to scripted responses by content sniffing.
+function scriptedLlm(script?: Partial<Record<string, string | (() => string)>>): {
+  llm: DreamLLM;
+  provider: MockProvider;
+} {
+  const provider = new MockProvider([]);
+  provider.completeResponder = (req: CompleteRequest) => {
+    const prompt = typeof req.messages[0]?.content === 'string' ? req.messages[0].content : '';
+    let key = 'other';
+    if (prompt.includes('duplicates that say the same thing')) key = 'refine';
+    else if (prompt.includes('auditing your long-term memory')) key = 'audit';
+    else if (prompt.includes('reflecting during sleep')) key = 'persona';
+    else if (prompt.includes('private diary')) key = 'diary';
+    else if (prompt.includes('compress conversation history')) key = 'fold';
+    const handler = script?.[key];
+    if (typeof handler === 'function') return handler();
+    if (typeof handler === 'string') return handler;
+    if (key === 'refine' || key === 'audit') return NOOP_PATCH;
+    if (key === 'persona') return NOOP_PERSONA;
+    if (key === 'diary') return 'A quiet day; we talked and I noted things worth keeping.';
+    return '[mock]';
+  };
+  return { llm: { primary: provider, fallback: null }, provider };
+}
+
+function seedDialogue(sessionId: string, turns: [string, string][], dayOffset = 0): void {
+  const base = Date.now() - dayOffset * 86_400_000;
+  turns.forEach(([u, a], i) => {
+    db.prepare(
+      'INSERT INTO l2_turns (session_id, turn_id, t_ms, user_text, assistant_text, raw_json) VALUES (?, ?, ?, ?, ?, ?)',
+    ).run(sessionId, `seed${dayOffset}-${i}`, base + i * 1000, u, a, '[]');
+  });
+}
+
+describe('dream cycle', () => {
+  test('1. gate: chat.send rejected while dreaming; works after wake', async () => {
+    seedDialogue('default', [['hello', 'hi']]);
+    let release: (() => void) | null = null;
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    const { llm } = scriptedLlm({
+      audit: () => {
+        void gate;
+        return NOOP_PATCH;
+      },
+      refine: NOOP_PATCH,
+    });
+    // Make refine_semantic wait so the cycle is observably "running".
+    const slowLlm: DreamLLM = {
+      primary: {
+        complete: async (req) => {
+          if (
+            typeof req.messages[0]?.content === 'string' &&
+            req.messages[0].content.includes('duplicates that say the same thing')
+          ) {
+            await gate;
+          }
+          return llm.primary.complete(req);
+        },
+        chatStream: llm.primary.chatStream.bind(llm.primary),
+      },
+      fallback: null,
+    };
+    addFact('core_facts', 'seed fact so refine is not skipped');
+
+    const cycle = runDreamCycle({ sessionId: 'default', llm: slowLlm, emit: () => {} });
+    expect(isDreaming()).toBe(true);
+
+    expect(wake().ok).toBe(false);
+    release!();
+    await cycle;
+
+    expect(dreamStatus().current_step).toBe('finished_idle');
+    expect(isDreaming()).toBe(true);
+    const woke = wake();
+    expect(woke.ok).toBe(true);
+    expect(isDreaming()).toBe(false);
+  });
+
+  test('2. double enter rejected; wake when not dreaming rejected', async () => {
+    const { llm } = scriptedLlm();
+    const first = runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
+    const second = await runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
+    expect(second.ok).toBe(false);
+    await first;
+    wake();
+    expect(wake().ok).toBe(false);
+  });
+
+  test('3. reconciliation: planted contradiction → exactly one active fact survives', async () => {
+    const cat = addFact('preferences', 'User loves cats and wants one');
+    seedDialogue('default', [
+      ['actually I got a dog last week, I am off cats now', 'a dog! tell me everything'],
+    ]);
+    const { llm } = scriptedLlm({
+      audit: JSON.stringify({
+        remove_ids: [cat!.id],
+        add: [{ category: 'preferences', text: 'User has a dog now (off cats)' }],
+      }),
+    });
+
+    await runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
+
+    const active = listFacts({ category: 'preferences' });
+    expect(active.length).toBe(1);
+    expect(active[0]?.text).toContain('dog');
+    const catRow = db.prepare('SELECT deleted_ms FROM l3_facts WHERE id = ?').get(cat!.id) as {
+      deleted_ms: number | null;
+    };
+    expect(catRow.deleted_ms).not.toBeNull();
+  });
+
+  test('4. diaries: yesterday gets a day row; 7 day-diaries roll into a week', async () => {
+    seedDialogue('default', [['we talked about espresso', 'lovely']], 1);
+    const { llm } = scriptedLlm();
+    await runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
+
+    const days = db.prepare("SELECT period_key FROM diaries WHERE kind = 'day'").all();
+    expect(days.length).toBeGreaterThanOrEqual(1);
+
+    // 14 consecutive days always cover at least one complete week-group
+    // regardless of alignment.
+    for (let i = 2; i <= 15; i++) seedDialogue('default', [[`day ${i} chat`, 'noted']], i);
+    resetDreamStateForTests();
+    await runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
+    const weeks = db.prepare("SELECT period_key FROM diaries WHERE kind = 'week'").all();
+    expect(weeks.length).toBeGreaterThanOrEqual(1);
+  });
+
+  test('5. persona_update writes core memory with dream source + audit', async () => {
+    seedDialogue('default', [['I trust you with this', 'that means a lot']]);
+    const { llm } = scriptedLlm({
+      persona: JSON.stringify({
+        self_state: 'gentler than yesterday',
+        relationship_status: 'trusted confidant',
+        reason: 'user shared something vulnerable',
+      }),
+    });
+    await runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
+    expect(getCore().relationship_status).toBe('trusted confidant');
+    const audit = db
+      .prepare("SELECT source FROM core_memory_audit ORDER BY id DESC LIMIT 1")
+      .get() as { source: string };
+    expect(audit.source).toBe('dream');
+  });
+
+  test('6. key cascade falls back; prompts carry no <<< delimiters', async () => {
+    const primary = new MockProvider([]);
+    primary.completeResponder = () => {
+      throw new Error('rate limit: 当前分组上游负载已饱和');
+    };
+    const fallback = new MockProvider([]);
+    fallback.completeResponder = () => 'fallback says hi';
+
+    const result = await dreamCall(
+      { primary, fallback },
+      'test prompt',
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.text).toBe('fallback says hi');
+
+    const onlyPrimary = await dreamCall({ primary, fallback: null }, 'test prompt');
+    expect(onlyPrimary.ok).toBe(false);
+    if (!onlyPrimary.ok) expect(onlyPrimary.failure).toBe('rate_limited');
+
+    const fact = addFact('core_facts', 'sample')!;
+    const prompts = [
+      refineSemanticPrompt(listFacts()),
+      memoryAuditPrompt(listFacts(), 'User: hi\nLuna: hello'),
+    ];
+    for (const p of prompts) {
+      expect(p).not.toContain('<<<');
+      expect(p).not.toContain('>>>');
+    }
+    void fact;
+  });
+
+  test('7. per-step traces are durable before the cycle ends', async () => {
+    addFact('core_facts', 'seed');
+    seedDialogue('default', [['hi', 'hello']]);
+    let tracesAtPersona = -1;
+    const store = new TraceStore(db);
+    setTraceStore(store);
+    const { llm } = scriptedLlm({
+      persona: () => {
+        tracesAtPersona = store.getEventsByTurn(`dream:${dreamStatus().is_dreaming ? currentCycleId() : ''}`).length;
+        return NOOP_PERSONA;
+      },
+    });
+    function currentCycleId(): string {
+      const row = db.prepare('SELECT cycle_id FROM dream_state WHERE id = 1').get() as {
+        cycle_id: string | null;
+      };
+      return row.cycle_id ?? '';
+    }
+    await runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
+    expect(tracesAtPersona).toBeGreaterThanOrEqual(2);
+  });
+
+  test('8. enter_dream tool: pending intent only; no dream activity before turn.result', async () => {
+    const events: ServerEvent[] = [];
+    const session = getSession('default');
+    const toolContent = [
+      { type: 'tool_use', id: 'tu1', name: 'enter_dream', input: { reason: 'long day' } },
+    ] as unknown as Anthropic.ContentBlock[];
+    const rounds: ProviderEvent[][] = [
+      [
+        {
+          kind: 'message_stop',
+          stopReason: 'tool_use',
+          toolUses: [{ id: 'tu1', name: 'enter_dream', input: { reason: 'long day' } }],
+          assistantContent: toolContent,
+          usage: { input_tokens: 1, output_tokens: 1 },
+        },
+      ],
+      [
+        { kind: 'text_delta', text: 'good night' },
+        {
+          kind: 'message_stop',
+          stopReason: 'end_turn',
+          toolUses: [],
+          assistantContent: [{ type: 'text', text: 'good night' }] as unknown as Anthropic.ContentBlock[],
+          usage: { input_tokens: 1, output_tokens: 1 },
+        },
+      ],
+    ];
+    await runTurn({
+      session,
+      turnId: 't1',
+      userText: 'you can rest now',
+      provider: new MockProvider(rounds),
+      registry: builtinRegistry,
+      emit: (e) => events.push(e),
+    });
+
+    expect(session.pendingDream).toBe('long day');
+    expect(isDreaming()).toBe(false);
+    expect(events.at(-1)?.type).toBe('turn.result');
+  });
+
+  test('9. boot reconciliation: stale dreaming state parks awake', () => {
+    db.prepare("UPDATE dream_state SET is_dreaming = 1, current_step = 'memory_audit', cycle_id = 'dream-stale' WHERE id = 1").run();
+    db.prepare("INSERT INTO dream_reports (cycle_id, started_ms, ended_ms, report_json) VALUES ('dream-stale', 1, NULL, '{}')").run();
+    resetDreamStateForTests();
+    bootReconcile();
+    expect(isDreaming()).toBe(false);
+    const report = db
+      .prepare("SELECT ended_ms, report_json FROM dream_reports WHERE cycle_id = 'dream-stale'")
+      .get() as { ended_ms: number | null; report_json: string };
+    expect(report.ended_ms).not.toBeNull();
+    expect(JSON.parse(report.report_json).aborted).toBe(true);
+  });
+});

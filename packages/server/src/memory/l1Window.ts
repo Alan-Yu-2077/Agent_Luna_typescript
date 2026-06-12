@@ -51,7 +51,7 @@ export function planFold(session: Session): FoldPlan | null {
   let cum = 0;
   let rowIdx = 0;
   while (rowIdx < rows.length && cum < session.windowLowWater) {
-    cum += (JSON.parse(rows[rowIdx]!.raw_json) as unknown[]).length;
+    cum += (JSON.parse(rows[rowIdx]!.raw_json) as object[]).length;
     rowIdx += 1;
   }
   if (cum !== session.windowLowWater) return null;
@@ -60,7 +60,7 @@ export function planFold(session: Session): FoldPlan | null {
   let newLowWater = session.windowLowWater;
   while (rowIdx < rows.length) {
     const row = rows[rowIdx]!;
-    const msgCount = (JSON.parse(row.raw_json) as unknown[]).length;
+    const msgCount = (JSON.parse(row.raw_json) as object[]).length;
     const remainingAfter = session.history.length - (newLowWater + msgCount);
     if (remainingAfter < KEEP_MSGS) break;
     pieces.push(`User: ${row.user_text}\nLuna: ${row.assistant_text}`);

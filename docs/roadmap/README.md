@@ -4,9 +4,10 @@ Forward development plan for the TypeScript rewrite. Each initiative is a folder
 self-contained version plans, executed one at a time. Version numbers reserve across initiatives so
 they never overlap.
 
-> **Current shipped head: v0.3.6** (2026-06-11, local trace viewer). Initiatives 1 and 1.5
-> ✅ complete. **Next up: Initiative 2 — memory + dream substrate (v0.4.0–v0.5.0)**, planned in
-> [`memory-dream-substrate-2026-06/`](memory-dream-substrate-2026-06/). See
+> **Current shipped head: v0.5.0** (2026-06-12, dream engine). Initiatives 1, 1.5, and 2
+> ✅ complete — Luna remembers, recalls by meaning, survives restarts, and consolidates in
+> dreams. **Next up: Initiative 3 — persona + humanity guardrails (v0.6.0–v0.7.0,
+> introduces `message_tool` per LD #9).** See
 > [`../history/DEVELOPMENT.md`](../history/DEVELOPMENT.md).
 
 ## Planned initiatives (execution order)
@@ -15,7 +16,7 @@ they never overlap.
 |---|---|---|---|---|
 | 1 | v0.1.0 – v0.3.0 | **Tool spec foundation** — Bun skeleton + WS server + typed tool registry + `Result<T>` + 3 representative tools + first end-to-end LLM round trip with Anthropic interleaved tool-use | [`tool-spec-foundation-2026-06/`](tool-spec-foundation-2026-06/) | ✅ shipped 2026-06-11 |
 | 1.5 | v0.3.5 – v0.3.6 | **Observability foundation** — `trace_id` propagation through the v0.3 StateGraph; SQLite trace table (one row per node transition + per tool call); minimal local viewer. Mastra Telemetry / LangSmith parity, table-stakes for every later initiative | [`observability-foundation-2026-06/`](observability-foundation-2026-06/) | ✅ shipped 2026-06-11 |
-| 2 | v0.4.0 – v0.5.0 | **Memory + dream substrate** — SQLite three-layer memory (L1 window / L2 full-text archive / L3 semantic) + prose core memory + hybrid `sqlite-vec`/CJK recall + the **dream** consolidation engine (manual + `enter_dream` tool; reconciliation, diaries, persona update). Merges the old "memory" + "dream" initiatives — dream is the engine memory needs. Port of Python v0.52–v0.57 | [`memory-dream-substrate-2026-06/`](memory-dream-substrate-2026-06/) | ⏳ planned (next up) |
+| 2 | v0.4.0 – v0.5.0 | **Memory + dream substrate** — SQLite three-layer memory (L1 window / L2 full-text archive / L3 semantic) + prose core memory + hybrid `sqlite-vec`/CJK recall + the **dream** consolidation engine (manual + `enter_dream` tool; reconciliation, diaries, persona update). Merges the old "memory" + "dream" initiatives — dream is the engine memory needs. Port of Python v0.52–v0.57 | [`memory-dream-substrate-2026-06/`](memory-dream-substrate-2026-06/) | ✅ shipped 2026-06-12 (5 versions) |
 | 3 | v0.6.0 – v0.7.0 | **Persona + humanity guardrails** — three-layer persona resolution with file-watch cache; humanity hard caps move from streaming-layer truncation to Zod schema on `message` input. **Introduces `message_tool`** per LD #9 (everything-as-tool); frontend wire-event shape (`tool.progress{tool_name:'message'}`) is fixed here for Initiative 6 to consume | _(folder TBD)_ | ⏳ planned |
 | 4 | v0.8.0 – v0.9.0 | **Reasoning rails** — port L1/L2 contracts with Zod-structured-output decisions; full decision replay tree on top of the v0.3.5 trace plumbing | _(folder TBD)_ | ⏳ planned |
 | 5 | v0.10.0 – v0.11.0 | **Proactive engine** — port the state machine (`ENGAGED → IDLE_WATCH → NUDGED → DORMANT → SLEEPING`); cadence persistence; lull anchoring. **Carries the deferred dream auto-trigger** (reuses this engine's idle scheduler) | _(folder TBD)_ | ⏳ planned |

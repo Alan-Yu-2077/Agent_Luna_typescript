@@ -1,6 +1,6 @@
 # Agent_Luna (TypeScript) — Development History
 
-Last updated: 2026-06-12 (Asia/Shanghai) — v0.4.3 (Hybrid recall — sqlite-vec + CJK lexical)
+Last updated: 2026-06-12 (Asia/Shanghai) — v0.5.0 (Dream engine) — Initiative 2 complete
 
 ## Scope
 
@@ -41,7 +41,8 @@ during the rewrite. Its version log is unrelated to this one — `v0.1` here is 
 | `v0.4.0` | 2026-06-12 | Memory substrate foundation — SQLite-backed sessions (L1) + L2 full-text timeline | `c2b322b` |
 | `v0.4.1` | 2026-06-12 | L1 rolling window — recent-N verbatim + compress-once async fold | `e406b60` |
 | `v0.4.2` | 2026-06-12 | L3 semantic store + prose core memory + remember/forget/update_self | `07cc0c1` |
-| `v0.4.3` | 2026-06-12 | Hybrid recall — sqlite-vec embedding-first + CJK-bigram lexical | `working tree` |
+| `v0.4.3` | 2026-06-12 | Hybrid recall — sqlite-vec embedding-first + CJK-bigram lexical | `25d2b08` |
+| `v0.5.0` | 2026-06-12 | Dream engine — isolated 6-step consolidation; Initiative 2 complete | `working tree` |
 
 ## Detailed records
 
@@ -97,6 +98,69 @@ Inference:
   `defineTool`, the dispatcher, and provider logic stay in `packages/server`. Frontend
   (`packages/web`) will consume the same protocol package in Initiative 6, getting
   contract drift as a type error rather than a runtime mismatch.
+
+### `v0.5.0` — 2026-06-12 — Dream engine (Initiative 2 capstone)
+
+Status:
+
+- working tree (commit hash recorded post-commit)
+
+Fact:
+
+- **`graph.ts` generalized** (`runGraph<S, N extends string>`; `NodeFn` returns `N | 'end'`)
+  — type-level only, turn loop unchanged (`TurnNode` 6-union + `NodeName` alias). The dream
+  cycle is a **second StateGraph** on the same runner, not a bespoke pipeline.
+- Wire contract: `ClientEvent` += `dream.enter` / `dream.wake`; `ServerEvent` +=
+  `dream.status` / `dream.step {step, status, detail}`; `chat.send` while dreaming →
+  `error{code:'dreaming'}` (reject, never interleave).
+- `enter_dream` tool added (`ToolName` → 4): **pending-intent only** — sets
+  `session.pendingDream`; the ws layer starts the cycle strictly after the triggering
+  turn's `turn.result` (closes Python's tail-race where the daemon thread started inside
+  tool execution).
+- `dream/` (5 files, ~600 LOC): `dreamState.ts` (module-state gate + SQLite write-through;
+  `finished_idle` parked semantics — completed cycle keeps `is_dreaming=true` until an
+  explicit wake; **boot reconciliation** marks crash-stale cycles aborted and parks awake),
+  `cycle.ts` (six DreamNode steps: refine_semantic → refine_layer1 → memory_audit →
+  persona_update → run_diaries → rag_refresh; traces under `dream:<cycle_id>` with
+  **per-step flushes**; per-step `DreamReport` records persisted to `dream_reports`),
+  `llm.ts` (two-attempt summarizer→default key cascade as **two provider instances**;
+  failure classification incl. yunwu's Chinese rate-limit strings; Zod `MemoryPatch` /
+  `PersonaPatch` JSON-block parsing), `prompts.ts` (natural-language section headers —
+  **no `<<<>>>` delimiters**, the Python v0.56.1 content-filter lesson, test-asserted).
+- `migrations/0006_dream.sql`: `dream_state` (seeded single row), `dream_reports`,
+  `diaries` (day/week/month, `UNIQUE(kind, period_key)`). Diary tiers: day → week rollup
+  (complete week groups), capped by `LUNA_DREAM_MAX_DIARIES_PER_CYCLE` (20).
+- Reconciliation = supersede via the v0.4.2 stores: `memory_audit` soft-forgets stale ids +
+  adds replacements; `persona_update` writes prose core memory with source `'dream'`.
+- `main.ts`: dream LLM cascade built from `LUNA_SUMMARIZER_API_KEY` (+ fallback to the
+  main provider); `bootReconcile()` at startup. Test preload now also forces
+  `LUNA_MEMORY_EMBEDDING=0` ambiently — unit tests can never hit the network via the
+  auto-loaded `.env` (suites opt back in with fake clients).
+- Tests: 111 across 19 files (was 102). New dream suite (9): gate + wake lifecycle ·
+  double-enter/early-wake rejection · **planted-contradiction reconciliation (exactly one
+  active fact survives, old one soft-deleted)** · day+week diaries · persona update with
+  dream-source audit · key cascade + delimiter-absence · per-step trace durability ·
+  pending-intent (no dream activity before `turn.result`) · boot reconciliation.
+- Real-LLM smoke (full cycle ×2): built memory in chat → `dream.enter` → six steps ran
+  (`persona_update:ok / run_diaries:ok / rag_refresh:ok`; `memory_audit` reconciled when
+  given material — and on one run was correctly `skipped` because Luna had **already
+  self-reconciled live** via the remember tool) → `chat.send` while parked → `dreaming` →
+  wake → coherent replies. DB evidence: a real first-person diary row ("Today we finished
+  the dream engine. After all the back-and-forth, the false starts…"), dream-updated
+  `self_state` + `relationship_status`, parked `dream_state`, full step report.
+
+Inference:
+
+- **Initiative 2 (memory + dream substrate) is complete.** Luna now has the full loop her
+  positioning requires: she remembers (L3 + core), recalls by meaning (hybrid), survives
+  restarts (L1/L2), and consolidates offline (dream) — with the live hot path making zero
+  synchronous memory LLM calls and the prompt cache surviving by construction.
+- The isolation contract is stricter than Python's in two places (pending-intent trigger,
+  boot reconciliation) and equal where Python's hard-won fixes mattered (content-filter
+  prompts, key cascade) — the audited "port the lessons, not the accidents" line held.
+- Deviation from plan, documented: the pending-dream check lives in `ws.ts`'s post-turn
+  continuation rather than `runTurn`'s finally — same semantics (strictly post-finalize),
+  cleaner emit reuse, no dream import inside the turn loop.
 
 ### `v0.4.3` — 2026-06-12 — Hybrid recall (sqlite-vec + CJK lexical)
 

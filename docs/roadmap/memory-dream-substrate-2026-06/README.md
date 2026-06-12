@@ -1,6 +1,6 @@
 # Initiative 2 — Memory + Dream Substrate (v0.4.0 – v0.5.0)
 
-> **Status: PLANNED — next up (execution Order 2).** Version range **v0.4.0 → v0.5.0**.
+> **Status: ✅ SHIPPED 2026-06-12 (all 5 versions).** Version range **v0.4.0 → v0.5.0**.
 > Merges the old "memory substrate" (Initiative 2) and "dream engine" (old Initiative 7) into
 > one initiative — dream **is** the consolidation engine that memory needs, so they ship
 > together. Master: [`../README.md`](../README.md).
@@ -144,11 +144,11 @@ diverge on storage and a few deliberate choices.**
 
 | Plan | Version | Theme | Risk | Depends | Status |
 |---|---|---|---|---|---|
-| [Memory substrate foundation](v0.4.0-memory-substrate.md) | v0.4.0 | SQLite-backed `Session` (L1 persistence) + L2 full-text timeline table; reuse `sql.ts`; single-writer free via WAL | Medium | v0.3.6 | ⏳ planned |
-| [L1 rolling window](v0.4.1-l1-rolling-window.md) | v0.4.1 | recent-N verbatim + compress-once rolling summary; never re-compress; L2 re-derive | Medium | v0.4.0 | ⏳ planned |
-| [L3 semantic + core memory](v0.4.2-l3-semantic-core.md) | v0.4.2 | SQLite L3 (5 categories) + `remember`/`forget` tool upgrade + prose core memory (self_state + relationship_status + audit/restore) + per-turn injection block | Medium-High | v0.4.0 | ⏳ planned |
-| [Hybrid recall (RAG)](v0.4.3-hybrid-recall.md) | v0.4.3 | `sqlite-vec` embedding-first + CJK-bigram lexical over L2 full-text + L3 facts | Medium | v0.4.2 | ⏳ planned |
-| [Dream engine](v0.5.0-dream-engine.md) | v0.5.0 | manual (WS + `enter_dream` tool) + manual-wake isolated dream: refine_semantic / refine_l1 / memory_audit / persona_update / run_diaries (day/week/month) / rag_refresh; dream gate on single WS | High | v0.4.3 | ⏳ planned |
+| [Memory substrate foundation](v0.4.0-memory-substrate.md) | v0.4.0 | SQLite-backed `Session` (L1 persistence) + L2 full-text timeline table; reuse `sql.ts`; single-writer free via WAL | Medium | v0.3.6 | ✅ shipped 2026-06-12 |
+| [L1 rolling window](v0.4.1-l1-rolling-window.md) | v0.4.1 | recent-N verbatim + compress-once rolling summary; never re-compress; L2 re-derive | Medium | v0.4.0 | ✅ shipped 2026-06-12 |
+| [L3 semantic + core memory](v0.4.2-l3-semantic-core.md) | v0.4.2 | SQLite L3 (5 categories) + `remember`/`forget` tool upgrade + prose core memory (self_state + relationship_status + audit/restore) + per-turn injection block | Medium-High | v0.4.0 | ✅ shipped 2026-06-12 |
+| [Hybrid recall (RAG)](v0.4.3-hybrid-recall.md) | v0.4.3 | `sqlite-vec` embedding-first + CJK-bigram lexical over L2 full-text + L3 facts | Medium | v0.4.2 | ✅ shipped 2026-06-12 |
+| [Dream engine](v0.5.0-dream-engine.md) | v0.5.0 | manual (WS + `enter_dream` tool) + manual-wake isolated dream: refine_semantic / refine_l1 / memory_audit / persona_update / run_diaries (day/week/month) / rag_refresh; dream gate on single WS | High | v0.4.3 | ✅ shipped 2026-06-12 |
 
 **Deferred (no number reserved yet): dream auto-trigger.** Lands **after Initiative 5 (proactive,
 v0.10–v0.11)** because it reuses the proactive idle scheduler that does not exist until then — the

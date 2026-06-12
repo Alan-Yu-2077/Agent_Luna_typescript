@@ -71,7 +71,7 @@ function makeCtx(sessionId = 'test'): { sessionId: string; sessionMutex: Mutex }
 }
 
 function makeRegistry(tool: Tool): ToolRegistry {
-  return { time_now: tool, read_file: tool, remember: tool };
+  return { time_now: tool, read_file: tool, remember: tool, enter_dream: tool };
 }
 
 async function collect(gen: AsyncGenerator<ToolEvent>): Promise<ToolEvent[]> {

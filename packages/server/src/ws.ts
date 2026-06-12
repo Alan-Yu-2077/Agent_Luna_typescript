@@ -5,17 +5,62 @@ import { outbound } from './outbound';
 import { dispatchToolCalls } from './tools/dispatcher';
 import { builtinRegistry, type ToolRegistry } from './tools/registry';
 import type { Provider } from './provider/types';
-import { getSession } from './turn/session';
+import { getSession, type Session } from './turn/session';
 import { runTurn } from './turn/runTurn';
+import { dreamStatus, isDreaming, wake } from './dream/dreamState';
+import { runDreamCycle } from './dream/cycle';
+import type { DreamLLM } from './dream/llm';
 
 export type WSData = { sessionId: string };
 
-export type Runtime = { provider: Provider; registry: ToolRegistry };
+export type Runtime = { provider: Provider; registry: ToolRegistry; dreamLlm?: DreamLLM };
 
 let runtime: Runtime | null = null;
 
 export function setRuntime(r: Runtime | null): void {
   runtime = r;
+}
+
+function safeEmit(ws: ServerWebSocket<WSData>): (e: ServerEvent) => void {
+  return (e) => {
+    try {
+      outbound(ws, e);
+    } catch {
+      /* socket may be gone; dream/turn continues for persistence */
+    }
+  };
+}
+
+function startDream(ws: ServerWebSocket<WSData>, session: Session): void {
+  if (!runtime?.dreamLlm) {
+    outbound(ws, {
+      type: 'error',
+      code: 'runtime_not_configured',
+      message: 'no provider configured; dream unavailable',
+    });
+    return;
+  }
+  const cycle = runDreamCycle({
+    sessionId: session.id,
+    llm: runtime.dreamLlm,
+    emit: safeEmit(ws),
+  });
+  // enterDream runs synchronously inside runDreamCycle before its first await,
+  // so the gate state is already accurate here.
+  if (isDreaming()) {
+    const status = dreamStatus();
+    outbound(ws, {
+      type: 'dream.status',
+      is_dreaming: status.is_dreaming,
+      current_step: status.current_step,
+      last_dream_ms: status.last_dream_ms,
+    });
+  }
+  void cycle.then((r) => {
+    if (!r.ok) {
+      safeEmit(ws)({ type: 'error', code: 'dream_failed', message: r.error });
+    }
+  });
 }
 
 export function handleOpen(ws: ServerWebSocket<WSData>): void {
@@ -79,6 +124,14 @@ export function handleMessage(
       void runDevDispatch(ws, event.call_id, event.tool_name, event.input);
       return;
     case 'chat.send': {
+      if (isDreaming()) {
+        outbound(ws, {
+          type: 'error',
+          code: 'dreaming',
+          message: 'Luna is dreaming — send dream.wake to wake her',
+        });
+        return;
+      }
       if (!runtime) {
         outbound(ws, {
           type: 'error',
@@ -97,19 +150,49 @@ export function handleMessage(
         return;
       }
       const turnId = event.turn_id ?? `${session.id}:turn:${session.turnSeq}`;
+      const emit = safeEmit(ws);
       void runTurn({
         session,
         turnId,
         userText: event.text,
         provider: runtime.provider,
         registry: runtime.registry,
-        emit: (e: ServerEvent) => {
-          try {
-            outbound(ws, e);
-          } catch {
-            /* socket may be gone mid-turn; turn still completes for history */
-          }
-        },
+        emit,
+      }).then(() => {
+        // enter_dream is a pending intent: the cycle starts only after the
+        // triggering turn fully finalized — never overlapping any part of it.
+        if (session.pendingDream !== null) {
+          session.pendingDream = null;
+          startDream(ws, session);
+        }
+      });
+      return;
+    }
+    case 'dream.enter': {
+      const session = getSession(ws.data.sessionId);
+      if (session.activeTurn !== null) {
+        outbound(ws, {
+          type: 'error',
+          code: 'turn_in_progress',
+          message: 'cannot enter dream while a turn is running',
+        });
+        return;
+      }
+      startDream(ws, session);
+      return;
+    }
+    case 'dream.wake': {
+      const result = wake();
+      if (!result.ok) {
+        outbound(ws, { type: 'error', code: result.error, message: `wake rejected: ${result.error}` });
+        return;
+      }
+      const status = dreamStatus();
+      outbound(ws, {
+        type: 'dream.status',
+        is_dreaming: status.is_dreaming,
+        current_step: status.current_step,
+        last_dream_ms: status.last_dream_ms,
       });
       return;
     }

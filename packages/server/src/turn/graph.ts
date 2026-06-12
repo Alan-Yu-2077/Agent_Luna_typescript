@@ -1,29 +1,38 @@
-export type NodeName =
+// Generic StateGraph: N is the union of non-terminal node names; every node
+// returns the next node or 'end'. Used by the turn loop (TurnNode) and the
+// dream cycle (DreamNode) — one orchestration shape, one trace seam.
+export type NodeFn<S, N extends string> = (state: S) => Promise<N | 'end'>;
+
+export type Graph<S, N extends string> = Record<N, NodeFn<S, N>>;
+
+export type TransitionHook<S, N extends string> = (
+  from: N | '_',
+  to: N | 'end',
+  state: S,
+) => void;
+
+export async function runGraph<S, N extends string>(
+  graph: Graph<S, N>,
+  start: N,
+  state: S,
+  onTransition?: TransitionHook<S, N>,
+): Promise<void> {
+  let current: N | 'end' = start;
+  onTransition?.('_', current, state);
+  while (current !== 'end') {
+    const from: N = current;
+    const next: N | 'end' = await graph[from](state);
+    onTransition?.(from, next, state);
+    current = next;
+  }
+}
+
+export type TurnNode =
   | 'parse_input'
   | 'build_request'
   | 'open_stream'
   | 'dispatch_tools'
   | 'append_results'
-  | 'finalize'
-  | 'end';
+  | 'finalize';
 
-export type NodeFn<S> = (state: S) => Promise<NodeName>;
-
-export type Graph<S> = Record<Exclude<NodeName, 'end'>, NodeFn<S>>;
-
-export type TransitionHook<S> = (from: NodeName | '_', to: NodeName, state: S) => void;
-
-export async function runGraph<S>(
-  graph: Graph<S>,
-  start: Exclude<NodeName, 'end'>,
-  state: S,
-  onTransition?: TransitionHook<S>,
-): Promise<void> {
-  let current: NodeName = start;
-  onTransition?.('_', current, state);
-  while (current !== 'end') {
-    const next = await graph[current](state);
-    onTransition?.(current, next, state);
-    current = next;
-  }
-}
+export type NodeName = TurnNode | 'end';

@@ -28,15 +28,54 @@ every decision here.
 
 ## Current state (read this first)
 
-> **Shipped head: v0.3.6** (2026-06-11). Initiatives 1 (tool spec) and 1.5 (observability) are
-> complete. Next up: Initiative 2 — memory substrate (v0.4.0). The agent core works end-to-end:
-> a WS client sends `chat.send`, a real LLM turn streams back through a StateGraph with
-> interleaved tool calls, and every turn is traced to SQLite and browsable at `/_trace`.
+> **Shipped head: v0.5.0** (2026-06-12). Initiatives 1 (tool spec), 1.5 (observability), and
+> 2 (memory + dream) are complete. Next up: Initiative 3 — persona + humanity (v0.6, introduces
+> `message_tool` per LD #9). The agent core works end-to-end: WS `chat.send` → real LLM turn
+> through a generic StateGraph with interleaved tools → persisted to SQLite (L1 session + L2
+> full-text + L3 facts + prose core memory) → hybrid recall (sqlite-vec + CJK lexical) injected
+> cache-aware → manual/tool-triggered **dream** consolidates offline (reconcile, diaries,
+> persona) — all traced and browsable at `/_trace`.
 
 Always confirm the head by reading the top of
 [`docs/history/DEVELOPMENT.md`](../../../docs/history/DEVELOPMENT.md) — it is the truth source,
-not this skill. The file map below is current as of v0.3.6; if DEVELOPMENT.md shows a higher
+not this skill. The file map below is current as of v0.5.0; if DEVELOPMENT.md shows a higher
 version, trust the code and update this skill.
+
+### Memory + dream additions (v0.4.0–v0.5.0; base map below is v0.3.6)
+
+```
+packages/protocol/src/
+  memory.ts    L2Turn · SessionRow · L3Category/L3Fact (deleted_ms soft-delete) · CoreMemory (prose)
+  events.ts    += chat dream.enter/dream.wake · dream.status/dream.step · error{code:'dreaming'}
+  tools.ts     ToolName += enter_dream (4 tools)
+packages/server/src/
+  migrations/            ONE shared dir (0001 traces … 0006 dream); migrate() throws on dup numbers
+  memory/
+    sessionStore.ts      setMemoryDb() seam (no-op unset) · loadSession/persistSession/appendL2/listL2 · commitFold CAS
+    l1Window.ts          buildActiveContext (summary-msg + verbatim tail) · planFold (whole L2 turns) · maybeFold (ASYNC post-finalize, CAS)
+    l3Store.ts           addFact (dedupKey, prefixed ids, active_threads TTL) · forgetFact = SOFT delete · listFacts(asOf time-travel)
+    coreMemory.ts        getCore/updateCore (audit-first)/restore(n) — prose only
+    renderCoreBlock.ts   STABLE system-prompt block + cache_control breakpoint (byte-identity = cache invariant, test-pinned)
+    recall/
+      vecRuntime.ts      initCustomSqlite (process-global, BEFORE any Database; tests via bunfig preload) · tryLoadVec
+      embed.ts           ~60-LOC fetch /v1/embeddings client (NOT openai_compat) · f32-LE BLOB · sha256 cache · cosine
+      lexical.ts         CJK sliding bigrams + ascii words
+      recall.ts          hybrid 0.7cos+0.3lex + recency; vec0 lazy-created derived table; fallback TS cosine; recall block = MESSAGE level
+  dream/
+    dreamState.ts        module gate + SQLite write-through · finished_idle parked · bootReconcile (crash-stale → aborted+awake)
+    cycle.ts             SECOND StateGraph (6 DreamNodes) · trace dream:<cycle_id> · flush per step
+    llm.ts               summarizer→default key cascade (two provider instances) · failure classification · Zod patch parsing
+    prompts.ts           natural-language headers — NO <<<>>> delimiters (yunwu content-filter lesson)
+  tools/builtin/enter_dream.ts   pending-intent ONLY; cycle starts post-turn.result (ws.ts continuation)
+  turn/graph.ts          runGraph<S, N extends string> — generic; TurnNode + NodeName alias
+```
+
+Key invariants (each test-pinned): hot path = zero synchronous memory LLM calls (async CAS fold
+is the sole exception) · system prompt byte-stable unless memory changes · forget = soft delete ·
+dream never overlaps a live turn (incl. its trigger's turn) · fold input = L2 verbatim, never the
+prior summary. Test preload forces `LUNA_MEMORY_EMBEDDING=0` (Bun auto-loads `.env` with real
+keys — unit tests must not hit the network ambiently). WAL gotcha: a not-cleanly-closed DB fails
+`{readonly:true}` opens with SQLITE_CANTOPEN — inspect with a writable connection.
 
 ### File map (v0.3.6)
 

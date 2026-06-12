@@ -4,7 +4,7 @@ import { ToolName, type ServerEvent, type ToolCall, type FinishReason } from '@l
 import type { Provider, ProviderToolUse, ProviderUsage } from '../provider/types';
 import type { ToolRegistry } from '../tools/registry';
 import { dispatchToolCalls } from '../tools/dispatcher';
-import { runGraph, type Graph, type TransitionHook, type NodeName } from './graph';
+import { runGraph, type Graph, type TransitionHook, type TurnNode, type NodeName } from './graph';
 import type { Session } from './session';
 import { trace, flushTrace, traceEnabled } from '../trace/instrument';
 import { appendL2, persistSession } from '../memory/sessionStore';
@@ -63,7 +63,7 @@ export function toolsToAnthropicFormat(registry: ToolRegistry): Anthropic.Tool[]
   });
 }
 
-const graph: Graph<TurnState> = {
+const graph: Graph<TurnState, TurnNode> = {
   async parse_input(s) {
     const blocks: Anthropic.TextBlockParam[] = [];
     if (Bun.env['LUNA_MEMORY_INJECT'] !== '0' && getMemoryDb()) {
@@ -230,7 +230,7 @@ export type RunTurnOptions = {
   provider: Provider;
   registry: ToolRegistry;
   emit: (e: ServerEvent) => void;
-  onTransition?: TransitionHook<TurnState>;
+  onTransition?: TransitionHook<TurnState, TurnNode>;
 };
 
 export async function runTurn(opts: RunTurnOptions): Promise<TurnState> {
@@ -270,7 +270,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<TurnState> {
     startedMs: Date.now(),
   };
 
-  const onTransition: TransitionHook<TurnState> = (from, to, s) => {
+  const onTransition: TransitionHook<TurnState, TurnNode> = (from, to, s) => {
     if (traceEnabled()) {
       trace({
         schema_v: 1,

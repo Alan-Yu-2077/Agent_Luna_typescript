@@ -70,7 +70,8 @@ afterEach(() => {
   db.close(false);
   resetSessions();
   delete Bun.env['LUNA_EMBEDDING_API_KEY'];
-  delete Bun.env['LUNA_MEMORY_EMBEDDING'];
+  // Restore the preload's ambient-network guard.
+  Bun.env['LUNA_MEMORY_EMBEDDING'] = '0';
 });
 
 function seedL2(sessionId: string, turns: [string, string][]): void {

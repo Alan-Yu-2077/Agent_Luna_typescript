@@ -19,10 +19,20 @@ export const ChatSendEvent = z.object({
   text: z.string().min(1),
 });
 
+export const DreamEnterEvent = z.object({
+  type: z.literal('dream.enter'),
+});
+
+export const DreamWakeEvent = z.object({
+  type: z.literal('dream.wake'),
+});
+
 export const ClientEvent = z.discriminatedUnion('type', [
   PingEvent,
   DevDispatchToolEvent,
   ChatSendEvent,
+  DreamEnterEvent,
+  DreamWakeEvent,
 ]);
 export type ClientEvent = z.infer<typeof ClientEvent>;
 
@@ -88,6 +98,23 @@ export const TurnResultEvent = z.object({
   }),
 });
 
+export const DreamStepStatus = z.enum(['ok', 'skipped', 'failed']);
+export type DreamStepStatus = z.infer<typeof DreamStepStatus>;
+
+export const DreamStatusEvent = z.object({
+  type: z.literal('dream.status'),
+  is_dreaming: z.boolean(),
+  current_step: z.string().nullable(),
+  last_dream_ms: z.number().int().nullable(),
+});
+
+export const DreamStepEvent = z.object({
+  type: z.literal('dream.step'),
+  step: z.string(),
+  status: DreamStepStatus,
+  detail: z.string(),
+});
+
 export const ServerEvent = z.discriminatedUnion('type', [
   PongEvent,
   ErrorEvent,
@@ -97,5 +124,7 @@ export const ServerEvent = z.discriminatedUnion('type', [
   TurnStartedEvent,
   ReplyTokenEvent,
   TurnResultEvent,
+  DreamStatusEvent,
+  DreamStepEvent,
 ]);
 export type ServerEvent = z.infer<typeof ServerEvent>;

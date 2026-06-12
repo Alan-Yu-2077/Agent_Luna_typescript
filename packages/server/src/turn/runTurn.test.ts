@@ -55,7 +55,7 @@ function progressRegistry(progressCount: number): ToolRegistry {
       yield { kind: 'ok', data: { ok: true as const } };
     },
   });
-  return { time_now: tool, read_file: tool, remember: tool };
+  return { time_now: tool, read_file: tool, remember: tool, enter_dream: tool };
 }
 
 async function run(
