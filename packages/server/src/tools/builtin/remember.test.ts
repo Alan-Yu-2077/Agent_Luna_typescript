@@ -69,3 +69,30 @@ describe('remember tool (discriminated actions)', () => {
     expect(rememberTool.summarize({ status: 'self_updated' })).toBe('self_updated');
   });
 });
+
+describe('remember input schema (gateway-safe flat object)', () => {
+  test('per-action requirements enforced via superRefine', () => {
+    expect(rememberTool.input.safeParse({ action: 'add' }).success).toBe(false);
+    expect(
+      rememberTool.input.safeParse({ action: 'add', category: 'core_facts', text: 'x' }).success,
+    ).toBe(true);
+    expect(rememberTool.input.safeParse({ action: 'forget' }).success).toBe(false);
+    expect(rememberTool.input.safeParse({ action: 'forget', id: 'cf_1' }).success).toBe(true);
+    expect(rememberTool.input.safeParse({ action: 'update_self' }).success).toBe(false);
+    expect(
+      rememberTool.input.safeParse({ action: 'update_self', self_state: 'calm' }).success,
+    ).toBe(true);
+  });
+
+  test('wrong field name ("content") → recoverable miss on the right field, not a union blob', () => {
+    const r = rememberTool.input.safeParse({
+      action: 'add',
+      category: 'core_facts',
+      content: 'wrong key',
+    });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      expect(r.error.issues.some((i) => i.path[0] === 'text')).toBe(true);
+    }
+  });
+});

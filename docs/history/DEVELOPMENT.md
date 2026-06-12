@@ -1,6 +1,6 @@
 # Agent_Luna (TypeScript) — Development History
 
-Last updated: 2026-06-12 (Asia/Shanghai) — v0.5.1 (dev chat page `/_chat`)
+Last updated: 2026-06-12 (Asia/Shanghai) — v0.5.2 (gateway-safe tool schemas; `remember` fix from first real-usage data)
 
 ## Scope
 
@@ -43,7 +43,8 @@ during the rewrite. Its version log is unrelated to this one — `v0.1` here is 
 | `v0.4.2` | 2026-06-12 | L3 semantic store + prose core memory + remember/forget/update_self | `07cc0c1` |
 | `v0.4.3` | 2026-06-12 | Hybrid recall — sqlite-vec embedding-first + CJK-bigram lexical | `25d2b08` |
 | `v0.5.0` | 2026-06-12 | Dream engine — isolated 6-step consolidation; Initiative 2 complete | `a0df0b5` |
-| `v0.5.1` | 2026-06-12 | Dev chat page `/_chat` — first usable conversation surface | `working tree` |
+| `v0.5.1` | 2026-06-12 | Dev chat page `/_chat` — first usable conversation surface | `c4a9d84` |
+| `v0.5.2` | 2026-06-12 | Gateway-safe tool schemas — `remember` flat input + `_noargs` unwrap | `working tree` |
 
 ## Detailed records
 
@@ -99,6 +100,53 @@ Inference:
   `defineTool`, the dispatcher, and provider logic stay in `packages/server`. Frontend
   (`packages/web`) will consume the same protocol package in Initiative 6, getting
   contract drift as a type error rather than a runtime mismatch.
+
+### `v0.5.2` — 2026-06-12 — Gateway-safe tool schemas (`remember` bug from first real usage)
+
+Status:
+
+- working tree (commit hash recorded post-commit)
+
+Fact:
+
+- **Bug (user-reported, confirmed in trace data):** every real-usage `remember` call failed with
+  `validation_failed: invalid_union_discriminator` (turns 1 and 6, 2026-06-12 16:54/17:01).
+  L2 archive showed the model's arguments arriving wrapped as `{"_noargs": "<raw args text>"}` —
+  a key that exists nowhere in this repo or the SDK. Root cause: `remember`'s input was a Zod
+  `discriminatedUnion`, whose wire schema is a **root-level `anyOf` with no top-level
+  `properties`**; the yunwu gateway treats such tools as argument-less and wraps whatever the
+  model emits under `_noargs`. The upstream model also never saw the real field names (one call
+  used `content` instead of `text`). `read_file` (plain object schema) was untouched in the same
+  sessions — and the dream cycle's `memory_audit` step quietly compensated by adding 5 facts the
+  failed `remember` calls had attempted.
+- **Fix 1 — flat input schema** (`tools/builtin/remember.ts`): `action: z.enum(...)` + optional
+  per-action fields with `describe()` hints, per-action requirements enforced in `superRefine`.
+  Wire schema is now a flat root-level object; runtime and wire contracts agree exactly (no
+  strict-variant mismatch a flattening shim would have introduced). Wrong-field-name calls now
+  fail with a targeted recoverable issue (`text: required for action="add"`) instead of a union blob.
+- **Fix 2 — defensive unwrap** (`provider/anthropic.ts` `unwrapGatewayInput`, exported + unit
+  tested): a `{"_noargs": "<json>"}` single-key input is unwrapped to the parsed object when the
+  raw text is a JSON object; anything else passes through for tool validation to reject
+  recoverably. Applied only to dispatch `toolUses`; `assistantContent` stays verbatim in history
+  (signed thinking blocks).
+- **Fix 3 — cap error recoverable** (`tools/dispatcher.ts`): `concurrent tool cap exceeded` was
+  `recoverable: false`, telling the model not to retry calls it can simply re-issue next round
+  (hit in real usage, turn 25: 9 parallel `read_file`). Now `recoverable: true`.
+- **Regression guard** (`runTurn.test.ts`): every builtin tool's `toolsToAnthropicFormat` schema
+  must be a root-level `type: "object"` with `properties` and no `anyOf`/`oneOf`/`allOf`.
+- Tests: 120 across 21 files (+7). Live yunwu smoke: "请记住：我的名字是 Alan，我喜欢猫。" → two
+  clean `remember` tool_use calls (`action:"add"`, correct `text`/`category`/`confidence`),
+  both validate PASS, no `_noargs`.
+
+Inference:
+
+- First bug found **by the observability + memory substrate doing their job**: the trace table
+  pinpointed the failing call and the L2 verbatim archive preserved the mangled input — exactly
+  the "memory bugs are traceable from day one" payoff the roadmap ordered Initiative 1.5 before 2 for.
+- Locks a wire-contract rule for everything-as-tool (LD #9): **tool input schemas must be flat
+  root-level objects** — discriminated unions stay a runtime-validation pattern, never a wire
+  shape. The v0.6 `message` tool schema already satisfies this; the regression test makes it
+  permanent.
 
 ### `v0.5.1` — 2026-06-12 — Dev chat page `/_chat`
 

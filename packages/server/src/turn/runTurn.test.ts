@@ -7,7 +7,7 @@ import type { ProviderEvent } from '../provider/types';
 import { defineTool } from '../tools/defineTool';
 import { builtinRegistry, type ToolRegistry } from '../tools/registry';
 import { getSession, resetSessions } from './session';
-import { runTurn, MAX_TOOL_ITERATIONS } from './runTurn';
+import { runTurn, toolsToAnthropicFormat, MAX_TOOL_ITERATIONS } from './runTurn';
 
 function stopWithTool(
   id: string,
@@ -211,5 +211,21 @@ describe('runTurn', () => {
     expect(provider.requests.length).toBe(1);
     expect(session.activeTurn).toBe(null);
     expect(events.find((e) => e.type === 'turn.result')).toBeUndefined();
+  });
+});
+
+describe('tool wire schemas (gateway compatibility)', () => {
+  // The yunwu gateway mangles tools whose root schema is anyOf/oneOf (no
+  // top-level properties): args come back wrapped as {"_noargs": "<raw>"}.
+  // Every tool must therefore present a flat root-level object on the wire.
+  test('every builtin tool schema is a root-level object with properties', () => {
+    for (const t of toolsToAnthropicFormat(builtinRegistry)) {
+      const s = t.input_schema as Record<string, unknown>;
+      expect(s['type']).toBe('object');
+      expect('properties' in s).toBe(true);
+      expect('anyOf' in s).toBe(false);
+      expect('oneOf' in s).toBe(false);
+      expect('allOf' in s).toBe(false);
+    }
   });
 });

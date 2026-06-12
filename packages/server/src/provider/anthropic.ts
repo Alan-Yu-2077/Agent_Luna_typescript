@@ -10,6 +10,30 @@ import type {
 const MODEL = Bun.env['LUNA_MODEL'] ?? 'claude-opus-4-8';
 const MAX_TOKENS = Number(Bun.env['LUNA_MAX_TOKENS'] ?? 8192);
 
+// The yunwu gateway wraps tool arguments it failed to map upstream as
+// {"_noargs": "<raw args text>"} (observed 2026-06-12 on `remember` while its
+// wire schema was a root-level anyOf). Recover the real object when the raw
+// text is JSON; otherwise pass through and let tool validation reject it with
+// a recoverable error the model can act on.
+export function unwrapGatewayInput(input: unknown): unknown {
+  if (input !== null && typeof input === 'object' && !Array.isArray(input)) {
+    const rec = input as Record<string, unknown>;
+    const keys = Object.keys(rec);
+    const raw = rec['_noargs'];
+    if (keys.length === 1 && keys[0] === '_noargs' && typeof raw === 'string') {
+      try {
+        const parsed: unknown = JSON.parse(raw);
+        if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          return parsed;
+        }
+      } catch {
+        // not JSON — fall through unchanged
+      }
+    }
+  }
+  return input;
+}
+
 export class AnthropicProvider implements Provider {
   private client: Anthropic;
 
@@ -77,7 +101,7 @@ export class AnthropicProvider implements Provider {
 
     const toolUses = final.content
       .filter((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use')
-      .map((b) => ({ id: b.id, name: b.name, input: b.input }));
+      .map((b) => ({ id: b.id, name: b.name, input: unwrapGatewayInput(b.input) }));
 
     yield {
       kind: 'message_stop',

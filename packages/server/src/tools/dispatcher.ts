@@ -22,7 +22,8 @@ export async function* dispatchToolCalls(
   const accepted = calls.slice(0, MAX_CONCURRENT_TOOLS_PER_SESSION);
 
   for (const call of overflow) {
-    yield finalErr(call, 'execution_exception', 'concurrent tool cap exceeded', false);
+    // recoverable: the model can simply re-issue the dropped calls next round
+    yield finalErr(call, 'execution_exception', 'concurrent tool cap exceeded', true);
   }
 
   const safeParallel: ToolCall[] = [];

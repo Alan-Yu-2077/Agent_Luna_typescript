@@ -4,23 +4,43 @@ import { defineTool } from '../defineTool';
 import { addFact, forgetFact } from '../../memory/l3Store';
 import { updateCore } from '../../memory/coreMemory';
 
-const Input = z.discriminatedUnion('action', [
-  z.object({
-    action: z.literal('add'),
-    category: L3Category,
-    text: z.string().min(1),
-    confidence: L3Confidence.optional(),
-  }),
-  z.object({
-    action: z.literal('forget'),
-    id: z.string().min(1),
-  }),
-  z.object({
-    action: z.literal('update_self'),
-    self_state: z.string().optional(),
-    relationship_status: z.string().optional(),
-  }),
-]);
+// Flat object on purpose, NOT z.discriminatedUnion: a root-level anyOf wire
+// schema (no top-level `properties`) makes the yunwu gateway treat the tool as
+// argument-less and wrap the model's args as {"_noargs": "<raw>"} — every call
+// then fails validation. Per-action requirements are enforced in superRefine.
+const Input = z
+  .object({
+    action: z.enum(['add', 'forget', 'update_self']),
+    category: L3Category.optional().describe('required when action="add"'),
+    text: z.string().min(1).optional().describe('the fact to store; required when action="add"'),
+    confidence: L3Confidence.optional().describe('only meaningful when action="add"'),
+    id: z.string().min(1).optional().describe('entry id to forget; required when action="forget"'),
+    self_state: z.string().optional().describe('only meaningful when action="update_self"'),
+    relationship_status: z
+      .string()
+      .optional()
+      .describe('only meaningful when action="update_self"'),
+  })
+  .superRefine((v, ctx) => {
+    if (v.action === 'add') {
+      if (!v.category) {
+        ctx.addIssue({ code: 'custom', path: ['category'], message: 'required for action="add"' });
+      }
+      if (!v.text) {
+        ctx.addIssue({ code: 'custom', path: ['text'], message: 'required for action="add"' });
+      }
+    }
+    if (v.action === 'forget' && !v.id) {
+      ctx.addIssue({ code: 'custom', path: ['id'], message: 'required for action="forget"' });
+    }
+    if (v.action === 'update_self' && v.self_state === undefined && v.relationship_status === undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['self_state'],
+        message: 'action="update_self" needs self_state and/or relationship_status',
+      });
+    }
+  });
 
 const Output = z.object({
   status: z.enum(['added', 'deduped', 'forgotten', 'not_found', 'self_updated']),
@@ -39,6 +59,8 @@ export const rememberTool = defineTool({
   execute: async function* (input) {
     switch (input.action) {
       case 'add': {
+        // superRefine guarantees both; guards narrow the optional-field type
+        if (!input.category || !input.text) return;
         const result = addFact(input.category, input.text, input.confidence);
         if (!result) {
           yield {
@@ -53,6 +75,7 @@ export const rememberTool = defineTool({
         return;
       }
       case 'forget': {
+        if (!input.id) return;
         const result = forgetFact(input.id);
         if (!result) {
           yield {

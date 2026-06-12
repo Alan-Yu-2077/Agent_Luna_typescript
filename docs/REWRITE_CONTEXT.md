@@ -147,7 +147,7 @@ These are **explicitly out of scope** for v2. Most are dead, vestigial, or sympt
 - `make_directory`, `move_path`, `copy_path`, `delete_path` → folded into `shell` tool.
 - `local_roots`, `explore_local_files`, `codebase_overview`, `find_relevant_files` → covered by `list_files` + `search_code` + `read_file`.
 - `progress_update` → replaced by streaming progress from tools themselves (interleaved tool-use).
-- `remember`, `revise_memory`, `forget`, `update_self` → collapsed into one `remember` tool with a discriminated input (final shape locked at v0.4.2 planning: `action: 'add' | 'forget' | 'update_self'` + `category` for L3 placement; supersedes the early `input.kind` sketch — v0.2 shipped `kind` as a category stub, v0.4.2 reshapes it).
+- `remember`, `revise_memory`, `forget`, `update_self` → collapsed into one `remember` tool with a discriminated input (final shape locked at v0.4.2 planning: `action: 'add' | 'forget' | 'update_self'` + `category` for L3 placement; supersedes the early `input.kind` sketch — v0.2 shipped `kind` as a category stub, v0.4.2 reshapes it). **v0.5.2 wire-contract amendment:** the discrimination is enforced in `superRefine` over a **flat root-level object schema**, never `z.discriminatedUnion` on the wire — the yunwu gateway mangles root-level `anyOf` tool schemas into `{"_noargs": "<raw>"}` (every real-usage `remember` call failed until this fix). Rule generalizes to all tools incl. the v0.6 `message` tool; regression-tested in `runTurn.test.ts`.
 
 **Dead code removed in transit**
 - `core_memory_refiner` **module name** is cut, **but its rendering function survives**: the
