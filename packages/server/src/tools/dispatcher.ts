@@ -13,17 +13,6 @@ export type DispatchContext = {
   sessionMutex: Mutex;
 };
 
-const sessionMutexes = new Map<string, Mutex>();
-
-export function getSessionMutex(sessionId: string): Mutex {
-  let m = sessionMutexes.get(sessionId);
-  if (!m) {
-    m = new Mutex();
-    sessionMutexes.set(sessionId, m);
-  }
-  return m;
-}
-
 export async function* dispatchToolCalls(
   calls: ToolCall[],
   ctx: DispatchContext,

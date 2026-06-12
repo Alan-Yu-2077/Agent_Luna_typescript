@@ -6,13 +6,17 @@ import { closeDb, migrate, openDb } from './sql';
 import { TraceStore } from './trace/store';
 import { setTraceStore } from './trace/instrument';
 import { traceViewerHandler } from './trace/viewer';
+import { setMemoryDb } from './memory/sessionStore';
 
 const port = Number(process.env['LUNA_PORT'] ?? 8787);
 
 const db = openDb(Bun.env['LUNA_DB_PATH'] ?? './luna.sqlite');
-const version = migrate(db, join(import.meta.dir, 'trace', 'migrations'));
+const version = migrate(db, join(import.meta.dir, 'migrations'));
 const traceStore = new TraceStore(db);
 setTraceStore(traceStore);
+if (Bun.env['LUNA_PERSIST'] !== '0') {
+  setMemoryDb(db);
+}
 console.log(`[luna-server] sqlite ready (schema v${version})`);
 
 const viewerEnabled = Bun.env['LUNA_VIEWER'] !== '0';

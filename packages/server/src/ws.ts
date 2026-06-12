@@ -2,7 +2,7 @@ import type { ServerWebSocket } from 'bun';
 import { ClientEvent, ToolName, assertNever } from '@luna/protocol';
 import type { ServerEvent, ToolEvent } from '@luna/protocol';
 import { outbound } from './outbound';
-import { dispatchToolCalls, getSessionMutex } from './tools/dispatcher';
+import { dispatchToolCalls } from './tools/dispatcher';
 import { builtinRegistry, type ToolRegistry } from './tools/registry';
 import type { Provider } from './provider/types';
 import { getSession } from './turn/session';
@@ -124,11 +124,11 @@ async function runDevDispatch(
   tool_name: ToolName,
   input: unknown,
 ): Promise<void> {
-  const sessionMutex = getSessionMutex(ws.data.sessionId);
+  const session = getSession(ws.data.sessionId);
   try {
     for await (const evt of dispatchToolCalls(
       [{ call_id, tool_name, input }],
-      { sessionId: ws.data.sessionId, sessionMutex },
+      { sessionId: session.id, sessionMutex: session.mutex },
       builtinRegistry,
     )) {
       forwardToolEvent(ws, evt);

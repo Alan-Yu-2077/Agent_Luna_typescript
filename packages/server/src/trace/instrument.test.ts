@@ -16,7 +16,7 @@ let store: TraceStore;
 
 beforeEach(() => {
   db = new Database(':memory:', { strict: true });
-  db.exec(readFileSync(join(import.meta.dir, 'migrations', '0001_traces.sql'), 'utf8'));
+  db.exec(readFileSync(join(import.meta.dir, '..', 'migrations', '0001_traces.sql'), 'utf8'));
   store = new TraceStore(db);
   setTraceStore(store);
   delete Bun.env['LUNA_TRACE'];

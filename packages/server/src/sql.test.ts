@@ -81,4 +81,15 @@ describe('sql', () => {
     expect(row.journal_mode).toBe('wal');
     closeDb(db);
   });
+
+  test('duplicate migration numbers throw instead of silently skipping', () => {
+    const dir = makeTmp();
+    const migrationsDir = join(dir, 'migrations');
+    mkdirSync(migrationsDir);
+    writeFileSync(join(migrationsDir, '0001_a.sql'), 'CREATE TABLE a (id INTEGER);');
+    writeFileSync(join(migrationsDir, '0001_b.sql'), 'CREATE TABLE b (id INTEGER);');
+    const db = openDb(join(dir, 'dup.sqlite'));
+    expect(() => migrate(db, migrationsDir)).toThrow('duplicate migration number');
+    closeDb(db);
+  });
 });

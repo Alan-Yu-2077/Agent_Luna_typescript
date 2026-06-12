@@ -24,6 +24,17 @@ export function migrate(db: Database, migrationsDir: string): number {
     .filter((f) => f.endsWith('.sql'))
     .sort();
 
+  const seen = new Set<number>();
+  for (const file of files) {
+    const match = file.match(/^(\d+)_/);
+    if (!match || !match[1]) continue;
+    const version = Number(match[1]);
+    if (seen.has(version)) {
+      throw new Error(`duplicate migration number ${version} (${file}) — would be silently skipped`);
+    }
+    seen.add(version);
+  }
+
   let current = userVersion(db);
   for (const file of files) {
     const match = file.match(/^(\d+)_/);

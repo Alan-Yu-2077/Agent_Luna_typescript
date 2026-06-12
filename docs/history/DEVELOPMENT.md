@@ -1,6 +1,6 @@
 # Agent_Luna (TypeScript) — Development History
 
-Last updated: 2026-06-11 (Asia/Shanghai) — v0.3.6 (Local trace viewer)
+Last updated: 2026-06-12 (Asia/Shanghai) — v0.4.0 (Memory substrate foundation)
 
 ## Scope
 
@@ -37,7 +37,8 @@ during the rewrite. Its version log is unrelated to this one — `v0.1` here is 
 | `v0.2.0` | 2026-06-11 | Typed tool registry + `Result<T>` + 3 representative tools | `14753c4` |
 | `v0.3.0` | 2026-06-11 | Anthropic interleaved tool-use end-to-end (StateGraph turn loop) | `8fbdce4` |
 | `v0.3.5` | 2026-06-11 | Trace plumbing — first `bun:sqlite`, trace_id through the graph | `cbb468a` |
-| `v0.3.6` | 2026-06-11 | Local `/_trace` viewer; `LUNA_TRACE` default on | `working tree` |
+| `v0.3.6` | 2026-06-11 | Local `/_trace` viewer; `LUNA_TRACE` default on | `58a970a` |
+| `v0.4.0` | 2026-06-12 | Memory substrate foundation — SQLite-backed sessions (L1) + L2 full-text timeline | `working tree` |
 
 ## Detailed records
 
@@ -93,6 +94,48 @@ Inference:
   `defineTool`, the dispatcher, and provider logic stay in `packages/server`. Frontend
   (`packages/web`) will consume the same protocol package in Initiative 6, getting
   contract drift as a type error rather than a runtime mismatch.
+
+### `v0.4.0` — 2026-06-12 — Memory substrate foundation
+
+Status:
+
+- working tree (commit hash recorded post-commit)
+
+Fact:
+
+- Added `packages/protocol/src/memory.ts` (Zod `L2Turn` + `SessionRow`) and
+  `packages/server/src/memory/sessionStore.ts` (~100 LOC): `setMemoryDb()` injection seam
+  (mirrors `setTraceStore` — unset → all functions no-op, existing test suites run unchanged),
+  `loadSession` / `persistSession` (upsert) / `appendL2` / `listL2`.
+- **Migrations unified into one shared dir** `packages/server/src/migrations/`:
+  `0001_traces.sql` moved from `trace/migrations/` (number is the identity — path is never
+  recorded, so existing DBs are unaffected), new `0002_memory.sql` (`sessions`, `l2_turns`
+  + `(session_id, t_ms)` index). `migrate()` now throws on duplicate migration numbers
+  (they would otherwise be silently skipped). Trace test fixture paths updated.
+- `session.ts` hydrates from SQLite on first `getSession` when the seam is set; `Session`
+  gains `pendingDream: string | null` (reserved for v0.5.0). `runTurn` snapshots history
+  length at turn start and persists the turn's full as-sent slice to L2 (`raw_json`) +
+  upserts the session in its `finally` — signed thinking blocks survive restarts verbatim.
+- **Mutex unification (audit finding H)**: deleted `dispatcher.getSessionMutex` (the second,
+  parallel per-session mutex map); both ws paths (`chat.send` and `dev.dispatch_tool`) now
+  feed `DispatchContext.sessionMutex` from the single `getSession(id).mutex`.
+- Env: `LUNA_PERSIST` (default on; `=0` keeps sessions in-memory). Wiring in `main.ts` only.
+- Tests: 78 across 15 files (was 73). New: sessionStore (4 — restart-survival incl. signed
+  thinking + tool_use round-trip, L2 ordering + raw_json fidelity, ephemeral seam, upsert),
+  sql duplicate-number throw.
+- Manual smoke (real LLM, two boots, one DB): told her "My name is Alan", killed the server,
+  rebooted, asked "What is my name?" → **"Alan"**. DB after: schema v2, `turn_seq=2`, 2 L2 rows.
+
+Inference:
+
+- **Luna survives restarts** — the foundational property of Initiative 2, proven end-to-end
+  against the real gateway. History persists as the exact Anthropic content blocks the model
+  produced (signature validation keeps working on resumed conversations).
+- Collapses Python v0.52 (single-writer) + v0.53 (full-text archive) into one version:
+  SQLite WAL + the unified session mutex give single-writer structurally, with no lock
+  machinery to port.
+- L2 is now the ground-truth corpus that v0.4.1's fold derives from, v0.4.3 embeds, and
+  v0.5.0's diaries summarize — everything downstream reads from here.
 
 ### `v0.3.6` — 2026-06-11 — Local trace viewer
 

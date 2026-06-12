@@ -7,6 +7,7 @@ import { dispatchToolCalls } from '../tools/dispatcher';
 import { runGraph, type Graph, type TransitionHook, type NodeName } from './graph';
 import type { Session } from './session';
 import { trace, flushTrace, traceEnabled } from '../trace/instrument';
+import { appendL2, persistSession } from '../memory/sessionStore';
 
 export const MAX_TOOL_ITERATIONS = 8;
 
@@ -271,6 +272,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<TurnState> {
   };
 
   opts.session.activeTurn = opts.turnId;
+  const historyStart = opts.session.history.length;
   try {
     await runGraph(graph, 'parse_input', state, onTransition);
   } catch (e) {
@@ -280,6 +282,14 @@ export async function runTurn(opts: RunTurnOptions): Promise<TurnState> {
   } finally {
     opts.session.activeTurn = null;
     opts.session.turnSeq += 1;
+    appendL2({
+      sessionId: opts.session.id,
+      turnId: opts.turnId,
+      userText: opts.userText,
+      assistantText: state.text,
+      rawContent: opts.session.history.slice(historyStart),
+    });
+    persistSession(opts.session.id, opts.session.history, opts.session.turnSeq);
     flushTrace(opts.turnId);
   }
   return state;
