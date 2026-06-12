@@ -17,18 +17,45 @@ export function getMemoryDb(): Database | null {
 export type PersistedSession = {
   history: Anthropic.MessageParam[];
   turnSeq: number;
+  rollingSummary: string;
+  windowLowWater: number;
 };
+
+type SessionRowFull = SessionRow & { rolling_summary: string; window_low_water: number };
 
 export function loadSession(id: string): PersistedSession | null {
   if (!db) return null;
   const row = db
-    .prepare('SELECT id, turn_seq, history_json, updated_ms FROM sessions WHERE id = ?')
-    .get(id) as SessionRow | null;
+    .prepare(
+      'SELECT id, turn_seq, history_json, updated_ms, rolling_summary, window_low_water FROM sessions WHERE id = ?',
+    )
+    .get(id) as SessionRowFull | null;
   if (!row) return null;
   return {
     history: JSON.parse(row.history_json) as Anthropic.MessageParam[],
     turnSeq: row.turn_seq,
+    rollingSummary: row.rolling_summary,
+    windowLowWater: row.window_low_water,
   };
+}
+
+// Append-only CAS commit for the L1 fold: only lands if window_low_water is
+// unchanged since the fold snapshotted it. Returns false on a lost race.
+export function commitFold(
+  id: string,
+  summaryChunk: string,
+  newLowWater: number,
+  expectedLowWater: number,
+): boolean {
+  if (!db) return false;
+  const result = db
+    .prepare(
+      `UPDATE sessions
+       SET rolling_summary = rolling_summary || ?, window_low_water = ?
+       WHERE id = ? AND window_low_water = ?`,
+    )
+    .run(summaryChunk, newLowWater, id, expectedLowWater);
+  return result.changes === 1;
 }
 
 export function persistSession(

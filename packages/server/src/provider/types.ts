@@ -29,6 +29,18 @@ export type ProviderRequest = {
   tools: Anthropic.Tool[];
 };
 
+export type CompleteRequest = {
+  system: string;
+  messages: Anthropic.MessageParam[];
+  maxTokens?: number;
+};
+
+export type CompleteResult = {
+  text: string;
+  usage: ProviderUsage;
+};
+
 export interface Provider {
   chatStream(req: ProviderRequest): AsyncIterable<ProviderEvent>;
+  complete(req: CompleteRequest): Promise<CompleteResult>;
 }

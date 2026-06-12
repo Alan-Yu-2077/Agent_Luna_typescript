@@ -14,7 +14,9 @@ let db: Database;
 
 function freshDb(): Database {
   const d = new Database(':memory:', { strict: true });
-  d.exec(readFileSync(join(import.meta.dir, '..', 'migrations', '0002_memory.sql'), 'utf8'));
+  for (const f of ['0002_memory.sql', '0003_l1_window.sql']) {
+    d.exec(readFileSync(join(import.meta.dir, '..', 'migrations', f), 'utf8'));
+  }
   return d;
 }
 

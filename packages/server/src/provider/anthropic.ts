@@ -1,5 +1,11 @@
 import Anthropic from '@anthropic-ai/sdk';
-import type { Provider, ProviderEvent, ProviderRequest } from './types';
+import type {
+  CompleteRequest,
+  CompleteResult,
+  Provider,
+  ProviderEvent,
+  ProviderRequest,
+} from './types';
 
 const MODEL = Bun.env['LUNA_MODEL'] ?? 'claude-opus-4-8';
 const MAX_TOKENS = Number(Bun.env['LUNA_MAX_TOKENS'] ?? 8192);
@@ -7,12 +13,32 @@ const MAX_TOKENS = Number(Bun.env['LUNA_MAX_TOKENS'] ?? 8192);
 export class AnthropicProvider implements Provider {
   private client: Anthropic;
 
-  constructor() {
+  constructor(opts?: { apiKey?: string }) {
     this.client = new Anthropic({
-      apiKey: Bun.env['ANTHROPIC_API_KEY'],
+      apiKey: opts?.apiKey ?? Bun.env['ANTHROPIC_API_KEY'],
       baseURL: Bun.env['ANTHROPIC_BASE_URL'],
       maxRetries: 2,
     });
+  }
+
+  async complete(req: CompleteRequest): Promise<CompleteResult> {
+    const response = await this.client.messages.create({
+      model: MODEL,
+      max_tokens: req.maxTokens ?? 2048,
+      system: req.system,
+      messages: req.messages,
+    });
+    const text = response.content
+      .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+      .map((b) => b.text)
+      .join('');
+    return {
+      text,
+      usage: {
+        input_tokens: response.usage.input_tokens,
+        output_tokens: response.usage.output_tokens,
+      },
+    };
   }
 
   async *chatStream(req: ProviderRequest): AsyncIterable<ProviderEvent> {

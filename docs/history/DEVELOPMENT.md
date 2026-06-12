@@ -1,6 +1,6 @@
 # Agent_Luna (TypeScript) — Development History
 
-Last updated: 2026-06-12 (Asia/Shanghai) — v0.4.0 (Memory substrate foundation)
+Last updated: 2026-06-12 (Asia/Shanghai) — v0.4.1 (L1 rolling window)
 
 ## Scope
 
@@ -38,7 +38,8 @@ during the rewrite. Its version log is unrelated to this one — `v0.1` here is 
 | `v0.3.0` | 2026-06-11 | Anthropic interleaved tool-use end-to-end (StateGraph turn loop) | `8fbdce4` |
 | `v0.3.5` | 2026-06-11 | Trace plumbing — first `bun:sqlite`, trace_id through the graph | `cbb468a` |
 | `v0.3.6` | 2026-06-11 | Local `/_trace` viewer; `LUNA_TRACE` default on | `58a970a` |
-| `v0.4.0` | 2026-06-12 | Memory substrate foundation — SQLite-backed sessions (L1) + L2 full-text timeline | `working tree` |
+| `v0.4.0` | 2026-06-12 | Memory substrate foundation — SQLite-backed sessions (L1) + L2 full-text timeline | `c2b322b` |
+| `v0.4.1` | 2026-06-12 | L1 rolling window — recent-N verbatim + compress-once async fold | `working tree` |
 
 ## Detailed records
 
@@ -94,6 +95,47 @@ Inference:
   `defineTool`, the dispatcher, and provider logic stay in `packages/server`. Frontend
   (`packages/web`) will consume the same protocol package in Initiative 6, getting
   contract drift as a type error rather than a runtime mismatch.
+
+### `v0.4.1` — 2026-06-12 — L1 rolling window
+
+Status:
+
+- working tree (commit hash recorded post-commit)
+
+Fact:
+
+- Added `packages/server/src/memory/l1Window.ts` (~110 LOC): `buildActiveContext` (bounded
+  view sent to the model — `[<conversation_summary> user message?] + history.slice(lowWater)`;
+  `session.history` itself is never truncated), `planFold` (chooses **whole L2 turns** so the
+  fold boundary always lands at a turn start, never splitting tool_use/tool_result pairs;
+  fold input comes from L2 `user_text`/`assistant_text` columns — never from
+  `rollingSummary`), `maybeFold` (**async fire-and-forget**, scheduled in `runTurn`'s
+  finally after trace flush; CAS-committed).
+- `migrations/0003_l1_window.sql`: `sessions` += `rolling_summary`, `window_low_water`.
+  `sessionStore.commitFold` appends the summary chunk via SQL `||` concat with
+  `WHERE window_low_water = :expected` — CAS failure = `changes === 0`, fold discards.
+- `Provider` interface gains **`complete(req): Promise<{text, usage}>`** (non-streaming;
+  shared by this fold and v0.5.0's dream): `AnthropicProvider.complete` via
+  `messages.create`, constructor gains optional `apiKey` (dream's key cascade = two provider
+  instances); `MockProvider` gains `completeResponder` + request capture.
+- `runTurn.open_stream` now sends `buildActiveContext(session)` instead of raw history.
+- Env: `LUNA_L1_WINDOW` (default on), `LUNA_L1_KEEP_MSGS` (24), `LUNA_L1_FOLD_BATCH_MSGS` (12).
+- Tests: 84 across 16 files (was 78). New l1Window suite (6): bounded@40turns ·
+  **no-re-compression invariant** (second fold input excludes the first summary's marker
+  text) · deterministic plan from same L2 · `LUNA_L1_WINDOW=0` passthrough ·
+  fold-never-blocks (gated in-flight fold + live turn completes; fold lands after) ·
+  CAS stale-fold discard (fast fold wins, slow fold returns false).
+
+Inference:
+
+- **The compression-drift trap is structurally closed**: summaries only ever grow by
+  appending chunks derived from verbatim L2 text; existing summary text is never an input
+  to summarization. The hot path keeps zero synchronous memory LLM calls (the fold runs
+  post-`turn.result`) — both audited TS-line constraints hold by construction, with tests
+  guarding each.
+- Corrects the Python port hazard flagged in the roadmap audit: Python ran its fold in an
+  aux thread pool, and the async property was nearly lost in translation. Here it is
+  explicit, CAS-protected, and test-pinned.
 
 ### `v0.4.0` — 2026-06-12 — Memory substrate foundation
 

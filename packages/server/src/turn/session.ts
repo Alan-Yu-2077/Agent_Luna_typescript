@@ -8,6 +8,8 @@ export type Session = {
   turnSeq: number;
   activeTurn: string | null;
   pendingDream: string | null;
+  rollingSummary: string;
+  windowLowWater: number;
   mutex: Mutex;
 };
 
@@ -23,6 +25,8 @@ export function getSession(id: string): Session {
       turnSeq: persisted?.turnSeq ?? 0,
       activeTurn: null,
       pendingDream: null,
+      rollingSummary: persisted?.rollingSummary ?? '',
+      windowLowWater: persisted?.windowLowWater ?? 0,
       mutex: new Mutex(),
     };
     sessions.set(id, s);

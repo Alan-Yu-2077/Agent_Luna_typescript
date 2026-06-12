@@ -1,0 +1,2 @@
+ALTER TABLE sessions ADD COLUMN rolling_summary TEXT NOT NULL DEFAULT '';
+ALTER TABLE sessions ADD COLUMN window_low_water INTEGER NOT NULL DEFAULT 0;

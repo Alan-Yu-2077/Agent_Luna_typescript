@@ -8,6 +8,7 @@ import { runGraph, type Graph, type TransitionHook, type NodeName } from './grap
 import type { Session } from './session';
 import { trace, flushTrace, traceEnabled } from '../trace/instrument';
 import { appendL2, persistSession } from '../memory/sessionStore';
+import { buildActiveContext, maybeFold } from '../memory/l1Window';
 
 export const MAX_TOOL_ITERATIONS = 8;
 
@@ -65,7 +66,7 @@ const graph: Graph<TurnState> = {
     s.pendingToolUses = [];
     for await (const ev of s.provider.chatStream({
       system: SYSTEM_PROMPT_PLACEHOLDER,
-      messages: s.session.history,
+      messages: buildActiveContext(s.session),
       tools: s.anthropicTools,
     })) {
       switch (ev.kind) {
@@ -291,6 +292,9 @@ export async function runTurn(opts: RunTurnOptions): Promise<TurnState> {
     });
     persistSession(opts.session.id, opts.session.history, opts.session.turnSeq);
     flushTrace(opts.turnId);
+    void maybeFold(opts.session, opts.provider).catch(() => {
+      /* fold is best-effort; a failed fold leaves verbatim history intact */
+    });
   }
   return state;
 }
