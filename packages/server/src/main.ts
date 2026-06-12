@@ -6,6 +6,7 @@ import { closeDb, migrate, openDb } from './sql';
 import { TraceStore } from './trace/store';
 import { setTraceStore } from './trace/instrument';
 import { traceViewerHandler } from './trace/viewer';
+import { devChatHandler } from './devchat/devchat';
 import { setMemoryDb } from './memory/sessionStore';
 import { initCustomSqlite } from './memory/recall/vecRuntime';
 import { bootReconcile } from './dream/dreamState';
@@ -55,6 +56,8 @@ const server = Bun.serve<WSData>({
     if (viewerEnabled) {
       const viewerResponse = traceViewerHandler(req, traceStore);
       if (viewerResponse) return viewerResponse;
+      const chatResponse = devChatHandler(req);
+      if (chatResponse) return chatResponse;
     }
     if (srv.upgrade(req, { data: { sessionId: 'default' } })) return;
     return new Response('luna-server: WebSocket only', { status: 426 });

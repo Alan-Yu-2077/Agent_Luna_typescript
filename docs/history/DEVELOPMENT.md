@@ -1,6 +1,6 @@
 # Agent_Luna (TypeScript) — Development History
 
-Last updated: 2026-06-12 (Asia/Shanghai) — v0.5.0 (Dream engine) — Initiative 2 complete
+Last updated: 2026-06-12 (Asia/Shanghai) — v0.5.1 (dev chat page `/_chat`)
 
 ## Scope
 
@@ -42,7 +42,8 @@ during the rewrite. Its version log is unrelated to this one — `v0.1` here is 
 | `v0.4.1` | 2026-06-12 | L1 rolling window — recent-N verbatim + compress-once async fold | `e406b60` |
 | `v0.4.2` | 2026-06-12 | L3 semantic store + prose core memory + remember/forget/update_self | `07cc0c1` |
 | `v0.4.3` | 2026-06-12 | Hybrid recall — sqlite-vec embedding-first + CJK-bigram lexical | `25d2b08` |
-| `v0.5.0` | 2026-06-12 | Dream engine — isolated 6-step consolidation; Initiative 2 complete | `working tree` |
+| `v0.5.0` | 2026-06-12 | Dream engine — isolated 6-step consolidation; Initiative 2 complete | `a0df0b5` |
+| `v0.5.1` | 2026-06-12 | Dev chat page `/_chat` — first usable conversation surface | `working tree` |
 
 ## Detailed records
 
@@ -98,6 +99,29 @@ Inference:
   `defineTool`, the dispatcher, and provider logic stay in `packages/server`. Frontend
   (`packages/web`) will consume the same protocol package in Initiative 6, getting
   contract drift as a type error rather than a runtime mismatch.
+
+### `v0.5.1` — 2026-06-12 — Dev chat page `/_chat`
+
+Status:
+
+- working tree (commit hash recorded post-commit)
+
+Fact:
+
+- Added `packages/server/src/devchat/` — `devchat.ts` (handler: `/_chat` → static HTML, null
+  fall-through; same shape as the trace viewer, mounted behind the same `LUNA_VIEWER` gate)
+  and `devchat.html` (~200 LOC vanilla): streaming chat bubbles over the existing WS protocol
+  (`chat.send` → `turn.started`/`reply.token`/`turn.result`), tool chips, 🌙 入梦 / ☀️ 唤醒
+  buttons (`dream.enter`/`dream.wake`), dream-step chips, dreaming-state input lock,
+  auto-reconnect, link to `/_trace`. Zero new wire events — pure consumer.
+- Tests: 113 across 20 files (+2). Boot smoke: `/_chat` 200 with content, `/_trace` 200, WS ping ok.
+
+Inference:
+
+- First **usable** conversation surface — Alan can now actually live with Luna's memory
+  (the "manual dream proven in use" staging both Python and the TS roadmap call for) without
+  waiting for Initiative 6's real frontend. Explicitly a dev page: the Live2D `agent-app`
+  port at v0.12 is unaffected and remains the product surface.
 
 ### `v0.5.0` — 2026-06-12 — Dream engine (Initiative 2 capstone)
 
