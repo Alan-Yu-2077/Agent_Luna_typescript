@@ -1,6 +1,6 @@
 # Agent_Luna (TypeScript) — Development History
 
-Last updated: 2026-06-12 (Asia/Shanghai) — v0.4.2 (L3 semantic + prose core memory)
+Last updated: 2026-06-12 (Asia/Shanghai) — v0.4.3 (Hybrid recall — sqlite-vec + CJK lexical)
 
 ## Scope
 
@@ -40,7 +40,8 @@ during the rewrite. Its version log is unrelated to this one — `v0.1` here is 
 | `v0.3.6` | 2026-06-11 | Local `/_trace` viewer; `LUNA_TRACE` default on | `58a970a` |
 | `v0.4.0` | 2026-06-12 | Memory substrate foundation — SQLite-backed sessions (L1) + L2 full-text timeline | `c2b322b` |
 | `v0.4.1` | 2026-06-12 | L1 rolling window — recent-N verbatim + compress-once async fold | `e406b60` |
-| `v0.4.2` | 2026-06-12 | L3 semantic store + prose core memory + remember/forget/update_self | `working tree` |
+| `v0.4.2` | 2026-06-12 | L3 semantic store + prose core memory + remember/forget/update_self | `07cc0c1` |
+| `v0.4.3` | 2026-06-12 | Hybrid recall — sqlite-vec embedding-first + CJK-bigram lexical | `working tree` |
 
 ## Detailed records
 
@@ -96,6 +97,54 @@ Inference:
   `defineTool`, the dispatcher, and provider logic stay in `packages/server`. Frontend
   (`packages/web`) will consume the same protocol package in Initiative 6, getting
   contract drift as a type error rather than a runtime mismatch.
+
+### `v0.4.3` — 2026-06-12 — Hybrid recall (sqlite-vec + CJK lexical)
+
+Status:
+
+- working tree (commit hash recorded post-commit)
+
+Fact:
+
+- **Spike first** (`scripts/spike-sqlite-vec.ts`): `Database.setCustomSQLite` + sqlite-vec
+  0.1.9 load + vec0 KNN verified live on this machine — PASS, vec0 primary path GO.
+- Added `memory/recall/` (4 files, ~330 LOC): `vecRuntime.ts` (guarded `initCustomSqlite` —
+  process-global, once, before any Database; `tryLoadVec` with remembered failure),
+  `embed.ts` (~60 LOC fetch client for OpenAI-compatible `/v1/embeddings` — deliberately
+  NOT the cut `openai_compat` adapter; batch ≤64; f32-LE BLOB layout shared by vec0 and the
+  TS path; sha256 `contentHash`; `cosine`), `lexical.ts` (ASCII words + **CJK sliding
+  bigrams** + stopwords, ported approach from Python `semantic_retrieval`), `recall.ts`
+  (`retrieve` = hybrid 0.7·cosine + 0.3·lexical + recency boost over L2 tail + live L3
+  facts; soft-deleted excluded; embedding outage → lexical-only; `MAX_EMBED_PER_TURN=64`
+  cold-cache cap until dream's `rag_refresh`; `renderRecallBlock`).
+- vec0 virtual table (`vec_cache`) is **derived data created lazily at runtime** keyed to
+  `embeddings_cache.rowid` — migrations must not depend on a loadable extension.
+  `0005_embeddings.sql` ships only the regular `embeddings_cache` table. Embedding-only
+  vec0 columns (the #274 metadata-col bug avoidance).
+- `runTurn.parse_input`: recall block injected as a `<memory>` text block **inside the user
+  message** (message level, after the cached prefix); user turns persist as-sent.
+  `bunfig.toml` gains `[test] preload` (`test-preload.ts` → `initCustomSqlite` before any
+  test constructs a Database). `main.ts` calls `initCustomSqlite()` before `openDb`.
+- Env: `LUNA_EMBEDDING_MODEL` / `LUNA_EMBEDDING_API_KEY` / `LUNA_EMBEDDING_BASE_URL`
+  (+ `.env.example`), `LUNA_MEMORY_RETRIEVAL_K` (12), `LUNA_MEMORY_EMBEDDING` (=0 →
+  lexical-only, zero API).
+- Tests: 102 across 18 files (was 93). New recall suite (9): CJK bigram tokenize · Chinese
+  lexical no-API · paraphrase semantic hit (deterministic fake embed client) · hash-cache
+  no-re-embed · recency tie-break · soft-deleted excluded · renderRecallBlock · **system
+  prompt byte-identical across different queries** (recall is message-level — the cache
+  invariant holds).
+- Real-API smoke: "what hot drink hobby did I mention?" hit the espresso L2 row with
+  **zero shared keywords** (true semantic match via text-embedding-3-large, 3072-dim);
+  `embeddings_cache` 3 rows + `vec_cache` 3 rows (vec0 live in production code).
+
+Inference:
+
+- Luna can now recall by meaning, in two languages, with a graceful degradation ladder:
+  vec0 KNN → TS cosine over the same BLOBs → pure CJK/ASCII lexical — each step a silent
+  fallback, no configuration coupling.
+- The cache invariant survived its hardest test: per-query retrieval content rides the
+  user message; the system prompt never varies with the query. TS goal #1 (latency via
+  prefix cache) and Luna's memory coexist by construction.
 
 ### `v0.4.2` — 2026-06-12 — L3 semantic store + prose core memory
 

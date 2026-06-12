@@ -7,8 +7,13 @@ import { TraceStore } from './trace/store';
 import { setTraceStore } from './trace/instrument';
 import { traceViewerHandler } from './trace/viewer';
 import { setMemoryDb } from './memory/sessionStore';
+import { initCustomSqlite } from './memory/recall/vecRuntime';
 
 const port = Number(process.env['LUNA_PORT'] ?? 8787);
+
+// Must precede ANY Database construction (process-global, once) — enables
+// extension loading for sqlite-vec on macOS.
+initCustomSqlite();
 
 const db = openDb(Bun.env['LUNA_DB_PATH'] ?? './luna.sqlite');
 const version = migrate(db, join(import.meta.dir, 'migrations'));

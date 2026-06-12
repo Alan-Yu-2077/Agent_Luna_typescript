@@ -11,6 +11,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "0.104.1",
     "@luna/protocol": "workspace:*",
+    "sqlite-vec": "0.1.9",
     "zod": "^3.25.0",
     "zod-to-json-schema": "^3.25"
   }

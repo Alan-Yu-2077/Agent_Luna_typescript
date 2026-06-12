@@ -10,6 +10,8 @@ import { trace, flushTrace, traceEnabled } from '../trace/instrument';
 import { appendL2, persistSession } from '../memory/sessionStore';
 import { buildActiveContext, maybeFold } from '../memory/l1Window';
 import { renderCoreBlock } from '../memory/renderCoreBlock';
+import { renderRecallBlock, retrieve } from '../memory/recall/recall';
+import { getMemoryDb } from '../memory/sessionStore';
 
 export const MAX_TOOL_ITERATIONS = 8;
 
@@ -63,10 +65,14 @@ export function toolsToAnthropicFormat(registry: ToolRegistry): Anthropic.Tool[]
 
 const graph: Graph<TurnState> = {
   async parse_input(s) {
-    s.session.history.push({
-      role: 'user',
-      content: [{ type: 'text', text: s.userText }],
-    });
+    const blocks: Anthropic.TextBlockParam[] = [];
+    if (Bun.env['LUNA_MEMORY_INJECT'] !== '0' && getMemoryDb()) {
+      const hits = await retrieve(s.session.id, s.userText);
+      const recall = renderRecallBlock(hits);
+      if (recall) blocks.push({ type: 'text', text: recall });
+    }
+    blocks.push({ type: 'text', text: s.userText });
+    s.session.history.push({ role: 'user', content: blocks });
     s.emit({ type: 'turn.started', turn_id: s.turnId });
     return 'build_request';
   },
