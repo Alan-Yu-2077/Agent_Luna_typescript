@@ -1,6 +1,6 @@
 # Agent_Luna (TypeScript) — Development History
 
-Last updated: 2026-06-12 (Asia/Shanghai) — v0.4.1 (L1 rolling window)
+Last updated: 2026-06-12 (Asia/Shanghai) — v0.4.2 (L3 semantic + prose core memory)
 
 ## Scope
 
@@ -39,7 +39,8 @@ during the rewrite. Its version log is unrelated to this one — `v0.1` here is 
 | `v0.3.5` | 2026-06-11 | Trace plumbing — first `bun:sqlite`, trace_id through the graph | `cbb468a` |
 | `v0.3.6` | 2026-06-11 | Local `/_trace` viewer; `LUNA_TRACE` default on | `58a970a` |
 | `v0.4.0` | 2026-06-12 | Memory substrate foundation — SQLite-backed sessions (L1) + L2 full-text timeline | `c2b322b` |
-| `v0.4.1` | 2026-06-12 | L1 rolling window — recent-N verbatim + compress-once async fold | `working tree` |
+| `v0.4.1` | 2026-06-12 | L1 rolling window — recent-N verbatim + compress-once async fold | `e406b60` |
+| `v0.4.2` | 2026-06-12 | L3 semantic store + prose core memory + remember/forget/update_self | `working tree` |
 
 ## Detailed records
 
@@ -95,6 +96,56 @@ Inference:
   `defineTool`, the dispatcher, and provider logic stay in `packages/server`. Frontend
   (`packages/web`) will consume the same protocol package in Initiative 6, getting
   contract drift as a type error rather than a runtime mismatch.
+
+### `v0.4.2` — 2026-06-12 — L3 semantic store + prose core memory
+
+Status:
+
+- working tree (commit hash recorded post-commit)
+
+Fact:
+
+- Protocol: `L3Category` (5 Python-parity categories), `L3Confidence`, `L3Fact`
+  (with `deleted_ms` + `expires_ms`), `CoreMemory` (prose `self_state` +
+  `relationship_status`). `migrations/0004_l3_core.sql`: `l3_facts` (+ category/dedup
+  indexes), `core_memory` (single row, seeded), `core_memory_audit` (append-only).
+- `memory/l3Store.ts` (~90 LOC): `addFact` (punctuation-normalized `dedupKey` port of
+  Python's `_dedup_key`; prefixed ids `cf_/pf_/km_/at_/pc_`; `active_threads` get a
+  14-day TTL), **`forgetFact` = soft delete** (`deleted_ms`, never removes the row — the
+  deliberate divergence from Python's hard-delete `ForgetTool`), `listFacts` with
+  **`asOf` time-travel** (deleted facts visible when valid at that time).
+- `memory/coreMemory.ts`: `getCore` / `updateCore` (audit-first: prior state recorded
+  before every write) / `restore(n)`. Prose only — no 5-field structure, no consistency
+  tripwire (Alan decision E + kept-undo compromise).
+- `memory/renderCoreBlock.ts`: the **stable** memory prefix (core memory + per-category
+  render-capped facts with `[id]` handles + a one-line remember-tool hint). Deterministic
+  — no timestamps. Render caps = Python's storage caps (15/10/12/6/8); storage stays
+  unbounded until dream prunes.
+- `remember` tool rewritten: discriminated `action: add | forget | update_self` input
+  (the cut-list's four-tools-into-one, final shape), SQLite-backed via the seam,
+  `session-serial`; unconfigured seam → structured err, never a throw.
+- `runTurn`: `buildSystemPrompt(session)` composes `[placeholder + core block]` as
+  `TextBlockParam[]` with a **`cache_control: ephemeral` breakpoint**;
+  `ProviderRequest.system` widened to `string | TextBlockParam[]`; user turns now persist
+  as content-block arrays (as-sent fidelity, ready for v0.4.3's message-level recall
+  block); `complete()` gains adaptive thinking.
+- Env: `LUNA_MEMORY_INJECT` (default on). Test fixtures switched to real `migrate()`.
+- Tests: 93 across 17 files (was 84). New: l3 suite (7 — soft-delete + asOf, dedup +
+  re-add-after-forget, TTL, audit + restore, render determinism, **byte-identical system
+  prompts across no-change turns / differing after a change**), remember suite rewrite (5).
+- Manual smoke (real LLM): "remember my cat is named Mochi" → model called the tool,
+  **chose `core_facts` itself**, L3 row landed; restart → "What is my cat called?" →
+  **"Mochi"**.
+
+Inference:
+
+- Luna now has self-managed durable memory with the prompt-cache invariant enforced by
+  test: the system prompt changes only when memory changes. The `[id]` handles in the
+  rendered block are what lets the model `forget` precisely — the supersede loop
+  (forget old + add new) is now mechanically possible for both the model (live) and
+  dream's `memory_audit` (v0.5.0, bulk).
+- Soft-delete + `asOf` makes "this was once true" a first-class query — the time-travel
+  substrate dream reconciliation and future temporal reasoning both stand on.
 
 ### `v0.4.1` — 2026-06-12 — L1 rolling window
 

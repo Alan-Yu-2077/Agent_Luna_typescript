@@ -1,53 +1,71 @@
-import { beforeEach, describe, expect, test } from 'bun:test';
-import { getRememberStore, rememberTool, resetRememberStore } from './remember';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { Database } from 'bun:sqlite';
+import { join } from 'node:path';
+import { migrate } from '../../sql';
+import { setMemoryDb } from '../../memory/sessionStore';
+import { listFacts } from '../../memory/l3Store';
+import { getCore } from '../../memory/coreMemory';
+import { rememberTool } from './remember';
 
-const ctx = (sessionId: string) => ({
-  sessionId,
+let db: Database;
+
+const ctx = () => ({
+  sessionId: 'test',
   callId: 'c1',
   abortSignal: new AbortController().signal,
 });
 
-async function run(
-  input: { kind: 'fact' | 'preference' | 'moment'; text: string },
-  sessionId: string,
-): Promise<unknown[]> {
-  const out: unknown[] = [];
-  for await (const e of rememberTool.execute(input, ctx(sessionId))) out.push(e);
-  return out;
+type RememberInput =
+  | { action: 'add'; category: string; text: string }
+  | { action: 'forget'; id: string }
+  | { action: 'update_self'; self_state?: string; relationship_status?: string };
+
+async function run(input: RememberInput): Promise<{ kind: string; data?: { status: string; id?: string } }> {
+  const events: unknown[] = [];
+  for await (const e of rememberTool.execute(input, ctx())) events.push(e);
+  return events[0] as { kind: string; data?: { status: string; id?: string } };
 }
 
-describe('remember', () => {
-  beforeEach(() => {
-    resetRememberStore();
-  });
+beforeEach(() => {
+  db = new Database(':memory:', { strict: true });
+  migrate(db, join(import.meta.dir, '..', '..', 'migrations'));
+  setMemoryDb(db);
+});
 
-  test('store-then-list within same session returns the item', async () => {
-    const events = await run({ kind: 'fact', text: 'sky is blue' }, 'sA');
-    expect(events.length).toBe(1);
-    const e = events[0] as { kind: string; data: { stored: boolean; id: string } };
+afterEach(() => {
+  setMemoryDb(null);
+  db.close(false);
+});
+
+describe('remember tool (discriminated actions)', () => {
+  test('add stores a fact', async () => {
+    const e = await run({ action: 'add', category: 'core_facts', text: 'Alan codes in TS' });
     expect(e.kind).toBe('ok');
-    expect(e.data.stored).toBe(true);
-    expect(e.data.id.startsWith('sA:')).toBe(true);
-
-    const stored = getRememberStore('sA');
-    expect(stored.length).toBe(1);
-    expect(stored[0]?.text).toBe('sky is blue');
-    expect(stored[0]?.kind).toBe('fact');
+    expect(e.data?.status).toBe('added');
+    expect(listFacts({ category: 'core_facts' }).length).toBe(1);
   });
 
-  test('different sessions are isolated', async () => {
-    await run({ kind: 'fact', text: 'in session A' }, 'sA');
-    await run({ kind: 'preference', text: 'in session B' }, 'sB');
-
-    const a = getRememberStore('sA');
-    const b = getRememberStore('sB');
-    expect(a.length).toBe(1);
-    expect(b.length).toBe(1);
-    expect(a[0]?.text).toBe('in session A');
-    expect(b[0]?.text).toBe('in session B');
+  test('forget soft-deletes by id', async () => {
+    const added = await run({ action: 'add', category: 'preferences', text: 'likes cats' });
+    const e = await run({ action: 'forget', id: added.data!.id! });
+    expect(e.data?.status).toBe('forgotten');
+    expect(listFacts({ category: 'preferences' }).length).toBe(0);
   });
 
-  test('summarize includes the id', () => {
-    expect(rememberTool.summarize({ stored: true, id: 'sA:7' })).toBe('Stored as sA:7');
+  test('update_self patches core memory', async () => {
+    const e = await run({ action: 'update_self', relationship_status: 'growing closer' });
+    expect(e.data?.status).toBe('self_updated');
+    expect(getCore().relationship_status).toBe('growing closer');
+  });
+
+  test('unconfigured memory db → structured err, not a throw', async () => {
+    setMemoryDb(null);
+    const e = await run({ action: 'add', category: 'core_facts', text: 'x' });
+    expect(e.kind).toBe('err');
+  });
+
+  test('summarize renders status + id', () => {
+    expect(rememberTool.summarize({ status: 'added', id: 'cf_1' })).toBe('added: cf_1');
+    expect(rememberTool.summarize({ status: 'self_updated' })).toBe('self_updated');
   });
 });

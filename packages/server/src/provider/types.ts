@@ -24,7 +24,7 @@ export type ProviderEvent =
     };
 
 export type ProviderRequest = {
-  system: string;
+  system: string | Anthropic.TextBlockParam[];
   messages: Anthropic.MessageParam[];
   tools: Anthropic.Tool[];
 };

@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { Database } from 'bun:sqlite';
-import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type Anthropic from '@anthropic-ai/sdk';
 import { MockProvider } from '../provider/mock';
@@ -8,6 +7,7 @@ import type { ProviderEvent } from '../provider/types';
 import { builtinRegistry } from '../tools/registry';
 import { getSession, resetSessions } from '../turn/session';
 import { runTurn } from '../turn/runTurn';
+import { migrate } from '../sql';
 import { appendL2, setMemoryDb, persistSession, loadSession } from './sessionStore';
 import { buildActiveContext, maybeFold, planFold } from './l1Window';
 
@@ -15,9 +15,7 @@ let db: Database;
 
 beforeEach(() => {
   db = new Database(':memory:', { strict: true });
-  for (const f of ['0002_memory.sql', '0003_l1_window.sql']) {
-    db.exec(readFileSync(join(import.meta.dir, '..', 'migrations', f), 'utf8'));
-  }
+  migrate(db, join(import.meta.dir, '..', 'migrations'));
   setMemoryDb(db);
   resetSessions();
   delete Bun.env['LUNA_L1_WINDOW'];

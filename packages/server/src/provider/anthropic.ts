@@ -27,6 +27,7 @@ export class AnthropicProvider implements Provider {
       max_tokens: req.maxTokens ?? 2048,
       system: req.system,
       messages: req.messages,
+      thinking: { type: 'adaptive' },
     });
     const text = response.content
       .filter((b): b is Anthropic.TextBlock => b.type === 'text')

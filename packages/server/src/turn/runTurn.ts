@@ -9,11 +9,24 @@ import type { Session } from './session';
 import { trace, flushTrace, traceEnabled } from '../trace/instrument';
 import { appendL2, persistSession } from '../memory/sessionStore';
 import { buildActiveContext, maybeFold } from '../memory/l1Window';
+import { renderCoreBlock } from '../memory/renderCoreBlock';
 
 export const MAX_TOOL_ITERATIONS = 8;
 
 const SYSTEM_PROMPT_PLACEHOLDER =
   'You are Luna, a helpful assistant. Use the available tools when they help you answer. Reply concisely.';
+
+// The stable system prefix: placeholder persona + core memory block, marked with a
+// cache_control breakpoint. Byte-identical across turns unless memory actually
+// changed — the prompt-cache invariant. Per-query content never goes here.
+export function buildSystemPrompt(_session: Session): Anthropic.TextBlockParam[] {
+  let text = SYSTEM_PROMPT_PLACEHOLDER;
+  if (Bun.env['LUNA_MEMORY_INJECT'] !== '0') {
+    const core = renderCoreBlock();
+    if (core.length > 0) text = `${text}\n\n${core}`;
+  }
+  return [{ type: 'text', text, cache_control: { type: 'ephemeral' } }];
+}
 
 export type TurnState = {
   session: Session;
@@ -50,7 +63,10 @@ export function toolsToAnthropicFormat(registry: ToolRegistry): Anthropic.Tool[]
 
 const graph: Graph<TurnState> = {
   async parse_input(s) {
-    s.session.history.push({ role: 'user', content: s.userText });
+    s.session.history.push({
+      role: 'user',
+      content: [{ type: 'text', text: s.userText }],
+    });
     s.emit({ type: 'turn.started', turn_id: s.turnId });
     return 'build_request';
   },
@@ -65,7 +81,7 @@ const graph: Graph<TurnState> = {
   async open_stream(s) {
     s.pendingToolUses = [];
     for await (const ev of s.provider.chatStream({
-      system: SYSTEM_PROMPT_PLACEHOLDER,
+      system: buildSystemPrompt(s.session),
       messages: buildActiveContext(s.session),
       tools: s.anthropicTools,
     })) {
