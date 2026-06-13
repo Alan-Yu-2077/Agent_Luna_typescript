@@ -28,6 +28,14 @@
         "zod-to-json-schema": "^3.25",
       },
     },
+    "packages/web": {
+      "name": "@luna/web",
+      "version": "0.1.0",
+      "dependencies": {
+        "@luna/protocol": "workspace:*",
+        "zod": "^3.25.0",
+      },
+    },
   },
   "packages": {
     "@anthropic-ai/sdk": ["@anthropic-ai/sdk@0.104.1", "", { "dependencies": { "json-schema-to-ts": "^3.1.1", "standardwebhooks": "^1.0.0" }, "peerDependencies": { "zod": "^3.25.0 || ^4.0.0" }, "optionalPeers": ["zod"], "bin": { "anthropic-ai-sdk": "bin/cli" } }, "sha512-gGACa/+IaiXzRRmF96aOhamoBgapKRBiFWbmmTFP8aMkpaEcuStF+Q61bjo4vPxBM7gqWJNZqsngslRdnLHv0Q=="],
@@ -37,6 +45,8 @@
     "@luna/protocol": ["@luna/protocol@workspace:packages/protocol"],
 
     "@luna/server": ["@luna/server@workspace:packages/server"],
+
+    "@luna/web": ["@luna/web@workspace:packages/web"],
 
     "@stablelib/base64": ["@stablelib/base64@1.0.1", "", {}, "sha512-1bnPQqSxSuc3Ii6MhBysoWCg58j97aUjuCSZrGSmDxNqtytIi0k8utUenAwTZN4V5mXXYGsVUI9zeBqy+jBOSQ=="],
 

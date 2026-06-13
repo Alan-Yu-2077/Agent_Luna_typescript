@@ -1,6 +1,6 @@
 # Agent_Luna (TypeScript) — Development History
 
-Last updated: 2026-06-13 (Asia/Shanghai) — v0.11.0 (self-continuation + dream auto-trigger + autonomy default-on; Initiative 5 complete)
+Last updated: 2026-06-13 (Asia/Shanghai) — v0.12.0 (frontend consumption controller; Initiative 6 begins)
 
 ## Scope
 
@@ -58,7 +58,8 @@ during the rewrite. Its version log is unrelated to this one — `v0.1` here is 
 | `v0.10.1` | 2026-06-13 | Proactive safety gate — hard block→surface→execute + fail-closed + action budget | `ed51152` |
 | `v0.10.2` | 2026-06-13 | Cadence governor + wake gate — prefilter + bounded "act now?" L2 judgment | `636caf3` |
 | `v0.10.3` | 2026-06-13 | Proactive scheduler/heartbeat — idle loop goes autonomous (behind the kill switch) | `ed51967` |
-| `v0.11.0` | 2026-06-13 | Self-continuation + dream auto-trigger + autonomy default-on; Initiative 5 complete | `working tree` |
+| `v0.11.0` | 2026-06-13 | Self-continuation + dream auto-trigger + autonomy default-on; Initiative 5 complete | `45bb3cb` |
+| `v0.12.0` | 2026-06-13 | Frontend consumption controller (`packages/web`); Initiative 6 begins | `working tree` |
 
 ## Detailed records
 
@@ -114,6 +115,55 @@ Inference:
   `defineTool`, the dispatcher, and provider logic stay in `packages/server`. Frontend
   (`packages/web`) will consume the same protocol package in Initiative 6, getting
   contract drift as a type error rather than a runtime mismatch.
+
+### `v0.12.0` — 2026-06-13 — Frontend consumption controller (Initiative 6, first pass)
+
+Status:
+
+- working tree (commit hash recorded post-commit)
+
+Fact:
+
+- **New `packages/web`** (`@luna/web`, depends on `@luna/protocol`) — the TS port of the Python
+  `agent-app.js` event consumer, modeled on its handler switch but consuming the **WS `ServerEvent`
+  union** instead of Python's SSE + dual-poll. The consumption brain, no Live2D/audio yet.
+- **`src/controller.ts`** — `createController({view, live2d, audio})` returns `handle(e:
+  ServerEvent)`: a pure, DOM-free, exhaustively-typed dispatcher (`assertNever` over all 12 event
+  variants). Speech is the `message` tool (LD #9): `tool.started{message}` opens a bubble keyed by
+  `call_id`, `tool.progress{tool_name:'message', text_delta}` streams it, `tool.finished` finalizes
+  from the **`MessageDelivery`** envelope (`MessageDelivery.safeParse` → text to the bubble,
+  `expression`+`emotion` to Live2D, `voice_params`+text to audio); a failed delivery discards the
+  preview + surfaces a re-say. `reply.token` streams a synthetic `reply` bubble (text mode);
+  dream/proactive/error render chips; a silent proactive turn (`spoke:false`) shows a quiet marker.
+- **`src/bubbles.ts`** — `BubbleView` seam (open/append/finalize/discard/chip) + `DomBubbleView`;
+  bubbles keyed by id so multiple message bubbles per turn stream independently (the v0.6.2 reality,
+  not Python's single-bubble merge). **`src/sinks.ts`** — `Live2DSink`/`AudioSink` interfaces +
+  console/no-op stubs (the real Live2D model driver + GPT-SoVITS audio plug in here later — the
+  Python `on_audio_start_commands` seam is preserved via `AudioSink.speak(onStart)`).
+- **`src/wsClient.ts`** — typed WS client; every inbound frame is `ServerEvent.safeParse`'d (the
+  validated boundary — a server-shape drift is a dropped frame, not a silent mis-handle), auto-
+  reconnect. **`src/app.ts` + `index.html`** — a minimal browser host wiring it together;
+  `bun run dev:web` serves it (Bun fullstack). Browser bundle builds clean.
+- Tests: 266 across 37 files (+9, all in `packages/web`): streamed message (open→append→finalize +
+  expression + speak); two independent message bubbles per turn; failed-delivery discard + re-say;
+  no-expression/no-voice path; `reply.token` text-mode streaming; non-message tool chips; dream +
+  proactive + error chips; `proactive.finished{spoke:true}` → no chip; `pong` consumed. All three
+  packages typecheck clean.
+
+Inference:
+
+- Initiative 6's value is exactly this: the frontend consumes the **same `@luna/protocol` Zod
+  types** the server produces, so contract drift between backend and frontend is a compile error,
+  not the Python silent-drift class (a handler early-returning on a frame the backend assumed
+  consumed). The controller is pure + interface-driven, so it is fully unit-tested with zero DOM/WS
+  — and the Live2D/audio pipelines drop in behind `Live2DSink`/`AudioSink` without touching the
+  consumption logic.
+- The TS WS protocol made the port a simplification, not a 1:1 copy: Python's SSE+poll dual
+  transport, the proactive cursor/replay, and the separate dream-status polling all collapse into
+  one validated event stream (the LD #2 single-WS dividend, again).
+- Scope (first pass, "后期再做调整"): Live2D rendering, the audio/TTS pipeline, lip-sync, the 60fps
+  FaceVM tick, and bundling/HMR polish are the next passes; this lands the consumption core they
+  all hang off.
 
 ### `v0.11.0` — 2026-06-13 — Self-continuation + dream auto-trigger + autonomy on (Initiative 5 capstone, commit 5 of 5)
 

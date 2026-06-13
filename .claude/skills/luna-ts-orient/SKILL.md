@@ -28,10 +28,11 @@ every decision here.
 
 ## Current state (read this first)
 
-> **Shipped head: v0.11.0** (2026-06-13). Initiatives 1 (tool spec), 1.5 (observability),
+> **Shipped head: v0.12.0** (2026-06-13). Initiatives 1 (tool spec), 1.5 (observability),
 > 2 (memory + dream), 3 (persona + humanity + `message` tool, **LD #9**), 4 (action integrity —
-> **LD #14**), and 5 (proactive agency — **LD #15**) are complete. Next up: Initiative 6 —
-> frontend port (TS `agent-app.js` controller + Live2D/audio). **Luna now has agency when no one
+> **LD #14**), and 5 (proactive agency — **LD #15**) are complete; **Initiative 6 (frontend port)
+> is in progress** — `packages/web` has the TS consumption controller. Next passes: Live2D model
+> driver + GPT-SoVITS audio behind the sink interfaces, bundling, full app UI. **Luna now has agency when no one
 > is talking**: a `.unref()`'d heartbeat (`LUNA_PROACTIVE`, default ON, `=0` kill switch) runs a
 > conservative wake judgment and, on act, a proactive `runTurn` that can act SILENTLY — bounded by
 > a hard reversible-silent/irreversible-surfaced safety gate + action budget. Self-continuation =

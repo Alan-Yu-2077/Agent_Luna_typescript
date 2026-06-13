@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Luna · Web (consumption)</title>
+    <style>
+      :root { --bg:#14110f; --panel:#1d1916; --line:#2c2622; --text:#e8e2da; --muted:#998d80; --accent:#d98c5f; }
+      * { box-sizing: border-box; }
+      body { margin:0; font:15px/1.6 ui-sans-serif, system-ui, "PingFang SC", sans-serif; background:var(--bg); color:var(--text); height:100vh; display:flex; flex-direction:column; }
+      header { padding:10px 16px; border-bottom:1px solid var(--line); display:flex; gap:12px; align-items:center; }
+      header h1 { margin:0; font-size:15px; font-weight:600; } header .accent { color:var(--accent); }
+      #status { font-size:12px; color:var(--muted); }
+      #log { flex:1; overflow-y:auto; padding:18px; display:flex; flex-direction:column; gap:10px; }
+      .luna-bubble { max-width:76%; padding:10px 14px; border-radius:14px; white-space:pre-wrap; word-break:break-word; align-self:flex-start; background:#241f1b; border:1px solid var(--line); border-bottom-left-radius:4px; }
+      .luna-chip { align-self:flex-start; font-size:12px; color:var(--muted); border:1px dashed var(--line); border-radius:10px; padding:3px 10px; }
+      .luna-chip.dream { color:#8a7bc8; border-color:#8a7bc8; }
+      .luna-chip.proactive { color:#7aa37a; border-color:#7aa37a; }
+      .luna-chip.error { color:#c25b5b; border-color:#c25b5b; }
+      footer { padding:12px 16px; border-top:1px solid var(--line); }
+      #input { width:100%; background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:10px; padding:10px 14px; font:inherit; outline:none; }
+      #input:focus { border-color:var(--accent); }
+    </style>
+  </head>
+  <body>
+    <header><h1>Luna <span class="accent">·</span> Web</h1><span id="status">connecting…</span></header>
+    <div id="log"></div>
+    <footer><input id="input" placeholder="对 Luna 说点什么…（Enter 发送）" autocomplete="off" /></footer>
+    <script type="module" src="./src/app.ts"></script>
+  </body>
+</html>

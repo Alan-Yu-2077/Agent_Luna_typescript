@@ -5,6 +5,7 @@
   "workspaces": ["packages/*"],
   "scripts": {
     "dev:server": "bun run packages/server/src/main.ts",
+    "dev:web": "bun packages/web/index.html",
     "test": "bun test",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
