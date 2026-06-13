@@ -19,6 +19,7 @@ export const readFileTool = defineTool({
   input: Input,
   output: Output,
   concurrency: 'safe-parallel',
+  proactiveRisk: 'safe',
   timeoutMs: 5000,
   summarize: (out) => {
     const preview = out.content.slice(0, 200).replace(/\s+/g, ' ').trim();

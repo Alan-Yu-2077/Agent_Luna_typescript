@@ -3,6 +3,13 @@ import type { ToolErrorCode, ToolName } from '@luna/protocol';
 
 export type ConcurrencyPolicy = 'safe-parallel' | 'session-serial' | 'global-serial';
 
+// Proactive safety tier (Initiative 5, v0.10.1). 'safe' = reversible/read-only,
+// may run silently in a proactive turn. Anything else (incl. an unmarked tool)
+// is treated as 'surface' — irreversible/outside-world, blocked in a proactive
+// turn until Luna surfaces the action with a message first (fail-closed: a tool
+// must EXPLICITLY opt into 'safe').
+export type ProactiveRisk = 'safe' | 'surface';
+
 export type ToolContext = {
   sessionId: string;
   callId: string;
@@ -26,6 +33,7 @@ export interface Tool {
   output: z.ZodTypeAny;
   concurrency: ConcurrencyPolicy;
   timeoutMs: number;
+  proactiveRisk?: ProactiveRisk;
   summarize: (out: any) => string;
   execute: (
     input: any,
@@ -40,6 +48,7 @@ export interface ToolSpec<I extends z.ZodTypeAny, O extends z.ZodTypeAny> {
   output: O;
   concurrency: ConcurrencyPolicy;
   timeoutMs: number;
+  proactiveRisk?: ProactiveRisk;
   summarize: (out: z.infer<O>) => string;
   execute: (
     input: z.infer<I>,

@@ -72,6 +72,7 @@ export const messageTool = defineTool({
   input: Input,
   output: MessageDelivery,
   concurrency: 'session-serial',
+  proactiveRisk: 'safe',
   timeoutMs: 1000,
   summarize: (out) => out.text.slice(0, 30),
   execute: async function* (input) {

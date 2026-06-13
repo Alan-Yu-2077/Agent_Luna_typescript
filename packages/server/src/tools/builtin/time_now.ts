@@ -15,6 +15,7 @@ export const timeNowTool = defineTool({
   input: Input,
   output: Output,
   concurrency: 'safe-parallel',
+  proactiveRisk: 'safe',
   timeoutMs: 1000,
   summarize: (out) => `${out.iso} (${out.tz})`,
   execute: async function* () {

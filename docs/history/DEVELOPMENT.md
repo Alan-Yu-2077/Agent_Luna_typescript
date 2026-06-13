@@ -1,6 +1,6 @@
 # Agent_Luna (TypeScript) — Development History
 
-Last updated: 2026-06-13 (Asia/Shanghai) — v0.10.0 (proactive turn primitive; Initiative 5 begins)
+Last updated: 2026-06-13 (Asia/Shanghai) — v0.10.1 (proactive safety gate — reversible-silent/irreversible-surfaced)
 
 ## Scope
 
@@ -54,7 +54,8 @@ during the rewrite. Its version log is unrelated to this one — `v0.1` here is 
 | `v0.8.2` | 2026-06-13 | Action-integrity guards — `is_final` promise + intent-without-act corrective retries | `ea246a4` |
 | `v0.8.3` | 2026-06-13 | `recall` tool — agentic memory search (Open Q #9) + L1 trigger clause | `8376820` |
 | `v0.9.0` | 2026-06-13 | Dictionary tuning + integrity defaults flipped on; Initiative 4 complete | `a50b6fc` |
-| `v0.10.0` | 2026-06-13 | Proactive turn primitive — `runTurn` + proactive framing + silent allowed (manual) | `working tree` |
+| `v0.10.0` | 2026-06-13 | Proactive turn primitive — `runTurn` + proactive framing + silent allowed (manual) | `514d309` |
+| `v0.10.1` | 2026-06-13 | Proactive safety gate — hard block→surface→execute + fail-closed + action budget | `working tree` |
 
 ## Detailed records
 
@@ -110,6 +111,66 @@ Inference:
   `defineTool`, the dispatcher, and provider logic stay in `packages/server`. Frontend
   (`packages/web`) will consume the same protocol package in Initiative 6, getting
   contract drift as a type error rather than a runtime mismatch.
+
+### `v0.10.1` — 2026-06-13 — Proactive safety gate (Initiative 5, commit 2 of 5)
+
+Status:
+
+- working tree (commit hash recorded post-commit)
+
+Fact:
+
+- **The LD #15 safety contract, as Alan chose it (hard gate).** Makes full-tool-incl-`shell`
+  autonomy survivable in an unsupervised loop. `defineTool` gains an optional
+  `proactiveRisk: 'safe' | 'surface'` ([`defineTool.ts`](../../packages/server/src/tools/defineTool.ts));
+  the six current builtins (`time_now`/`read_file`/`recall`/`remember`/`enter_dream`/`message`) are
+  marked **`'safe'`** (reversible/read-only; memory writes are reversible via soft-delete + dream
+  reconciliation; `message` is the surfacing act itself).
+- **`src/proactive/safetyGate.ts`** (new) — `proactiveRiskOf(tool)` is **fail-closed**: a tool is
+  `'safe'` ONLY if it explicitly opted in; anything unmarked → `'surface'` (so a future `shell`
+  tool is gated by default, no author action required). `isProactiveActionAllowed(risk, surfaced)`:
+  safe always; surface only after surfacing. `maxProactiveActions()` (env, default 6).
+- **Hard gate in `runTurn.dispatch_tools`** (proactive turns only): `surfacedBefore =
+  messageTexts.length > 0` computed at dispatch-node entry — it reflects PRIOR rounds only (this
+  round's messages dispatch later), so a `surface`-risk call is **blocked with a recoverable error**
+  ("say what you're about to do with the message tool first, then call this tool again") unless she
+  surfaced in an earlier round. This forces **announce-in-round-N, act-in-round-N+1** — block →
+  surface → execute. A blocked call is NOT dispatched and NOT counted toward the action budget;
+  emits a `surface:'proactive_action', decision:'blocked'` decision trace.
+- **Action budget** in `append_results`: a proactive cycle finalizes once `toolNamesThisTurn.length
+  >= maxProactiveActions()` (runaway-loop backstop on top of `MAX_TOOL_ITERATIONS`). **Env** —
+  `LUNA_PROACTIVE_MAX_ACTIONS` documented.
+- **Reactive turns are untouched** — both the gate and the budget are gated on `s.proactiveTurn`.
+- Tests: 222 across 32 files (+7): pure (`proactiveRiskOf` fail-closed, `isProactiveActionAllowed`);
+  hard-gate end-to-end via a **synthetic surface-risk tool** (reusing the `time_now` slot, unmarked):
+  surface-without-surfacing → **blocked, not executed**, recoverable, traced; surface-after-a-
+  prior-round-message → **allowed, executes**; safe tools run silently un-gated; reactive turn with
+  the surface tool → **not gated** (runs); action budget caps a cycle.
+
+Inference:
+
+- This is the spine that makes Alan's max-autonomy choice responsible: an unsupervised loop can call
+  anything, but **nothing irreversible happens silently** — she must tell you first, and you see the
+  announcement before the act. The hard gate (block-first) was Alan's explicit pick over the softer
+  act-then-surface, which is correct for autonomous `shell`.
+- Fail-closed is the load-bearing property: the gate defends against the *future* — a developer who
+  adds a destructive tool and forgets to classify it gets it gated by default, not silently
+  executed. The synthetic-surface-tool tests prove the block path today, before any real `shell`
+  exists (which ships later, under this gate — the only honest way to test it now).
+- Known v0.10.1 refinements (documented, both safe-by-construction): the surface-match is coarse
+  (any prior-round message unlocks surface actions this cycle, not per-action semantic matching);
+  and the action budget is checked per-round (after dispatch), so one round may overshoot the cap by
+  up to the concurrency limit — but only ever for calls that ALREADY passed the gate (safe or
+  already-surfaced), so neither can leak an un-surfaced action. Precise matching + per-call budget
+  are deferred.
+- Adversarial **bypass-hunt review** of the diff: **2 confirmed (both PASS verifications, no fix),
+  36 dismissed** — the verifier actively tried to construct a script where an irreversible action
+  runs silently and found **none**: same-round `[message, surfaceTool]` (both orderings) stays
+  blocked (`surfacedBefore` is computed once at entry, before `messageTexts` mutates); fail-closed
+  holds; blocked calls aren't dispatched/counted but their error result is paired (API contract
+  intact); termination holds (all-blocked loops still terminate at `MAX_TOOL_ITERATIONS`); reactive
+  turns byte-identical. The round-granular budget overshoot above was the only observation, judged
+  not a safety bypass.
 
 ### `v0.10.0` — 2026-06-13 — Proactive turn primitive (Initiative 5, commit 1 of 5)
 

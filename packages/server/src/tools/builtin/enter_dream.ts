@@ -21,6 +21,7 @@ export const enterDreamTool = defineTool({
   input: Input,
   output: Output,
   concurrency: 'session-serial',
+  proactiveRisk: 'safe',
   timeoutMs: 1000,
   summarize: () => 'dream pending — starts after this turn',
   execute: async function* (input, ctx) {

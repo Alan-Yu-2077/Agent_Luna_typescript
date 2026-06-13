@@ -18,6 +18,12 @@ import { renderHumanityBlock } from '../persona/humanity';
 import { renderL1Contract } from '../persona/l1Contract';
 import { WAKE_SCENE_BLOCK } from '../persona/scene';
 import { detectDefection, runDefectionAudit } from './integrity/defectionAudit';
+import {
+  maxProactiveActions,
+  SURFACE_FIRST_MESSAGE,
+  isProactiveActionAllowed,
+  proactiveRiskOf,
+} from '../proactive/safetyGate';
 
 export const MAX_TOOL_ITERATIONS = 8;
 
@@ -241,6 +247,11 @@ const graph: Graph<TurnState, TurnNode> = {
   async dispatch_tools(s) {
     const calls: ToolCall[] = [];
     s.toolResultBlocks = [];
+    // Proactive hard safety gate (v0.10.1): a surface-risk action is allowed
+    // only if Luna surfaced (sent a message) in a PRIOR round of this cycle.
+    // messageTexts reflects prior rounds here (this round's messages dispatch
+    // below), so this forces announce-then-act across rounds.
+    const surfacedBefore = s.messageTexts.length > 0;
 
     for (const use of s.pendingToolUses) {
       const nameParse = ToolName.safeParse(use.name);
@@ -260,8 +271,31 @@ const graph: Graph<TurnState, TurnNode> = {
         });
         continue;
       }
-      calls.push({ call_id: use.id, tool_name: nameParse.data, input: use.input });
-      s.toolNamesThisTurn.push(nameParse.data);
+      const name = nameParse.data;
+
+      if (s.proactiveTurn) {
+        const risk = proactiveRiskOf(s.registry[name]);
+        if (!isProactiveActionAllowed(risk, surfacedBefore)) {
+          const result = {
+            kind: 'err' as const,
+            code: 'execution_exception' as const,
+            message: SURFACE_FIRST_MESSAGE,
+            recoverable: true,
+          };
+          s.emit({ type: 'tool.finished', call_id: use.id, result });
+          s.toolResultBlocks.push({
+            type: 'tool_result',
+            tool_use_id: use.id,
+            content: JSON.stringify(result),
+            is_error: true,
+          });
+          emitProactiveGate(s, name, 'blocked');
+          continue; // not dispatched, not counted toward the action budget
+        }
+      }
+
+      calls.push({ call_id: use.id, tool_name: name, input: use.input });
+      s.toolNamesThisTurn.push(name);
     }
 
     if (calls.length > 0) {
@@ -328,6 +362,12 @@ const graph: Graph<TurnState, TurnNode> = {
     s.session.history.push({ role: 'user', content: ordered });
     s.iteration += 1;
     if (s.iteration >= MAX_TOOL_ITERATIONS) {
+      s.finishReason = 'max_iterations';
+      return 'finalize';
+    }
+    // Proactive action budget (v0.10.1): a runaway-loop backstop on top of the
+    // round cap, only for autonomous proactive cycles.
+    if (s.proactiveTurn && s.toolNamesThisTurn.length >= maxProactiveActions()) {
       s.finishReason = 'max_iterations';
       return 'finalize';
     }
@@ -459,6 +499,22 @@ function emitGuardDecision(
     decision,
     reason: matched,
     evidence: { kind, matched },
+  });
+}
+
+function emitProactiveGate(s: TurnState, toolName: string, decision: 'blocked'): void {
+  if (!traceEnabled()) return;
+  trace({
+    schema_v: 1,
+    kind: 'decision',
+    trace_id: s.turnId,
+    turn_id: s.turnId,
+    session_id: s.session.id,
+    t_ms: Date.now(),
+    surface: 'proactive_action',
+    decision,
+    reason: `surface-risk tool '${toolName}' blocked until surfaced`,
+    evidence: { tool: toolName },
   });
 }
 

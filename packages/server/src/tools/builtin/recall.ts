@@ -45,6 +45,7 @@ export const recallTool = defineTool({
   input: Input,
   output: Output,
   concurrency: 'safe-parallel',
+  proactiveRisk: 'safe',
   timeoutMs: 4000,
   summarize: (out) => `${out.hits.length} hit${out.hits.length === 1 ? '' : 's'}`,
   execute: async function* (input, ctx) {

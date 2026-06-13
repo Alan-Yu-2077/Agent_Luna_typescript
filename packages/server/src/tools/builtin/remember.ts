@@ -54,6 +54,7 @@ export const rememberTool = defineTool({
   input: Input,
   output: Output,
   concurrency: 'session-serial',
+  proactiveRisk: 'safe',
   timeoutMs: 2000,
   summarize: (out) => (out.id ? `${out.status}: ${out.id}` : out.status),
   execute: async function* (input) {
