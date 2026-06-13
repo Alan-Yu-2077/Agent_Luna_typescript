@@ -1,6 +1,6 @@
 # Agent_Luna (TypeScript) — Development History
 
-Last updated: 2026-06-13 (Asia/Shanghai) — v0.7.0 (message-tool default flip; Initiative 3 complete)
+Last updated: 2026-06-13 (Asia/Shanghai) — v0.8.0 (decision traces + defection audit; Initiative 4 begins)
 
 ## Scope
 
@@ -48,7 +48,8 @@ during the rewrite. Its version log is unrelated to this one — `v0.1` here is 
 | `v0.6.0` | 2026-06-13 | Persona foundation — mtime-cached loader, humanity splitters, wake scene | `25ed7cd` |
 | `v0.6.1` | 2026-06-13 | `message` tool + humanity caps as Zod schema (LD #9, flag off) | `266ee1b` |
 | `v0.6.2` | 2026-06-13 | Streaming message text (`input_json_delta` → `tool.progress`) + empty-reply guard | `dad7636` |
-| `v0.7.0` | 2026-06-13 | Message-tool default flip after recorded A/B; Initiative 3 complete | `working tree` |
+| `v0.7.0` | 2026-06-13 | Message-tool default flip after recorded A/B; Initiative 3 complete | `de41694` |
+| `v0.8.0` | 2026-06-13 | Decision trace events + zero-LLM defection audit + replay tree | `working tree` |
 
 ## Detailed records
 
@@ -104,6 +105,72 @@ Inference:
   `defineTool`, the dispatcher, and provider logic stay in `packages/server`. Frontend
   (`packages/web`) will consume the same protocol package in Initiative 6, getting
   contract drift as a type error rather than a runtime mismatch.
+
+### `v0.8.0` — 2026-06-13 — Decision traces + defection audit (Initiative 4, commit 1 of 5)
+
+Status:
+
+- working tree (commit hash recorded post-commit)
+
+Fact:
+
+- **Protocol** — `DecisionTraceEvent` added to the `TraceEvent` discriminated union
+  ([`trace.ts`](../../packages/protocol/src/trace.ts)): `{ kind:'decision', surface, decision,
+  reason, evidence? }` over the shared base. `evidence` is `z.record(z.unknown()).optional()`.
+  The "decision replay tree" is the existing `/_trace` per-turn view gaining these rows — the
+  trace store (`record`/`flush`/`getEventsByTurn`) is kind-agnostic, so **zero store changes**.
+- **`src/turn/integrity/defectionAudit.ts`** (new, ~130 LOC) — `detectDefection(input)`, a
+  **pure, zero-LLM** function returning `{defected, kind?, matched?}` over three detectors in
+  confidence order: (1) `is_final_promise` — last delivered message had `is_final:false` yet the
+  turn ended cleanly (`end_turn`); structural, no dictionary. (2) `message_intent` — a **verbatim
+  delivered message text** matches `PROMISE_PATTERNS` (CJK marker+verb window + English) AND no
+  non-`message` tool fired. (3) `thinking_intent` — same dictionary over the **summarized**
+  thinking; **audit-only tier**, distinguishable so v0.8.2's guard never retries on it. Plus
+  `runDefectionAudit(state)` — gated by `LUNA_DECISION_AUDIT`, records one `decision` trace on a
+  hit, wrapped so it can **never throw into the turn** (override-not-depend).
+- **Deliberate divergence from Python** (`_audit_web_search_intent_no_call`, agent_loop.py:669):
+  the load-bearing match source is the **delivered message text**, not raw thinking — our thinking
+  is `display:'summarized'` and may drop/paraphrase intent, so thinking matches are demoted to the
+  audit-only tier. Also: typed `decision` traces, not a `reasoning.jsonl` side-file.
+- **Plan refinement** (vs the committed v0.8.0 plan's "async after turn.result"): since detection
+  is a pure function, the audit runs **synchronously in `runTurn`'s `finally` BEFORE `flushTrace`**
+  ([`runTurn.ts`](../../packages/server/src/turn/runTurn.ts)) — the `decision` trace persists
+  atomically with the turn's other rows instead of needing a second write. New `TurnState` fields
+  `lastMessageIsFinal` + `toolNamesThisTurn` capture the audit inputs at the message-delivery and
+  tool-dispatch sites.
+- **Viewer** — `/_trace` renders `decision` rows (new `--decision` color, `.ev.decision` rules,
+  `fmtSummary` shows `surface · decision (kind)`).
+- **Env** — `LUNA_DECISION_AUDIT` documented in `.env.example` (default off until v0.9.0).
+- Tests: 184 across 27 files (+22): pure-detector matrix (all three kinds, ordering, the
+  `actedViaTool` gate, false-positive safety, null/empty cases, cross-bubble promises);
+  `runDefectionAudit` flag on/off → exactly-one / zero `decision` rows; end-to-end through `runTurn`
+  in message mode (defection → atomic decision trace; flag-off → none + turn unaffected; clean turn
+  → none); `DecisionTraceEvent` protocol parse/reject + union routing; **override-not-depend** — a
+  trace store that throws only on the `decision` write is swallowed (unit: `{defected:false}`; e2e:
+  turn still emits `turn.result` and flushes its node traces). The last two were added in response
+  to an adversarial review of the diff (2 confirmed findings, both flagging this exact untested
+  invariant — load-bearing because the audit runs synchronously in `finally` before `flushTrace`).
+- Real-LLM smoke (yunwu, `LUNA_DECISION_AUDIT=1`): an honest decline ("我现在碰不到你的日程，
+  没那个入口") correctly produced **no** defection; a conditional offer ("…你可以把那页打出来给我，
+  我立刻就能读") was flagged `message_intent` — a **false positive** (conditional offer, not a
+  present-tense failed promise). Recorded as the **first concrete v0.8.2 tuning target**; the
+  detector is left unchanged on purpose (measure-first discipline — v0.8.0 is audit-only).
+- Surfaced (and flagged as a separate task, NOT fixed here): in message mode, capability-lacking
+  prompts make the real model emit degenerate empty `{}` `message` calls that fail validation up to
+  `MAX_TOOL_ITERATIONS` and dead-end at `max_iterations`. A v0.6.x message-robustness bug, distinct
+  from the v0.5.2 `_noargs` issue; the empty-reply guard misses it (turn ends `max_iterations`, not
+  `end_turn`).
+
+Inference:
+
+- The instrument-first ordering earned its keep on its **first real run**: it immediately surfaced
+  a concrete false-positive class (conditional offers) for v0.8.2 to tune against, and incidentally
+  exposed the empty-`{}`-message loop — both are exactly the kind of texture the measure-first
+  design exists to make visible before any behavior changes.
+- LD #14 made real in the smallest possible slice: a zero-LLM, flag-gated, never-throwing observer
+  that adds a typed decision lane to the existing trace plumbing. Nothing about the turn changes
+  with the flag off (the A/B baseline guarantee), so v0.8.1's L1 contract lands against a clean,
+  measurable before-state.
 
 ### `v0.7.0` — 2026-06-13 — Message-tool default flip (Initiative 3 capstone, commit 4 of 4)
 

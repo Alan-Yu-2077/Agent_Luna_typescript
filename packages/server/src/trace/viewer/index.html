@@ -16,6 +16,7 @@
         --tool: #c98a3c;
         --outbound: #7aa37a;
         --overflow: #c25b5b;
+        --decision: #c07cc6;
       }
       * { box-sizing: border-box; }
       body {
@@ -64,12 +65,14 @@
       .ev.tool { border-color: var(--tool); }
       .ev.outbound { border-color: var(--outbound); }
       .ev.overflow { border-color: var(--overflow); }
+      .ev.decision { border-color: var(--decision); }
       .ev .row { display: flex; gap: 10px; align-items: baseline; cursor: pointer; }
       .ev .kind { text-transform: uppercase; font-size: 10px; letter-spacing: 0.05em; width: 70px; flex-shrink: 0; }
       .ev.node .kind { color: var(--node); }
       .ev.tool .kind { color: var(--tool); }
       .ev.outbound .kind { color: var(--outbound); }
       .ev.overflow .kind { color: var(--overflow); }
+      .ev.decision .kind { color: var(--decision); }
       .ev .summary { flex: 1; }
       .ev .dt { color: var(--muted); font-size: 11px; }
       .ev pre {
@@ -104,6 +107,7 @@
         if (kind === 'tool') return `${p.tool_name} · ${p.phase}`;
         if (kind === 'outbound') return p.server_event_type;
         if (kind === 'overflow') return `dropped ${p.dropped_count} events`;
+        if (kind === 'decision') return `${p.surface} · ${p.decision}${p.evidence && p.evidence.kind ? ' (' + p.evidence.kind + ')' : ''}`;
         return kind;
       }
 

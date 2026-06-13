@@ -16,6 +16,7 @@ import { getMemoryDb } from '../memory/sessionStore';
 import { loadPersona } from '../persona/loader';
 import { renderHumanityBlock } from '../persona/humanity';
 import { WAKE_SCENE_BLOCK } from '../persona/scene';
+import { runDefectionAudit } from './integrity/defectionAudit';
 
 export const MAX_TOOL_ITERATIONS = 8;
 
@@ -85,6 +86,12 @@ export type TurnState = {
   startedMs: number;
   // texts of successful message-tool deliveries this turn, in dispatch order
   messageTexts: string[];
+  // is_final of the last delivered message (null = none delivered) — for the
+  // is_final promise contract audit
+  lastMessageIsFinal: boolean | null;
+  // every validly-named tool dispatched this turn (incl. 'message') — for the
+  // intent-without-act audit ("promised to act but no non-message tool fired")
+  toolNamesThisTurn: string[];
   // empty-reply guard fired already (bounds the corrective retry to one)
   silentRetried: boolean;
 };
@@ -218,6 +225,7 @@ const graph: Graph<TurnState, TurnNode> = {
         continue;
       }
       calls.push({ call_id: use.id, tool_name: nameParse.data, input: use.input });
+      s.toolNamesThisTurn.push(nameParse.data);
     }
 
     if (calls.length > 0) {
@@ -259,8 +267,9 @@ const graph: Graph<TurnState, TurnNode> = {
             break;
           case 'final':
             if (evt.tool_name === 'message' && evt.result.kind === 'ok') {
-              const delivery = evt.result.data as { text?: unknown };
+              const delivery = evt.result.data as { text?: unknown; is_final?: unknown };
               if (typeof delivery.text === 'string') s.messageTexts.push(delivery.text);
+              if (typeof delivery.is_final === 'boolean') s.lastMessageIsFinal = delivery.is_final;
             }
             s.emit({ type: 'tool.finished', call_id: evt.call_id, result: evt.result });
             s.toolResultBlocks.push({
@@ -381,6 +390,8 @@ export async function runTurn(opts: RunTurnOptions): Promise<TurnState> {
     firstTokenMs: null,
     startedMs: Date.now(),
     messageTexts: [],
+    lastMessageIsFinal: null,
+    toolNamesThisTurn: [],
     silentRetried: false,
   };
 
@@ -427,6 +438,18 @@ export async function runTurn(opts: RunTurnOptions): Promise<TurnState> {
       rawContent: opts.session.history.slice(historyStart),
     });
     persistSession(opts.session.id, opts.session.history, opts.session.turnSeq);
+    // Action-integrity audit: pure detection + at most one decision trace,
+    // recorded BEFORE flushTrace so it persists atomically with the turn's
+    // other events. Gated by LUNA_DECISION_AUDIT; never throws into the turn.
+    runDefectionAudit({
+      turnId: opts.turnId,
+      sessionId: opts.session.id,
+      messageTexts: state.messageTexts,
+      lastMessageIsFinal: state.lastMessageIsFinal,
+      thinking: state.thinking,
+      toolNamesThisTurn: state.toolNamesThisTurn,
+      finishReason: state.finishReason,
+    });
     flushTrace(opts.turnId);
     void maybeFold(opts.session, opts.provider).catch(() => {
       /* fold is best-effort; a failed fold leaves verbatim history intact */

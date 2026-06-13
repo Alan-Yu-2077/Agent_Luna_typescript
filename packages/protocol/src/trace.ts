@@ -41,11 +41,24 @@ export const OverflowTraceEvent = z.object({
   dropped_count: z.number().int().nonnegative(),
 });
 
+// A judgment recorded for a turn (Initiative 4). `surface` names the decision
+// site (e.g. 'intent_no_act'), `decision`/`reason` are the override-not-depend
+// audit trail, `evidence` carries detector specifics. Off the hot path.
+export const DecisionTraceEvent = z.object({
+  ...base,
+  kind: z.literal('decision'),
+  surface: z.string(),
+  decision: z.string(),
+  reason: z.string(),
+  evidence: z.record(z.unknown()).optional(),
+});
+
 export const TraceEvent = z.discriminatedUnion('kind', [
   NodeTraceEvent,
   ToolTraceEvent,
   OutboundTraceEvent,
   OverflowTraceEvent,
+  DecisionTraceEvent,
 ]);
 export type TraceEvent = z.infer<typeof TraceEvent>;
 
