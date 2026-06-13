@@ -4,8 +4,8 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { handleClose, handleMessage, handleOpen, setRuntime, type WSData } from './ws';
 import { MockProvider } from './provider/mock';
 import type { ProviderEvent } from './provider/types';
-import { builtinRegistry } from './tools/registry';
-import { resetSessions } from './turn/session';
+import { builtinRegistry, messageRegistry } from './tools/registry';
+import { getSession, resetSessions } from './turn/session';
 
 let server: Server<WSData>;
 let url: string;
@@ -217,5 +217,67 @@ describe('dev.dispatch_tool', () => {
     expect(event.type).toBe('error');
     expect(event.code).toBe('invalid_event');
     expect(event.message).toContain('LUNA_DEV_TOOLS');
+  });
+});
+
+describe('proactive.fire (WS gating)', () => {
+  beforeEach(() => {
+    resetSessions();
+  });
+  afterEach(() => {
+    setRuntime(null);
+    delete Bun.env['LUNA_PROACTIVE'];
+  });
+
+  test('LUNA_PROACTIVE unset → proactive_disabled (kill switch)', async () => {
+    delete Bun.env['LUNA_PROACTIVE'];
+    setRuntime({ provider: new MockProvider([]), registry: messageRegistry });
+    const event = JSON.parse(await roundTrip(JSON.stringify({ type: 'proactive.fire' })));
+    expect(event.type).toBe('error');
+    expect(event.code).toBe('proactive_disabled');
+  });
+
+  test('LUNA_PROACTIVE=1 but no runtime → runtime_not_configured', async () => {
+    Bun.env['LUNA_PROACTIVE'] = '1';
+    setRuntime(null);
+    const event = JSON.parse(await roundTrip(JSON.stringify({ type: 'proactive.fire' })));
+    expect(event.type).toBe('error');
+    expect(event.code).toBe('runtime_not_configured');
+  });
+
+  test('rejects with turn_in_progress while a user turn is active (mutex)', async () => {
+    Bun.env['LUNA_PROACTIVE'] = '1';
+    setRuntime({ provider: new MockProvider([]), registry: messageRegistry });
+    getSession('default').activeTurn = 'busy-turn'; // simulate an in-flight user turn
+    const event = JSON.parse(await roundTrip(JSON.stringify({ type: 'proactive.fire' })));
+    expect(event.type).toBe('error');
+    expect(event.code).toBe('turn_in_progress');
+    getSession('default').activeTurn = null;
+  });
+
+  test('gating passes → a silent proactive cycle emits started…finished(spoke:false)', async () => {
+    Bun.env['LUNA_PROACTIVE'] = '1';
+    const silent: ProviderEvent[][] = [
+      [
+        {
+          kind: 'message_stop',
+          stopReason: 'end_turn',
+          toolUses: [],
+          assistantContent: [] as unknown as Anthropic.ContentBlock[],
+          usage: { input_tokens: 5, output_tokens: 1 },
+        },
+      ],
+    ];
+    setRuntime({ provider: new MockProvider(silent), registry: messageRegistry });
+    const events = await collectUntil(
+      JSON.stringify({ type: 'proactive.fire' }),
+      new Set(['proactive.finished', 'error']),
+      1000,
+    );
+    const types = events.map((e) => (e as { type: string }).type);
+    expect(types[0]).toBe('proactive.started');
+    expect(types.at(-1)).toBe('proactive.finished');
+    const finished = events.at(-1) as { spoke: boolean };
+    expect(finished.spoke).toBe(false);
   });
 });

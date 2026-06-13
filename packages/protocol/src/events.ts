@@ -27,12 +27,19 @@ export const DreamWakeEvent = z.object({
   type: z.literal('dream.wake'),
 });
 
+// Manual trigger for a proactive turn (Initiative 5, v0.10.0). Autonomous
+// firing comes from the server-side scheduler at v0.10.3.
+export const ProactiveFireEvent = z.object({
+  type: z.literal('proactive.fire'),
+});
+
 export const ClientEvent = z.discriminatedUnion('type', [
   PingEvent,
   DevDispatchToolEvent,
   ChatSendEvent,
   DreamEnterEvent,
   DreamWakeEvent,
+  ProactiveFireEvent,
 ]);
 export type ClientEvent = z.infer<typeof ClientEvent>;
 
@@ -118,6 +125,20 @@ export const DreamStepEvent = z.object({
   detail: z.string(),
 });
 
+// Proactive cycle markers (Initiative 5, v0.10.0). `spoke=false` = a silent
+// proactive turn (she acted via tools but sent no message) — the core new
+// capability of proactive agency.
+export const ProactiveStartedEvent = z.object({
+  type: z.literal('proactive.started'),
+  cycle_id: z.string(),
+});
+
+export const ProactiveFinishedEvent = z.object({
+  type: z.literal('proactive.finished'),
+  cycle_id: z.string(),
+  spoke: z.boolean(),
+});
+
 export const ServerEvent = z.discriminatedUnion('type', [
   PongEvent,
   ErrorEvent,
@@ -129,5 +150,7 @@ export const ServerEvent = z.discriminatedUnion('type', [
   TurnResultEvent,
   DreamStatusEvent,
   DreamStepEvent,
+  ProactiveStartedEvent,
+  ProactiveFinishedEvent,
 ]);
 export type ServerEvent = z.infer<typeof ServerEvent>;

@@ -55,6 +55,7 @@
       <a href="/_trace" target="_blank">trace ↗</a>
       <button id="dreamBtn">🌙 入梦</button>
       <button id="wakeBtn" disabled>☀️ 唤醒</button>
+      <button id="proactiveBtn">🌱 主动</button>
     </header>
     <div id="log"></div>
     <footer>
@@ -67,6 +68,7 @@
       const sendBtn = document.getElementById('sendBtn');
       const dreamBtn = document.getElementById('dreamBtn');
       const wakeBtn = document.getElementById('wakeBtn');
+      const proactiveBtn = document.getElementById('proactiveBtn');
       const statusEl = document.getElementById('status');
 
       let ws = null;
@@ -179,6 +181,14 @@
               setDreaming(ev.is_dreaming, ev.current_step);
               if (!ev.is_dreaming) el('chip dream', '☀️ Luna 醒了');
               break;
+            case 'proactive.started':
+              currentBubble = null; msgCountThisTurn = 0;
+              el('chip dream', '🌱 Luna 自己醒来动了一下…');
+              break;
+            case 'proactive.finished':
+              if (!ev.spoke) el('chip', '🌱 (她安静地做了点什么，没有说话)');
+              currentBubble = null;
+              break;
             case 'error':
               el('chip err', '⚠ ' + ev.code + ': ' + ev.message);
               if (ev.code === 'dreaming') setDreaming(true, null);
@@ -199,6 +209,7 @@
       input.addEventListener('keydown', (e) => { if (e.key === 'Enter') send(); });
       dreamBtn.onclick = () => { ws && ws.send(JSON.stringify({ type: 'dream.enter' })); };
       wakeBtn.onclick = () => { ws && ws.send(JSON.stringify({ type: 'dream.wake' })); };
+      proactiveBtn.onclick = () => { ws && ws.send(JSON.stringify({ type: 'proactive.fire' })); };
 
       connect();
     </script>

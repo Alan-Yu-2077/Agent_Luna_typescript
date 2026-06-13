@@ -122,6 +122,10 @@ export type TurnState = {
   // judges only bubbles delivered SINCE then, so a corrected promise isn't
   // re-flagged from the already-shown bubble.
   correctionWatermark: number;
+  // this is a proactive turn (Initiative 5): she woke on her own, the "user
+  // text" is an internal stage direction, and a silent outcome (no message) is
+  // legitimate — the empty-reply guard must not fire.
+  proactiveTurn: boolean;
 };
 
 export function toolsToAnthropicFormat(registry: ToolRegistry): Anthropic.Tool[] {
@@ -142,11 +146,15 @@ const graph: Graph<TurnState, TurnNode> = {
     // Wake scene rides the first user turn after boot — message level, never
     // system, so the cached system core stays byte-stable across the boot
     // transition. Persisted as-sent into history like every other block.
-    if (Bun.env['LUNA_PERSONA'] !== '0' && s.session.wakePending) {
+    // A proactive turn is not the user's first contact, so it never consumes it.
+    if (Bun.env['LUNA_PERSONA'] !== '0' && s.session.wakePending && !s.proactiveTurn) {
       blocks.push({ type: 'text', text: WAKE_SCENE_BLOCK });
       s.session.wakePending = false;
     }
-    if (Bun.env['LUNA_MEMORY_INJECT'] !== '0' && getMemoryDb()) {
+    // Per-query recall keys off the user's words; a proactive turn's "user
+    // text" is an internal stage direction, not a query, so skip it (core
+    // memory still injects via the system prompt).
+    if (Bun.env['LUNA_MEMORY_INJECT'] !== '0' && getMemoryDb() && !s.proactiveTurn) {
       const hits = await retrieve(s.session.id, s.userText);
       const recall = renderRecallBlock(hits);
       if (recall) blocks.push({ type: 'text', text: recall });
@@ -327,12 +335,31 @@ const graph: Graph<TurnState, TurnNode> = {
   },
 
   async finalize(s) {
+    // A proactive turn may legitimately act without speaking (Initiative 5):
+    // record the silent outcome and skip the "must speak" guard entirely. Any
+    // message she DID send still went through the integrity guards above.
+    if (s.proactiveTurn && s.messageTexts.length === 0 && traceEnabled()) {
+      trace({
+        schema_v: 1,
+        kind: 'node',
+        trace_id: s.turnId,
+        turn_id: s.turnId,
+        session_id: s.session.id,
+        t_ms: Date.now(),
+        node_from: 'finalize',
+        node_to: 'finalize',
+        payload: { proactive_silent: true, tools: s.toolNamesThisTurn },
+      });
+    }
     if (isMessageMode(s.registry)) {
       // Empty-reply guard (Python v0.47.12 lesson, always on in message mode):
-      // a message-mode turn must speak. One corrective USER-role stage
+      // a reactive message-mode turn must speak. One corrective USER-role stage
       // direction (never system — v0.27.1 hoisting lesson), bounded by the
-      // 'empty' reason in correctionUsed.
+      // 'empty' reason in correctionUsed. Proactive turns are exempt (silence
+      // is a legitimate outcome); the integrity guards + text-settling below
+      // still apply to any message a proactive turn DOES send.
       if (
+        !s.proactiveTurn &&
         s.messageTexts.length === 0 &&
         s.finishReason === 'end_turn' &&
         !s.correctionUsed.has('empty')
@@ -443,6 +470,9 @@ export type RunTurnOptions = {
   registry: ToolRegistry;
   emit: (e: ServerEvent) => void;
   onTransition?: TransitionHook<TurnState, TurnNode>;
+  // Initiative 5: she woke on her own; `userText` is an internal stage
+  // direction and a silent (no-message) outcome is legitimate.
+  proactiveTurn?: boolean;
 };
 
 export async function runTurn(opts: RunTurnOptions): Promise<TurnState> {
@@ -485,6 +515,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<TurnState> {
     toolNamesThisTurn: [],
     correctionUsed: new Set(),
     correctionWatermark: 0,
+    proactiveTurn: opts.proactiveTurn ?? false,
   };
 
   const onTransition: TransitionHook<TurnState, TurnNode> = (from, to, s) => {

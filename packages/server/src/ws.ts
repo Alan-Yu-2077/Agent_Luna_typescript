@@ -7,6 +7,7 @@ import { builtinRegistry, type ToolRegistry } from './tools/registry';
 import type { Provider } from './provider/types';
 import { getSession, type Session } from './turn/session';
 import { runTurn } from './turn/runTurn';
+import { runProactiveTurn } from './proactive/proactiveTurn';
 import { dreamStatus, isDreaming, wake } from './dream/dreamState';
 import { runDreamCycle } from './dream/cycle';
 import type { DreamLLM } from './dream/llm';
@@ -193,6 +194,49 @@ export function handleMessage(
         is_dreaming: status.is_dreaming,
         current_step: status.current_step,
         last_dream_ms: status.last_dream_ms,
+      });
+      return;
+    }
+    case 'proactive.fire': {
+      // Manual trigger (v0.10.0). Gated by the kill switch (default off until
+      // v0.11.0); autonomous firing arrives at v0.10.3.
+      if (Bun.env['LUNA_PROACTIVE'] !== '1') {
+        outbound(ws, {
+          type: 'error',
+          code: 'proactive_disabled',
+          message: 'proactive turns are gated by LUNA_PROACTIVE=1',
+        });
+        return;
+      }
+      if (isDreaming()) {
+        outbound(ws, { type: 'error', code: 'dreaming', message: 'Luna is dreaming' });
+        return;
+      }
+      if (!runtime) {
+        outbound(ws, {
+          type: 'error',
+          code: 'runtime_not_configured',
+          message: 'no provider configured; proactive unavailable',
+        });
+        return;
+      }
+      const session = getSession(ws.data.sessionId);
+      // A proactive turn never overlaps a user turn (same activeTurn guard that
+      // serializes chat.send / dream.enter).
+      if (session.activeTurn !== null) {
+        outbound(ws, {
+          type: 'error',
+          code: 'turn_in_progress',
+          message: `turn ${session.activeTurn} is still running`,
+        });
+        return;
+      }
+      void runProactiveTurn({
+        session,
+        cycleId: `${session.id}:${Date.now()}`,
+        provider: runtime.provider,
+        registry: runtime.registry,
+        emit: safeEmit(ws),
       });
       return;
     }

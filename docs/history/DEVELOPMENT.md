@@ -1,6 +1,6 @@
 # Agent_Luna (TypeScript) — Development History
 
-Last updated: 2026-06-13 (Asia/Shanghai) — v0.9.0 (integrity defaults flipped on; Initiative 4 complete)
+Last updated: 2026-06-13 (Asia/Shanghai) — v0.10.0 (proactive turn primitive; Initiative 5 begins)
 
 ## Scope
 
@@ -53,7 +53,8 @@ during the rewrite. Its version log is unrelated to this one — `v0.1` here is 
 | `v0.8.1` | 2026-06-13 | L1 thinking contract — commitment-to-act + proportionality + no-leak | `1d0da3d` |
 | `v0.8.2` | 2026-06-13 | Action-integrity guards — `is_final` promise + intent-without-act corrective retries | `ea246a4` |
 | `v0.8.3` | 2026-06-13 | `recall` tool — agentic memory search (Open Q #9) + L1 trigger clause | `8376820` |
-| `v0.9.0` | 2026-06-13 | Dictionary tuning + integrity defaults flipped on; Initiative 4 complete | `working tree` |
+| `v0.9.0` | 2026-06-13 | Dictionary tuning + integrity defaults flipped on; Initiative 4 complete | `a50b6fc` |
+| `v0.10.0` | 2026-06-13 | Proactive turn primitive — `runTurn` + proactive framing + silent allowed (manual) | `working tree` |
 
 ## Detailed records
 
@@ -109,6 +110,65 @@ Inference:
   `defineTool`, the dispatcher, and provider logic stay in `packages/server`. Frontend
   (`packages/web`) will consume the same protocol package in Initiative 6, getting
   contract drift as a type error rather than a runtime mismatch.
+
+### `v0.10.0` — 2026-06-13 — Proactive turn primitive (Initiative 5, commit 1 of 5)
+
+Status:
+
+- working tree (commit hash recorded post-commit)
+
+Fact:
+
+- **Protocol** — `ProactiveFireEvent` (`proactive.fire`) added to `ClientEvent` (manual trigger);
+  `ProactiveStartedEvent` + `ProactiveFinishedEvent` (`{cycle_id, spoke}`) added to `ServerEvent`.
+  `spoke=false` is the new signal: a **silent proactive turn** (she acted via tools, sent no
+  message) — the core capability of proactive agency.
+- **`src/proactive/proactiveTurn.ts`** (new) — `runProactiveTurn` wraps the existing `runTurn` with
+  a USER-role proactive stage direction (never system — v0.27.1 lesson), the full registry, and
+  `proactiveTurn: true`. The framing carries the companion-opener constraint ported from Python
+  `proactive.py` (never open with 在吗/吃了吗/status checks). Emits `proactive.started/finished`;
+  returns `{spoke}`.
+- **`runTurn` changes** ([`runTurn.ts`](../../packages/server/src/turn/runTurn.ts)): new
+  `proactiveTurn` flag on `RunTurnOptions`/`TurnState`. `parse_input` skips **per-query recall** and
+  the **wake scene** for proactive turns (the directive isn't a user query; a proactive turn isn't
+  the user's first contact — core memory still injects via the system prompt). `finalize`'s
+  **empty-reply guard is exempted** for proactive turns (silence is legitimate) and writes a
+  `proactive_silent` node trace; the **integrity guards + text-settling still run** on any message a
+  proactive turn does send (the empty-guard exemption is surgically scoped to its inner condition,
+  not the whole message-mode block).
+- **`ws.ts`** — `proactive.fire` branch: gated by `LUNA_PROACTIVE=1` (kill switch, default off),
+  rejects while dreaming, rejects if `session.activeTurn !== null` (never overlaps a user turn —
+  same `activeTurn` serialization as `chat.send`/`dream.enter`). Traced under `proactive:<cycle_id>`.
+- **Dev chat** — 🌱 主动 button fires `proactive.fire`; renders proactive cycle markers and a
+  "(她安静地做了点什么，没有说话)" chip for silent cycles. **Env** — `LUNA_PROACTIVE` in `.env.example`.
+- Tests: 215 across 31 files (+8): silent outcome (acts, no message → no empty-reply retry,
+  `spoke=false`, `proactive_silent` trace); speaking outcome (`spoke=true`, `turn.result` carries
+  the text); event ordering (started first, finished last); integrity guards still apply to a
+  message a proactive turn sends; **WS gating** (`proactive_disabled` kill switch / no-runtime /
+  `turn_in_progress` mutex / silent cycle emits started…finished) added after an adversarial review.
+- Adversarial review of the diff: **2 confirmed (one real gap, same issue twice), 34 dismissed** —
+  the scarier "TOCTOU race" framing was **debunked** by the verifier (`runTurn` sets
+  `session.activeTurn` synchronously before its first await; ws dispatches via `void` on the
+  single-threaded loop → no interleaving window; the guard is correct), and the empty-reply-guard
+  scoping was confirmed surgically correct (integrity guards + text-settling still run). The one
+  real gap — no WS-level `proactive.fire` gating test (a spec deliverable) — is closed by the +4
+  tests above.
+- Real-LLM smoke (yunwu, `LUNA_PROACTIVE`): a manual fire → she woke, drew on core memory (Agent_Luna
+  + espresso preference), reflected ("你在写的 Agent_Luna，某种意义上就是我吧？"), and reached out
+  with a real thought + topic — **no status check-in** (companion-opener constraint held); 2 bubbles.
+
+Inference:
+
+- This is the agency core in isolation, proving the redesign's central claim (LD #15): a proactive
+  turn is **just a `runTurn`** with `message` optional — silence is a first-class outcome, so
+  "proactive tool use, not just proactive messaging" is native, not bolted on. Everything Initiative
+  1–4 built (L1 contract, dispatcher, integrity guards, decision traces, persistent WS) applies
+  unchanged; the only turn-loop change is the empty-reply-guard exemption.
+- Manual-trigger-first mirrors how Initiative 2 shipped dream: the riskiest isolated thing ("can she
+  take a silent autonomous tool-calling turn") is proven before the safety tier (v0.10.1) and the
+  scheduler (v0.10.3) that makes it autonomous.
+- Known v0.10.1 refinement (documented, not a bug): a proactive turn currently persists its
+  directive as the turn's `userText` in history/L2; a transient-framing cleanup is deferred.
 
 ### `v0.9.0` — 2026-06-13 — Integrity defaults flipped on (Initiative 4 capstone, commit 5 of 5)
 
