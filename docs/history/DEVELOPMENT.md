@@ -1,6 +1,6 @@
 # Agent_Luna (TypeScript) — Development History
 
-Last updated: 2026-06-13 (Asia/Shanghai) — v0.8.2 (action-integrity guards)
+Last updated: 2026-06-13 (Asia/Shanghai) — v0.8.3 (recall tool; Open Q #9 resolved)
 
 ## Scope
 
@@ -51,7 +51,8 @@ during the rewrite. Its version log is unrelated to this one — `v0.1` here is 
 | `v0.7.0` | 2026-06-13 | Message-tool default flip after recorded A/B; Initiative 3 complete | `de41694` |
 | `v0.8.0` | 2026-06-13 | Decision trace events + zero-LLM defection audit + replay tree | `76c8dfe` |
 | `v0.8.1` | 2026-06-13 | L1 thinking contract — commitment-to-act + proportionality + no-leak | `1d0da3d` |
-| `v0.8.2` | 2026-06-13 | Action-integrity guards — `is_final` promise + intent-without-act corrective retries | `working tree` |
+| `v0.8.2` | 2026-06-13 | Action-integrity guards — `is_final` promise + intent-without-act corrective retries | `ea246a4` |
+| `v0.8.3` | 2026-06-13 | `recall` tool — agentic memory search (Open Q #9) + L1 trigger clause | `working tree` |
 
 ## Detailed records
 
@@ -107,6 +108,44 @@ Inference:
   `defineTool`, the dispatcher, and provider logic stay in `packages/server`. Frontend
   (`packages/web`) will consume the same protocol package in Initiative 6, getting
   contract drift as a type error rather than a runtime mismatch.
+
+### `v0.8.3` — 2026-06-13 — `recall` tool (Initiative 4, commit 4 of 5; resolves Open Q #9)
+
+Status:
+
+- working tree (commit hash recorded post-commit)
+
+Fact:
+
+- **Protocol** — `ToolName` += `'recall'` ([`tools.ts`](../../packages/protocol/src/tools.ts)).
+- **`src/tools/builtin/recall.ts`** (new) — agentic memory search via `defineTool`. Flat
+  root-object input (v0.5.2 gateway rule): `{ query: string, scope?: 'facts'|'timeline'|'both',
+  limit?: 1–10 }`; output `{ hits: { id, source, text, score, when_ms }[] }`. `execute` **reuses
+  the shipped hybrid `retrieve()`** ([`memory/recall/recall.ts`](../../packages/server/src/memory/recall/recall.ts))
+  — no new retrieval code — over-fetches `limit*2` then applies the scope filter (facts=l3,
+  timeline=l2, both=all). `concurrency: 'safe-parallel'` (read-only); no memory db → structured
+  err, not a throw (mirrors `remember`).
+- **Registry** — mounted in `builtinRegistry` (and so `messageRegistry` via its spread); **always
+  on** per LD #10, no flag. The wire-schema regression test already iterates the registry, so the
+  flat-schema guarantee covers it automatically.
+- **L1 contract** ([`l1Contract.ts`](../../packages/server/src/persona/l1Contract.ts)) — the
+  tool-trigger pass gains the recall clause: "does the user reference something you feel you should
+  already know but do not have in front of you? Recall it first." Now points at a tool that exists.
+- Tests: 204 across 30 files (+7): flat wire schema; query-required + limit bounds; ranked hits
+  from the store; `limit` respected; `scope=facts`→only l3 / `scope=timeline`→only l2; no-db →
+  structured err; summarize hit-count.
+- Real-embedding smoke: seeded "用户最喜欢的饮品是在家手冲的意式浓缩咖啡" + two distractors, then
+  `recall({query:'他平时爱喝点什么提神的'})` — a **zero-shared-keyword** paraphrase — surfaced the
+  espresso fact as the **top hit** (0.438 vs 0.254/0.253). Semantic recall works through the tool.
+
+Inference:
+
+- Resolves **Open Q #9** (model-callable recall), parked since v0.4.3 planning. Automatic
+  injection (v0.4.x) stays the floor; `recall` is the agentic reach — Luna can now decide to "think
+  back" and her call/no-call is visible in traces. Pairs with the L1 trigger clause so "该回忆没回忆"
+  has both a capability and a reasoning prompt, completing the 工具稳发 surface for Initiative 4.
+- Built on already-shipped retrieval, so the marginal cost was a thin tool wrapper — the v0.4.3
+  hybrid recall investment paying its second dividend (after auto-injection).
 
 ### `v0.8.2` — 2026-06-13 — Action-integrity guards (Initiative 4, commit 3 of 5)
 

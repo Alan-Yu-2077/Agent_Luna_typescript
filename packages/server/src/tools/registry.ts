@@ -3,6 +3,7 @@ import type { Tool } from './defineTool';
 import { enterDreamTool } from './builtin/enter_dream';
 import { messageTool } from './builtin/message';
 import { readFileTool } from './builtin/read_file';
+import { recallTool } from './builtin/recall';
 import { rememberTool } from './builtin/remember';
 import { timeNowTool } from './builtin/time_now';
 
@@ -16,6 +17,8 @@ export const builtinRegistry: ToolRegistry = {
   read_file: readFileTool,
   remember: rememberTool,
   enter_dream: enterDreamTool,
+  // agentic memory search — always mounted (LD #10), complements auto-injection
+  recall: recallTool,
 };
 
 // The LD #9 everything-as-tool surface. Mode selection happens once at boot
