@@ -1,6 +1,6 @@
 # Agent_Luna (TypeScript) — Development History
 
-Last updated: 2026-06-13 (Asia/Shanghai) — v0.12.0 (frontend consumption controller; Initiative 6 begins)
+Last updated: 2026-06-13 (Asia/Shanghai) — v0.12.1 (repo-wide audit + fixes: turn persistence resilience)
 
 ## Scope
 
@@ -59,7 +59,8 @@ during the rewrite. Its version log is unrelated to this one — `v0.1` here is 
 | `v0.10.2` | 2026-06-13 | Cadence governor + wake gate — prefilter + bounded "act now?" L2 judgment | `636caf3` |
 | `v0.10.3` | 2026-06-13 | Proactive scheduler/heartbeat — idle loop goes autonomous (behind the kill switch) | `ed51967` |
 | `v0.11.0` | 2026-06-13 | Self-continuation + dream auto-trigger + autonomy default-on; Initiative 5 complete | `45bb3cb` |
-| `v0.12.0` | 2026-06-13 | Frontend consumption controller (`packages/web`); Initiative 6 begins | `working tree` |
+| `v0.12.0` | 2026-06-13 | Frontend consumption controller (`packages/web`); Initiative 6 begins | `680e58d` |
+| `v0.12.1` | 2026-06-13 | Repo-wide audit (9 reviewers) + fixes — turn persistence resilience, dev tool_name | `working tree` |
 
 ## Detailed records
 
@@ -115,6 +116,48 @@ Inference:
   `defineTool`, the dispatcher, and provider logic stay in `packages/server`. Frontend
   (`packages/web`) will consume the same protocol package in Initiative 6, getting
   contract drift as a type error rather than a runtime mismatch.
+
+### `v0.12.1` — 2026-06-13 — Repo-wide audit + fixes
+
+Status:
+
+- working tree (commit hash recorded post-commit)
+
+Fact:
+
+- **Repo-wide adversarial audit** — 9 subsystem reviewers (turn loop, proactive, memory, dream,
+  tools/dispatcher, protocol/wire, provider/streaming, frontend, cross-cutting) over all of
+  `packages/{protocol,server,web}`, each finding adversarially verified. Result: **2 distinct real
+  bugs** (corroborated across 5 confirmed findings), **17 dismissed** as already-handled / single-
+  user-cut / by-design / theoretical (e.g. the cadence stale-snapshot race was already closed by
+  v0.10.3's in-flight guard; cross-session memory races don't exist for a single user; the dream
+  trigger already has `.catch`; `proactiveRisk:'safe'` for `remember` is by-design reversible).
+- **Bug A fix (major) — turn persistence resilience** ([`runTurn.ts`](../../packages/server/src/turn/runTurn.ts)):
+  the `finally` block ran `appendL2`/`persistSession`/`flushTrace` unguarded; a SQLite throw
+  (locked/readonly/disk-full) would reject `runTurn`'s promise — which the ws call sites do **not**
+  await → unhandled rejection / crash risk — and skip the remaining cleanup (trace loss). Now both
+  the persistence pair and `flushTrace` are wrapped in try/catch (log + surface `error{code:
+  'persistence_failed'}`, never rethrow); the trace flush + `maybeFold` always run. Defense-in-depth:
+  `.catch()` added to every fire-and-forget ws call site (`chat.send` post-turn chain, `proactive.fire`)
+  and a process-level `unhandledRejection` handler in `main.ts` (log, never terminate the companion).
+- **Bug B fix (minor) — dev-path wire drift** ([`ws.ts`](../../packages/server/src/ws.ts)):
+  `forwardToolEvent` (the `dev.dispatch_tool` path) omitted `tool_name` on `tool.progress`, so the
+  frontend controller (which filters message-tool streaming on `tool_name`) couldn't stream message
+  bubbles via that path. Now mirrors the main-turn contract (`tool_name: ToolName.parse(evt.tool_name)`).
+- Tests: 267 across 38 files (+1): persistence-failure resilience — a dropped `l2_turns` table makes
+  `appendL2` throw; the turn still **resolves**, surfaces `persistence_failed`, and **flushes its
+  traces** anyway.
+
+Inference:
+
+- The audit's headline is reassurance with one real catch: after 5 initiatives + a fresh frontend
+  package, the only material defect was an unguarded persistence path in the turn `finally` — every
+  hot-path/safety/concurrency invariant the reviewers tried to break held (the proactive overlap +
+  cadence + safety-gate invariants were re-confirmed clean, the previous reviews' fixes verified). The
+  17 dismissals are mostly the single-user 减法 paying off: a whole class of cross-session races
+  simply does not exist here.
+- `persistence_failed` needed no protocol change — `ErrorEvent.code` is `z.string()`, so a new code
+  is additive at the validated boundary.
 
 ### `v0.12.0` — 2026-06-13 — Frontend consumption controller (Initiative 6, first pass)
 

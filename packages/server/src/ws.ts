@@ -180,17 +180,23 @@ export function handleMessage(
         provider,
         registry,
         emit,
-      }).then(() => {
-        // enter_dream is a pending intent: the cycle starts only after the
-        // triggering turn fully finalized — never overlapping any part of it.
-        if (session.pendingDream !== null) {
-          session.pendingDream = null;
-          startDream(ws, session);
-          return;
-        }
-        // Self-continuation (v0.11.0): maybe add one more thought after a pause.
-        maybeScheduleContinuation({ session, provider, registry, emit: broadcast });
-      });
+      })
+        .then(() => {
+          // enter_dream is a pending intent: the cycle starts only after the
+          // triggering turn fully finalized — never overlapping any part of it.
+          if (session.pendingDream !== null) {
+            session.pendingDream = null;
+            startDream(ws, session);
+            return;
+          }
+          // Self-continuation (v0.11.0): maybe add one more thought after a pause.
+          maybeScheduleContinuation({ session, provider, registry, emit: broadcast });
+        })
+        .catch((e) => {
+          // a turn-finalize or continuation-scheduling failure must never crash
+          // the connection / surface as an unhandled rejection
+          console.error('[ws] chat.send post-turn failed:', e);
+        });
       return;
     }
     case 'dream.enter': {
@@ -261,6 +267,8 @@ export function handleMessage(
         provider: runtime.provider,
         registry: runtime.registry,
         emit: safeEmit(ws),
+      }).catch((e) => {
+        console.error('[ws] proactive.fire failed:', e);
       });
       return;
     }
@@ -308,6 +316,7 @@ function forwardToolEvent(ws: ServerWebSocket<WSData>, evt: ToolEvent): void {
       outbound(ws, {
         type: 'tool.progress',
         call_id: evt.call_id,
+        tool_name: ToolName.parse(evt.tool_name),
         payload: evt.payload,
       });
       return;

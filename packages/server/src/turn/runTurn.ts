@@ -609,14 +609,26 @@ export async function runTurn(opts: RunTurnOptions): Promise<TurnState> {
   } finally {
     opts.session.activeTurn = null;
     opts.session.turnSeq += 1;
-    appendL2({
-      sessionId: opts.session.id,
-      turnId: opts.turnId,
-      userText: opts.userText,
-      assistantText: state.text,
-      rawContent: opts.session.history.slice(historyStart),
-    });
-    persistSession(opts.session.id, opts.session.history, opts.session.turnSeq);
+    // Persistence must never reject runTurn's promise (the ws call sites don't
+    // await it) and must never skip the trace/fold cleanup below. A SQLite
+    // throw here (locked/readonly/disk-full) is logged + surfaced, not fatal.
+    try {
+      appendL2({
+        sessionId: opts.session.id,
+        turnId: opts.turnId,
+        userText: opts.userText,
+        assistantText: state.text,
+        rawContent: opts.session.history.slice(historyStart),
+      });
+      persistSession(opts.session.id, opts.session.history, opts.session.turnSeq);
+    } catch (e) {
+      console.error('[runTurn] persistence failed:', e);
+      try {
+        state.emit({ type: 'error', code: 'persistence_failed', message: 'turn data failed to persist' });
+      } catch {
+        /* emit is best-effort */
+      }
+    }
     // Action-integrity audit: pure detection + at most one decision trace,
     // recorded BEFORE flushTrace so it persists atomically with the turn's
     // other events. Gated by LUNA_DECISION_AUDIT; never throws into the turn.
@@ -629,7 +641,11 @@ export async function runTurn(opts: RunTurnOptions): Promise<TurnState> {
       toolNamesThisTurn: state.toolNamesThisTurn,
       finishReason: state.finishReason,
     });
-    flushTrace(opts.turnId);
+    try {
+      flushTrace(opts.turnId);
+    } catch (e) {
+      console.error('[runTurn] trace flush failed:', e);
+    }
     void maybeFold(opts.session, opts.provider).catch(() => {
       /* fold is best-effort; a failed fold leaves verbatim history intact */
     });

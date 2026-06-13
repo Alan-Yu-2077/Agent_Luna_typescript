@@ -35,6 +35,12 @@ process.on('SIGTERM', () => {
   process.exit(0);
 });
 
+// Defense-in-depth: a stray rejection from a fire-and-forget path (a turn,
+// proactive cycle, or dream) must log, never terminate the companion process.
+process.on('unhandledRejection', (reason) => {
+  console.error('[luna-server] unhandled rejection:', reason);
+});
+
 if (Bun.env['ANTHROPIC_API_KEY']) {
   const provider = new AnthropicProvider();
   const summarizerKey = Bun.env['LUNA_SUMMARIZER_API_KEY'];
