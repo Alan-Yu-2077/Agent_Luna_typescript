@@ -28,20 +28,41 @@ every decision here.
 
 ## Current state (read this first)
 
-> **Shipped head: v0.7.0** (2026-06-13). Initiatives 1 (tool spec), 1.5 (observability),
-> 2 (memory + dream), and 3 (persona + humanity + `message` tool, **LD #9 landed**) are
-> complete. Next up: Initiative 4 — reasoning rails (v0.8); revisit Open Q #9 (model-callable
-> `recall`) in its planning. The agent core works end-to-end: WS `chat.send` → real LLM turn
-> through a generic StateGraph with interleaved tools → **speech via the `message` tool only**
-> (default on; `LUNA_MESSAGE_TOOL=0` = text escape hatch), streamed as
-> `tool.progress{tool_name:'message', payload:{text_delta}}` → persisted to SQLite (L1 + L2 +
-> L3 + prose core memory) → hybrid recall injected cache-aware → manual/tool-triggered
-> **dream** consolidates offline — all traced and browsable at `/_trace`; chat at `/_chat`.
+> **Shipped head: v0.9.0** (2026-06-13). Initiatives 1 (tool spec), 1.5 (observability),
+> 2 (memory + dream), 3 (persona + humanity + `message` tool, **LD #9**), and 4 (action
+> integrity — **LD #14**) are complete. Next up: Initiative 5 — proactive + self-continuation,
+> designed fresh on the TS architecture (not a Python port). The agent core works end-to-end: WS
+> `chat.send` → real LLM turn through a generic StateGraph with interleaved tools, reasoning
+> under the **L1 thinking contract** (`LUNA_L1_CONTRACT`, default on) → **speech via the
+> `message` tool only** (`LUNA_MESSAGE_TOOL`, default on) → **action-integrity guards** in
+> finalize (`LUNA_INTEGRITY_GUARD`: is_final-promise + intent-without-act, one bounded retry) →
+> persisted to SQLite (L1 + L2 + L3 + prose core) → hybrid recall (auto-injected + the agentic
+> `recall` tool) → off-hot-path **defection audit** (`LUNA_DECISION_AUDIT`) writing typed
+> `decision` traces → manual/tool-triggered **dream** consolidates offline — all traced (incl.
+> the decision replay tree) at `/_trace`; chat at `/_chat`. All Initiative-4 flags default on
+> with `=0` escape hatches.
 
 Always confirm the head by reading the top of
 [`docs/history/DEVELOPMENT.md`](../../../docs/history/DEVELOPMENT.md) — it is the truth source,
 not this skill. The file map below is current as of v0.7.0; if DEVELOPMENT.md shows a higher
 version, trust the code and update this skill.
+
+### Action-integrity additions (v0.8.0–v0.9.0, Initiative 4 — LD #14)
+
+```
+packages/protocol/src/
+  trace.ts     TraceEvent += DecisionTraceEvent {surface, decision, reason, evidence?} (kind-agnostic store → no store change)
+  tools.ts     ToolName += recall (6 tools)
+packages/server/src/
+  turn/integrity/defectionAudit.ts
+                 detectDefection (PURE, zero-LLM): is_final_promise > message_intent (verbatim msg text) > thinking_intent (audit-only, never retried)
+                 PROMISE_PATTERNS + NEGATION_AFTER/CAPABILITY_MODAL filters (v0.9.0 tuning) · runDefectionAudit (gated, never throws, sync in finally before flushTrace)
+  persona/l1Contract.ts   renderL1Contract — commitment-to-act + tool-trigger pass (recall/save/check) + proportionality + no-leak + honesty; cached core block
+  turn/runTurn.ts         finalize: correctionUsed Set + correctionWatermark — empty/promise/intent guards, one user-role retry each then degrade; emitGuardDecision
+  tools/builtin/recall.ts agentic memory search — flat input {query,scope?,limit?} · reuses retrieve() · always mounted (LD #10)
+  scripts/integrity-sweep.ts   baseline-vs-full measurement sweep (v0.9.0 recorded)
+  FLAGS (all default ON since v0.9.0, =0 escape hatch): LUNA_L1_CONTRACT · LUNA_INTEGRITY_GUARD · LUNA_DECISION_AUDIT
+```
 
 ### Persona + message-tool additions (v0.5.1–v0.7.0)
 

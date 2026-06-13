@@ -1,8 +1,9 @@
 # Initiative 4 — Action Integrity Rails (v0.8.0 – v0.9.0)
 
-> **Status: ⏳ PLANNED (authored 2026-06-13).** Priority: next after Initiative 3 (shipped
-> v0.7.0). Version range **v0.8.0 → v0.9.0** (5 versions). Master:
-> [`../README.md`](../README.md).
+> **Status: ✅ SHIPPED 2026-06-13 (all 5 versions).** Version range **v0.8.0 → v0.9.0**. Master:
+> [`../README.md`](../README.md). As-shipped notes are folded into LD #14 in
+> [`../../REWRITE_CONTEXT.md`](../../REWRITE_CONTEXT.md) and the per-version records in
+> [`../../history/DEVELOPMENT.md`](../../history/DEVELOPMENT.md).
 
 ## The idea
 

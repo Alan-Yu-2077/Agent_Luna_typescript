@@ -95,6 +95,32 @@ describe('detectDefection (pure, zero-LLM)', () => {
     expect(r.defected).toBe(true);
     if (r.defected) expect(r.kind).toBe('message_intent');
   });
+
+  // v0.9.0 tuning: the two false-positive classes recorded on real turns
+  test('negated verb is an honest decline, not a defection ("我真查不到")', () => {
+    expect(detectDefection({ ...clean, messageTexts: ['我现在伸手没有联网搜索，我真查不到。'] })).toEqual(
+      { defected: false },
+    );
+    expect(detectDefection({ ...clean, messageTexts: ['这个我看不了，没那个入口。'] })).toEqual({
+      defected: false,
+    });
+  });
+
+  test('capability/conditional offer is not a present-tense promise ("我立刻就能读")', () => {
+    expect(
+      detectDefection({ ...clean, messageTexts: ['你把那页打出来给我，我立刻就能读。'] }),
+    ).toEqual({ defected: false });
+    expect(detectDefection({ ...clean, messageTexts: ['你发给我，我可以帮你查。'] })).toEqual({
+      defected: false,
+    });
+  });
+
+  test('a real promise next to a false positive is still caught', () => {
+    // "查不到" (FP) in bubble 1, a true "我去查" in bubble 2 → still flagged
+    const r = detectDefection({ ...clean, messageTexts: ['那个我查不到。', '不过我去查另一个。'] });
+    expect(r.defected).toBe(true);
+    if (r.defected) expect(r.kind).toBe('message_intent');
+  });
 });
 
 describe('runDefectionAudit (gated trace write)', () => {
@@ -126,8 +152,8 @@ describe('runDefectionAudit (gated trace write)', () => {
     db.close(false);
   });
 
-  test('flag off → no detection, no trace', () => {
-    delete Bun.env['LUNA_DECISION_AUDIT'];
+  test('LUNA_DECISION_AUDIT=0 → no detection, no trace', () => {
+    Bun.env['LUNA_DECISION_AUDIT'] = '0'; // default is ON since v0.9.0
     expect(runDefectionAudit(defectingState)).toEqual({ defected: false });
     store.flush('a1');
     expect(store.getEventsByTurn('a1').length).toBe(0);
@@ -198,12 +224,16 @@ describe('defection audit through runTurn (end-to-end)', () => {
     store = new TraceStore(db);
     setTraceStore(store);
     delete Bun.env['LUNA_TRACE'];
+    // isolate the finally-block audit from the now-default-on corrective guard
+    // (v0.9.0): the guard would retry the defection and consume unscripted rounds
+    Bun.env['LUNA_INTEGRITY_GUARD'] = '0';
     resetSessions();
   });
 
   afterEach(() => {
     setTraceStore(null);
     delete Bun.env['LUNA_DECISION_AUDIT'];
+    delete Bun.env['LUNA_INTEGRITY_GUARD'];
     delete Bun.env['LUNA_TRACE'];
     db.close(false);
   });
@@ -234,8 +264,8 @@ describe('defection audit through runTurn (end-to-end)', () => {
     expect(JSON.parse(decisions[0]!.payload_json).evidence.kind).toBe('message_intent');
   });
 
-  test('flag off (default): same turn writes no decision trace, turn result unaffected', async () => {
-    delete Bun.env['LUNA_DECISION_AUDIT'];
+  test('LUNA_DECISION_AUDIT=0: same turn writes no decision trace, turn result unaffected', async () => {
+    Bun.env['LUNA_DECISION_AUDIT'] = '0'; // default is ON since v0.9.0
     const provider = new MockProvider([
       [stopWithMessages([{ id: 'm1', input: { text: '我马上去查一下天气。', is_final: true } }])],
       [stopEnd],

@@ -35,10 +35,31 @@ export type DefectionInput = {
   finishReason: string;
 };
 
+// v0.9.0 tuning, from two false-positive classes recorded by the v0.8.0/v0.8.1
+// audit on real turns:
+//   - negated verbs ("我真查不到" = I genuinely can't check) — an honest decline
+//   - capability/conditional offers ("我立刻就能读" = I could read it, if…) — an offer
+// Neither is a present-tense promise the model is failing to keep, so they are
+// filtered out of message_intent.
+const NEGATION_AFTER = /^(?:不[到了行]|没)/;
+const CAPABILITY_MODAL = /能|会|可以|能够/;
+
+function isRealPromise(matched: string, after: string): boolean {
+  if (NEGATION_AFTER.test(after)) return false; // verb followed by 不到/没… → can't
+  if (CAPABILITY_MODAL.test(matched)) return false; // 能/可以/会 + verb → could, not will
+  return true;
+}
+
 function firstPromiseMatch(text: string): string | null {
   for (const re of PROMISE_PATTERNS) {
-    const m = re.exec(text);
-    if (m) return m[0];
+    // global so a false-positive first hit doesn't mask a real promise later
+    const g = new RegExp(re.source, re.flags.includes('g') ? re.flags : re.flags + 'g');
+    let m: RegExpExecArray | null;
+    while ((m = g.exec(text)) !== null) {
+      const after = text.slice(m.index + m[0].length);
+      if (isRealPromise(m[0], after)) return m[0];
+      if (m.index === g.lastIndex) g.lastIndex++; // avoid zero-width loop
+    }
   }
   return null;
 }
@@ -84,7 +105,8 @@ export type AuditState = {
 // Synchronous, gated, never throws into the turn (override-not-depend). Records
 // one `decision` trace when a defection is detected. No LLM call anywhere.
 export function runDefectionAudit(s: AuditState): DefectionResult {
-  if (Bun.env['LUNA_DECISION_AUDIT'] !== '1') return { defected: false };
+  // default ON since v0.9.0; LUNA_DECISION_AUDIT=0 opts out
+  if (Bun.env['LUNA_DECISION_AUDIT'] === '0') return { defected: false };
   try {
     const result = detectDefection({
       messageTexts: s.messageTexts,

@@ -68,8 +68,8 @@ describe('L1 contract in the system core (runTurn)', () => {
     expect(sys1).toBe(sys2); // cache invariant
   });
 
-  test('flag off (default): contract absent from the system core', async () => {
-    delete Bun.env['LUNA_L1_CONTRACT'];
+  test('LUNA_L1_CONTRACT=0: contract absent from the system core', async () => {
+    Bun.env['LUNA_L1_CONTRACT'] = '0'; // default is ON since v0.9.0
     const provider = await twoTurns();
     expect(systemText(provider.requests[0]!)).not.toContain('Calling the tool IS the act');
   });

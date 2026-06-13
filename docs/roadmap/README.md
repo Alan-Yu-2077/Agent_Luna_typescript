@@ -4,11 +4,13 @@ Forward development plan for the TypeScript rewrite. Each initiative is a folder
 self-contained version plans, executed one at a time. Version numbers reserve across initiatives so
 they never overlap.
 
-> **Current shipped head: v0.7.0** (2026-06-13, message-tool default flip). Initiatives 1,
-> 1.5, 2, and 3 ✅ complete — Luna remembers, recalls by meaning, dreams, has her persona, and
-> speaks exclusively through the typed `message` tool (LD #9 landed). **Next up: Initiative 4 —
-> reasoning rails (v0.8.0–v0.9.0); its planning should also revisit Open Q #9 (model-callable
-> `recall` tool), unblocked now that the tool-surface patterns are settled.** See
+> **Current shipped head: v0.9.0** (2026-06-13, action-integrity defaults flipped on).
+> Initiatives 1, 1.5, 2, 3, and 4 ✅ complete — Luna remembers, recalls by meaning (auto + the
+> agentic `recall` tool), dreams, has her persona, speaks through the typed `message` tool, and
+> now reasons under an L1 thinking contract with structural/mechanical action-integrity guards
+> (LD #14 landed; promises mechanically un-droppable; every judgment a typed `decision` trace).
+> **Next up: Initiative 5 — proactive + self-continuation, designed fresh on the TS architecture
+> (not a Python port), inheriting Initiative 4's audit + decision-trace substrate.** See
 > [`../history/DEVELOPMENT.md`](../history/DEVELOPMENT.md).
 
 ## Planned initiatives (execution order)
@@ -19,7 +21,7 @@ they never overlap.
 | 1.5 | v0.3.5 – v0.3.6 | **Observability foundation** — `trace_id` propagation through the v0.3 StateGraph; SQLite trace table (one row per node transition + per tool call); minimal local viewer. Mastra Telemetry / LangSmith parity, table-stakes for every later initiative | [`observability-foundation-2026-06/`](observability-foundation-2026-06/) | ✅ shipped 2026-06-11 |
 | 2 | v0.4.0 – v0.5.0 | **Memory + dream substrate** — SQLite three-layer memory (L1 window / L2 full-text archive / L3 semantic) + prose core memory + hybrid `sqlite-vec`/CJK recall + the **dream** consolidation engine (manual + `enter_dream` tool; reconciliation, diaries, persona update). Merges the old "memory" + "dream" initiatives — dream is the engine memory needs. Port of Python v0.52–v0.57 | [`memory-dream-substrate-2026-06/`](memory-dream-substrate-2026-06/) | ✅ shipped 2026-06-12 (5 versions) |
 | 3 | v0.6.0 – v0.7.0 | **Persona + humanity guardrails + `message` tool** — three-layer persona resolution with mtime-cached hot-reload; humanity hard caps as Zod schema on `message` input (not prompt-only, not truncation). **Introduces `message` tool** per LD #9 (everything-as-tool) behind `LUNA_MESSAGE_TOOL`, default-flipped at v0.7.0; frontend wire-event shape (`tool.progress{tool_name:'message'}`) is fixed here for Initiative 6 to consume | [`persona-message-tool-2026-06/`](persona-message-tool-2026-06/) | ✅ shipped 2026-06-13 (4 versions) |
-| 4 | v0.8.0 – v0.9.0 | **Action integrity rails** — 言行一致 + 工具稳发. **L1 thinking contract** (commitment-to-act + tool-trigger checklist + proportionality) in the cached core; structural/mechanical boundary enforcement (`is_final` promise contract + intent-without-act guard, generalizing the v0.6.2 empty-reply guard); off-hot-path defection audit → `decision` traces + replay tree; `recall` tool (Open Q #9). **No L2 gate harness** (LD #14 corrects a Python misreading) | [`action-integrity-2026-06/`](action-integrity-2026-06/) | ⏳ planned (5 versions authored 2026-06-13) |
+| 4 | v0.8.0 – v0.9.0 | **Action integrity rails** — 言行一致 + 工具稳发. **L1 thinking contract** (commitment-to-act + tool-trigger checklist + proportionality) in the cached core; structural/mechanical boundary enforcement (`is_final` promise contract + intent-without-act guard, generalizing the v0.6.2 empty-reply guard); off-hot-path defection audit → `decision` traces + replay tree; `recall` tool (Open Q #9). **No L2 gate harness** (LD #14 corrects a Python misreading) | [`action-integrity-2026-06/`](action-integrity-2026-06/) | ✅ shipped 2026-06-13 (5 versions) |
 | 5 | v0.10.0 – v0.11.0 | **Proactive + self-continuation (fresh design)** — designed on the TS architecture's advantages (persistent WS push + timers + everything-as-tool → a continuation is a delayed normal turn), **not** a Python port. Pacing state machine + cadence + lull anchoring as *reference*; the one legitimate decision **gate** (a trigger with no turn to ride) is hand-rolled here, reusing Initiative 4's audit lane + `decision` traces. **Carries the deferred dream auto-trigger** | _(folder TBD)_ | ⏳ planned |
 | 6 | v0.12.0 – v0.13.0 | **Frontend port** — TS port of `agent-app.js` controller (event consumer + bubble state machine + command dispatch); subscribes to `tool.progress{tool_name:'message'}` per LD #9; Live2D + audio pipeline unchanged; dream overlay / 🌙 button | _(folder TBD)_ | ⏳ planned |
 

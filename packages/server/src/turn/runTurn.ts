@@ -67,7 +67,8 @@ export function buildSystemPrompt(
   if (messageMode) parts.push(MESSAGE_MODE_DIRECTIVE);
   // L1 thinking contract governs HOW she reasons, so it scopes everything below
   // it. Stable text → stays inside the one cached block (cache invariant).
-  if (Bun.env['LUNA_L1_CONTRACT'] === '1') parts.push(renderL1Contract());
+  // Default ON since v0.9.0; LUNA_L1_CONTRACT=0 opts out.
+  if (Bun.env['LUNA_L1_CONTRACT'] !== '0') parts.push(renderL1Contract());
   if (Bun.env['LUNA_PERSONA'] !== '0') {
     const persona = loadPersona();
     parts.push(
@@ -346,7 +347,7 @@ const graph: Graph<TurnState, TurnNode> = {
       // verbatim from the audit; thinking_intent is audit-only and never
       // drives a retry here (summarized thinking is low-confidence).
       if (
-        Bun.env['LUNA_INTEGRITY_GUARD'] === '1' &&
+        Bun.env['LUNA_INTEGRITY_GUARD'] !== '0' &&
         s.messageTexts.length > 0 &&
         s.finishReason === 'end_turn'
       ) {

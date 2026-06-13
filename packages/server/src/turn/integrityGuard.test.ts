@@ -65,6 +65,7 @@ afterEach(() => {
   setTraceStore(null);
   if (savedGuard === undefined) delete Bun.env['LUNA_INTEGRITY_GUARD'];
   else Bun.env['LUNA_INTEGRITY_GUARD'] = savedGuard;
+  delete Bun.env['LUNA_DECISION_AUDIT'];
   delete Bun.env['LUNA_TRACE'];
   db.close(false);
 });
@@ -180,8 +181,9 @@ describe('intent-without-act guard', () => {
 });
 
 describe('flag-off parity', () => {
-  test('LUNA_INTEGRITY_GUARD unset → no promise/intent retries (v0.8.1 behavior)', async () => {
-    delete Bun.env['LUNA_INTEGRITY_GUARD'];
+  test('guard + audit off → v0.8.1 behavior exactly (no retries, no decision traces)', async () => {
+    Bun.env['LUNA_INTEGRITY_GUARD'] = '0'; // both default ON since v0.9.0
+    Bun.env['LUNA_DECISION_AUDIT'] = '0';
     const provider = new MockProvider([
       [msgRound([{ id: 'm1', input: { text: '我马上去查。', is_final: false } }])],
       [endRound],
@@ -192,8 +194,8 @@ describe('flag-off parity', () => {
     expect(decisions('t6').length).toBe(0);
   });
 
-  test('empty-reply guard still works with the flag off (v0.6.2 preserved)', async () => {
-    delete Bun.env['LUNA_INTEGRITY_GUARD'];
+  test('empty-reply guard still works with the integrity flag off (v0.6.2 preserved)', async () => {
+    Bun.env['LUNA_INTEGRITY_GUARD'] = '0'; // empty guard is independent of this flag
     const provider = new MockProvider([
       [endRound], // no message at all → empty-reply guard (always on in message mode)
       [msgRound([{ id: 'm1', input: { text: '在的。', is_final: true } }])],

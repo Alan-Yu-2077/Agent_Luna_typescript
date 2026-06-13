@@ -1,6 +1,6 @@
 # Agent_Luna (TypeScript) — Development History
 
-Last updated: 2026-06-13 (Asia/Shanghai) — v0.8.3 (recall tool; Open Q #9 resolved)
+Last updated: 2026-06-13 (Asia/Shanghai) — v0.9.0 (integrity defaults flipped on; Initiative 4 complete)
 
 ## Scope
 
@@ -52,7 +52,8 @@ during the rewrite. Its version log is unrelated to this one — `v0.1` here is 
 | `v0.8.0` | 2026-06-13 | Decision trace events + zero-LLM defection audit + replay tree | `76c8dfe` |
 | `v0.8.1` | 2026-06-13 | L1 thinking contract — commitment-to-act + proportionality + no-leak | `1d0da3d` |
 | `v0.8.2` | 2026-06-13 | Action-integrity guards — `is_final` promise + intent-without-act corrective retries | `ea246a4` |
-| `v0.8.3` | 2026-06-13 | `recall` tool — agentic memory search (Open Q #9) + L1 trigger clause | `working tree` |
+| `v0.8.3` | 2026-06-13 | `recall` tool — agentic memory search (Open Q #9) + L1 trigger clause | `8376820` |
+| `v0.9.0` | 2026-06-13 | Dictionary tuning + integrity defaults flipped on; Initiative 4 complete | `working tree` |
 
 ## Detailed records
 
@@ -108,6 +109,67 @@ Inference:
   `defineTool`, the dispatcher, and provider logic stay in `packages/server`. Frontend
   (`packages/web`) will consume the same protocol package in Initiative 6, getting
   contract drift as a type error rather than a runtime mismatch.
+
+### `v0.9.0` — 2026-06-13 — Integrity defaults flipped on (Initiative 4 capstone, commit 5 of 5)
+
+Status:
+
+- working tree (commit hash recorded post-commit)
+
+Fact:
+
+- **Dictionary tuning** ([`defectionAudit.ts`](../../packages/server/src/turn/integrity/defectionAudit.ts)),
+  from the two false-positive classes the v0.8.0/v0.8.1 audit recorded on real turns:
+  `firstPromiseMatch` now filters out (a) **negated verbs** — `NEGATION_AFTER` (`不到/不了/不行/没`
+  right after the verb → "我真查不到" = honest decline) and (b) **capability/conditional offers** —
+  `CAPABILITY_MODAL` (`能/会/可以/能够` in the match → "我立刻就能读" = an offer, not a promise). The
+  matcher also went **global** so a false-positive first hit no longer masks a real promise later
+  in the text. +3 detector tests pin both classes + the FP-next-to-real-promise case.
+- **Default flip** — `LUNA_L1_CONTRACT`, `LUNA_INTEGRITY_GUARD` → `!== '0'`; `LUNA_DECISION_AUDIT`
+  → `=== '0'` opt-out. All three default **on**. `.env.example` updated. The suite was audited
+  (not blanket-flipped): the 6 tests that pin flag-*off* behavior now set the relevant `=0`
+  explicitly; "guard + audit off → v0.8.1 behavior exactly" makes the parity intent literal.
+- **`scripts/integrity-sweep.ts`** (new) — baseline (integrity off) vs full (all on) over a fixed
+  6-turn script with capability-lacking bait turns + a memory-save + a recall opportunity; tallies
+  defections, guard corrections, tool-fire turns, humanity violations. `ab-message-mode.ts` is left
+  intact as the v0.7.0 message-tool baseline.
+- Tests: 207 across 30 files (+3 detector tuning tests; net after the flag-off test edits). tsc
+  clean both packages.
+
+Recorded sweep (yunwu, dev-scale, not a statistical claim):
+
+| Metric | baseline (integrity off) | full (all on) |
+|---|---|---|
+| intent-without-act defections | 1 (uncorrected) | 1 |
+| guard corrections | 0 | 2 (is_final nudges) |
+| tool-fire turns (of 6) | 2 (`remember`, `enter_dream`) | 2 |
+| per-message humanity | 0 violations | 0 violations |
+
+- Behavioral read: both modes **decline honestly** on capability-lacking prompts (no kept-false
+  promises); **full mode is markedly more explicit** about it — t1 produced "不想骗你说我查到了…
+  没留下空头支票哦" (the L1 commitment-to-act + honesty pillars visibly steering her). Both fired
+  `remember` on "记一下…报告" (act-then-speak — 工具稳发). The full-mode guard corrections were
+  `is_final` nudges (she under-set "more coming", the guard made her finish) — the zero-false-
+  positive structural guard working, at the cost of one extra bubble. The lone "humanity violation"
+  the sweep printed for full mode was a metric artifact (the script measures the *joined* multi-
+  bubble turn text; the caps are *per-message* and every bubble passed Zod).
+
+Inference:
+
+- **Initiative 4 complete in 5 versions**, delivering Alan's stated intent — 言行一致 + 工具稳发 +
+  边界契约 — as an L1 thinking contract (the design, per LD #14), backed by structural/mechanical
+  boundary enforcement (the `is_final` promise contract + intent-without-act guard) and an
+  off-hot-path defection audit that measures it. No standing L2 gate harness was built; the one
+  legitimate gate (a decision with no turn to ride) is deferred to Initiative 5 with its first real
+  consumer, as Python's own spec said it should have been.
+- The measure-first ordering paid off literally: the audit (shipped first) recorded two concrete
+  false-positive classes on real turns, which v0.9.0 tuned out against that evidence rather than
+  by guesswork — the same discipline as Initiative 3's A/B.
+- Honest scope note: the model was already fairly truthful, so the headline before/after is
+  directional, not dramatic. The durable wins are structural — `is_final` promises are now
+  mechanically un-droppable, `recall` exists, and every judgment is a typed, countable `decision`
+  trace in the replay tree — and they compound for Initiative 5's proactive/self-continuation work,
+  which inherits this measurement substrate.
 
 ### `v0.8.3` — 2026-06-13 — `recall` tool (Initiative 4, commit 4 of 5; resolves Open Q #9)
 
