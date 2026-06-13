@@ -5,7 +5,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { MockProvider } from '../provider/mock';
 import type { ProviderEvent } from '../provider/types';
 import { defineTool } from '../tools/defineTool';
-import { builtinRegistry, type ToolRegistry } from '../tools/registry';
+import { builtinRegistry, messageRegistry, type ToolRegistry } from '../tools/registry';
 import { getSession, resetSessions } from './session';
 import { runTurn, toolsToAnthropicFormat, MAX_TOOL_ITERATIONS } from './runTurn';
 
@@ -219,7 +219,7 @@ describe('tool wire schemas (gateway compatibility)', () => {
   // top-level properties): args come back wrapped as {"_noargs": "<raw>"}.
   // Every tool must therefore present a flat root-level object on the wire.
   test('every builtin tool schema is a root-level object with properties', () => {
-    for (const t of toolsToAnthropicFormat(builtinRegistry)) {
+    for (const t of toolsToAnthropicFormat(messageRegistry)) {
       const s = t.input_schema as Record<string, unknown>;
       expect(s['type']).toBe('object');
       expect('properties' in s).toBe(true);

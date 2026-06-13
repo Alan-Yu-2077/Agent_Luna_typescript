@@ -1,6 +1,6 @@
 # Agent_Luna (TypeScript) — Development History
 
-Last updated: 2026-06-13 (Asia/Shanghai) — v0.6.0 (persona foundation; Initiative 3 begins)
+Last updated: 2026-06-13 (Asia/Shanghai) — v0.6.1 (message tool + schema humanity caps, flag off)
 
 ## Scope
 
@@ -45,7 +45,8 @@ during the rewrite. Its version log is unrelated to this one — `v0.1` here is 
 | `v0.5.0` | 2026-06-12 | Dream engine — isolated 6-step consolidation; Initiative 2 complete | `a0df0b5` |
 | `v0.5.1` | 2026-06-12 | Dev chat page `/_chat` — first usable conversation surface | `c4a9d84` |
 | `v0.5.2` | 2026-06-12 | Gateway-safe tool schemas — `remember` flat input + `_noargs` unwrap | `a341162` |
-| `v0.6.0` | 2026-06-13 | Persona foundation — mtime-cached loader, humanity splitters, wake scene | `working tree` |
+| `v0.6.0` | 2026-06-13 | Persona foundation — mtime-cached loader, humanity splitters, wake scene | `25ed7cd` |
+| `v0.6.1` | 2026-06-13 | `message` tool + humanity caps as Zod schema (LD #9, flag off) | `working tree` |
 
 ## Detailed records
 
@@ -101,6 +102,54 @@ Inference:
   `defineTool`, the dispatcher, and provider logic stay in `packages/server`. Frontend
   (`packages/web`) will consume the same protocol package in Initiative 6, getting
   contract drift as a type error rather than a runtime mismatch.
+
+### `v0.6.1` — 2026-06-13 — `message` tool + schema humanity caps (Initiative 3, commit 2 of 4)
+
+Status:
+
+- working tree (commit hash recorded post-commit)
+
+Fact:
+
+- **Protocol** `message.ts`: `ExpressionKey` (Python's 15 ALLOWED_AFFECTS verbatim),
+  `VoiceParams` (opaque passthrough), `MessageSegment` (`{index, text, delay_ms}` — delay is
+  metadata, server never sleeps, amendment A2), `MessageDelivery` (the `tool.finished` payload =
+  the delivery contract Initiative 6 consumes). `ToolName` + `'message'`.
+- **`tools/builtin/message.ts`**: flat root-object input (v0.5.2 gateway rule) — `text` ≤140
+  via `.max()`, ≤4 sentences + ≤55-char clause via `superRefine` over the v0.6.0 CJK splitters
+  (amendment A1: `sentences` is NOT a model field; segments derived server-side); `expression`/
+  `emotion [0,1]`/`voice_params` optional; `is_final` required. Pacing 28ms/char clamp 120–900
+  ported as constants. `concurrency: 'session-serial'` (bubbles arrive in order). Humanity
+  enforcement is exactly the recoverable `validation_failed` path — no truncation code exists.
+- **Registry**: `ToolRegistry` → `Partial<Record<ToolName, Tool>>` (conditional mount without
+  forcing the key everywhere); `messageRegistry = builtin + message`; `isMessageMode(registry)`.
+  **Mode's single source of truth is registry content** — `main.ts` reads `LUNA_MESSAGE_TOOL=1`
+  once at boot; the turn loop never reads env.
+- **runTurn**: system prompt gains the speech directive (calling IS speaking / no top-level
+  text / is_final) only in message mode; `dispatch_tools` collects successful message texts;
+  `finalize` sets `turn.result.text` to their `\n`-join (stray top-level text stays in
+  history/trace as the observable leak signal but never becomes the reply). Dispatcher itself
+  untouched — message is a normal tool, which is LD #9's forcing-function point.
+- Tests: 148 across 24 files (+15): schema caps (141 chars / 5 sentences / 56-char clause
+  rejected, targeted messages), envelope passthrough, pacing clamps, wire-schema regression now
+  iterates `messageRegistry`, mode-derivation, two-bubble turn → ordered `tool.finished` +
+  concatenated `turn.result`, violation → recoverable err → re-emit wins, flag-off path
+  byte-untouched.
+- Real-LLM smoke (yunwu, message mode, full runTurn with persona+memory): two bubbles —
+  雪的故事 (`soft_warmth`, 0.6, `is_final:false`, 2 segments) then a question
+  (`curious_attention`, 0.7, `is_final:true`); `turn.result` = concatenation. **Observed leak**:
+  one top-level English aside after the final tool round ("I shared the story…"), correctly
+  excluded from the reply — exactly the signal the v0.7.0 A/B counts and the v0.6.2
+  directive/guard iteration targets.
+
+Inference:
+
+- LD #9 is now real on the wire: speech is a typed, validated, traced tool action with Live2D
+  metadata in the same frame. The model adopted multi-bubble + expression + is_final semantics
+  zero-shot from schema descriptions alone, which derisks the v0.7.0 default flip.
+- The observed top-level leak confirms the A/B instrumentation works and gives v0.6.2 a concrete
+  target: the leak happened on the post-tool round where the model "narrates completion" — the
+  empty-reply guard's inverse. Directive tuning, not architecture, is the likely fix.
 
 ### `v0.6.0` — 2026-06-13 — Persona foundation (Initiative 3, commit 1 of 4)
 

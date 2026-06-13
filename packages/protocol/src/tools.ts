@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const ToolName = z.enum(['time_now', 'read_file', 'remember', 'enter_dream']);
+export const ToolName = z.enum(['time_now', 'read_file', 'remember', 'enter_dream', 'message']);
 export type ToolName = z.infer<typeof ToolName>;
 
 export const ToolErrorCode = z.enum([

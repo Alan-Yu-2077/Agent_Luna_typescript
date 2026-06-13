@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 import { handleClose, handleMessage, handleOpen, setRuntime, type WSData } from './ws';
 import { AnthropicProvider } from './provider/anthropic';
-import { builtinRegistry } from './tools/registry';
+import { builtinRegistry, messageRegistry } from './tools/registry';
 import { closeDb, migrate, openDb } from './sql';
 import { TraceStore } from './trace/store';
 import { setTraceStore } from './trace/instrument';
@@ -42,9 +42,12 @@ if (Bun.env['ANTHROPIC_API_KEY']) {
   const dreamLlm = summarizerKey
     ? { primary: new AnthropicProvider({ apiKey: summarizerKey }), fallback: provider }
     : { primary: provider, fallback: null };
-  setRuntime({ provider, registry: builtinRegistry, dreamLlm });
+  // LD #9 mode switch, read once at boot: registry content IS the mode —
+  // everything downstream derives it from the registry, never from env.
+  const messageMode = Bun.env['LUNA_MESSAGE_TOOL'] === '1';
+  setRuntime({ provider, registry: messageMode ? messageRegistry : builtinRegistry, dreamLlm });
   console.log(
-    `[luna-server] provider: ${Bun.env['LUNA_MODEL'] ?? 'claude-opus-4-8'} via ${Bun.env['ANTHROPIC_BASE_URL'] ?? 'https://api.anthropic.com'}${summarizerKey ? ' (+summarizer key)' : ''}`,
+    `[luna-server] provider: ${Bun.env['LUNA_MODEL'] ?? 'claude-opus-4-8'} via ${Bun.env['ANTHROPIC_BASE_URL'] ?? 'https://api.anthropic.com'}${summarizerKey ? ' (+summarizer key)' : ''}${messageMode ? ' [message-tool mode]' : ''}`,
   );
 } else {
   console.warn('[luna-server] ANTHROPIC_API_KEY not set — chat.send disabled');

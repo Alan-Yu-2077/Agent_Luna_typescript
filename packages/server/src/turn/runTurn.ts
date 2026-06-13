@@ -2,7 +2,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import { ToolName, type ServerEvent, type ToolCall, type FinishReason } from '@luna/protocol';
 import type { Provider, ProviderToolUse, ProviderUsage } from '../provider/types';
-import type { ToolRegistry } from '../tools/registry';
+import { isMessageMode, type ToolRegistry } from '../tools/registry';
 import { dispatchToolCalls } from '../tools/dispatcher';
 import { runGraph, type Graph, type TransitionHook, type TurnNode, type NodeName } from './graph';
 import type { Session } from './session';
@@ -20,6 +20,12 @@ export const MAX_TOOL_ITERATIONS = 8;
 
 const BASE_DIRECTIVES = 'You are Luna. Use the available tools when they help you answer.';
 
+const MESSAGE_MODE_DIRECTIVE =
+  'How you deliver speech: you speak ONLY by calling the message tool — calling it IS speaking, ' +
+  'and it is your only voice. Never write top-level text outside tool calls; internal reasoning ' +
+  'belongs in thinking. Each message call is one chat bubble — prefer several short calls over ' +
+  'one long one. Set is_final=true on the last message of your turn.';
+
 const EMBODIMENT_BLOCK =
   'Runtime embodiment: right now the user reaches you through a plain text chat page — no ' +
   'visible body, no voice yet. A Live2D on-screen form and voiced speech are planned for you ' +
@@ -30,8 +36,12 @@ const EMBODIMENT_BLOCK =
 // humanity rules + core memory block, marked with a cache_control breakpoint.
 // Byte-identical across turns unless the persona file or memory actually
 // changed — the prompt-cache invariant. Per-query content never goes here.
-export function buildSystemPrompt(_session: Session): Anthropic.TextBlockParam[] {
+export function buildSystemPrompt(
+  _session: Session,
+  messageMode = false,
+): Anthropic.TextBlockParam[] {
   const parts: string[] = [BASE_DIRECTIVES];
+  if (messageMode) parts.push(MESSAGE_MODE_DIRECTIVE);
   if (Bun.env['LUNA_PERSONA'] !== '0') {
     const persona = loadPersona();
     parts.push(
@@ -68,6 +78,8 @@ export type TurnState = {
   tokenCount: number;
   firstTokenMs: number | null;
   startedMs: number;
+  // texts of successful message-tool deliveries this turn, in dispatch order
+  messageTexts: string[];
 };
 
 export function toolsToAnthropicFormat(registry: ToolRegistry): Anthropic.Tool[] {
@@ -113,7 +125,7 @@ const graph: Graph<TurnState, TurnNode> = {
   async open_stream(s) {
     s.pendingToolUses = [];
     for await (const ev of s.provider.chatStream({
-      system: buildSystemPrompt(s.session),
+      system: buildSystemPrompt(s.session, isMessageMode(s.registry)),
       messages: buildActiveContext(s.session),
       tools: s.anthropicTools,
     })) {
@@ -210,6 +222,10 @@ const graph: Graph<TurnState, TurnNode> = {
             s.emit({ type: 'tool.progress', call_id: evt.call_id, payload: evt.payload });
             break;
           case 'final':
+            if (evt.tool_name === 'message' && evt.result.kind === 'ok') {
+              const delivery = evt.result.data as { text?: unknown };
+              if (typeof delivery.text === 'string') s.messageTexts.push(delivery.text);
+            }
             s.emit({ type: 'tool.finished', call_id: evt.call_id, result: evt.result });
             s.toolResultBlocks.push({
               type: 'tool_result',
@@ -238,6 +254,14 @@ const graph: Graph<TurnState, TurnNode> = {
   },
 
   async finalize(s) {
+    // Message mode: the turn's text is what was actually delivered through the
+    // message tool (one line per bubble). Stray top-level text stays in
+    // history/trace — observable leak signal for the A/B — but does not become
+    // the reply. Zero deliveries falls through to s.text for now (the empty-
+    // reply guard lands in v0.6.2).
+    if (isMessageMode(s.registry) && s.messageTexts.length > 0) {
+      s.text = s.messageTexts.join('\n');
+    }
     s.emit({
       type: 'turn.result',
       turn_id: s.turnId,
@@ -294,6 +318,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<TurnState> {
     tokenCount: 0,
     firstTokenMs: null,
     startedMs: Date.now(),
+    messageTexts: [],
   };
 
   const onTransition: TransitionHook<TurnState, TurnNode> = (from, to, s) => {
