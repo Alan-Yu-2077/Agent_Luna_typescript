@@ -23,14 +23,19 @@ function classify(e: unknown): 'rate_limited' | 'content_filter' | 'auth' | 'exc
 // Two-attempt cascade (Python v0.56.2): summarizer-key provider first so dream
 // work never competes with the main reply key's quota; fall back to the default
 // provider on empty text or exception.
-export async function dreamCall(llm: DreamLLM, prompt: string, maxTokens = 2048): Promise<DreamCallResult> {
+export async function dreamCall(
+  llm: DreamLLM,
+  prompt: string,
+  maxTokens = 2048,
+  system = 'You are Luna in a dream state, doing quiet internal housekeeping.',
+): Promise<DreamCallResult> {
   const attempts: Provider[] = llm.fallback ? [llm.primary, llm.fallback] : [llm.primary];
   let last: DreamCallResult = { ok: false, failure: 'empty_text', detail: 'no attempts made' };
 
   for (const provider of attempts) {
     try {
       const result: CompleteResult = await provider.complete({
-        system: 'You are Luna in a dream state, doing quiet internal housekeeping.',
+        system,
         messages: [{ role: 'user', content: prompt }],
         maxTokens,
       });

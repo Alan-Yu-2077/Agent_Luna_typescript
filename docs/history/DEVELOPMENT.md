@@ -1,6 +1,6 @@
 # Agent_Luna (TypeScript) — Development History
 
-Last updated: 2026-06-13 (Asia/Shanghai) — v0.10.1 (proactive safety gate — reversible-silent/irreversible-surfaced)
+Last updated: 2026-06-13 (Asia/Shanghai) — v0.10.2 (cadence governor + wake gate)
 
 ## Scope
 
@@ -55,7 +55,8 @@ during the rewrite. Its version log is unrelated to this one — `v0.1` here is 
 | `v0.8.3` | 2026-06-13 | `recall` tool — agentic memory search (Open Q #9) + L1 trigger clause | `8376820` |
 | `v0.9.0` | 2026-06-13 | Dictionary tuning + integrity defaults flipped on; Initiative 4 complete | `a50b6fc` |
 | `v0.10.0` | 2026-06-13 | Proactive turn primitive — `runTurn` + proactive framing + silent allowed (manual) | `514d309` |
-| `v0.10.1` | 2026-06-13 | Proactive safety gate — hard block→surface→execute + fail-closed + action budget | `working tree` |
+| `v0.10.1` | 2026-06-13 | Proactive safety gate — hard block→surface→execute + fail-closed + action budget | `ed51152` |
+| `v0.10.2` | 2026-06-13 | Cadence governor + wake gate — prefilter + bounded "act now?" L2 judgment | `working tree` |
 
 ## Detailed records
 
@@ -111,6 +112,59 @@ Inference:
   `defineTool`, the dispatcher, and provider logic stay in `packages/server`. Frontend
   (`packages/web`) will consume the same protocol package in Initiative 6, getting
   contract drift as a type error rather than a runtime mismatch.
+
+### `v0.10.2` — 2026-06-13 — Cadence governor + wake gate (Initiative 5, commit 3 of 5)
+
+Status:
+
+- working tree (commit hash recorded post-commit)
+
+Fact:
+
+- **`migrations/0007_proactive.sql`** — five cadence columns on `sessions`
+  (`proactive_phase`/`quota_used`/`quota_date`/`last_ms`/`nudges`) so timing survives restart
+  (Python v0.47.3 lesson: a timed state machine that resets on boot fires bursts).
+- **`src/proactive/cadence.ts`** (new) — the governor: the **mechanical rail** around the wake
+  judgment. `shouldConsiderWake(cadence, {lastUserMs, nowMs, nowHour})` is a **pure cheap-exit
+  prefilter** (Initiative-4 discipline) short-circuiting on `disabled` / `quiet_hours` /
+  `deep_absence` (>18h) / `cooldown` / `quota_exhausted` / `too_soon` before any LLM token is spent.
+  **Lull anchoring** (Python): the effective gap is `min(userGap, sinceLastProactive)`, so her own
+  recent message keeps her from nudging into a lull she just broke. `commitProactive` (quota bump
+  w/ daily rollover + timestamp), `recordUserActivity` (reset to engaged), `loadCadence`/
+  `saveCadence` (upsert; restart-survival). Constants env-tunable
+  (`LUNA_PROACTIVE_IDLE_THRESHOLD_MS`/`MIN_INTERVAL_MS`/`DAILY_QUOTA`/`QUIET_HOURS`/`LONG_ABSENCE_MS`).
+- **`src/proactive/wakeGate.ts`** (new) — the bounded **"act now?" L2 judgment**, the one legitimate
+  gate Initiative 4 deferred (a decision with no turn to ride). Runs **only after** the prefilter
+  passes, **off the reply key** (reuses the dream `complete()` cascade — `dreamCall` gained an
+  optional `system` override), returns Zod `{act, intent?, reason}`, and **fails closed**: a
+  garbled/failed/invalid-intent judgment → `act:false`. `buildWakeContext` renders gap + daypart +
+  recent proactive messages (anti-repeat).
+- **Env** — the cadence knobs documented (deferred to the v0.11.0 close to avoid clutter; defaults
+  are companion-appropriate: 10-min idle, 5-min cooldown, 5/day, quiet 0–6am, 18h absence).
+- Tests: 243 across 34 files (+21): every prefilter gate + lull anchoring; `commitProactive`
+  rollover + `recordUserActivity`; persistence round-trip + simulated-restart reload + default-when-
+  no-row; `wakeGate` parse (valid / embedded-in-prose / unparseable→closed / invalid-intent→closed /
+  provider-failure→closed); `buildWakeContext`.
+- Real-LLM smoke (yunwu): a 3-hour-idle context → `act:false` ("no pending thread to justify
+  interrupting the quiet"); a 12-min gap after two recent proactive messages → `act:false` ("my last
+  two messages already reached out; staying quiet is right" — the model reasoning about lull
+  anchoring unprompted). Conservative-by-default, exactly the companion posture.
+
+Inference:
+
+- This is the decision layer in isolation, before the scheduler wires it to a timer (v0.10.3). It
+  has **no action authority** — it only decides *whether to consider* a proactive turn; the safety
+  gate (v0.10.1) and kill switch still govern what a turn may do. So the risk is bounded and the
+  coverage is pure-function + fail-closed + smoke; the heavy adversarial review is reserved for
+  v0.10.3 (which actually makes the loop autonomous).
+- The mechanical-rail + bounded-judgment shape is Initiative 4's L1/L2 discipline applied to the one
+  place a real gate belongs: cheap deterministic gates do the bulk of the work for free; the LLM
+  judges only the genuinely ambiguous "it's quiet — is there a real reason to stir?" and defaults to
+  silence. The real-model smoke declining both times is the design working, not a gap.
+- Scope note: the full Python nudge-escalation sub-states (idle_watch→nudged→renudge→dormant) are
+  deferred to v0.10.3 — they only matter once the scheduler drives *repeated* autonomous wakes, and
+  the daily quota + cooldown already prevent over-nudging. The `phase` column is persisted now for
+  v0.10.3 to drive.
 
 ### `v0.10.1` — 2026-06-13 — Proactive safety gate (Initiative 5, commit 2 of 5)
 
