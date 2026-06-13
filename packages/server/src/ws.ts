@@ -64,7 +64,23 @@ function startDream(ws: ServerWebSocket<WSData>, session: Session): void {
   });
 }
 
+// Connected sockets, so the server-side proactive scheduler (v0.10.3) can push
+// bubbles over the existing WS without a per-connection handle. A proactive
+// turn with no listener still runs (memory persists); its output lands in L2.
+const activeSockets = new Set<ServerWebSocket<WSData>>();
+
+export function broadcast(e: ServerEvent): void {
+  for (const ws of activeSockets) {
+    try {
+      outbound(ws, e);
+    } catch {
+      /* socket may be gone; other listeners + persistence continue */
+    }
+  }
+}
+
 export function handleOpen(ws: ServerWebSocket<WSData>): void {
+  activeSockets.add(ws);
   console.log(`[ws] open ${ws.remoteAddress} session=${ws.data.sessionId}`);
 }
 
@@ -73,6 +89,7 @@ export function handleClose(
   code: number,
   reason: string,
 ): void {
+  activeSockets.delete(ws);
   console.log(`[ws] close ${ws.remoteAddress} code=${code} reason=${reason}`);
 }
 
@@ -150,6 +167,7 @@ export function handleMessage(
         });
         return;
       }
+      session.lastUserMs = Date.now(); // resets the proactive idle gap
       const turnId = event.turn_id ?? `${session.id}:turn:${session.turnSeq}`;
       const emit = safeEmit(ws);
       void runTurn({

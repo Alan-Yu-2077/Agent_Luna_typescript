@@ -1,5 +1,6 @@
 import { join } from 'node:path';
-import { handleClose, handleMessage, handleOpen, setRuntime, type WSData } from './ws';
+import { broadcast, handleClose, handleMessage, handleOpen, setRuntime, type WSData } from './ws';
+import { startScheduler } from './proactive/scheduler';
 import { AnthropicProvider } from './provider/anthropic';
 import { builtinRegistry, messageRegistry } from './tools/registry';
 import { closeDb, migrate, openDb } from './sql';
@@ -46,10 +47,15 @@ if (Bun.env['ANTHROPIC_API_KEY']) {
   // everything downstream derives it from the registry, never from env.
   // Default ON since v0.7.0; LUNA_MESSAGE_TOOL=0 is the text-path escape hatch.
   const messageMode = Bun.env['LUNA_MESSAGE_TOOL'] !== '0';
-  setRuntime({ provider, registry: messageMode ? messageRegistry : builtinRegistry, dreamLlm });
+  const registry = messageMode ? messageRegistry : builtinRegistry;
+  setRuntime({ provider, registry, dreamLlm });
   console.log(
     `[luna-server] provider: ${Bun.env['LUNA_MODEL'] ?? 'claude-opus-4-8'} via ${Bun.env['ANTHROPIC_BASE_URL'] ?? 'https://api.anthropic.com'}${summarizerKey ? ' (+summarizer key)' : ''}${messageMode ? ' [message-tool mode]' : ''}`,
   );
+  // Proactive heartbeat (v0.10.3). The timer runs always; each tick no-ops
+  // unless LUNA_PROACTIVE=1 (re-read per tick, so the kill switch toggles
+  // without a restart). Bubbles push to all connected sockets.
+  startScheduler({ provider, registry, dreamLlm, emit: broadcast });
 } else {
   console.warn('[luna-server] ANTHROPIC_API_KEY not set — chat.send disabled');
 }

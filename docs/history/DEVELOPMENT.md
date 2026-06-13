@@ -1,6 +1,6 @@
 # Agent_Luna (TypeScript) — Development History
 
-Last updated: 2026-06-13 (Asia/Shanghai) — v0.10.2 (cadence governor + wake gate)
+Last updated: 2026-06-13 (Asia/Shanghai) — v0.10.3 (proactive scheduler — the loop goes autonomous)
 
 ## Scope
 
@@ -56,7 +56,8 @@ during the rewrite. Its version log is unrelated to this one — `v0.1` here is 
 | `v0.9.0` | 2026-06-13 | Dictionary tuning + integrity defaults flipped on; Initiative 4 complete | `a50b6fc` |
 | `v0.10.0` | 2026-06-13 | Proactive turn primitive — `runTurn` + proactive framing + silent allowed (manual) | `514d309` |
 | `v0.10.1` | 2026-06-13 | Proactive safety gate — hard block→surface→execute + fail-closed + action budget | `ed51152` |
-| `v0.10.2` | 2026-06-13 | Cadence governor + wake gate — prefilter + bounded "act now?" L2 judgment | `working tree` |
+| `v0.10.2` | 2026-06-13 | Cadence governor + wake gate — prefilter + bounded "act now?" L2 judgment | `636caf3` |
+| `v0.10.3` | 2026-06-13 | Proactive scheduler/heartbeat — idle loop goes autonomous (behind the kill switch) | `working tree` |
 
 ## Detailed records
 
@@ -112,6 +113,69 @@ Inference:
   `defineTool`, the dispatcher, and provider logic stay in `packages/server`. Frontend
   (`packages/web`) will consume the same protocol package in Initiative 6, getting
   contract drift as a type error rather than a runtime mismatch.
+
+### `v0.10.3` — 2026-06-13 — Proactive scheduler/heartbeat (Initiative 5, commit 4 of 5)
+
+Status:
+
+- working tree (commit hash recorded post-commit)
+
+Fact:
+
+- **`src/proactive/scheduler.ts`** (new) — the heartbeat that makes the loop **autonomous**.
+  `startScheduler(deps)` runs a single `setInterval` (`LUNA_PROACTIVE_TICK_SECONDS`, default 60,
+  `.unref()`'d so it never keeps the process alive); `runTick` is exported so tests drive it
+  directly (no real timer). Each tick (gated on `LUNA_PROACTIVE`, re-read per tick → kill switch
+  works without restart; skipped while dreaming): for each active session with `activeTurn===null`,
+  run the cadence prefilter → on consider, the `wakeGate` judgment (off the reply key) → on `act`,
+  **re-check** `activeTurn`/dreaming/enabled (the wakeGate LLM call took real time), then
+  `runProactiveTurn` + `commitProactive`+`saveCadence`. A throwing tick is caught (never crashes the
+  loop). Wake decisions are traced+flushed as `surface:'proactive_wake'` (`act`/`hold`).
+- **Overlap safety** — a proactive turn never overlaps a user turn or dream. The TOCTOU window
+  (check `activeTurn` → await wakeGate → fire) is closed by a **re-check after the await**;
+  `runProactiveTurn`→`runTurn` sets `session.activeTurn` **synchronously before its first await**, and
+  ws dispatches `chat.send` via `void` on the single-threaded loop, so once the re-check passes there
+  is no interleaving window. A `chat.send` arriving mid-cycle is rejected by the same `activeTurn`
+  guard (`turn_in_progress`).
+- **`session.ts`** — `lastUserMs` (init boot time; never proactive-fires until a fresh idle gap
+  elapses) + `activeSessionIds()`. **`ws.ts`** — `chat.send` stamps `session.lastUserMs = now`
+  (resets the idle gap; proactive turns do NOT touch it — that's lull anchoring via cadence); an
+  `activeSockets` set (maintained in open/close) + `broadcast(e)` so the server pushes proactive
+  bubbles with no per-connection handle (a proactive turn with no listener still runs; its output
+  persists to L2). **`main.ts`** starts the scheduler with `emit: broadcast`.
+- **Cadence integrity** confirmed: `persistSession` is a column-specific `ON CONFLICT … UPDATE`
+  (`turn_seq`/`history_json`/`updated_ms` only) — it does **not** wipe the `proactive_*` columns, so
+  a proactive turn's own persist doesn't clobber the cadence the scheduler commits right after.
+- **Env** — `LUNA_PROACTIVE_TICK_SECONDS` + the cadence knobs documented in `.env.example`.
+- **In-flight guard** (`ticking` boolean): serializes ticks — a tick's wakeGate + proactive turn can
+  outlast the interval, and without this a second timer firing would start a concurrent tick that
+  re-passes the (stale, pre-cooldown) prefilter and fires a SECOND proactive turn back-to-back. This
+  was a real defect **found by the adversarial review and fixed before commit** (see below).
+- Tests: 250 across 35 files (+7): disabled → no-op; prefilter-too-soon → no judgment/turn; idle +
+  `hold` → wake decision logged, no turn; idle + `act` → proactive turn fires + cadence committed
+  (quota=1, lastProactive stamped); after firing, the next tick is cooldown-blocked; **concurrent
+  ticks → the in-flight guard skips the second (no back-to-back fire, no quota corruption)**; an
+  active user turn is never overlapped.
+- Adversarial overlap/TOCTOU-hunt review: the invariant that mattered most — **proactive never
+  overlaps a user turn or dream** — was **verified clean** (activeTurn set synchronously before the
+  first await; the re-check→runProactiveTurn→runTurn chain is synchronous-contiguous; chat.send/
+  dream.enter rejected mid-cycle). broadcast/kill-switch/timer-unref/cadence-not-wiped all verified.
+  The review **escalated a minor test-gap finding into the real concurrent-tick reentrancy defect
+  above** (proactive-vs-proactive back-to-back + quota corruption — the "runaway timer" risk),
+  reproduced deterministically; fixed by the in-flight guard + regression test. The quiet-hours
+  timezone note was correctly dismissed (single-user, local-time by design, `.env` documents it).
+
+Inference:
+
+- This is the version where Luna acquires a life of her own — a backend daemon that, on idle,
+  decides whether to stir and acts. It is the architecturally consequential moment of the whole
+  rewrite, which is why it landed only after the agency core (v0.10.0), the safety gate (v0.10.1),
+  and the decision layer (v0.10.2) were each proven in isolation: the heartbeat just composes them.
+- Everything is still behind `LUNA_PROACTIVE` (default off through this version); v0.11.0 flips it on
+  (Alan's explicit choice) and adds self-continuation + dream auto-trigger as scheduled wakeups.
+- The single persistent WS (LD #2) is why this is simple and burst-proof: `broadcast` over live
+  sockets, no outbox/cursor/TTL/replay layer, so Python's v0.58.0.2 reconnect-backlog-burst class
+  structurally cannot occur.
 
 ### `v0.10.2` — 2026-06-13 — Cadence governor + wake gate (Initiative 5, commit 3 of 5)
 
