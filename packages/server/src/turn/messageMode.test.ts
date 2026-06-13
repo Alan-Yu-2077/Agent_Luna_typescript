@@ -113,6 +113,88 @@ describe('message-tool mode (LUNA_MESSAGE_TOOL registry)', () => {
     expect(result.text).toBe('换短的说法。');
   });
 
+  test('streamed input deltas become ordered tool.progress text_deltas before dispatch', async () => {
+    const provider = new MockProvider([
+      [
+        { kind: 'tool_input_delta', id: 'm1', name: 'message', partial_json: '' },
+        { kind: 'tool_input_delta', id: 'm1', name: 'message', partial_json: '{"text": "你好' },
+        { kind: 'tool_input_delta', id: 'm1', name: 'message', partial_json: '，我在呢。"' },
+        { kind: 'tool_input_delta', id: 'm1', name: 'message', partial_json: ', "is_final": true}' },
+        stopWithMessages([{ id: 'm1', input: { text: '你好，我在呢。', is_final: true } }]),
+      ],
+      [stopEnd('')],
+    ]);
+    const events = await turn(provider, '在吗');
+
+    const progress = events.filter(
+      (e) => e.type === 'tool.progress' && e.tool_name === 'message',
+    ) as { payload: { text_delta: string } }[];
+    expect(progress.map((p) => p.payload.text_delta).join('')).toBe('你好，我在呢。');
+    expect(progress.length).toBe(2);
+
+    const order = events.map((e) => e.type);
+    expect(order.indexOf('tool.progress')).toBeLessThan(order.indexOf('tool.started'));
+    const finished = events.find((e) => e.type === 'tool.finished') as {
+      result: { kind: string };
+    };
+    expect(finished.result.kind).toBe('ok');
+  });
+
+  test('preview-then-invalid: progress streams, then finished err (discard contract)', async () => {
+    const bad = '一。二。三。四。五。';
+    const provider = new MockProvider([
+      [
+        {
+          kind: 'tool_input_delta',
+          id: 'm1',
+          name: 'message',
+          partial_json: `{"text": "${bad}", "is_final": true}`,
+        },
+        stopWithMessages([{ id: 'm1', input: { text: bad, is_final: true } }]),
+      ],
+      [stopWithMessages([{ id: 'm2', input: { text: '短点说。', is_final: true } }])],
+      [stopEnd('')],
+    ]);
+    const events = await turn(provider, 'hi');
+
+    const progress = events.filter((e) => e.type === 'tool.progress');
+    expect(progress.length).toBeGreaterThan(0);
+    const finished = events.filter((e) => e.type === 'tool.finished') as {
+      result: { kind: string; code?: string };
+    }[];
+    expect(finished[0]!.result.code).toBe('validation_failed');
+    const result = events.find((e) => e.type === 'turn.result') as { text: string };
+    expect(result.text).toBe('短点说。');
+  });
+
+  test('empty-reply guard: silent turn gets one corrective retry, then speaks', async () => {
+    const provider = new MockProvider([
+      [stopEnd('')],
+      [stopWithMessages([{ id: 'm1', input: { text: '我在的。', is_final: true } }])],
+      [stopEnd('')],
+    ]);
+    const events = await turn(provider, '说话呀');
+
+    expect(provider.requests.length).toBe(3);
+    const lastReq = provider.requests[1]!;
+    const directive = JSON.stringify(lastReq.messages[lastReq.messages.length - 1]);
+    expect(directive).toContain('Stage direction');
+    const result = events.find((e) => e.type === 'turn.result') as { text: string };
+    expect(result.text).toBe('我在的。');
+  });
+
+  test('double-silent: degraded fallback uses leaked text, no infinite retry', async () => {
+    const provider = new MockProvider([
+      [{ kind: 'text_delta', text: '泄漏的旁白' }, stopEnd('泄漏的旁白')],
+      [stopEnd('')],
+    ]);
+    const events = await turn(provider, 'hi');
+
+    expect(provider.requests.length).toBe(2);
+    const result = events.find((e) => e.type === 'turn.result') as { text: string };
+    expect(result.text).toBe('泄漏的旁白');
+  });
+
   test('flag-off path untouched: builtin registry yields plain text turn', async () => {
     const provider = new MockProvider([
       [{ kind: 'text_delta', text: '普通文本回复' }, stopEnd('普通文本回复')],

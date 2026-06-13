@@ -71,6 +71,32 @@
 
       let ws = null;
       let currentBubble = null;
+      // streaming message-tool bubbles, keyed by call_id (v0.6.2)
+      const msgBubbles = new Map();
+      let msgCountThisTurn = 0;
+
+      function ensureMsgBubble(callId) {
+        let b = msgBubbles.get(callId);
+        if (!b) {
+          b = el('msg luna', '');
+          msgBubbles.set(callId, b);
+          msgCountThisTurn += 1;
+        }
+        return b;
+      }
+
+      function revealSegments(bubble, segments) {
+        // paced reveal only when nothing was streamed live (degraded path)
+        let i = 0;
+        function step() {
+          if (i >= segments.length) return;
+          bubble.textContent += (i > 0 ? ' ' : '') + segments[i].text;
+          log.scrollTop = log.scrollHeight;
+          i += 1;
+          if (i < segments.length) setTimeout(step, segments[i].delay_ms);
+        }
+        step();
+      }
 
       function el(cls, text) {
         const d = document.createElement('div');
@@ -99,7 +125,8 @@
           const ev = JSON.parse(e.data);
           switch (ev.type) {
             case 'turn.started':
-              currentBubble = el('msg luna', '');
+              currentBubble = null;
+              msgCountThisTurn = 0;
               break;
             case 'reply.token':
               if (!currentBubble) currentBubble = el('msg luna', '');
@@ -107,17 +134,43 @@
               log.scrollTop = log.scrollHeight;
               break;
             case 'turn.result':
-              if (currentBubble && currentBubble.textContent.length === 0) {
-                currentBubble.textContent = ev.text || '（无文字回复）';
+              if (!currentBubble && msgCountThisTurn === 0 && ev.text) {
+                el('msg luna', ev.text);
               }
               currentBubble = null;
               break;
             case 'tool.started':
+              if (ev.tool_name === 'message') { ensureMsgBubble(ev.call_id); break; }
               el('chip tool', '🔧 ' + ev.tool_name + ' …');
               break;
-            case 'tool.finished':
+            case 'tool.progress':
+              if (ev.tool_name === 'message' && ev.payload && typeof ev.payload.text_delta === 'string') {
+                ensureMsgBubble(ev.call_id).textContent += ev.payload.text_delta;
+                log.scrollTop = log.scrollHeight;
+              }
+              break;
+            case 'tool.finished': {
+              const bubble = msgBubbles.get(ev.call_id);
+              if (bubble) {
+                msgBubbles.delete(ev.call_id);
+                if (ev.result.kind === 'ok') {
+                  const d = ev.result.data;
+                  if (bubble.textContent.length === 0 && d.segments && d.segments.length) {
+                    revealSegments(bubble, d.segments);
+                  } else {
+                    bubble.textContent = d.text;
+                  }
+                  if (d.expression) el('chip', '🎭 ' + d.expression + (d.emotion != null ? ' · ' + d.emotion : ''));
+                } else {
+                  bubble.remove();
+                  msgCountThisTurn -= 1;
+                  el('chip err', '💬 重说: ' + String(ev.result.message || '').slice(0, 80));
+                }
+                break;
+              }
               el('chip tool', '🔧 ' + (ev.result.kind === 'ok' ? (ev.result.summary || 'done') : '失败: ' + ev.result.message));
               break;
+            }
             case 'dream.step':
               el('chip dream', '🌙 ' + ev.step + ' → ' + ev.status + (ev.detail ? ' · ' + ev.detail : ''));
               setDreaming(true, ev.step);

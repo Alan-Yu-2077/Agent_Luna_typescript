@@ -5,6 +5,7 @@ import type { Provider, ProviderToolUse, ProviderUsage } from '../provider/types
 import { isMessageMode, type ToolRegistry } from '../tools/registry';
 import { dispatchToolCalls } from '../tools/dispatcher';
 import { runGraph, type Graph, type TransitionHook, type TurnNode, type NodeName } from './graph';
+import { JsonTextStream } from './jsonTextStream';
 import type { Session } from './session';
 import { trace, flushTrace, traceEnabled } from '../trace/instrument';
 import { appendL2, persistSession } from '../memory/sessionStore';
@@ -25,6 +26,10 @@ const MESSAGE_MODE_DIRECTIVE =
   'and it is your only voice. Never write top-level text outside tool calls; internal reasoning ' +
   'belongs in thinking. Each message call is one chat bubble — prefer several short calls over ' +
   'one long one. Set is_final=true on the last message of your turn.';
+
+const SILENT_TURN_DIRECTIVE =
+  '(Stage direction: you ended your turn without speaking. Respond now by calling the message ' +
+  'tool — calling it is the act of speaking. Do not write top-level text.)';
 
 const EMBODIMENT_BLOCK =
   'Runtime embodiment: right now the user reaches you through a plain text chat page — no ' +
@@ -80,6 +85,8 @@ export type TurnState = {
   startedMs: number;
   // texts of successful message-tool deliveries this turn, in dispatch order
   messageTexts: string[];
+  // empty-reply guard fired already (bounds the corrective retry to one)
+  silentRetried: boolean;
 };
 
 export function toolsToAnthropicFormat(registry: ToolRegistry): Anthropic.Tool[] {
@@ -124,6 +131,10 @@ const graph: Graph<TurnState, TurnNode> = {
 
   async open_stream(s) {
     s.pendingToolUses = [];
+    // live text preview per streaming message call (input_json_delta tier) —
+    // validated delivery happens later at dispatch; a preview that fails
+    // validation ends in tool.finished{err} and the consumer discards it
+    const messageStreams = new Map<string, JsonTextStream>();
     for await (const ev of s.provider.chatStream({
       system: buildSystemPrompt(s.session, isMessageMode(s.registry)),
       messages: buildActiveContext(s.session),
@@ -141,6 +152,26 @@ const graph: Graph<TurnState, TurnNode> = {
           break;
         case 'tool_use_start':
           break;
+        case 'tool_input_delta': {
+          if (ev.name !== 'message') break;
+          let stream = messageStreams.get(ev.id);
+          if (!stream) {
+            stream = new JsonTextStream();
+            messageStreams.set(ev.id, stream);
+          }
+          const delta = stream.push(ev.partial_json);
+          if (delta.length > 0) {
+            if (s.firstTokenMs === null) s.firstTokenMs = Date.now() - s.startedMs;
+            s.tokenCount += 1;
+            s.emit({
+              type: 'tool.progress',
+              call_id: ev.id,
+              tool_name: 'message',
+              payload: { text_delta: delta },
+            });
+          }
+          break;
+        }
         case 'message_stop':
           s.stopReason = ev.stopReason;
           s.pendingToolUses = ev.toolUses;
@@ -219,7 +250,12 @@ const graph: Graph<TurnState, TurnNode> = {
             });
             break;
           case 'progress':
-            s.emit({ type: 'tool.progress', call_id: evt.call_id, payload: evt.payload });
+            s.emit({
+              type: 'tool.progress',
+              call_id: evt.call_id,
+              tool_name: ToolName.parse(evt.tool_name),
+              payload: evt.payload,
+            });
             break;
           case 'final':
             if (evt.tool_name === 'message' && evt.result.kind === 'ok') {
@@ -254,13 +290,39 @@ const graph: Graph<TurnState, TurnNode> = {
   },
 
   async finalize(s) {
-    // Message mode: the turn's text is what was actually delivered through the
-    // message tool (one line per bubble). Stray top-level text stays in
-    // history/trace — observable leak signal for the A/B — but does not become
-    // the reply. Zero deliveries falls through to s.text for now (the empty-
-    // reply guard lands in v0.6.2).
-    if (isMessageMode(s.registry) && s.messageTexts.length > 0) {
-      s.text = s.messageTexts.join('\n');
+    if (isMessageMode(s.registry)) {
+      // Empty-reply guard (Python v0.47.12 lesson): a message-mode turn must
+      // speak. One corrective retry as a USER-role stage direction (never
+      // system — Python's v0.27.1 hoisting lesson), bounded by silentRetried.
+      if (s.messageTexts.length === 0 && s.finishReason === 'end_turn' && !s.silentRetried) {
+        s.silentRetried = true;
+        s.session.history.push({
+          role: 'user',
+          content: [{ type: 'text', text: SILENT_TURN_DIRECTIVE }],
+        });
+        return 'build_request';
+      }
+      // The turn's text is what was actually delivered through the message
+      // tool (one line per bubble). Stray top-level text stays in history and
+      // traces — the observable leak signal for the A/B — but never becomes
+      // the reply unless the degraded fallback below fires.
+      if (s.messageTexts.length > 0) {
+        s.text = s.messageTexts.join('\n');
+      } else if (s.silentRetried && traceEnabled()) {
+        // double-silent: degraded fallback — leaked top-level text (possibly
+        // empty) becomes the reply, and the failure is countable in traces
+        trace({
+          schema_v: 1,
+          kind: 'node',
+          trace_id: s.turnId,
+          turn_id: s.turnId,
+          session_id: s.session.id,
+          t_ms: Date.now(),
+          node_from: 'finalize',
+          node_to: 'finalize',
+          payload: { empty_turn: true, leaked_chars: s.text.length },
+        });
+      }
     }
     s.emit({
       type: 'turn.result',
@@ -319,6 +381,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<TurnState> {
     firstTokenMs: null,
     startedMs: Date.now(),
     messageTexts: [],
+    silentRetried: false,
   };
 
   const onTransition: TransitionHook<TurnState, TurnNode> = (from, to, s) => {

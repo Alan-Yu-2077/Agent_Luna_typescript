@@ -15,6 +15,9 @@ export type ProviderEvent =
   | { kind: 'text_delta'; text: string }
   | { kind: 'thinking_delta'; text: string }
   | { kind: 'tool_use_start'; id: string; name: string }
+  // raw partial-JSON chunk of an open tool_use block's input (SDK
+  // input_json_delta), keyed to the block announced by tool_use_start
+  | { kind: 'tool_input_delta'; id: string; name: string; partial_json: string }
   | {
       kind: 'message_stop';
       stopReason: string;

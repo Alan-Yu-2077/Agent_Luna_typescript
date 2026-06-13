@@ -76,9 +76,17 @@ export class AnthropicProvider implements Provider {
       thinking: { type: 'adaptive', display: 'summarized' },
     });
 
+    // open tool_use blocks by stream index, so input_json_delta chunks can be
+    // attributed to the right call (v0.6.2 message streaming)
+    const openToolBlocks = new Map<number, { id: string; name: string }>();
+
     for await (const event of stream) {
       if (event.type === 'content_block_start') {
         if (event.content_block.type === 'tool_use') {
+          openToolBlocks.set(event.index, {
+            id: event.content_block.id,
+            name: event.content_block.name,
+          });
           yield {
             kind: 'tool_use_start',
             id: event.content_block.id,
@@ -92,6 +100,16 @@ export class AnthropicProvider implements Provider {
           yield { kind: 'text_delta', text: event.delta.text };
         } else if (event.delta.type === 'thinking_delta') {
           yield { kind: 'thinking_delta', text: event.delta.thinking };
+        } else if (event.delta.type === 'input_json_delta') {
+          const blk = openToolBlocks.get(event.index);
+          if (blk) {
+            yield {
+              kind: 'tool_input_delta',
+              id: blk.id,
+              name: blk.name,
+              partial_json: event.delta.partial_json,
+            };
+          }
         }
         continue;
       }

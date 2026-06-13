@@ -1,6 +1,6 @@
 # Agent_Luna (TypeScript) — Development History
 
-Last updated: 2026-06-13 (Asia/Shanghai) — v0.6.1 (message tool + schema humanity caps, flag off)
+Last updated: 2026-06-13 (Asia/Shanghai) — v0.6.2 (streaming message text + empty-reply guard)
 
 ## Scope
 
@@ -46,7 +46,8 @@ during the rewrite. Its version log is unrelated to this one — `v0.1` here is 
 | `v0.5.1` | 2026-06-12 | Dev chat page `/_chat` — first usable conversation surface | `c4a9d84` |
 | `v0.5.2` | 2026-06-12 | Gateway-safe tool schemas — `remember` flat input + `_noargs` unwrap | `a341162` |
 | `v0.6.0` | 2026-06-13 | Persona foundation — mtime-cached loader, humanity splitters, wake scene | `25ed7cd` |
-| `v0.6.1` | 2026-06-13 | `message` tool + humanity caps as Zod schema (LD #9, flag off) | `working tree` |
+| `v0.6.1` | 2026-06-13 | `message` tool + humanity caps as Zod schema (LD #9, flag off) | `266ee1b` |
+| `v0.6.2` | 2026-06-13 | Streaming message text (`input_json_delta` → `tool.progress`) + empty-reply guard | `working tree` |
 
 ## Detailed records
 
@@ -102,6 +103,48 @@ Inference:
   `defineTool`, the dispatcher, and provider logic stay in `packages/server`. Frontend
   (`packages/web`) will consume the same protocol package in Initiative 6, getting
   contract drift as a type error rather than a runtime mismatch.
+
+### `v0.6.2` — 2026-06-13 — Streaming message text + empty-reply guard (Initiative 3, commit 3 of 4)
+
+Status:
+
+- working tree (commit hash recorded post-commit)
+
+Fact:
+
+- **Provider**: new `tool_input_delta` event (`{id, name, partial_json}`) — `anthropic.ts` tracks
+  open tool_use blocks by stream index and attributes SDK `input_json_delta` chunks; MockProvider
+  scripts them natively.
+- **`turn/jsonTextStream.ts`** (~110 LOC, the fiddly piece): incremental extractor for the
+  top-level `"text"` field of streamed partial JSON — depth tracking (nested objects like
+  `voice_params` skipped), key matching at depth 1 only, full escape handling (`\n`, `\"`,
+  `\uXXXX` incl. surrogate pairs) across arbitrary chunk splits. 10 dense unit tests including
+  the spike-verified yunwu chunk shapes and single-char pathological splits.
+- **runTurn `open_stream`**: deltas for `message` blocks feed per-call extractors → emit
+  `tool.progress { call_id, tool_name: 'message', payload: { text_delta } }` per fragment;
+  drives `firstTokenMs`/`tokenCount` (latency observability parity with text mode). Streaming
+  preview and validated delivery are separate tiers: a preview that fails dispatch validation
+  ends in `tool.finished{err}` and the consumer discards it (dev chat implements the contract).
+  `ToolProgressEvent` gains optional `tool_name` — the Initiative 6 subscription key — and
+  dispatcher-tier progress events now carry it too.
+- **Empty-reply guard** (Python v0.47.12 lesson): a message-mode `end_turn` with zero successful
+  deliveries gets ONE corrective retry as a **user-role** stage direction (v0.27.1 hoisting
+  lesson), bounded by `silentRetried`; double-silent → degraded fallback (leaked top-level text
+  becomes the reply) + countable `empty_turn` node trace.
+- **Dev chat**: message bubbles keyed by `call_id` — created on `tool.started`/first delta,
+  appended per `text_delta`, finalized on ok (expression shown as 🎭 chip), removed on err with a
+  "重说" chip; paced `delay_ms` segment reveal only when nothing streamed live; `turn.result`
+  renders a bubble only when no message bubbles exist this turn (degraded/text-mode path).
+- Tests: 162 across 25 files (+14). Real-LLM smoke (yunwu, fresh session): 9 ordered
+  `tool.progress` deltas, streamed preview byte-equal to the two delivered bubbles
+  (wake-persona greeting), first delta ~5s (thinking latency).
+
+Inference:
+
+- The LD #9 streaming story is now complete end-to-end: token-stream UX inside a validated tool
+  envelope, on the real gateway, with the same latency observability as the text baseline. What
+  remains for the initiative is policy, not plumbing: run the A/B script and flip the default
+  (v0.7.0).
 
 ### `v0.6.1` — 2026-06-13 — `message` tool + schema humanity caps (Initiative 3, commit 2 of 4)
 

@@ -58,6 +58,9 @@ export const ToolStartedEvent = z.object({
 export const ToolProgressEvent = z.object({
   type: z.literal('tool.progress'),
   call_id: z.string(),
+  // present since v0.6.2 — lets consumers filter (the message-streaming
+  // contract Initiative 6 subscribes to is tool.progress{tool_name:'message'})
+  tool_name: ToolName.optional(),
   payload: z.unknown(),
 });
 
