@@ -28,10 +28,15 @@ every decision here.
 
 ## Current state (read this first)
 
-> **Shipped head: v0.9.0** (2026-06-13). Initiatives 1 (tool spec), 1.5 (observability),
-> 2 (memory + dream), 3 (persona + humanity + `message` tool, **LD #9**), and 4 (action
-> integrity — **LD #14**) are complete. Next up: Initiative 5 — proactive + self-continuation,
-> designed fresh on the TS architecture (not a Python port). The agent core works end-to-end: WS
+> **Shipped head: v0.11.0** (2026-06-13). Initiatives 1 (tool spec), 1.5 (observability),
+> 2 (memory + dream), 3 (persona + humanity + `message` tool, **LD #9**), 4 (action integrity —
+> **LD #14**), and 5 (proactive agency — **LD #15**) are complete. Next up: Initiative 6 —
+> frontend port (TS `agent-app.js` controller + Live2D/audio). **Luna now has agency when no one
+> is talking**: a `.unref()`'d heartbeat (`LUNA_PROACTIVE`, default ON, `=0` kill switch) runs a
+> conservative wake judgment and, on act, a proactive `runTurn` that can act SILENTLY — bounded by
+> a hard reversible-silent/irreversible-surfaced safety gate + action budget. Self-continuation =
+> a `setTimeout` micro-wake after a user turn; dream auto-trigger = a `consolidate`-intent turn
+> calling `enter_dream`. The agent core works end-to-end: WS
 > `chat.send` → real LLM turn through a generic StateGraph with interleaved tools, reasoning
 > under the **L1 thinking contract** (`LUNA_L1_CONTRACT`, default on) → **speech via the
 > `message` tool only** (`LUNA_MESSAGE_TOOL`, default on) → **action-integrity guards** in
@@ -46,6 +51,25 @@ Always confirm the head by reading the top of
 [`docs/history/DEVELOPMENT.md`](../../../docs/history/DEVELOPMENT.md) — it is the truth source,
 not this skill. The file map below is current as of v0.7.0; if DEVELOPMENT.md shows a higher
 version, trust the code and update this skill.
+
+### Proactive-agency additions (v0.10.0–v0.11.0, Initiative 5 — LD #15)
+
+```
+packages/protocol/src/events.ts   ClientEvent += proactive.fire · ServerEvent += proactive.started/finished{spoke}
+packages/server/src/
+  migrations/0007_proactive.sql    cadence columns on sessions (restart-survival)
+  proactive/
+    proactiveTurn.ts   runProactiveTurn = runTurn + proactiveTurn:true (silence allowed) + intent framing (spontaneous/continuation/consolidate)
+    safetyGate.ts      proactiveRiskOf FAIL-CLOSED (safe only if opted in) · isProactiveActionAllowed (surface needs a prior-round message) · maxProactiveActions()
+    cadence.ts         shouldConsiderWake prefilter (quiet/quota/cooldown/deep-absence/lull-anchor) · commit/load/save · proactiveEnabled() = LUNA_PROACTIVE!=='0' (default ON)
+    wakeGate.ts        bounded "act now?" L2 judgment, off the reply key (dreamCall), Zod {act,intent,reason}, FAILS CLOSED
+    scheduler.ts       runTick (in-flight guard) → prefilter → wakeGate → re-check → runProactiveTurn → commit; dream auto-trigger on pendingDream; startScheduler in main.ts
+    continuation.ts    self-continuation = setTimeout micro-wake after a user turn (mechanical probability gate)
+  turn/runTurn.ts      dispatch_tools HARD GATE (proactive surface-risk blocked until surfaced) + action budget; finalize exempts the empty-reply guard for proactive turns
+  ws.ts                proactive.fire branch + activeSockets/broadcast (push proactive bubbles) + lastUserMs stamp + maybeScheduleContinuation
+  scripts/proactive-soak.ts        manual heartbeat soak vs the real model
+  FLAGS: LUNA_PROACTIVE (default ON) · LUNA_PROACTIVE_TICK_SECONDS/IDLE_THRESHOLD_MS/MIN_INTERVAL_MS/DAILY_QUOTA/QUIET_HOURS/LONG_ABSENCE_MS/MAX_ACTIONS · LUNA_SELFCONT(_PROBABILITY/_PAUSE_MS)
+```
 
 ### Action-integrity additions (v0.8.0–v0.9.0, Initiative 4 — LD #14)
 

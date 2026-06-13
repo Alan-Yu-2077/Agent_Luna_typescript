@@ -1,0 +1,57 @@
+import type { ServerEvent } from '@luna/protocol';
+import type { Provider } from '../provider/types';
+import type { ToolRegistry } from '../tools/registry';
+import type { Session } from '../turn/session';
+import { isDreaming } from '../dream/dreamState';
+import { runProactiveTurn } from './proactiveTurn';
+import { proactiveEnabled } from './cadence';
+
+// Self-continuation (Initiative 5, v0.11.0) — "a real person paused, then added
+// one more thing." Not the heartbeat: a one-shot short timer right after a user
+// turn, so the pause feels like seconds, not the 60s heartbeat. Reuses the
+// proactive path with the `continuation` framing. Gated by a probability
+// (mechanical, never a model-emitted "more to say" flag — Python v0.28.1 lesson).
+
+export type ContinuationDeps = {
+  session: Session;
+  provider: Provider;
+  registry: ToolRegistry;
+  emit: (e: ServerEvent) => void;
+};
+
+// Decides whether to schedule a continuation. Pure-ish (reads env); a
+// probability of 1 always continues, 0 never (deterministic for tests).
+export function shouldContinue(): boolean {
+  if (!proactiveEnabled()) return false;
+  if (Bun.env['LUNA_SELFCONT'] === '0') return false;
+  const prob = Number(Bun.env['LUNA_SELFCONT_PROBABILITY'] ?? 0.35);
+  if (!(prob > 0)) return false;
+  return Math.random() < prob;
+}
+
+// Runs the continuation micro-wake, guarded so it never overlaps a user turn or
+// dream (the same activeTurn discipline as the scheduler). Exported for tests.
+export async function fireContinuation(deps: ContinuationDeps): Promise<void> {
+  const { session } = deps;
+  if (session.activeTurn !== null || isDreaming() || !proactiveEnabled()) return;
+  await runProactiveTurn({
+    session,
+    cycleId: `${session.id}:cont:${Date.now()}`,
+    provider: deps.provider,
+    registry: deps.registry,
+    emit: deps.emit,
+    intent: 'continuation',
+  });
+}
+
+// Call after a user turn finalizes: maybe schedule a continuation after a short
+// pause. Fire-and-forget; never throws into the caller.
+export function maybeScheduleContinuation(deps: ContinuationDeps): void {
+  if (!shouldContinue()) return;
+  const pauseMs = Number(Bun.env['LUNA_SELFCONT_PAUSE_MS'] ?? 4000);
+  setTimeout(() => {
+    void fireContinuation(deps).catch(() => {
+      /* continuation is best-effort */
+    });
+  }, pauseMs);
+}

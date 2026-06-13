@@ -8,6 +8,8 @@ import type { Provider } from './provider/types';
 import { getSession, type Session } from './turn/session';
 import { runTurn } from './turn/runTurn';
 import { runProactiveTurn } from './proactive/proactiveTurn';
+import { proactiveEnabled } from './proactive/cadence';
+import { maybeScheduleContinuation } from './proactive/continuation';
 import { dreamStatus, isDreaming, wake } from './dream/dreamState';
 import { runDreamCycle } from './dream/cycle';
 import type { DreamLLM } from './dream/llm';
@@ -168,14 +170,15 @@ export function handleMessage(
         return;
       }
       session.lastUserMs = Date.now(); // resets the proactive idle gap
+      const { provider, registry } = runtime; // narrowed by the guard above
       const turnId = event.turn_id ?? `${session.id}:turn:${session.turnSeq}`;
       const emit = safeEmit(ws);
       void runTurn({
         session,
         turnId,
         userText: event.text,
-        provider: runtime.provider,
-        registry: runtime.registry,
+        provider,
+        registry,
         emit,
       }).then(() => {
         // enter_dream is a pending intent: the cycle starts only after the
@@ -183,7 +186,10 @@ export function handleMessage(
         if (session.pendingDream !== null) {
           session.pendingDream = null;
           startDream(ws, session);
+          return;
         }
+        // Self-continuation (v0.11.0): maybe add one more thought after a pause.
+        maybeScheduleContinuation({ session, provider, registry, emit: broadcast });
       });
       return;
     }
@@ -216,13 +222,13 @@ export function handleMessage(
       return;
     }
     case 'proactive.fire': {
-      // Manual trigger (v0.10.0). Gated by the kill switch (default off until
-      // v0.11.0); autonomous firing arrives at v0.10.3.
-      if (Bun.env['LUNA_PROACTIVE'] !== '1') {
+      // Manual trigger (v0.10.0). Gated by the kill switch (default ON since
+      // v0.11.0; LUNA_PROACTIVE=0 disables).
+      if (!proactiveEnabled()) {
         outbound(ws, {
           type: 'error',
           code: 'proactive_disabled',
-          message: 'proactive turns are gated by LUNA_PROACTIVE=1',
+          message: 'proactive turns are disabled (LUNA_PROACTIVE=0)',
         });
         return;
       }

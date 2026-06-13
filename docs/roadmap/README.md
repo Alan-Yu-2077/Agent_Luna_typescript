@@ -4,14 +4,15 @@ Forward development plan for the TypeScript rewrite. Each initiative is a folder
 self-contained version plans, executed one at a time. Version numbers reserve across initiatives so
 they never overlap.
 
-> **Current shipped head: v0.9.0** (2026-06-13, action-integrity defaults flipped on).
-> Initiatives 1, 1.5, 2, 3, and 4 ✅ complete — Luna remembers, recalls by meaning (auto + the
-> agentic `recall` tool), dreams, has her persona, speaks through the typed `message` tool, and
-> now reasons under an L1 thinking contract with structural/mechanical action-integrity guards
-> (LD #14 landed; promises mechanically un-droppable; every judgment a typed `decision` trace).
-> **Next up: Initiative 5 — proactive + self-continuation, designed fresh on the TS architecture
-> (not a Python port), inheriting Initiative 4's audit + decision-trace substrate.** See
-> [`../history/DEVELOPMENT.md`](../history/DEVELOPMENT.md).
+> **Current shipped head: v0.11.0** (2026-06-13, proactive agency complete). Initiatives 1, 1.5,
+> 2, 3, 4, and 5 ✅ complete — Luna remembers, recalls, dreams, has her persona, speaks through the
+> typed `message` tool, reasons under action-integrity rails, and now has **agency when no one is
+> talking**: an autonomous heartbeat that can act silently (memory, recall, dream, look-up) or
+> reach out, under a hard reversible-silent/irreversible-surfaced safety gate (LD #15 landed;
+> `LUNA_PROACTIVE` default on). Self-continuation + dream auto-trigger ship as its natural
+> behaviors. **Next up: Initiative 6 — frontend port** (TS `agent-app.js` controller + Live2D/audio;
+> consumes the now-frozen `tool.progress{tool_name:'message'}` + `MessageDelivery` wire contract).
+> See [`../history/DEVELOPMENT.md`](../history/DEVELOPMENT.md).
 
 ## Planned initiatives (execution order)
 
@@ -22,7 +23,7 @@ they never overlap.
 | 2 | v0.4.0 – v0.5.0 | **Memory + dream substrate** — SQLite three-layer memory (L1 window / L2 full-text archive / L3 semantic) + prose core memory + hybrid `sqlite-vec`/CJK recall + the **dream** consolidation engine (manual + `enter_dream` tool; reconciliation, diaries, persona update). Merges the old "memory" + "dream" initiatives — dream is the engine memory needs. Port of Python v0.52–v0.57 | [`memory-dream-substrate-2026-06/`](memory-dream-substrate-2026-06/) | ✅ shipped 2026-06-12 (5 versions) |
 | 3 | v0.6.0 – v0.7.0 | **Persona + humanity guardrails + `message` tool** — three-layer persona resolution with mtime-cached hot-reload; humanity hard caps as Zod schema on `message` input (not prompt-only, not truncation). **Introduces `message` tool** per LD #9 (everything-as-tool) behind `LUNA_MESSAGE_TOOL`, default-flipped at v0.7.0; frontend wire-event shape (`tool.progress{tool_name:'message'}`) is fixed here for Initiative 6 to consume | [`persona-message-tool-2026-06/`](persona-message-tool-2026-06/) | ✅ shipped 2026-06-13 (4 versions) |
 | 4 | v0.8.0 – v0.9.0 | **Action integrity rails** — 言行一致 + 工具稳发. **L1 thinking contract** (commitment-to-act + tool-trigger checklist + proportionality) in the cached core; structural/mechanical boundary enforcement (`is_final` promise contract + intent-without-act guard, generalizing the v0.6.2 empty-reply guard); off-hot-path defection audit → `decision` traces + replay tree; `recall` tool (Open Q #9). **No L2 gate harness** (LD #14 corrects a Python misreading) | [`action-integrity-2026-06/`](action-integrity-2026-06/) | ✅ shipped 2026-06-13 (5 versions) |
-| 5 | v0.10.0 – v0.11.0 | **Proactive agency** — autonomous tool-calling turns when no one is talking, not just proactive messaging (the 2026 ambient/Hermes paradigm, companion-scaled). A proactive turn is a `runTurn` with the full tool surface and **`message` optional** (she can act silently). Idle + scheduled wakeups; the wake gate is the one legitimate L2 gate (reuses Initiative 4's audit lane). **Safety contract (LD #15): reversible-silent / irreversible-surfaced** + kill switch + action budget, because Alan chose full-tool-incl-`shell` autonomy. **Carries the deferred dream auto-trigger** + self-continuation (a delayed micro-wake) | [`proactive-agency-2026-06/`](proactive-agency-2026-06/) | ⏳ planned (5 versions authored 2026-06-13) |
+| 5 | v0.10.0 – v0.11.0 | **Proactive agency** — autonomous tool-calling turns when no one is talking, not just proactive messaging (the 2026 ambient/Hermes paradigm, companion-scaled). A proactive turn is a `runTurn` with the full tool surface and **`message` optional** (she can act silently). Idle + scheduled wakeups; the wake gate is the one legitimate L2 gate (reuses Initiative 4's audit lane). **Safety contract (LD #15): reversible-silent / irreversible-surfaced** + kill switch + action budget, because Alan chose full-tool-incl-`shell` autonomy. **Carries the deferred dream auto-trigger** + self-continuation (a delayed micro-wake) | [`proactive-agency-2026-06/`](proactive-agency-2026-06/) | ✅ shipped 2026-06-13 (5 versions) |
 | 6 | v0.12.0 – v0.13.0 | **Frontend port** — TS port of `agent-app.js` controller (event consumer + bubble state machine + command dispatch); subscribes to `tool.progress{tool_name:'message'}` per LD #9; Live2D + audio pipeline unchanged; dream overlay / 🌙 button | _(folder TBD)_ | ⏳ planned |
 
 ## Ordering philosophy

@@ -4,8 +4,9 @@ import type { ToolRegistry } from '../tools/registry';
 import type { DreamLLM } from '../dream/llm';
 import { activeSessionIds, getSession, type Session } from '../turn/session';
 import { isDreaming } from '../dream/dreamState';
+import { runDreamCycle } from '../dream/cycle';
 import { trace, flushTrace, traceEnabled } from '../trace/instrument';
-import { runProactiveTurn } from './proactiveTurn';
+import { runProactiveTurn, type ProactiveIntent } from './proactiveTurn';
 import { buildWakeContext, wakeGate, type WakeVerdict } from './wakeGate';
 import {
   commitProactive,
@@ -129,13 +130,23 @@ async function tickOnce(deps: SchedulerDeps): Promise<void> {
     // is no interleaving window with chat.send.
     if (session.activeTurn !== null || isDreaming() || !proactiveEnabled()) continue;
 
+    const intent: ProactiveIntent = verdict.intent === 'consolidate' ? 'consolidate' : 'spontaneous';
     await runProactiveTurn({
       session,
       cycleId: `${sessionId}:${now}`,
       provider: deps.provider,
       registry: deps.registry,
       emit: deps.emit,
+      intent,
     });
     saveCadence(sessionId, commitProactive(cadence, now));
+
+    // Dream auto-trigger (v0.11.0, closes LD #11's deferred half): if she chose
+    // to dream during the proactive turn, start the cycle. Fire-and-forget —
+    // isDreaming() gates every subsequent tick, so no overlap.
+    if (session.pendingDream !== null) {
+      session.pendingDream = null;
+      void runDreamCycle({ sessionId, llm: deps.dreamLlm, emit: deps.emit }).catch(() => {});
+    }
   }
 }

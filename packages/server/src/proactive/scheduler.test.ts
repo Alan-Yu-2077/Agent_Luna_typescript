@@ -73,8 +73,8 @@ function allWakeDecisions(): { decision: string; reason: string }[] {
 }
 
 describe('proactive scheduler tick', () => {
-  test('disabled → no-op', async () => {
-    delete Bun.env['LUNA_PROACTIVE'];
+  test('disabled (LUNA_PROACTIVE=0) → no-op', async () => {
+    Bun.env['LUNA_PROACTIVE'] = '0'; // default is ON since v0.11.0
     idleSession();
     const { deps, gate, turnProvider } = makeDeps('{"act":true,"reason":"x"}', [[endRound]]);
     await runTick(deps);
@@ -139,6 +139,34 @@ describe('proactive scheduler tick', () => {
     expect(b.turnProvider.requests.length).toBe(0);
     // exactly one fire committed to the cadence (quota not corrupted to stay at 1 via a stale snapshot)
     expect(loadCadence('default').quotaUsed).toBe(1);
+  });
+
+  test('dream auto-trigger: a proactive turn that calls enter_dream starts a dream', async () => {
+    idleSession();
+    const gate = new MockProvider([]);
+    gate.completeResponder = () => '{"act":true,"intent":"consolidate","reason":"long quiet"}';
+    // proactive turn: round 1 calls enter_dream (sets pendingDream), round 2 ends
+    const enterDream: ProviderEvent = {
+      kind: 'message_stop',
+      stopReason: 'tool_use',
+      toolUses: [{ id: 'd1', name: 'enter_dream', input: {} }],
+      assistantContent: [
+        { type: 'tool_use', id: 'd1', name: 'enter_dream', input: {} },
+      ] as unknown as Anthropic.ContentBlock[],
+      usage: { input_tokens: 10, output_tokens: 5 },
+    };
+    const turnProvider = new MockProvider([[enterDream], [endRound]]);
+    const deps: SchedulerDeps = {
+      provider: turnProvider,
+      registry: messageRegistry,
+      dreamLlm: { primary: gate, fallback: null },
+      emit: () => {},
+    };
+    const session = getSession('default');
+    await runTick(deps);
+    // the scheduler consumed the pending-dream intent (proof the trigger branch ran)
+    expect(session.pendingDream).toBeNull();
+    expect(turnProvider.requests.length).toBeGreaterThanOrEqual(1);
   });
 
   test('an active user turn is never overlapped', async () => {

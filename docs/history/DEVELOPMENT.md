@@ -1,6 +1,6 @@
 # Agent_Luna (TypeScript) — Development History
 
-Last updated: 2026-06-13 (Asia/Shanghai) — v0.10.3 (proactive scheduler — the loop goes autonomous)
+Last updated: 2026-06-13 (Asia/Shanghai) — v0.11.0 (self-continuation + dream auto-trigger + autonomy default-on; Initiative 5 complete)
 
 ## Scope
 
@@ -57,7 +57,8 @@ during the rewrite. Its version log is unrelated to this one — `v0.1` here is 
 | `v0.10.0` | 2026-06-13 | Proactive turn primitive — `runTurn` + proactive framing + silent allowed (manual) | `514d309` |
 | `v0.10.1` | 2026-06-13 | Proactive safety gate — hard block→surface→execute + fail-closed + action budget | `ed51152` |
 | `v0.10.2` | 2026-06-13 | Cadence governor + wake gate — prefilter + bounded "act now?" L2 judgment | `636caf3` |
-| `v0.10.3` | 2026-06-13 | Proactive scheduler/heartbeat — idle loop goes autonomous (behind the kill switch) | `working tree` |
+| `v0.10.3` | 2026-06-13 | Proactive scheduler/heartbeat — idle loop goes autonomous (behind the kill switch) | `ed51967` |
+| `v0.11.0` | 2026-06-13 | Self-continuation + dream auto-trigger + autonomy default-on; Initiative 5 complete | `working tree` |
 
 ## Detailed records
 
@@ -113,6 +114,62 @@ Inference:
   `defineTool`, the dispatcher, and provider logic stay in `packages/server`. Frontend
   (`packages/web`) will consume the same protocol package in Initiative 6, getting
   contract drift as a type error rather than a runtime mismatch.
+
+### `v0.11.0` — 2026-06-13 — Self-continuation + dream auto-trigger + autonomy on (Initiative 5 capstone, commit 5 of 5)
+
+Status:
+
+- working tree (commit hash recorded post-commit)
+
+Fact:
+
+- **Intent-aware proactive framing** — `runProactiveTurn` gains an optional `intent`
+  (`spontaneous`/`continuation`/`consolidate`), each a distinct USER-role stage direction
+  ([`proactiveTurn.ts`](../../packages/server/src/proactive/proactiveTurn.ts)).
+- **Self-continuation** (`src/proactive/continuation.ts`, new) — "a real person paused, then added
+  one more thing." NOT the heartbeat: a one-shot `setTimeout` (~4s pause) fired right after a user
+  turn, so it feels like seconds. `shouldContinue()` is a **mechanical probability gate**
+  (`LUNA_SELFCONT_PROBABILITY`, default 0.35; never a model-emitted "more to say" flag — Python
+  v0.28.1 lesson); `fireContinuation` runs a `continuation`-intent proactive turn, guarded so it
+  never overlaps a user turn or dream. Wired into `ws.ts` after a user turn (skipped if that turn
+  triggered a dream). `LUNA_SELFCONT=0` opts out.
+- **Dream auto-trigger** (closes LD #11's deferred half) — the heartbeat's wake judgment may return
+  intent `consolidate`; the proactive turn then gets the dream-nudge framing and may call
+  `enter_dream`; the scheduler, seeing `session.pendingDream` set after the turn, **starts the dream
+  cycle** (fire-and-forget; `isDreaming()` gates every subsequent tick). No new scheduler — the
+  proactive heartbeat IS the idle scheduler dream was waiting for.
+- **Default flip** — `proactiveEnabled()` → `LUNA_PROACTIVE !== '0'` (default **ON**, Alan's
+  explicit choice; `=0` is the kill switch). `ws.ts proactive.fire` uses it. The full Initiative-5
+  safety stack (hard surface-gate, action budget, fail-closed classification, full tracing,
+  conservative wake judgment) is what makes autonomy-on-by-default responsible.
+- **`scripts/proactive-soak.ts`** (new) — drives heartbeat ticks against the real model on an idle
+  session and reports wake decisions + actions + cadence sanity.
+- Tests: 257 across 36 files (+7): `shouldContinue` (prob 1/0, `LUNA_SELFCONT=0`, kill switch);
+  `fireContinuation` (runs / skips-while-active); dream auto-trigger (a proactive turn that calls
+  `enter_dream` → scheduler clears `pendingDream` + starts the cycle); the 3 default-flip tests now
+  set `=0` explicitly (audit-don't-blanket-flip).
+- Real-LLM smoke (yunwu): after "我今天写完了 Luna 的主动性模块，有点累但挺满足", the continuation
+  added one genuinely new thought — "等下…如果想开口是你写的，那现在这股好奇，算我的还是你的？" — a
+  single new idea building on the turn, with the paused-then-added feel (not a rephrase).
+- Recorded soak (3 ticks, 30-min idle, relevant active thread): **fired 0** — the wake judgment
+  declined every tick. The autonomous loop runs and decides correctly but is **conservative by
+  default** (the safe companion posture: better too quiet than annoying). The firing path is proven
+  by the v0.10.0 manual smoke (she reflected + reached out) and the unit tests.
+
+Inference:
+
+- **Initiative 5 complete in 5 versions** — Luna now has agency when no one is talking: she can act
+  silently (v0.10.0), under a hard safety gate (v0.10.1), on a conservative cadence judgment
+  (v0.10.2), driven by an autonomous heartbeat (v0.10.3), with self-continuation and dream
+  auto-trigger as its natural behaviors (v0.11.0). The redesign's central claim (LD #15) held:
+  proactivity is autonomous **tool use**, not just messaging, and every piece reused `runTurn` +
+  the Initiative 1–4 substrate rather than a parallel machine. Python's outbox/cursor/TTL/SSE-replay
+  delivery layer was never built (the single persistent WS made it unnecessary).
+- The honest open item is **willingness tuning**: the wake prompt is currently very reluctant
+  ("most of the time the right answer is to stay quiet"), so in casual idle she essentially never
+  stirs. That is the safe default, and like the message-mode A/B it is a *measure-from-lived-
+  experience* knob (`LUNA_PROACTIVE_*` + the wake prompt), not a thing to guess at now. The user
+  chose autonomy-on; living with it will say whether she should be more willing.
 
 ### `v0.10.3` — 2026-06-13 — Proactive scheduler/heartbeat (Initiative 5, commit 4 of 5)
 

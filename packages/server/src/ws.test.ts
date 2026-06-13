@@ -229,8 +229,8 @@ describe('proactive.fire (WS gating)', () => {
     delete Bun.env['LUNA_PROACTIVE'];
   });
 
-  test('LUNA_PROACTIVE unset → proactive_disabled (kill switch)', async () => {
-    delete Bun.env['LUNA_PROACTIVE'];
+  test('LUNA_PROACTIVE=0 → proactive_disabled (kill switch)', async () => {
+    Bun.env['LUNA_PROACTIVE'] = '0'; // default is ON since v0.11.0
     setRuntime({ provider: new MockProvider([]), registry: messageRegistry });
     const event = JSON.parse(await roundTrip(JSON.stringify({ type: 'proactive.fire' })));
     expect(event.type).toBe('error');

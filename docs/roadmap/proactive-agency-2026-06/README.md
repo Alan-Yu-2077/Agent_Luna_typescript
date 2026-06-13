@@ -1,8 +1,11 @@
 # Initiative 5 — Proactive Agency (v0.10.0 – v0.11.0)
 
-> **Status: ⏳ PLANNED (authored 2026-06-13).** Priority: next after Initiative 4 (shipped
-> v0.9.0). Version range **v0.10.0 → v0.11.0** (5 versions). Master:
-> [`../README.md`](../README.md).
+> **Status: ✅ SHIPPED 2026-06-13 (all 5 versions).** Version range **v0.10.0 → v0.11.0**. Master:
+> [`../README.md`](../README.md). As-shipped notes are folded into LD #15 in
+> [`../../REWRITE_CONTEXT.md`](../../REWRITE_CONTEXT.md) and the per-version records in
+> [`../../history/DEVELOPMENT.md`](../../history/DEVELOPMENT.md). One scope divergence: scheduled
+> wakeups were not needed — self-continuation became a `setTimeout` micro-wake and dream
+> auto-trigger a `consolidate`-intent turn calling `enter_dream`, so the idle heartbeat sufficed.
 
 ## The idea
 

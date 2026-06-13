@@ -40,8 +40,8 @@ describe('shouldConsiderWake (prefilter)', () => {
     delete Bun.env['LUNA_PROACTIVE_QUIET_HOURS'];
   });
 
-  test('disabled when LUNA_PROACTIVE != 1', () => {
-    delete Bun.env['LUNA_PROACTIVE'];
+  test('disabled when LUNA_PROACTIVE=0 (kill switch; default ON since v0.11.0)', () => {
+    Bun.env['LUNA_PROACTIVE'] = '0';
     expect(shouldConsiderWake(base, ctx()).reason).toBe('disabled');
   });
   test('quiet hours short-circuit', () => {
