@@ -17,7 +17,7 @@ import { loadPersona } from '../persona/loader';
 import { renderHumanityBlock } from '../persona/humanity';
 import { renderL1Contract } from '../persona/l1Contract';
 import { WAKE_SCENE_BLOCK } from '../persona/scene';
-import { runDefectionAudit } from './integrity/defectionAudit';
+import { detectDefection, runDefectionAudit } from './integrity/defectionAudit';
 
 export const MAX_TOOL_ITERATIONS = 8;
 
@@ -32,6 +32,22 @@ const MESSAGE_MODE_DIRECTIVE =
 const SILENT_TURN_DIRECTIVE =
   '(Stage direction: you ended your turn without speaking. Respond now by calling the message ' +
   'tool — calling it is the act of speaking. Do not write top-level text.)';
+
+// Action-integrity corrective directives (v0.8.2). User-role stage directions
+// (never system — Python's v0.27.1 hoisting lesson). The intent one offers a
+// DOUBLE exit because intent detection is a fuzzy heuristic: a false positive
+// costs one gentle re-prompt, never a wrong block.
+const PROMISE_BROKEN_DIRECTIVE =
+  '(Stage direction: you marked a message is_final:false — meaning more is coming — then ' +
+  'stopped. Continue now: either call a tool, or finish what you were saying and mark the last ' +
+  'message is_final:true.)';
+
+// Both exits append COHERENTLY to the already-delivered bubble (messages are
+// streamed before finalize runs — a retry cannot retract, only continue).
+const INTENT_NO_ACT_DIRECTIVE =
+  '(Stage direction: you said you would look something up or act, but have not done it. If you ' +
+  'can, follow through now by calling the tool — calling it is the act. If you genuinely cannot, ' +
+  'add a brief honest note that you cannot — do not leave the promise dangling.)';
 
 const EMBODIMENT_BLOCK =
   'Runtime embodiment: right now the user reaches you through a plain text chat page — no ' +
@@ -96,8 +112,15 @@ export type TurnState = {
   // every validly-named tool dispatched this turn (incl. 'message') — for the
   // intent-without-act audit ("promised to act but no non-message tool fired")
   toolNamesThisTurn: string[];
-  // empty-reply guard fired already (bounds the corrective retry to one)
-  silentRetried: boolean;
+  // which corrective retries have fired this turn — each reason corrects at
+  // most once, so the guard can never loop (generalizes the v0.6.2 one-retry
+  // bound). 'empty' = no message; 'promise' = broken is_final:false; 'intent'
+  // = promised-but-no-tool.
+  correctionUsed: Set<'empty' | 'promise' | 'intent'>;
+  // messageTexts length at the last intent/promise correction — the guard
+  // judges only bubbles delivered SINCE then, so a corrected promise isn't
+  // re-flagged from the already-shown bubble.
+  correctionWatermark: number;
 };
 
 export function toolsToAnthropicFormat(registry: ToolRegistry): Anthropic.Tool[] {
@@ -304,24 +327,62 @@ const graph: Graph<TurnState, TurnNode> = {
 
   async finalize(s) {
     if (isMessageMode(s.registry)) {
-      // Empty-reply guard (Python v0.47.12 lesson): a message-mode turn must
-      // speak. One corrective retry as a USER-role stage direction (never
-      // system — Python's v0.27.1 hoisting lesson), bounded by silentRetried.
-      if (s.messageTexts.length === 0 && s.finishReason === 'end_turn' && !s.silentRetried) {
-        s.silentRetried = true;
-        s.session.history.push({
-          role: 'user',
-          content: [{ type: 'text', text: SILENT_TURN_DIRECTIVE }],
-        });
+      // Empty-reply guard (Python v0.47.12 lesson, always on in message mode):
+      // a message-mode turn must speak. One corrective USER-role stage
+      // direction (never system — v0.27.1 hoisting lesson), bounded by the
+      // 'empty' reason in correctionUsed.
+      if (
+        s.messageTexts.length === 0 &&
+        s.finishReason === 'end_turn' &&
+        !s.correctionUsed.has('empty')
+      ) {
+        s.correctionUsed.add('empty');
+        pushDirective(s, SILENT_TURN_DIRECTIVE);
         return 'build_request';
       }
+
+      // Action-integrity guards (v0.8.2, gated): she DID speak and ended
+      // cleanly, but the message broke a promise. detectDefection is reused
+      // verbatim from the audit; thinking_intent is audit-only and never
+      // drives a retry here (summarized thinking is low-confidence).
+      if (
+        Bun.env['LUNA_INTEGRITY_GUARD'] === '1' &&
+        s.messageTexts.length > 0 &&
+        s.finishReason === 'end_turn'
+      ) {
+        // Judge only bubbles delivered since the last correction (is_final is
+        // always the current last message, so it is not sliced).
+        const d = detectDefection({
+          messageTexts: s.messageTexts.slice(s.correctionWatermark),
+          lastIsFinal: s.lastMessageIsFinal,
+          thinking: s.thinking,
+          calledToolNames: s.toolNamesThisTurn,
+          finishReason: s.finishReason,
+        });
+        if (d.defected && d.kind !== 'thinking_intent') {
+          const reason = d.kind === 'is_final_promise' ? 'promise' : 'intent';
+          if (!s.correctionUsed.has(reason)) {
+            s.correctionUsed.add(reason);
+            s.correctionWatermark = s.messageTexts.length;
+            emitGuardDecision(s, 'corrected', d.kind, d.matched);
+            pushDirective(
+              s,
+              d.kind === 'is_final_promise' ? PROMISE_BROKEN_DIRECTIVE : INTENT_NO_ACT_DIRECTIVE,
+            );
+            return 'build_request';
+          }
+          // already corrected this reason once → degrade, don't loop
+          emitGuardDecision(s, 'degraded', d.kind, d.matched);
+        }
+      }
+
       // The turn's text is what was actually delivered through the message
       // tool (one line per bubble). Stray top-level text stays in history and
-      // traces — the observable leak signal for the A/B — but never becomes
-      // the reply unless the degraded fallback below fires.
+      // traces — the observable leak signal — but never becomes the reply
+      // unless the degraded fallback below fires.
       if (s.messageTexts.length > 0) {
         s.text = s.messageTexts.join('\n');
-      } else if (s.silentRetried && traceEnabled()) {
+      } else if (s.correctionUsed.has('empty') && traceEnabled()) {
         // double-silent: degraded fallback — leaked top-level text (possibly
         // empty) becomes the reply, and the failure is countable in traces
         trace({
@@ -347,6 +408,31 @@ const graph: Graph<TurnState, TurnNode> = {
     return 'end';
   },
 };
+
+function pushDirective(s: TurnState, text: string): void {
+  s.session.history.push({ role: 'user', content: [{ type: 'text', text }] });
+}
+
+function emitGuardDecision(
+  s: TurnState,
+  decision: 'corrected' | 'degraded',
+  kind: string,
+  matched: string,
+): void {
+  if (!traceEnabled()) return;
+  trace({
+    schema_v: 1,
+    kind: 'decision',
+    trace_id: s.turnId,
+    turn_id: s.turnId,
+    session_id: s.session.id,
+    t_ms: Date.now(),
+    surface: 'integrity_guard',
+    decision,
+    reason: matched,
+    evidence: { kind, matched },
+  });
+}
 
 export type RunTurnOptions = {
   session: Session;
@@ -396,7 +482,8 @@ export async function runTurn(opts: RunTurnOptions): Promise<TurnState> {
     messageTexts: [],
     lastMessageIsFinal: null,
     toolNamesThisTurn: [],
-    silentRetried: false,
+    correctionUsed: new Set(),
+    correctionWatermark: 0,
   };
 
   const onTransition: TransitionHook<TurnState, TurnNode> = (from, to, s) => {

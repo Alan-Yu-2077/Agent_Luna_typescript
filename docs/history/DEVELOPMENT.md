@@ -1,6 +1,6 @@
 # Agent_Luna (TypeScript) — Development History
 
-Last updated: 2026-06-13 (Asia/Shanghai) — v0.8.1 (L1 thinking contract)
+Last updated: 2026-06-13 (Asia/Shanghai) — v0.8.2 (action-integrity guards)
 
 ## Scope
 
@@ -50,7 +50,8 @@ during the rewrite. Its version log is unrelated to this one — `v0.1` here is 
 | `v0.6.2` | 2026-06-13 | Streaming message text (`input_json_delta` → `tool.progress`) + empty-reply guard | `dad7636` |
 | `v0.7.0` | 2026-06-13 | Message-tool default flip after recorded A/B; Initiative 3 complete | `de41694` |
 | `v0.8.0` | 2026-06-13 | Decision trace events + zero-LLM defection audit + replay tree | `76c8dfe` |
-| `v0.8.1` | 2026-06-13 | L1 thinking contract — commitment-to-act + proportionality + no-leak | `working tree` |
+| `v0.8.1` | 2026-06-13 | L1 thinking contract — commitment-to-act + proportionality + no-leak | `1d0da3d` |
+| `v0.8.2` | 2026-06-13 | Action-integrity guards — `is_final` promise + intent-without-act corrective retries | `working tree` |
 
 ## Detailed records
 
@@ -106,6 +107,66 @@ Inference:
   `defineTool`, the dispatcher, and provider logic stay in `packages/server`. Frontend
   (`packages/web`) will consume the same protocol package in Initiative 6, getting
   contract drift as a type error rather than a runtime mismatch.
+
+### `v0.8.2` — 2026-06-13 — Action-integrity guards (Initiative 4, commit 3 of 5)
+
+Status:
+
+- working tree (commit hash recorded post-commit)
+
+Fact:
+
+- **Generalized the v0.6.2 empty-reply guard** in `runTurn`'s `finalize`
+  ([`runTurn.ts`](../../packages/server/src/turn/runTurn.ts)): the single `silentRetried` boolean
+  becomes `correctionUsed: Set<'empty'|'promise'|'intent'>` — each reason corrects **at most once**,
+  so the guard can never loop (the one-retry bound, generalized). Three corrective reasons:
+  - **empty** (unchanged, always on in message mode): no message delivered → `SILENT_TURN_DIRECTIVE`.
+  - **promise** (new, structural, zero false positives): last delivered message had `is_final:false`
+    yet the turn ended cleanly → `PROMISE_BROKEN_DIRECTIVE` ("you said more was coming, then
+    stopped — continue or mark is_final:true").
+  - **intent** (new, heuristic): a delivered message text promised an act (`detectDefection`'s
+    `message_intent`) and no non-`message` tool fired → `INTENT_NO_ACT_DIRECTIVE`, a **double exit**
+    ("follow through by calling the tool, OR add a brief honest note you can't — don't leave the
+    promise dangling").
+- **thinking_intent never drives a retry** — summarized thinking is low-confidence; it stays an
+  audit-only count (v0.8.0). The guard explicitly skips `d.kind === 'thinking_intent'`.
+- **`detectDefection` reused verbatim** from v0.8.0 — one detection function serves both the
+  off-hot-path audit and the corrective guard.
+- **`correctionWatermark`** (new `TurnState` field): set to `messageTexts.length` on each
+  promise/intent correction; the guard then judges only `messageTexts.slice(watermark)`, so an
+  already-corrected promise isn't re-flagged from the bubble that's already on screen. The
+  `is_final` check still uses the *current* last message (not sliced). This matters because
+  **messages are already streamed when `finalize` runs** — a retry can only append, not retract,
+  so the directives are worded for coherent continuation.
+- All corrective directives are **USER-role** stage directions (Python v0.27.1 hoisting lesson);
+  each correction/degrade emits a `decision` trace (`surface:'integrity_guard'`,
+  `decision:'corrected'|'degraded'`). Gated by `LUNA_INTEGRITY_GUARD` (default off);
+  `.env.example` documents it (and `LUNA_L1_CONTRACT`).
+- Tests: 197 across 29 files (+8): is_final-false→one retry→clean close (4 rounds); persistent
+  is_final-false→corrected-then-degraded, no loop; intent→double-exit retry→acting-on-retry closes
+  with no degrade (watermark working); false-positive safety (promised AND acted → no guard);
+  thinking-only promise → no retry; flag-off → no promise/intent retries (v0.8.1 parity); empty-reply
+  guard still works flag-off (v0.6.2 preserved); **multi-reason bound** — empty→promise both fire
+  once in one turn and it still terminates (the +1 test added after review).
+- Adversarial review of the control-flow diff: **1 confirmed (a PASS verification, no fix needed),
+  32 dismissed** — every blocker-level invariant (loop-bound, watermark, flag-off parity, user-role
+  directives, end_turn gating, audit/guard no-double-count) verified holding. The sole actioned item
+  was a dismissed nit (multi-reason path verified safe but untested) → pinned with the +1 test above.
+- Real-LLM smoke (yunwu, guard+contract+audit on): a clean greeting → no spurious retry, no decision
+  traces; "记一下：我下周一要交报告" → `tools=[remember, message, message, message]` — she said
+  "记下了——下周一，报告" **and actually fired `remember`**. 言行一致 end-to-end; the guard correctly
+  did not interfere (she acted).
+
+Inference:
+
+- This is the enforcement layer the L1 contract (v0.8.1) only asks for: the contract lowers the
+  defection rate, the guard catches what slips through and corrects it in one bounded retry. The
+  `is_final` promise guard is the high-value, zero-false-positive piece — a structurally certain
+  broken promise, mechanically caught.
+- The streaming reality (messages pre-delivered) forced a real design refinement the plan's "double
+  exit" wording didn't fully anticipate: a retry **appends**, so both exits must read as coherent
+  continuations, and the watermark stops the guard from re-judging an already-shown bubble. Both
+  were caught at implementation time and are covered by tests.
 
 ### `v0.8.1` — 2026-06-13 — L1 thinking contract (Initiative 4, commit 2 of 5)
 
