@@ -1,6 +1,6 @@
 # Agent_Luna (TypeScript) — Development History
 
-Last updated: 2026-06-12 (Asia/Shanghai) — v0.5.2 (gateway-safe tool schemas; `remember` fix from first real-usage data)
+Last updated: 2026-06-13 (Asia/Shanghai) — v0.6.0 (persona foundation; Initiative 3 begins)
 
 ## Scope
 
@@ -44,7 +44,8 @@ during the rewrite. Its version log is unrelated to this one — `v0.1` here is 
 | `v0.4.3` | 2026-06-12 | Hybrid recall — sqlite-vec embedding-first + CJK-bigram lexical | `25d2b08` |
 | `v0.5.0` | 2026-06-12 | Dream engine — isolated 6-step consolidation; Initiative 2 complete | `a0df0b5` |
 | `v0.5.1` | 2026-06-12 | Dev chat page `/_chat` — first usable conversation surface | `c4a9d84` |
-| `v0.5.2` | 2026-06-12 | Gateway-safe tool schemas — `remember` flat input + `_noargs` unwrap | `working tree` |
+| `v0.5.2` | 2026-06-12 | Gateway-safe tool schemas — `remember` flat input + `_noargs` unwrap | `a341162` |
+| `v0.6.0` | 2026-06-13 | Persona foundation — mtime-cached loader, humanity splitters, wake scene | `working tree` |
 
 ## Detailed records
 
@@ -100,6 +101,53 @@ Inference:
   `defineTool`, the dispatcher, and provider logic stay in `packages/server`. Frontend
   (`packages/web`) will consume the same protocol package in Initiative 6, getting
   contract drift as a type error rather than a runtime mismatch.
+
+### `v0.6.0` — 2026-06-13 — Persona foundation (Initiative 3, commit 1 of 4)
+
+Status:
+
+- working tree (commit hash recorded post-commit)
+
+Fact:
+
+- **Persona file** ported from Python `persona.runtime.default.md` (105 lines, near-verbatim) to
+  `packages/server/persona/default.md`. One deliberate addition under Hard Runtime Guidance: "Do
+  not claim abilities or perceptions you do not actually have right now" — codifies the real-usage
+  key_moment where Luna performed capabilities she lacked and was called out.
+- **`src/persona/loader.ts`**: mtime-gated hot reload (amendment A5) — `statSync` per call,
+  re-read only on change; same-object identity when unchanged (prompt-cache friendly); missing
+  file → fallback one-liner + single warning, never a crash. `LUNA_PERSONA_PATH` overrides the
+  repo default.
+- **`src/persona/humanity.ts`**: caps as TS constants (140/4/55, no JSON config); ported CJK
+  splitters — `splitSentences` (`[。！？!?]+|\n+`), `splitClauses` (also breaks on sentence marks,
+  a strictly-more-correct divergence from Python's clause-punct-only split); `renderHumanityBlock`
+  prose for the system core (guidance tier; Zod enforcement arrives v0.6.1).
+- **`src/persona/scene.ts`**: wake scene block (Python turn-0 branch). Injected at MESSAGE level
+  into the first user turn after process boot via `Session.wakePending` (in-memory, deliberately
+  unpersisted — a restart is a fresh wake). Python's "continuing" turn-1+ framing not ported:
+  redundant with the persona file's Memory Condition/Growth sections, and it would have made a
+  permanently turn-varying block. System core stays byte-stable across the boot transition.
+- **`buildSystemPrompt` assembly order** (one cached block): base directives → persona reference
+  (framing line + file text) → embodiment → humanity rules → core memory. **Embodiment rewritten
+  truthful**: Python claimed a visible Live2D body; ours states plainly "text chat page, no body,
+  no voice yet — planned later; do not claim to be visible or audible" (updates at Initiative 6).
+  `LUNA_PERSONA=0` drops persona/embodiment/humanity/scene (memory blocks unaffected).
+- Tests: 133 across 22 files (+13): loader identity/reload/fallback; splitter CJK/ASCII/mixed
+  cases; runTurn integration — scene block only in first user turn and never in system; persona
+  file edit changes system prompt exactly once then stable (byte-compare via MockProvider).
+- Real-LLM smoke (yunwu, boot → "你是谁？"): "我是Luna。刚醒过来，脑子里还很空，名字倒是清楚。
+  你呢，你是我睁眼看到的第一个人。" — 42 chars, 3 sentences, wake framing + persona voice + cap
+  compliance in one reply, zero assistant politeness.
+
+Inference:
+
+- Layer 2 of the three persona layers was already live (core-memory prose from v0.4.2, updated by
+  `remember(update_self)` and dream `persona_update`) — this version makes the layering explicit
+  and gives it the static substrate (layer 1) and the wake moment (layer 3 → message level).
+- The honest-embodiment divergence and the no-capability-claims line are both direct products of
+  the 2026-06-12 real-usage session — the memory substrate observing Luna's own failure modes is
+  now feeding persona design. That loop (live usage → L3 key_moments → next version's guardrails)
+  is exactly what the rewrite was structured to enable.
 
 ### `v0.5.2` — 2026-06-12 — Gateway-safe tool schemas (`remember` bug from first real usage)
 

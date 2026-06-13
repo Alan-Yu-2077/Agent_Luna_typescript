@@ -12,22 +12,41 @@ import { buildActiveContext, maybeFold } from '../memory/l1Window';
 import { renderCoreBlock } from '../memory/renderCoreBlock';
 import { renderRecallBlock, retrieve } from '../memory/recall/recall';
 import { getMemoryDb } from '../memory/sessionStore';
+import { loadPersona } from '../persona/loader';
+import { renderHumanityBlock } from '../persona/humanity';
+import { WAKE_SCENE_BLOCK } from '../persona/scene';
 
 export const MAX_TOOL_ITERATIONS = 8;
 
-const SYSTEM_PROMPT_PLACEHOLDER =
-  'You are Luna, a helpful assistant. Use the available tools when they help you answer. Reply concisely.';
+const BASE_DIRECTIVES = 'You are Luna. Use the available tools when they help you answer.';
 
-// The stable system prefix: placeholder persona + core memory block, marked with a
-// cache_control breakpoint. Byte-identical across turns unless memory actually
+const EMBODIMENT_BLOCK =
+  'Runtime embodiment: right now the user reaches you through a plain text chat page — no ' +
+  'visible body, no voice yet. A Live2D on-screen form and voiced speech are planned for you ' +
+  'later, but they are not active today. Do not claim to be visible, audible, or able to ' +
+  'gesture; what you actually have is text, your tools, and your memory.';
+
+// The stable system prefix: base directives + persona reference + embodiment +
+// humanity rules + core memory block, marked with a cache_control breakpoint.
+// Byte-identical across turns unless the persona file or memory actually
 // changed — the prompt-cache invariant. Per-query content never goes here.
 export function buildSystemPrompt(_session: Session): Anthropic.TextBlockParam[] {
-  let text = SYSTEM_PROMPT_PLACEHOLDER;
+  const parts: string[] = [BASE_DIRECTIVES];
+  if (Bun.env['LUNA_PERSONA'] !== '0') {
+    const persona = loadPersona();
+    parts.push(
+      'The following is the active runtime persona reference for Luna. Follow it consistently, ' +
+        'but keep the reply natural and alive instead of sounding scripted or theatrical.\n\n' +
+        persona.text,
+    );
+    parts.push(EMBODIMENT_BLOCK);
+    parts.push(renderHumanityBlock());
+  }
   if (Bun.env['LUNA_MEMORY_INJECT'] !== '0') {
     const core = renderCoreBlock();
-    if (core.length > 0) text = `${text}\n\n${core}`;
+    if (core.length > 0) parts.push(core);
   }
-  return [{ type: 'text', text, cache_control: { type: 'ephemeral' } }];
+  return [{ type: 'text', text: parts.join('\n\n'), cache_control: { type: 'ephemeral' } }];
 }
 
 export type TurnState = {
@@ -66,6 +85,13 @@ export function toolsToAnthropicFormat(registry: ToolRegistry): Anthropic.Tool[]
 const graph: Graph<TurnState, TurnNode> = {
   async parse_input(s) {
     const blocks: Anthropic.TextBlockParam[] = [];
+    // Wake scene rides the first user turn after boot — message level, never
+    // system, so the cached system core stays byte-stable across the boot
+    // transition. Persisted as-sent into history like every other block.
+    if (Bun.env['LUNA_PERSONA'] !== '0' && s.session.wakePending) {
+      blocks.push({ type: 'text', text: WAKE_SCENE_BLOCK });
+      s.session.wakePending = false;
+    }
     if (Bun.env['LUNA_MEMORY_INJECT'] !== '0' && getMemoryDb()) {
       const hits = await retrieve(s.session.id, s.userText);
       const recall = renderRecallBlock(hits);

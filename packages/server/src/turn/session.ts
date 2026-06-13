@@ -10,6 +10,9 @@ export type Session = {
   pendingDream: string | null;
   rollingSummary: string;
   windowLowWater: number;
+  // True until the first turn after process boot — drives the wake scene
+  // block. Deliberately NOT persisted: a restart genuinely is a fresh wake.
+  wakePending: boolean;
   mutex: Mutex;
 };
 
@@ -27,6 +30,7 @@ export function getSession(id: string): Session {
       pendingDream: null,
       rollingSummary: persisted?.rollingSummary ?? '',
       windowLowWater: persisted?.windowLowWater ?? 0,
+      wakePending: true,
       mutex: new Mutex(),
     };
     sessions.set(id, s);
