@@ -1,6 +1,7 @@
 # Initiative 3 — Persona + Humanity Guardrails + `message` Tool (v0.6.0 – v0.7.0)
 
-> **Status: ⏳ planned (authored 2026-06-12).** Version range **v0.6.0 → v0.7.0** (4 versions).
+> **Status: ✅ SHIPPED 2026-06-13 (all 4 versions, authored 2026-06-12).** Version range
+> **v0.6.0 → v0.7.0**.
 > This is where **LD #9 (everything-as-tool) lands**: all user-facing output moves into a typed
 > `message` tool envelope, humanity hard caps become Zod schema instead of prompt hopes, and
 > Luna gets her actual persona. Master: [`../README.md`](../README.md).

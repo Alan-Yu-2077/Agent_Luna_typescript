@@ -44,7 +44,8 @@ if (Bun.env['ANTHROPIC_API_KEY']) {
     : { primary: provider, fallback: null };
   // LD #9 mode switch, read once at boot: registry content IS the mode —
   // everything downstream derives it from the registry, never from env.
-  const messageMode = Bun.env['LUNA_MESSAGE_TOOL'] === '1';
+  // Default ON since v0.7.0; LUNA_MESSAGE_TOOL=0 is the text-path escape hatch.
+  const messageMode = Bun.env['LUNA_MESSAGE_TOOL'] !== '0';
   setRuntime({ provider, registry: messageMode ? messageRegistry : builtinRegistry, dreamLlm });
   console.log(
     `[luna-server] provider: ${Bun.env['LUNA_MODEL'] ?? 'claude-opus-4-8'} via ${Bun.env['ANTHROPIC_BASE_URL'] ?? 'https://api.anthropic.com'}${summarizerKey ? ' (+summarizer key)' : ''}${messageMode ? ' [message-tool mode]' : ''}`,

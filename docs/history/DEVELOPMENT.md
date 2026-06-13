@@ -1,6 +1,6 @@
 # Agent_Luna (TypeScript) — Development History
 
-Last updated: 2026-06-13 (Asia/Shanghai) — v0.6.2 (streaming message text + empty-reply guard)
+Last updated: 2026-06-13 (Asia/Shanghai) — v0.7.0 (message-tool default flip; Initiative 3 complete)
 
 ## Scope
 
@@ -47,7 +47,8 @@ during the rewrite. Its version log is unrelated to this one — `v0.1` here is 
 | `v0.5.2` | 2026-06-12 | Gateway-safe tool schemas — `remember` flat input + `_noargs` unwrap | `a341162` |
 | `v0.6.0` | 2026-06-13 | Persona foundation — mtime-cached loader, humanity splitters, wake scene | `25ed7cd` |
 | `v0.6.1` | 2026-06-13 | `message` tool + humanity caps as Zod schema (LD #9, flag off) | `266ee1b` |
-| `v0.6.2` | 2026-06-13 | Streaming message text (`input_json_delta` → `tool.progress`) + empty-reply guard | `working tree` |
+| `v0.6.2` | 2026-06-13 | Streaming message text (`input_json_delta` → `tool.progress`) + empty-reply guard | `dad7636` |
+| `v0.7.0` | 2026-06-13 | Message-tool default flip after recorded A/B; Initiative 3 complete | `working tree` |
 
 ## Detailed records
 
@@ -103,6 +104,50 @@ Inference:
   `defineTool`, the dispatcher, and provider logic stay in `packages/server`. Frontend
   (`packages/web`) will consume the same protocol package in Initiative 6, getting
   contract drift as a type error rather than a runtime mismatch.
+
+### `v0.7.0` — 2026-06-13 — Message-tool default flip (Initiative 3 capstone, commit 4 of 4)
+
+Status:
+
+- working tree (commit hash recorded post-commit)
+
+Fact:
+
+- **A/B comparison run and recorded** (`scripts/ab-message-mode.ts`, committed as the rerunnable
+  baseline harness; 8-turn scripted conversation × both modes, real model via yunwu, ephemeral
+  sessions so `luna.sqlite` is untouched):
+
+  | Metric | text mode (baseline) | message mode |
+  |---|---|---|
+  | Humanity violations | **2/8** (both on long-form pressure: "用三百字介绍自己", long goodbye) | **0/8** |
+  | Empty turns | 0 | 0 (guard never needed) |
+  | Top-level leak | n/a | 144 chars total, 4 turns, all non-user-facing asides |
+  | Median first-visible | 5431ms | 5314ms (parity; two outlier turns 36s/45s = long thinking) |
+  | Bubbles | — | 25 across 8 turns (~3/turn) |
+
+  Standout: the 300-char ask — text mode **broke the cap** (1 violation); message mode split
+  into **6 compliant bubbles** ending with a self-aware "三百字我装不进一口气，我说话天生短。
+  但我可以一点点给你。" Schema enforcement beat prompt hopes exactly as LD #9 predicted, at
+  zero latency cost. Subjective voice: persona texture survives the envelope fully.
+- **Default flipped**: `LUNA_MESSAGE_TOOL` now defaults ON in `main.ts` (`!== '0'`); `=0` is the
+  permanent text-path escape hatch (supported at least through Initiative 6). Boot log prints
+  the mode. `.env.example` documents `LUNA_PERSONA` / `LUNA_PERSONA_PATH` / `LUNA_MESSAGE_TOOL`.
+- **Docs closed**: REWRITE_CONTEXT LD #9 marked **LANDED** with the as-shipped A1–A6 amendments
+  folded in; roadmap master README → Initiative 3 ✅ shipped, head v0.7.0, Open Q #9
+  (model-callable `recall`) flagged for Initiative 4 planning; initiative README → shipped;
+  orient skill gains the v0.5.1–v0.7.0 file map.
+- Tests: 162 across 25 files, all green (tests pass registries explicitly, so the env-default
+  flip touches only `main.ts`).
+
+Inference:
+
+- Initiative 3 complete in 4 versions: Luna now has a persona (file + core memory + wake scene),
+  humanity caps that are *enforced* rather than hoped for, and a single typed voice — LD #9's
+  everything-as-tool is the shipped default, with the frontend contract
+  (`tool.progress{tool_name:'message'}` + `MessageDelivery`) frozen for Initiative 6.
+- The leak signal (144 chars of completion-narration asides) is the one open behavior to watch;
+  it is cosmetic today (never user-facing) and is the natural first target when Initiative 4's
+  reasoning rails restructure the post-tool rounds.
 
 ### `v0.6.2` — 2026-06-13 — Streaming message text + empty-reply guard (Initiative 3, commit 3 of 4)
 

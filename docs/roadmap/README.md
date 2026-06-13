@@ -4,10 +4,11 @@ Forward development plan for the TypeScript rewrite. Each initiative is a folder
 self-contained version plans, executed one at a time. Version numbers reserve across initiatives so
 they never overlap.
 
-> **Current shipped head: v0.5.0** (2026-06-12, dream engine). Initiatives 1, 1.5, and 2
-> ✅ complete — Luna remembers, recalls by meaning, survives restarts, and consolidates in
-> dreams. **Next up: Initiative 3 — persona + humanity guardrails (v0.6.0–v0.7.0,
-> introduces `message_tool` per LD #9).** See
+> **Current shipped head: v0.7.0** (2026-06-13, message-tool default flip). Initiatives 1,
+> 1.5, 2, and 3 ✅ complete — Luna remembers, recalls by meaning, dreams, has her persona, and
+> speaks exclusively through the typed `message` tool (LD #9 landed). **Next up: Initiative 4 —
+> reasoning rails (v0.8.0–v0.9.0); its planning should also revisit Open Q #9 (model-callable
+> `recall` tool), unblocked now that the tool-surface patterns are settled.** See
 > [`../history/DEVELOPMENT.md`](../history/DEVELOPMENT.md).
 
 ## Planned initiatives (execution order)
@@ -17,7 +18,7 @@ they never overlap.
 | 1 | v0.1.0 – v0.3.0 | **Tool spec foundation** — Bun skeleton + WS server + typed tool registry + `Result<T>` + 3 representative tools + first end-to-end LLM round trip with Anthropic interleaved tool-use | [`tool-spec-foundation-2026-06/`](tool-spec-foundation-2026-06/) | ✅ shipped 2026-06-11 |
 | 1.5 | v0.3.5 – v0.3.6 | **Observability foundation** — `trace_id` propagation through the v0.3 StateGraph; SQLite trace table (one row per node transition + per tool call); minimal local viewer. Mastra Telemetry / LangSmith parity, table-stakes for every later initiative | [`observability-foundation-2026-06/`](observability-foundation-2026-06/) | ✅ shipped 2026-06-11 |
 | 2 | v0.4.0 – v0.5.0 | **Memory + dream substrate** — SQLite three-layer memory (L1 window / L2 full-text archive / L3 semantic) + prose core memory + hybrid `sqlite-vec`/CJK recall + the **dream** consolidation engine (manual + `enter_dream` tool; reconciliation, diaries, persona update). Merges the old "memory" + "dream" initiatives — dream is the engine memory needs. Port of Python v0.52–v0.57 | [`memory-dream-substrate-2026-06/`](memory-dream-substrate-2026-06/) | ✅ shipped 2026-06-12 (5 versions) |
-| 3 | v0.6.0 – v0.7.0 | **Persona + humanity guardrails + `message` tool** — three-layer persona resolution with mtime-cached hot-reload; humanity hard caps as Zod schema on `message` input (not prompt-only, not truncation). **Introduces `message` tool** per LD #9 (everything-as-tool) behind `LUNA_MESSAGE_TOOL`, default-flipped at v0.7.0; frontend wire-event shape (`tool.progress{tool_name:'message'}`) is fixed here for Initiative 6 to consume | [`persona-message-tool-2026-06/`](persona-message-tool-2026-06/) | ⏳ planned (4 versions authored 2026-06-12) |
+| 3 | v0.6.0 – v0.7.0 | **Persona + humanity guardrails + `message` tool** — three-layer persona resolution with mtime-cached hot-reload; humanity hard caps as Zod schema on `message` input (not prompt-only, not truncation). **Introduces `message` tool** per LD #9 (everything-as-tool) behind `LUNA_MESSAGE_TOOL`, default-flipped at v0.7.0; frontend wire-event shape (`tool.progress{tool_name:'message'}`) is fixed here for Initiative 6 to consume | [`persona-message-tool-2026-06/`](persona-message-tool-2026-06/) | ✅ shipped 2026-06-13 (4 versions) |
 | 4 | v0.8.0 – v0.9.0 | **Reasoning rails** — port L1/L2 contracts with Zod-structured-output decisions; full decision replay tree on top of the v0.3.5 trace plumbing | _(folder TBD)_ | ⏳ planned |
 | 5 | v0.10.0 – v0.11.0 | **Proactive engine** — port the state machine (`ENGAGED → IDLE_WATCH → NUDGED → DORMANT → SLEEPING`); cadence persistence; lull anchoring. **Carries the deferred dream auto-trigger** (reuses this engine's idle scheduler) | _(folder TBD)_ | ⏳ planned |
 | 6 | v0.12.0 – v0.13.0 | **Frontend port** — TS port of `agent-app.js` controller (event consumer + bubble state machine + command dispatch); subscribes to `tool.progress{tool_name:'message'}` per LD #9; Live2D + audio pipeline unchanged; dream overlay / 🌙 button | _(folder TBD)_ | ⏳ planned |

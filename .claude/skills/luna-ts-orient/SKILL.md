@@ -28,18 +28,43 @@ every decision here.
 
 ## Current state (read this first)
 
-> **Shipped head: v0.5.0** (2026-06-12). Initiatives 1 (tool spec), 1.5 (observability), and
-> 2 (memory + dream) are complete. Next up: Initiative 3 — persona + humanity (v0.6, introduces
-> `message_tool` per LD #9). The agent core works end-to-end: WS `chat.send` → real LLM turn
-> through a generic StateGraph with interleaved tools → persisted to SQLite (L1 session + L2
-> full-text + L3 facts + prose core memory) → hybrid recall (sqlite-vec + CJK lexical) injected
-> cache-aware → manual/tool-triggered **dream** consolidates offline (reconcile, diaries,
-> persona) — all traced and browsable at `/_trace`.
+> **Shipped head: v0.7.0** (2026-06-13). Initiatives 1 (tool spec), 1.5 (observability),
+> 2 (memory + dream), and 3 (persona + humanity + `message` tool, **LD #9 landed**) are
+> complete. Next up: Initiative 4 — reasoning rails (v0.8); revisit Open Q #9 (model-callable
+> `recall`) in its planning. The agent core works end-to-end: WS `chat.send` → real LLM turn
+> through a generic StateGraph with interleaved tools → **speech via the `message` tool only**
+> (default on; `LUNA_MESSAGE_TOOL=0` = text escape hatch), streamed as
+> `tool.progress{tool_name:'message', payload:{text_delta}}` → persisted to SQLite (L1 + L2 +
+> L3 + prose core memory) → hybrid recall injected cache-aware → manual/tool-triggered
+> **dream** consolidates offline — all traced and browsable at `/_trace`; chat at `/_chat`.
 
 Always confirm the head by reading the top of
 [`docs/history/DEVELOPMENT.md`](../../../docs/history/DEVELOPMENT.md) — it is the truth source,
-not this skill. The file map below is current as of v0.5.0; if DEVELOPMENT.md shows a higher
+not this skill. The file map below is current as of v0.7.0; if DEVELOPMENT.md shows a higher
 version, trust the code and update this skill.
+
+### Persona + message-tool additions (v0.5.1–v0.7.0)
+
+```
+packages/protocol/src/
+  message.ts   ExpressionKey (15 affects) · VoiceParams · MessageSegment{delay_ms metadata} · MessageDelivery (tool.finished payload = frontend contract)
+  events.ts    ToolProgressEvent += tool_name (message streaming subscription key)
+  tools.ts     ToolName += message (5 tools)
+packages/server/
+  persona/default.md       Luna's persona file (ported from Python; honest-embodiment + no-capability-claims)
+  src/persona/
+    loader.ts              mtime-gated hot reload (LUNA_PERSONA_PATH override; fallback never crashes)
+    humanity.ts            caps 140/4/55 as constants · CJK splitSentences/splitClauses (schema + prompt share them)
+    scene.ts               WAKE_SCENE_BLOCK — message-level, first turn after boot (Session.wakePending)
+  src/tools/builtin/message.ts   flat root-object input · superRefine humanity caps · segments derived server-side
+  src/tools/registry.ts    ToolRegistry = Partial<Record> · messageRegistry · isMessageMode(registry) = mode truth
+  src/turn/
+    jsonTextStream.ts      incremental "text"-field extractor over input_json_delta chunks (escapes/\uXXXX/nesting)
+    runTurn.ts             buildSystemPrompt(session, messageMode): base→persona→embodiment→humanity→core, one cache block
+                           open_stream: tool_input_delta → tool.progress text_delta · finalize: empty-reply guard (one user-role retry → degraded trace)
+  src/devchat/devchat.html streaming bubbles by call_id · 🎭 expression chips · err → discard preview
+  scripts/ab-message-mode.ts   A/B harness text-mode vs message-mode (v0.7.0 baseline; rerun before Initiative 4 changes)
+```
 
 ### Memory + dream additions (v0.4.0–v0.5.0; base map below is v0.3.6)
 

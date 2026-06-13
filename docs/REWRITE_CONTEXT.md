@@ -121,13 +121,28 @@ humanity guardrails). v0.3 ships `reply.token` text-default to give Initiative 2
 stable baseline; the v0.6 swap is staged behind `LUNA_MESSAGE_TOOL=1` so an A/B comparison
 against the v0.3 baseline is possible.
 
+> **LANDED 2026-06-13 (v0.6.1–v0.7.0).** Default ON since v0.7.0; `LUNA_MESSAGE_TOOL=0` is the
+> permanent text-path escape hatch (supported at least through Initiative 6). As-shipped
+> amendments to the sketch table above (full rationale in
+> `docs/roadmap/persona-message-tool-2026-06/README.md` A1–A6):
+> `sentences` is **server-derived**, never a model field — the model supplies `text` only, the
+> ≤4×≤55 caps run in `superRefine` over CJK splitters, and derived segments ship in the
+> `MessageDelivery` envelope (`tool.finished` payload) with `delay_ms` pacing **metadata** (the
+> server never sleeps). The input schema is a **flat root object** (v0.5.2 gateway rule — never
+> a wire-level discriminated union). Python's separate expression pass is cut: `expression` is a
+> typed optional schema field (15-key enum), `emotion` normalized [0,1]. The humanity auditor is
+> not ported — Zod IS the auditor, and violations are *recoverable errors*, countable in traces.
+> Empty turns get one user-role corrective retry, then a traced degraded fallback.
+
 **Anthropic stream compatibility**: `input_json_delta` carries the `text` field's tokens, so
 the token-stream UX is preserved — the model still streams text, just inside a tool input
-envelope rather than a top-level text block.
+envelope rather than a top-level text block. *(Verified live on yunwu 2026-06-12: incremental
+chunks, streamed preview byte-equal to delivery — `jsonTextStream.ts` does the extraction.)*
 
 **Frontend implication**: Initiative 6 (frontend port, v0.12) consumers subscribe to
-`tool.progress{tool_name:'message'}` instead of `reply.token`. The wire-event shape will be
-specified in Initiative 3 (v0.6) so v0.12 inherits a stable contract.
+`tool.progress{tool_name:'message', payload:{text_delta}}` instead of `reply.token`, and render
+delivery from the `MessageDelivery` envelope on `tool.finished`. Shipped and fixed at v0.6.2;
+the dev chat page is the reference consumer.
 
 ## What we are cutting from Python Luna (减负 list)
 
