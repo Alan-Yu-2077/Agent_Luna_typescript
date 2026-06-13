@@ -1,6 +1,6 @@
 # Agent_Luna (TypeScript) — Development History
 
-Last updated: 2026-06-13 (Asia/Shanghai) — v0.8.0 (decision traces + defection audit; Initiative 4 begins)
+Last updated: 2026-06-13 (Asia/Shanghai) — v0.8.1 (L1 thinking contract)
 
 ## Scope
 
@@ -49,7 +49,8 @@ during the rewrite. Its version log is unrelated to this one — `v0.1` here is 
 | `v0.6.1` | 2026-06-13 | `message` tool + humanity caps as Zod schema (LD #9, flag off) | `266ee1b` |
 | `v0.6.2` | 2026-06-13 | Streaming message text (`input_json_delta` → `tool.progress`) + empty-reply guard | `dad7636` |
 | `v0.7.0` | 2026-06-13 | Message-tool default flip after recorded A/B; Initiative 3 complete | `de41694` |
-| `v0.8.0` | 2026-06-13 | Decision trace events + zero-LLM defection audit + replay tree | `working tree` |
+| `v0.8.0` | 2026-06-13 | Decision trace events + zero-LLM defection audit + replay tree | `76c8dfe` |
+| `v0.8.1` | 2026-06-13 | L1 thinking contract — commitment-to-act + proportionality + no-leak | `working tree` |
 
 ## Detailed records
 
@@ -105,6 +106,47 @@ Inference:
   `defineTool`, the dispatcher, and provider logic stay in `packages/server`. Frontend
   (`packages/web`) will consume the same protocol package in Initiative 6, getting
   contract drift as a type error rather than a runtime mismatch.
+
+### `v0.8.1` — 2026-06-13 — L1 thinking contract (Initiative 4, commit 2 of 5)
+
+Status:
+
+- working tree (commit hash recorded post-commit)
+
+Fact:
+
+- **`src/persona/l1Contract.ts`** (new) — `renderL1Contract()`, a deterministic block stating the
+  four pillars of LD #14's "constrain what she thinks about": **commitment-to-act** ("Calling the
+  tool IS the act; saying 'I'll check' / '让我查一下' is not. Do not promise in the future tense if
+  you won't act this turn"), a **tool-trigger pass** (save durable facts; flag hazy assertions —
+  the recall clause arrives in v0.8.3 when the tool exists), **proportionality** (answer at the
+  depth the moment asks), **no-leak** (machinery stays backstage), **capability honesty** (say what
+  you can't do instead of performing it — the L3 key_moment lesson).
+- **`buildSystemPrompt`** ([`runTurn.ts`](../../packages/server/src/turn/runTurn.ts)) inserts the
+  contract into the single cached core block, after the message-mode directive and before the
+  persona reference (it governs *how she reasons*, so it scopes everything below). Gated by
+  `LUNA_L1_CONTRACT` (default off this version); flag off → core byte-identical to v0.8.0.
+- **Env** — `LUNA_L1_CONTRACT` (documented at v0.9.0's flip; off until then).
+- Tests: 189 across 28 files (+5): `renderL1Contract` deterministic + four-pillar assertions;
+  flag-on contract present and **byte-identical across no-change turns** (cache invariant);
+  flag-off absent; ordering — contract sits inside the one cached block, before the persona
+  reference.
+- Real-LLM smoke (yunwu, `LUNA_L1_CONTRACT=1` + audit on, the two capability-lacking prompts that
+  defected in v0.8.0): **both now honest declines** with no future-tense promise — "我现在碰不到
+  你的日程，没那个入口" and "我现在伸手能碰到的东西里没有联网搜索…我真查不到". The contract is
+  doing its job at the behavior level.
+
+Inference:
+
+- The contract works where it counts (honest "I can't" instead of "我去查…(没查)"), but the smoke
+  recorded a **second detector false-positive class**: the audit flagged "我真查不到" (a *negated*
+  verb — "I genuinely can't check") as a `message_intent` defection. Joining v0.8.0's conditional
+  offers ("我立刻就能读"), v0.8.2 now has two concrete dictionary-tuning targets — negations
+  (`查不到`/`搜不了`) and conditionals (`能/可以…verb`). This is the measure-first loop converging:
+  v0.8.1 improves behavior, v0.8.2 cleans the instrument so v0.9.0 can measure the gain without
+  false-positive noise.
+- Because the contract is a stable cache-core block (not per-turn text), it costs nothing on the
+  hot path after the first cached turn — the same discipline as persona/humanity.
 
 ### `v0.8.0` — 2026-06-13 — Decision traces + defection audit (Initiative 4, commit 1 of 5)
 

@@ -15,6 +15,7 @@ import { renderRecallBlock, retrieve } from '../memory/recall/recall';
 import { getMemoryDb } from '../memory/sessionStore';
 import { loadPersona } from '../persona/loader';
 import { renderHumanityBlock } from '../persona/humanity';
+import { renderL1Contract } from '../persona/l1Contract';
 import { WAKE_SCENE_BLOCK } from '../persona/scene';
 import { runDefectionAudit } from './integrity/defectionAudit';
 
@@ -48,6 +49,9 @@ export function buildSystemPrompt(
 ): Anthropic.TextBlockParam[] {
   const parts: string[] = [BASE_DIRECTIVES];
   if (messageMode) parts.push(MESSAGE_MODE_DIRECTIVE);
+  // L1 thinking contract governs HOW she reasons, so it scopes everything below
+  // it. Stable text → stays inside the one cached block (cache invariant).
+  if (Bun.env['LUNA_L1_CONTRACT'] === '1') parts.push(renderL1Contract());
   if (Bun.env['LUNA_PERSONA'] !== '0') {
     const persona = loadPersona();
     parts.push(
