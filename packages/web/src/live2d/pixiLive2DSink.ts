@@ -128,6 +128,18 @@ export async function createPixiLive2DSink(
   };
   internal.on('beforeModelUpdate', () => faceVm.tick(performance.now()));
 
+  // ?dev: expose the model + faceVm so live params can be measured from the console.
+  if (typeof location !== 'undefined' && location.search.includes('dev')) {
+    (globalThis as unknown as Record<string, unknown>)['__lunaDbg'] = {
+      model,
+      faceVm,
+      param: (id: string) =>
+        (
+          model.internalModel.coreModel as unknown as { getParameterValueById(id: string): number }
+        ).getParameterValueById(id),
+    };
+  }
+
   // WHY as unknown as: app.view is pixi's ICanvas union; we drive it as a DOM canvas.
   const canvas = app.view as unknown as HTMLCanvasElement;
   canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;touch-action:none;cursor:grab;';
@@ -158,24 +170,27 @@ export async function createPixiLive2DSink(
   };
   canvas.addEventListener('pointerup', endDrag);
   canvas.addEventListener('pointercancel', endDrag);
-  // Head-centric gaze: the pointer's offset from the HEAD (top ~16% of the model)
-  // drives FaceVm's eyes + head only. Window-wide so she tracks the cursor across
-  // the page; `gazeOn` truly gates it (off → FaceVm eases back to neutral).
+  // Gaze: drive the model's own focusController via model.focus(). It runs at the
+  // right point in the Cubism pipeline (before physics), so it actually moves the
+  // head + body + eyes. (Writing those angle params from FaceVm at
+  // 'beforeModelUpdate' is too late — physics already consumed them, so they never
+  // deform.) We keep the built-in autoFocus OFF and call focus() ourselves with a
+  // HEAD-centric reference: shift the focus Y so the FACE (~18% down the bbox), not
+  // the body center, maps to "looking straight" — so pointing at her neck reads as
+  // level, not "up". `gazeOn` truly gates it; off eases back to neutral.
+  const focusable = model as unknown as { focus(x: number, y: number, instant?: boolean): void };
   let gazeOn = gazeFollowEnabled();
-  faceVm.setGazeFollow(gazeOn);
-  // The neutral "looking straight" reference sits on the FACE — ~18% down the
-  // bounding box (the top includes hat + ears), NOT the body center. So pointing
-  // at her face/neck means roughly level, not "looking up".
   const HEAD_FRAC = 0.18;
+  const focusNeutral = (instant: boolean): void => {
+    focusable.focus(model.x + model.width / 2, model.y + model.height * 0.5, instant);
+  };
+  if (!gazeOn) focusNeutral(true);
   window.addEventListener('pointermove', (e) => {
     if (!gazeOn || drag) return;
     const rect = canvas.getBoundingClientRect();
-    const headX = rect.left + model.x + model.width / 2;
-    const headY = rect.top + model.y + model.height * HEAD_FRAC;
-    faceVm.setGazeTarget(
-      (e.clientX - headX) / (model.width * 0.6),
-      (headY - e.clientY) / (model.height * 0.45),
-    );
+    const stageX = e.clientX - rect.left;
+    const stageY = e.clientY - rect.top + model.height * (0.5 - HEAD_FRAC);
+    focusable.focus(stageX, stageY);
   });
 
   // Wheel = zoom (persisted multiplier on the fit scale, clamped).
@@ -211,7 +226,7 @@ export async function createPixiLive2DSink(
         /* ignore */
       }
       gazeOn = on;
-      faceVm.setGazeFollow(on);
+      if (!on) focusNeutral(false); // ease back to center when gaze is turned off
     },
     triggerEmotion: (id, intensity) => faceVm.triggerEmotion(id, intensity),
     listEmotions: () => faceVm.listEmotions(),

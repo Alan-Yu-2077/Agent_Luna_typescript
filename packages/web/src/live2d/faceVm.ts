@@ -66,9 +66,6 @@ export class FaceVm {
   private readonly cur: Record<FaceStateKey, number> = { ...FACE_VM_DEFAULT_STATE };
   private state: Live2DState = 'neutral';
   private mouth = 0;
-  private gazeOn = false;
-  private gazeTargetX = 0; // normalized -1..1 (head-centric pointer offset)
-  private gazeTargetY = 0;
   private playback: Playback | null = null;
   private readonly actions = new Map<string, ActionInstance>();
   private pending: { id: EmotionId | null; intensity: number } | undefined;
@@ -80,20 +77,6 @@ export class FaceVm {
   }
   setMouth(value: number): void {
     this.mouth = clamp01(value);
-  }
-  // Head-centric gaze (our own, replacing pixi's body-centered autoFocus). When
-  // on, the pointer offset relative to the HEAD drives eyes + head only (never
-  // body); off resets to neutral so the toggle actually stops following.
-  setGazeFollow(on: boolean): void {
-    this.gazeOn = on;
-    if (!on) {
-      this.gazeTargetX = 0;
-      this.gazeTargetY = 0;
-    }
-  }
-  setGazeTarget(x: number, y: number): void {
-    this.gazeTargetX = Math.max(-1, Math.min(1, x));
-    this.gazeTargetY = Math.max(-1, Math.min(1, y));
   }
   setExpression(key: ExpressionKey, emotion = 0.95): void {
     this.pending = { id: affectToEmotion(key), intensity: clamp01(emotion) };
@@ -121,21 +104,6 @@ export class FaceVm {
     const owned = this.ownedKeys(now);
     applyPose(target, STATE_BIAS[this.state], owned);
     target.mouthOpen = Math.max(target.mouthOpen, this.mouth); // lip-sync drives the mouth whenever audio plays
-    // Gaze base layer: eyes + head only (no body), so an active emotion's owned
-    // head/eye channels still win, and at rest she tracks the pointer head-first.
-    if (this.gazeOn) {
-      const gx = this.gazeTargetX;
-      const gy = this.gazeTargetY;
-      if (!owned.has('gazeX')) target.gazeX = gx * 0.8; // eyes
-      if (!owned.has('gazeY')) target.gazeY = gy * 0.8;
-      if (!owned.has('headYaw')) target.headYaw = gx * 18; // head turn
-      if (!owned.has('headPitch')) target.headPitch = gy * 12;
-      if (!owned.has('headRoll')) target.headRoll = gx * gy * -10; // subtle tilt, like pixi's product term
-      // Body follows the gaze too — restores the ParamBodyAngleX sway the built-in
-      // autoFocus gave (the reference is head-centric; this is just the lean).
-      if (!owned.has('bodyYaw')) target.bodyYaw = gx * 8;
-      if (!owned.has('bodyLift')) target.bodyLift = gy * 3;
-    }
     this.applyEmotion(target, now);
     this.applyActions(target, now);
 
