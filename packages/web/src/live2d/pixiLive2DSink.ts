@@ -170,27 +170,32 @@ export async function createPixiLive2DSink(
   };
   canvas.addEventListener('pointerup', endDrag);
   canvas.addEventListener('pointercancel', endDrag);
-  // Gaze: drive the model's own focusController via model.focus(). It runs at the
-  // right point in the Cubism pipeline (before physics), so it actually moves the
-  // head + body + eyes. (Writing those angle params from FaceVm at
-  // 'beforeModelUpdate' is too late — physics already consumed them, so they never
-  // deform.) We keep the built-in autoFocus OFF and call focus() ourselves with a
-  // HEAD-centric reference: shift the focus Y so the FACE (~18% down the bbox), not
-  // the body center, maps to "looking straight" — so pointing at her neck reads as
-  // level, not "up". `gazeOn` truly gates it; off eases back to neutral.
-  const focusable = model as unknown as { focus(x: number, y: number, instant?: boolean): void };
+  // Gaze: drive the model's focusController DIRECTLY. It runs before physics, so it
+  // actually moves head + body + eyes (writing those angle params from FaceVm at
+  // 'beforeModelUpdate' is too late — physics already consumed them). We do NOT use
+  // model.focus(): it's direction-only (always full deflection, and focusing the
+  // center degenerates to atan2(0,0)=0 → full-right, which is why "turn off" got
+  // stuck looking right). Instead we feed a PROPORTIONAL, head-centric offset: the
+  // pointer's distance from the FACE (~18% down the bbox) maps to focus [-1,1], so
+  // the face/neck reads neutral (not "up"), and turning gaze off eases to (0,0).
+  const focusController = (
+    model.internalModel as unknown as {
+      focusController: { focus(x: number, y: number, instant?: boolean): void };
+    }
+  ).focusController;
   let gazeOn = gazeFollowEnabled();
   const HEAD_FRAC = 0.18;
-  const focusNeutral = (instant: boolean): void => {
-    focusable.focus(model.x + model.width / 2, model.y + model.height * 0.5, instant);
-  };
-  if (!gazeOn) focusNeutral(true);
+  const clamp1 = (v: number): number => Math.max(-1, Math.min(1, v));
+  if (!gazeOn) focusController.focus(0, 0, true);
   window.addEventListener('pointermove', (e) => {
     if (!gazeOn || drag) return;
     const rect = canvas.getBoundingClientRect();
-    const stageX = e.clientX - rect.left;
-    const stageY = e.clientY - rect.top + model.height * (0.5 - HEAD_FRAC);
-    focusable.focus(stageX, stageY);
+    const headX = rect.left + model.x + model.width / 2;
+    const headY = rect.top + model.y + model.height * HEAD_FRAC;
+    focusController.focus(
+      clamp1((e.clientX - headX) / (model.width * 0.7)),
+      clamp1((headY - e.clientY) / (model.height * 0.55)), // up = positive
+    );
   });
 
   // Wheel = zoom (persisted multiplier on the fit scale, clamped).
@@ -226,7 +231,7 @@ export async function createPixiLive2DSink(
         /* ignore */
       }
       gazeOn = on;
-      if (!on) focusNeutral(false); // ease back to center when gaze is turned off
+      if (!on) focusController.focus(0, 0, false); // ease head/body/eyes back to center
     },
     triggerEmotion: (id, intensity) => faceVm.triggerEmotion(id, intensity),
     listEmotions: () => faceVm.listEmotions(),
