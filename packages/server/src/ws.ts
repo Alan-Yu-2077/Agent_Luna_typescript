@@ -6,6 +6,7 @@ import { dispatchToolCalls } from './tools/dispatcher';
 import { builtinRegistry, type ToolRegistry } from './tools/registry';
 import type { Provider } from './provider/types';
 import { getSession, type Session } from './turn/session';
+import { listL2 } from './memory/sessionStore';
 import { runTurn } from './turn/runTurn';
 import { runProactiveTurn } from './proactive/proactiveTurn';
 import { proactiveEnabled } from './proactive/cadence';
@@ -83,7 +84,15 @@ export function broadcast(e: ServerEvent): void {
 
 export function handleOpen(ws: ServerWebSocket<WSData>): void {
   activeSockets.add(ws);
-  console.log(`[ws] open ${ws.remoteAddress} session=${ws.data.sessionId}`);
+  // Replay the persisted conversation so a browser refresh rehydrates the chat
+  // log. The L2 timeline is the clean per-turn user/assistant text with real
+  // turn times; cap the most-recent slice so the frame stays bounded.
+  const turns = listL2(ws.data.sessionId, { limit: 2000 })
+    .map((r) => ({ user_text: r.user_text, assistant_text: r.assistant_text, t_ms: r.t_ms }))
+    .filter((t) => t.user_text !== '' || t.assistant_text !== '')
+    .slice(-300);
+  if (turns.length > 0) outbound(ws, { type: 'history', turns });
+  console.log(`[ws] open ${ws.remoteAddress} session=${ws.data.sessionId} history=${turns.length}`);
 }
 
 export function handleClose(

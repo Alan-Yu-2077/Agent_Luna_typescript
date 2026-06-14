@@ -7,6 +7,7 @@ import { closeDb, migrate, openDb } from './sql';
 import { TraceStore } from './trace/store';
 import { setTraceStore } from './trace/instrument';
 import { traceViewerHandler } from './trace/viewer';
+import { workspaceHandler } from './workspace/workspace';
 import { devChatHandler } from './devchat/devchat';
 import { setMemoryDb } from './memory/sessionStore';
 import { initCustomSqlite } from './memory/recall/vecRuntime';
@@ -18,7 +19,9 @@ const port = Number(process.env['LUNA_PORT'] ?? 8787);
 // extension loading for sqlite-vec on macOS.
 initCustomSqlite();
 
-const db = openDb(Bun.env['LUNA_DB_PATH'] ?? './luna.sqlite');
+// Pin the DB to the repo root regardless of cwd (../../../ from packages/server/src),
+// so launching from a subdirectory can't silently create a second empty luna.sqlite.
+const db = openDb(Bun.env['LUNA_DB_PATH'] ?? join(import.meta.dir, '..', '..', '..', 'luna.sqlite'));
 const version = migrate(db, join(import.meta.dir, 'migrations'));
 const traceStore = new TraceStore(db);
 setTraceStore(traceStore);
@@ -68,10 +71,12 @@ if (Bun.env['ANTHROPIC_API_KEY']) {
 
 const server = Bun.serve<WSData>({
   port,
-  fetch(req, srv) {
+  async fetch(req, srv) {
     if (viewerEnabled) {
       const viewerResponse = traceViewerHandler(req, traceStore);
       if (viewerResponse) return viewerResponse;
+      const workspaceResponse = await workspaceHandler(req);
+      if (workspaceResponse) return workspaceResponse;
       const chatResponse = devChatHandler(req);
       if (chatResponse) return chatResponse;
     }

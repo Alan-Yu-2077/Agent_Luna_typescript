@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Luna · workspace</title>
+    <style>
+      :root {
+        --bg: #1e1e1e;
+        --side: #252526;
+        --bar: #323233;
+        --line: #383838;
+        --fg: #d4d4d4;
+        --dim: #858585;
+        --accent: #569cd6;
+        --accent2: #4ec9b0;
+        --pink: #c586c0;
+        --warn: #f48771;
+        --sel: #094771;
+        --rowsel: #2a2d2e;
+      }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; margin: 0; }
+      body {
+        background: var(--bg);
+        color: var(--fg);
+        font: 12px/1.5 'SF Mono', ui-monospace, Menlo, Consolas, monospace;
+        display: flex;
+        flex-direction: column;
+      }
+      .titlebar {
+        height: 36px;
+        background: var(--bar);
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 0 12px;
+        flex: 0 0 auto;
+      }
+      .titlebar .logo { color: var(--pink); font-weight: 600; }
+      .titlebar .status { color: var(--dim); }
+      .titlebar .spacer { flex: 1; }
+      .btn {
+        background: #0e639c;
+        color: #fff;
+        border: none;
+        border-radius: 3px;
+        padding: 4px 12px;
+        cursor: pointer;
+        font: inherit;
+      }
+      .btn:hover { background: #1177bb; }
+      .btn.ghost { background: transparent; border: 1px solid var(--line); color: var(--fg); }
+      .btn.ghost:hover { border-color: var(--accent); }
+      .btn.danger { background: #6b2020; }
+      .btn.danger:hover { background: #a13030; }
+      .shell { flex: 1; display: flex; min-height: 0; }
+      .sidebar {
+        width: 240px;
+        flex: 0 0 auto;
+        background: var(--side);
+        border-right: 1px solid var(--line);
+        overflow-y: auto;
+      }
+      .sidebar h2 {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+        color: var(--dim);
+        padding: 10px 14px 6px;
+        margin: 0;
+      }
+      .tab {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 4px 14px;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .tab:hover { background: var(--rowsel); }
+      .tab.active { background: var(--sel); }
+      .tab .ic { color: var(--accent2); }
+      .tab .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+      .tab .ct {
+        color: var(--dim);
+        background: #00000033;
+        border-radius: 10px;
+        padding: 0 7px;
+        font-size: 11px;
+      }
+      .editor { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+      .editor .ehead {
+        height: 34px;
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 0 14px;
+        border-bottom: 1px solid var(--line);
+        background: #252526;
+      }
+      .editor .ehead .tname { color: var(--accent); font-weight: 600; }
+      .editor .ehead .hint { color: var(--dim); font-size: 11px; }
+      .gridwrap { flex: 1; overflow: auto; }
+      table { border-collapse: collapse; width: 100%; }
+      th, td {
+        text-align: left;
+        padding: 4px 9px;
+        border-bottom: 1px solid var(--line);
+        border-right: 1px solid var(--line);
+        vertical-align: top;
+        max-width: 460px;
+        overflow: hidden;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      th {
+        position: sticky;
+        top: 0;
+        background: var(--bar);
+        color: var(--accent2);
+        font-weight: 600;
+        z-index: 1;
+        white-space: nowrap;
+      }
+      tr:hover td { background: var(--rowsel); }
+      td.editable { cursor: text; }
+      td.editable:focus { outline: 1px solid var(--accent); background: #04395e; }
+      td.empty { color: #5a5a5a; font-style: italic; }
+      td.rowact { width: 28px; text-align: center; border-right: 1px solid var(--line); }
+      .del { color: var(--warn); cursor: pointer; opacity: 0.5; }
+      tr:hover .del { opacity: 1; }
+      .nodata { padding: 20px; color: var(--dim); }
+      .toast {
+        position: fixed;
+        bottom: 14px;
+        right: 14px;
+        background: #333;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        padding: 8px 14px;
+        color: var(--fg);
+        opacity: 0;
+        transition: opacity 0.2s;
+        pointer-events: none;
+      }
+      .toast.on { opacity: 1; }
+    </style>
+  </head>
+  <body>
+    <div class="titlebar">
+      <span class="logo">🌙 Luna workspace</span>
+      <span class="status" id="status">loading…</span>
+      <span class="spacer"></span>
+      <label class="status">rows
+        <select id="limit" class="btn ghost" style="padding:2px 6px">
+          <option>50</option><option selected>100</option><option>300</option><option>1000</option>
+        </select>
+      </label>
+      <button class="btn ghost" id="refresh">⟳ Refresh</button>
+      <button class="btn danger" id="reset">🗑 Reset DB</button>
+    </div>
+    <div class="shell">
+      <div class="sidebar">
+        <h2>Tables</h2>
+        <div id="tabs"></div>
+      </div>
+      <div class="editor">
+        <div class="ehead">
+          <span class="tname" id="curname">—</span>
+          <span class="hint" id="curhint"></span>
+          <span class="spacer" style="flex:1"></span>
+          <span class="hint">双击单元格编辑 · 🗑 删行</span>
+        </div>
+        <div class="gridwrap" id="grid"><div class="nodata">loading…</div></div>
+      </div>
+    </div>
+    <div class="toast" id="toast"></div>
+    <script>
+      const $ = (id) => document.getElementById(id);
+      let DATA = { tables: [] };
+      let current = null;
+      const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+      let toastTimer = null;
+      function toast(msg) {
+        const t = $('toast');
+        t.textContent = msg;
+        t.classList.add('on');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => t.classList.remove('on'), 1800);
+      }
+
+      async function load(keep) {
+        const res = await fetch('/_workspace/api/all?limit=' + $('limit').value);
+        DATA = await res.json();
+        if (!DATA.enabled) { $('status').textContent = 'persistence off — no DB'; return; }
+        const total = DATA.tables.reduce((a, t) => a + Math.max(0, t.count), 0);
+        $('status').textContent = DATA.tables.length + ' tables · ' + total + ' rows';
+        renderTabs();
+        const pick = keep && DATA.tables.find((t) => t.name === current) ? current : (DATA.tables[0] && DATA.tables[0].name);
+        if (pick) select(pick);
+      }
+      function renderTabs() {
+        $('tabs').innerHTML = DATA.tables.map((t) =>
+          '<div class="tab' + (t.name === current ? ' active' : '') + '" data-n="' + esc(t.name) + '">' +
+          '<span class="ic">▤</span><span class="nm">' + esc(t.name) + '</span>' +
+          '<span class="ct">' + (t.count < 0 ? '!' : t.count) + '</span></div>'
+        ).join('');
+        $('tabs').querySelectorAll('.tab').forEach((el) => el.addEventListener('click', () => select(el.dataset.n)));
+      }
+      function select(name) {
+        current = name;
+        renderTabs();
+        const t = DATA.tables.find((x) => x.name === name);
+        if (!t) return;
+        $('curname').textContent = t.name;
+        $('curhint').textContent = (t.count < 0 ? (t.error || 'error') : t.count + ' rows') + (t.editable ? '' : ' · read-only');
+        if (t.error) { $('grid').innerHTML = '<div class="nodata">' + esc(t.error) + '</div>'; return; }
+        if (!t.rows.length) { $('grid').innerHTML = '<div class="nodata">— empty —</div>'; return; }
+        const cols = (t.columns.length ? t.columns : Object.keys(t.rows[0])).filter((c) => c !== '__rowid');
+        const thead = '<tr>' + (t.editable ? '<th></th>' : '') + cols.map((c) => '<th>' + esc(c) + '</th>').join('') + '</tr>';
+        const body = t.rows.map((r) => {
+          const rid = r.__rowid;
+          const act = t.editable ? '<td class="rowact"><span class="del" title="delete" data-rid="' + rid + '">✕</span></td>' : '';
+          const cells = cols.map((c) => {
+            const v = r[c];
+            if (v === null || v === undefined) return '<td class="empty' + (t.editable ? ' editable' : '') + '" data-rid="' + rid + '" data-col="' + esc(c) + '">∅</td>';
+            const disp = typeof v === 'object' ? JSON.stringify(v) : v;
+            return '<td' + (t.editable ? ' class="editable" contenteditable="true"' : '') + ' data-rid="' + rid + '" data-col="' + esc(c) + '">' + esc(disp) + '</td>';
+          }).join('');
+          return '<tr>' + act + cells + '</tr>';
+        }).join('');
+        $('grid').innerHTML = '<table>' + thead + body + '</table>';
+        if (t.editable) wireEdits(t.name);
+      }
+      function wireEdits(table) {
+        $('grid').querySelectorAll('td.editable').forEach((td) => {
+          const orig = td.textContent;
+          td.addEventListener('focus', () => { if (td.classList.contains('empty')) td.textContent = ''; });
+          td.addEventListener('blur', async () => {
+            const val = td.textContent;
+            if (val === orig) return;
+            const r = await fetch('/_workspace/api/edit', {
+              method: 'POST', headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ action: 'update', table, rowid: Number(td.dataset.rid), column: td.dataset.col, value: val }),
+            }).then((x) => x.json());
+            toast(r.ok ? 'saved ' + table + '.' + td.dataset.col : 'error: ' + (r.error || '?'));
+          });
+        });
+        $('grid').querySelectorAll('.del').forEach((d) => d.addEventListener('click', async () => {
+          if (!confirm('删除这一行？')) return;
+          const r = await fetch('/_workspace/api/edit', {
+            method: 'POST', headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ action: 'delete', table, rowid: Number(d.dataset.rid) }),
+          }).then((x) => x.json());
+          toast(r.ok ? 'deleted' : 'error: ' + (r.error || '?'));
+          if (r.ok) load(true);
+        }));
+      }
+      $('refresh').addEventListener('click', () => load(true));
+      $('limit').addEventListener('change', () => load(true));
+      $('reset').addEventListener('click', async () => {
+        if (!confirm('一键重置：清空对话 / L2 / L3 / traces / 会话（保留人格与梦状态）。不可撤销，确定？')) return;
+        const r = await fetch('/_workspace/api/reset', {
+          method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ confirm: true }),
+        }).then((x) => x.json());
+        toast(r.ok ? 'reset done' : 'error: ' + (r.error || '?'));
+        load(true);
+      });
+      load(false);
+    </script>
+  </body>
+</html>

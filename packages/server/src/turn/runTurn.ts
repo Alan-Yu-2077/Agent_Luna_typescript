@@ -194,7 +194,13 @@ const graph: Graph<TurnState, TurnNode> = {
           if (s.firstTokenMs === null) s.firstTokenMs = Date.now() - s.startedMs;
           s.tokenCount += 1;
           s.text += ev.text;
-          s.emit({ type: 'reply.token', turn_id: s.turnId, text: ev.text });
+          // In message-tool mode, speech IS the message tool — a free text block
+          // is the model narrating/thinking out loud, NOT a chat bubble. Only
+          // stream reply.token in text mode (LUNA_MESSAGE_TOOL=0). (s.text still
+          // accumulates for the turn.result canonical join + persistence.)
+          if (!isMessageMode(s.registry)) {
+            s.emit({ type: 'reply.token', turn_id: s.turnId, text: ev.text });
+          }
           break;
         case 'thinking_delta':
           s.thinking += ev.text;
