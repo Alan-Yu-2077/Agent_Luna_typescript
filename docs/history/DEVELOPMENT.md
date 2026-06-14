@@ -1,6 +1,6 @@
 # Agent_Luna (TypeScript) — Development History
 
-Last updated: 2026-06-14 (Asia/Shanghai) — v0.13.2 (high-fidelity FaceVM — layered emotions + overlays)
+Last updated: 2026-06-14 (Asia/Shanghai) — v0.13.3 (voice + lip-sync — the AudioSink, behind the reused sidecar)
 
 ## Scope
 
@@ -63,7 +63,8 @@ during the rewrite. Its version log is unrelated to this one — `v0.1` here is 
 | `v0.12.1` | 2026-06-13 | Repo-wide audit (9 reviewers) + fixes — turn persistence resilience, dev tool_name | `7cbfdc1` |
 | `v0.13.0` | 2026-06-14 | Cute UI shell — redesigned vtuber-overlay frontend (chat left / model right) | `f82f5ae` |
 | `v0.13.1` | 2026-06-14 | Live2D foundation — yumi avatar (pixi-live2d + Cubism), first-cut FaceVM, draggable | `94ff57a` |
-| `v0.13.2` | 2026-06-14 | High-fidelity FaceVM — 14 layered emotions + timelines + overlays + actions | `working tree` |
+| `v0.13.2` | 2026-06-14 | High-fidelity FaceVM — 14 layered emotions + timelines + overlays + actions | `e367b50` |
+| `v0.13.3` | 2026-06-14 | Voice + lip-sync — Web Audio AudioSink + RMS lip-sync + GPT-SoVITS proxy client | `working tree` |
 
 ## Detailed records
 
@@ -119,6 +120,53 @@ Inference:
   `defineTool`, the dispatcher, and provider logic stay in `packages/server`. Frontend
   (`packages/web`) will consume the same protocol package in Initiative 6, getting
   contract drift as a type error rather than a runtime mismatch.
+
+### `v0.13.3` — 2026-06-14 — Voice + lip-sync (Initiative 6, the AudioSink)
+
+Status:
+
+- working tree (commit hash recorded post-commit)
+
+Fact:
+
+- **New `packages/web/src/audio/` (6 files):**
+  - [`lipSync.ts`](../../packages/web/src/audio/lipSync.ts) — pure RMS→mouth-open, ported from
+    Python `lip-sync.js` (gain 32 → EMA baseline → pulse/onset contrast → gate → decay → smooth).
+  - [`audioPlayer.ts`](../../packages/web/src/audio/audioPlayer.ts) — Web Audio graph (AudioContext +
+    gain + analyser); plays a decoded WAV (real TTS) or a synthetic tone (dev smoke); `rms()` reads
+    the analyser; resume()/stop().
+  - [`ttsClient.ts`](../../packages/web/src/audio/ttsClient.ts) — `POST <base>/speak` → WAV ArrayBuffer;
+    throws on non-200 (caller goes silent).
+  - [`webAudioSink.ts`](../../packages/web/src/audio/webAudioSink.ts) — the real `AudioSink`:
+    fetch → play → a rAF lip-sync loop feeding `onMouth`; **self-disables** if the sidecar is
+    unavailable; unlocks the AudioContext on the first user gesture; `playTone` dev method.
+  - tests: `lipSync.test.ts` (3) + `ttsClient.test.ts` (2).
+- **[`dev-server.ts`](../../packages/web/dev-server.ts)** forwards `/api/gpt-sovits/*` →
+  `LUNA_TTS_PROXY` (the reused Python proxy); 502 when unset/unreachable.
+- **[`app.ts`](../../packages/web/src/app.ts)** constructs `WebAudioSink` (`onMouth` →
+  `live2d.setMouthOpen`) behind `localStorage 'luna:tts'`; the `?dev` hook now also exposes
+  `lunaAudio`. **[`faceVm.ts`](../../packages/web/src/live2d/faceVm.ts):** mouth-open is now driven
+  by lip-sync unconditionally (decoupled from the speaking state) so audio moves the mouth whenever
+  it plays. No `AudioSink` interface change — the controller's `audio.speak` (on message finalize)
+  now yields real speech + lip-sync when the sidecar is up.
+- **Reuse-as-is (REWRITE_CONTEXT locked decision):** the GPT-SoVITS Python proxy + ML sidecar are NOT
+  rebuilt; only the TS driving code (client + Web Audio playback + lip-sync) is ported behind the sink.
+- **Validation:** `tsc` clean (web + server); `bun test` **293 pass / 0 fail** (+5). Browser smoke
+  (`?dev`): `setMouthOpen` visibly opens yumi's mouth (the lip-sync output path); **live GPT-SoVITS
+  synthesis is pending the sidecar** (a heavy Python ML server, not runnable in this environment).
+- **Deferred:** the random open-target stepping + form/pucker/shrug mouth shaping; streamed PCM-chunk
+  playback (currently decodes a full WAV); voice/reference-audio config (uses proxy defaults).
+
+Inference:
+
+- **Luna's last sensory channel is in.** She can speak with lip-sync, behind the same `AudioSink`,
+  with zero controller/protocol change — the seam that absorbed Live2D now absorbs audio too.
+- **An honest boundary, handled gracefully.** The TTS pipeline "stays as-is," so the heavy ML server
+  is out of scope and unverifiable here; the sink self-disables to silence when it's absent, and the
+  chat + avatar keep working. The TS-side audio + lip-sync is what shipped, and it's verified.
+- **Determinism where it counts.** `lipSync` is pure and unit-tested; the Web Audio glue is
+  browser-verified for the mouth-output path. The TTS request shape + failure path are unit-tested
+  against a stubbed fetch.
 
 ### `v0.13.2` — 2026-06-14 — High-fidelity FaceVM (Initiative 6, layered emotions)
 

@@ -94,7 +94,7 @@ export class FaceVm {
     const target: Record<FaceStateKey, number> = { ...FACE_VM_DEFAULT_STATE };
     const owned = this.ownedKeys(now);
     applyPose(target, STATE_BIAS[this.state], owned);
-    if (this.state === 'speaking') target.mouthOpen = Math.max(target.mouthOpen, this.mouth);
+    target.mouthOpen = Math.max(target.mouthOpen, this.mouth); // lip-sync drives the mouth whenever audio plays
     this.applyEmotion(target, now);
     this.applyActions(target, now);
 

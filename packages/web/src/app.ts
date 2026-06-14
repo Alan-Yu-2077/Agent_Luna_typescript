@@ -1,10 +1,11 @@
 import { createController } from './controller';
 import { LunaWsClient, type WsStatus } from './wsClient';
-import { consoleLive2DSink, noopAudioSink, type Live2DSink } from './sinks';
+import { consoleLive2DSink, noopAudioSink, type AudioSink, type Live2DSink } from './sinks';
 import { CuteBubbleView } from './ui/cuteBubbleView';
 import { buildLayout } from './ui/layout';
 import { startTimestampRefresh } from './ui/time';
 import { createPixiLive2DSink } from './live2d/pixiLive2DSink';
+import { WebAudioSink } from './audio/webAudioSink';
 
 // Browser entry — builds the cute UI shell, mounts the real Live2D avatar
 // (v0.13.1) into the model stage behind a WebGL/flag guard, and wires the
@@ -37,12 +38,19 @@ async function boot(): Promise<void> {
     }
   }
 
-  const controller = createController({ view, live2d, audio: noopAudioSink });
+  let audio: AudioSink = noopAudioSink;
+  if (localStorage.getItem('luna:tts') !== '0') {
+    audio = new WebAudioSink({ onMouth: (v) => live2d.setMouthOpen(v) });
+  }
 
-  // Guarded dev hook (only with ?dev in the URL): expose the Live2D sink so the
-  // avatar's expressions can be smoke-tested without a backend.
+  const controller = createController({ view, live2d, audio });
+
+  // Guarded dev hook (only with ?dev in the URL): expose the sinks so the avatar's
+  // expressions + lip-sync can be smoke-tested without a backend.
   if (location.search.includes('dev')) {
-    (globalThis as unknown as { lunaLive2D?: Live2DSink }).lunaLive2D = live2d;
+    const g = globalThis as unknown as { lunaLive2D?: Live2DSink; lunaAudio?: AudioSink };
+    g.lunaLive2D = live2d;
+    g.lunaAudio = audio;
   }
 
   let dreaming = false;
