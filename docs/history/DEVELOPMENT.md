@@ -1,6 +1,6 @@
 # Agent_Luna (TypeScript) — Development History
 
-Last updated: 2026-06-14 (Asia/Shanghai) — v0.13.4 (dream overlay + UX polish; Initiative 6 ✅ — the body is assembled)
+Last updated: 2026-06-15 (Asia/Shanghai) — v0.13.6 (C-side fix pass — real-usage bug fixes on the assembled body)
 
 ## Scope
 
@@ -65,7 +65,48 @@ during the rewrite. Its version log is unrelated to this one — `v0.1` here is 
 | `v0.13.1` | 2026-06-14 | Live2D foundation — yumi avatar (pixi-live2d + Cubism), first-cut FaceVM, draggable | `94ff57a` |
 | `v0.13.2` | 2026-06-14 | High-fidelity FaceVM — 14 layered emotions + timelines + overlays + actions | `e367b50` |
 | `v0.13.3` | 2026-06-14 | Voice + lip-sync — Web Audio AudioSink + RMS lip-sync + GPT-SoVITS proxy client | `78a3350` |
-| `v0.13.4` | 2026-06-14 | Dream overlay + UX polish (thinking/mood/scroll/settings/a11y); **Initiative 6 complete** | `working tree` |
+| `v0.13.4` | 2026-06-14 | Dream overlay + UX polish (thinking/mood/scroll/settings/a11y); **Initiative 6 complete** | `7465f5d` |
+| `v0.13.5` | 2026-06-15 | One-command local launcher (`bun run dev`) + TTS proxy; Initiative 7 cancelled | `6e18d9a` |
+| `v0.13.6` | 2026-06-15 | C-side fix pass (real-usage bugs) — Live2D override/gaze/zoom, L1 history, thinking-leak, TTS, dev IDE | `17ff3ff` `25e4e2b` |
+
+## C-side fix pass (2026-06-15) — v0.13.5 / v0.13.6
+
+After Initiative 6 assembled the body, real-usage feedback surfaced a batch of client-side bugs.
+Two fix rounds, all verified (tsc + `bun test` 296 green + browser smoke via the preview).
+
+**v0.13.5 — local launcher + Initiative 7 cancel** (`6e18d9a`)
+- `bun run dev` ([`scripts/dev-all.ts`](../../scripts/dev-all.ts)) spawns server (8787) + web (5173) +
+  the local GPT-SoVITS TTS proxy (8788). The proxy ([`scripts/tts-proxy.cjs`](../../scripts/tts-proxy.cjs))
+  is a thin standalone HTTP wrapper over the Python project's `GptSovitsService` (which had no
+  standalone launcher — it was mounted in the old Python ws-server). Prefixed logs, Ctrl-C cascade,
+  a startup banner with the entry URL, **proactive OFF by default in dev**.
+- Initiative 7 (open-source packaging) **cancelled**: TTS stays original GPT-SoVITS, local-only.
+
+**v0.13.6 — C-side fix pass** (server `17ff3ff`, web `25e4e2b`)
+
+Bugs found in real use and their root causes / fixes:
+- **Expressions/mouth "完全没触发"** — FaceVm ran on `app.ticker` (render-LOW priority, i.e. BEFORE
+  the model's `internalModel.update`), so the auto idle-motion + blink overwrote every param each
+  frame. Fix: drive FaceVm from the model's own `'beforeModelUpdate'` event (after the built-in
+  controllers, before deform). Emotions + lip-sync now win; gaze + physics still drive the rest.
+- **Refresh lost the chat log** — `handleOpen` sent nothing. Fix: new `history` ServerEvent replays
+  the L2 timeline on connect (real timestamps + divider; idempotent across reconnects).
+- **Gaze toggle didn't disable + tracked from the body center** — `model.autoFocus` is a no-op
+  (autoFocus lives on `model.automator`); pixi's `focus()` references the body center + sways the
+  body. Fix: kill the built-in autoFocus, drive a head-centric eyes+head gaze in FaceVm; the toggle
+  truly gates it.
+- **Model couldn't be zoomed** — added wheel zoom (persisted, clamped) + double-click reset.
+- **Thinking leaked into chat bubbles** — in message-tool mode the model's free text blocks were
+  streamed as `reply.token`. Fix: only stream `reply.token` in text mode; message mode speaks solely
+  via the message tool.
+- **TTS "没挂上"** — `WebAudioSink` latched off permanently on the first failure, so GPT-SoVITS's 503
+  while loading its ~5 GB model killed voice for the session. Fix: don't latch on 503 (retryable);
+  give up only after several consecutive hard failures. Mouth-drive path verified post-`beforeModelUpdate`.
+- **Confusing autonomous replies + "test-message" DB** — the data was real history + proactive
+  auto-fires (not test data); proactive is now OFF in dev, the DB path is pinned to the repo root,
+  and the stray empty `packages/server/luna.sqlite` was removed.
+- **Dev tooling**: a `?dev` performance panel (trigger all 14 emotions + states) and a VSCode-style
+  `/_workspace` data IDE (sidebar table tree + editable grid + one-click reset + row delete/cell edit).
 
 ## Detailed records
 
