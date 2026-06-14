@@ -124,10 +124,17 @@ export class FaceVm {
     // Gaze base layer: eyes + head only (no body), so an active emotion's owned
     // head/eye channels still win, and at rest she tracks the pointer head-first.
     if (this.gazeOn) {
-      if (!owned.has('gazeX')) target.gazeX = this.gazeTargetX * 0.7;
-      if (!owned.has('gazeY')) target.gazeY = this.gazeTargetY * 0.7;
-      if (!owned.has('headYaw')) target.headYaw = this.gazeTargetX * 14;
-      if (!owned.has('headPitch')) target.headPitch = this.gazeTargetY * 9;
+      const gx = this.gazeTargetX;
+      const gy = this.gazeTargetY;
+      if (!owned.has('gazeX')) target.gazeX = gx * 0.8; // eyes
+      if (!owned.has('gazeY')) target.gazeY = gy * 0.8;
+      if (!owned.has('headYaw')) target.headYaw = gx * 18; // head turn
+      if (!owned.has('headPitch')) target.headPitch = gy * 12;
+      if (!owned.has('headRoll')) target.headRoll = gx * gy * -10; // subtle tilt, like pixi's product term
+      // Body follows the gaze too — restores the ParamBodyAngleX sway the built-in
+      // autoFocus gave (the reference is head-centric; this is just the lean).
+      if (!owned.has('bodyYaw')) target.bodyYaw = gx * 8;
+      if (!owned.has('bodyLift')) target.bodyLift = gy * 3;
     }
     this.applyEmotion(target, now);
     this.applyActions(target, now);

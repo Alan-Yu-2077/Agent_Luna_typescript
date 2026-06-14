@@ -163,7 +163,10 @@ export async function createPixiLive2DSink(
   // the page; `gazeOn` truly gates it (off → FaceVm eases back to neutral).
   let gazeOn = gazeFollowEnabled();
   faceVm.setGazeFollow(gazeOn);
-  const HEAD_FRAC = 0.16;
+  // The neutral "looking straight" reference sits on the FACE — ~18% down the
+  // bounding box (the top includes hat + ears), NOT the body center. So pointing
+  // at her face/neck means roughly level, not "looking up".
+  const HEAD_FRAC = 0.18;
   window.addEventListener('pointermove', (e) => {
     if (!gazeOn || drag) return;
     const rect = canvas.getBoundingClientRect();
