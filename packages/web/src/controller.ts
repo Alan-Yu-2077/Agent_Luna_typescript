@@ -31,6 +31,7 @@ export function createController(deps: ControllerDeps): { handle: (e: ServerEven
 
       case 'turn.started':
         textStreaming = false;
+        deps.live2d.setState('thinking');
         return;
 
       case 'reply.token':
@@ -45,6 +46,7 @@ export function createController(deps: ControllerDeps): { handle: (e: ServerEven
         if (e.tool_name === 'message') {
           messageBubbles.add(e.call_id);
           deps.view.open(e.call_id);
+          deps.live2d.setState('speaking');
         } else {
           deps.view.chip('tool', `🔧 ${e.tool_name}…`);
         }
@@ -88,6 +90,7 @@ export function createController(deps: ControllerDeps): { handle: (e: ServerEven
         // turn.result text is the canonical join. Nothing more to draw here
         // (text-mode-empty fallback is a later refinement).
         textStreaming = false;
+        deps.live2d.setState('neutral');
         return;
 
       case 'dream.status':
@@ -97,6 +100,7 @@ export function createController(deps: ControllerDeps): { handle: (e: ServerEven
             ? `🌙 dreaming${e.current_step ? ` · ${e.current_step}` : ''}`
             : '☀️ awake',
         );
+        deps.live2d.setState(e.is_dreaming ? 'sleeping' : 'neutral');
         return;
 
       case 'dream.step':

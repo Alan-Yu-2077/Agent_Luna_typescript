@@ -4,13 +4,15 @@ Forward development plan for the TypeScript rewrite. Each initiative is a folder
 self-contained version plans, executed one at a time. Version numbers reserve across initiatives so
 they never overlap.
 
-> **Current shipped head: v0.13.0** (2026-06-14, cute UI shell — the redesigned frontend).
+> **Current shipped head: v0.13.1** (2026-06-14, Live2D foundation — yumi avatar live in the cute UI).
 > Initiatives 1, 1.5, 2, 3, 4, 5 ✅ complete; **Initiative 6 in progress** — `packages/web` has the TS
 > consumption controller **plus the redesigned cute UI shell** (vtuber-overlay style: chat panel left
 > / model stage right, light-blue stripes + lace, user-left/Luna-right bubbles + timestamps + tool
 > cards, 🌙 入梦), consuming the shared `@luna/protocol` types so backend↔frontend drift is a compile
-> error. **Next** (v0.13.1–v0.13.3, [`frontend-port-2026-06/`](frontend-port-2026-06/)): the real
-> Live2D avatar (yumi) + GPT-SoVITS voice + lip-sync behind the sink interfaces, then dream-overlay +
+> error. **The live yumi avatar is in** (v0.13.1 — pixi-live2d + Cubism + yumi, first-cut FaceVM,
+> draggable + persisted, degrade-safe). **Next** (v0.13.2–v0.13.4,
+> [`frontend-port-2026-06/`](frontend-port-2026-06/)): high-fidelity FaceVM, GPT-SoVITS voice +
+> lip-sync, then dream-overlay +
 > UX polish. See [`../history/DEVELOPMENT.md`](../history/DEVELOPMENT.md).
 
 ## Planned initiatives (execution order)
@@ -23,7 +25,7 @@ they never overlap.
 | 3 | v0.6.0 – v0.7.0 | **Persona + humanity guardrails + `message` tool** — three-layer persona resolution with mtime-cached hot-reload; humanity hard caps as Zod schema on `message` input (not prompt-only, not truncation). **Introduces `message` tool** per LD #9 (everything-as-tool) behind `LUNA_MESSAGE_TOOL`, default-flipped at v0.7.0; frontend wire-event shape (`tool.progress{tool_name:'message'}`) is fixed here for Initiative 6 to consume | [`persona-message-tool-2026-06/`](persona-message-tool-2026-06/) | ✅ shipped 2026-06-13 (4 versions) |
 | 4 | v0.8.0 – v0.9.0 | **Action integrity rails** — 言行一致 + 工具稳发. **L1 thinking contract** (commitment-to-act + tool-trigger checklist + proportionality) in the cached core; structural/mechanical boundary enforcement (`is_final` promise contract + intent-without-act guard, generalizing the v0.6.2 empty-reply guard); off-hot-path defection audit → `decision` traces + replay tree; `recall` tool (Open Q #9). **No L2 gate harness** (LD #14 corrects a Python misreading) | [`action-integrity-2026-06/`](action-integrity-2026-06/) | ✅ shipped 2026-06-13 (5 versions) |
 | 5 | v0.10.0 – v0.11.0 | **Proactive agency** — autonomous tool-calling turns when no one is talking, not just proactive messaging (the 2026 ambient/Hermes paradigm, companion-scaled). A proactive turn is a `runTurn` with the full tool surface and **`message` optional** (she can act silently). Idle + scheduled wakeups; the wake gate is the one legitimate L2 gate (reuses Initiative 4's audit lane). **Safety contract (LD #15): reversible-silent / irreversible-surfaced** + kill switch + action budget, because Alan chose full-tool-incl-`shell` autonomy. **Carries the deferred dream auto-trigger** + self-continuation (a delayed micro-wake) | [`proactive-agency-2026-06/`](proactive-agency-2026-06/) | ✅ shipped 2026-06-13 (5 versions) |
-| 6 | v0.12.0 – v0.13.3 | **Frontend port — the body** — the consumption controller (v0.12.0, shipped) + a freshly **redesigned** cute UI (Alan's design, not a Python-page port) + the real Live2D avatar (yumi) + GPT-SoVITS voice + lip-sync, all behind the v0.12.0 `Live2DSink`/`AudioSink` interfaces. Reuses the pixi-live2d/Cubism runtime + yumi assets + the SoVITS sidecar; the TS driver glue is ported fresh ("参考 Python 但不照搬"). **v0.12.0 shipped; v0.13.0–v0.13.3 planned** | [`frontend-port-2026-06/`](frontend-port-2026-06/) | 🔨 in progress (v0.13.0) |
+| 6 | v0.12.0 – v0.13.4 | **Frontend port — the body** — the consumption controller (v0.12.0, shipped) + a freshly **redesigned** cute UI (Alan's design, not a Python-page port) + the real Live2D avatar (yumi) + GPT-SoVITS voice + lip-sync, all behind the v0.12.0 `Live2DSink`/`AudioSink` interfaces. Reuses the pixi-live2d/Cubism runtime + yumi assets + the SoVITS sidecar; the TS driver glue is ported fresh ("参考 Python 但不照搬"). **v0.12.0 shipped; v0.13.0–v0.13.3 planned** | [`frontend-port-2026-06/`](frontend-port-2026-06/) | 🔨 in progress (v0.13.1) |
 
 ## Ordering philosophy
 
@@ -122,6 +124,7 @@ the GPT-SoVITS sidecar, while porting the TS driver glue + the whole page fresh.
 |---|---|---|
 | v0.12.0 ✅ | (shipped) consumption controller | event → bubble state machine + `Live2DSink`/`AudioSink` interfaces (`packages/web`) — **shipped 2026-06-13** |
 | v0.13.0 ✅ | [Cute UI shell](frontend-port-2026-06/v0.13.0-cute-ui-shell.md) | the redesigned page: striped/lace cute style, two-pane layout (**chat LEFT / model RIGHT**, per Alan's overlay reference), user-left/Luna-right bubbles + timestamps + cute tool cards, input bar, 🌙 入梦 — on the shipped controller, stub sinks — **shipped 2026-06-14** |
-| v0.13.1 | [Live2D avatar](frontend-port-2026-06/v0.13.1-live2d.md) | real `Live2DSink`: pixi-live2d + Cubism + yumi; `face-vm` layer model in TS; expression/emotion from the message envelope; draggable + persisted position. **High risk — spike first, `LUNA_LIVE2D` flag** |
-| v0.13.2 | [Voice + lip-sync](frontend-port-2026-06/v0.13.2-tts-lipsync.md) | real `AudioSink`: GPT-SoVITS sidecar, segment-buffered playback, on-audio-start → Live2D, RMS lip-sync, autoplay unlock. `LUNA_TTS` flag |
-| v0.13.3 | [Polish + close](frontend-port-2026-06/v0.13.3-polish-close.md) | dream overlay + ☀️ wake; thinking indicator, proactive glow, mood pip, scroll pill, settings, reconnect UI; reduced-motion + responsive; full E2E + **initiative ✅** |
+| v0.13.1 ✅ | [Live2D foundation](frontend-port-2026-06/v0.13.1-live2d.md) | real `Live2DSink`: pixi-live2d + Cubism + yumi; first-cut FaceVM; draggable + persisted; WebGL-guard degrade — **shipped 2026-06-14** |
+| v0.13.2 | [Live2D high-fidelity FaceVM](frontend-port-2026-06/v0.13.2-live2d-fidelity.md) | port the layered FaceVM engine + emotion/action libraries + rich affect→emotion mapping |
+| v0.13.3 | [Voice + lip-sync](frontend-port-2026-06/v0.13.3-tts-lipsync.md) | real `AudioSink`: GPT-SoVITS sidecar, segment-buffered playback, on-audio-start → Live2D, RMS lip-sync, autoplay unlock. `LUNA_TTS` flag |
+| v0.13.4 | [Polish + close](frontend-port-2026-06/v0.13.4-polish-close.md) | dream overlay + ☀️ wake; thinking indicator, proactive glow, mood pip, scroll pill, settings, reconnect UI; reduced-motion + responsive; full E2E + **initiative ✅** |

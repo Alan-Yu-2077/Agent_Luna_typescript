@@ -1,6 +1,6 @@
 # Agent_Luna (TypeScript) — Development History
 
-Last updated: 2026-06-14 (Asia/Shanghai) — v0.13.0 (cute UI shell — redesigned vtuber-overlay frontend)
+Last updated: 2026-06-14 (Asia/Shanghai) — v0.13.1 (Live2D foundation — yumi avatar live in the cute UI)
 
 ## Scope
 
@@ -61,7 +61,8 @@ during the rewrite. Its version log is unrelated to this one — `v0.1` here is 
 | `v0.11.0` | 2026-06-13 | Self-continuation + dream auto-trigger + autonomy default-on; Initiative 5 complete | `45bb3cb` |
 | `v0.12.0` | 2026-06-13 | Frontend consumption controller (`packages/web`); Initiative 6 begins | `680e58d` |
 | `v0.12.1` | 2026-06-13 | Repo-wide audit (9 reviewers) + fixes — turn persistence resilience, dev tool_name | `7cbfdc1` |
-| `v0.13.0` | 2026-06-14 | Cute UI shell — redesigned vtuber-overlay frontend (chat left / model right) | `working tree` |
+| `v0.13.0` | 2026-06-14 | Cute UI shell — redesigned vtuber-overlay frontend (chat left / model right) | `f82f5ae` |
+| `v0.13.1` | 2026-06-14 | Live2D foundation — yumi avatar (pixi-live2d + Cubism), first-cut FaceVM, draggable | `working tree` |
 
 ## Detailed records
 
@@ -117,6 +118,69 @@ Inference:
   `defineTool`, the dispatcher, and provider logic stay in `packages/server`. Frontend
   (`packages/web`) will consume the same protocol package in Initiative 6, getting
   contract drift as a type error rather than a runtime mismatch.
+
+### `v0.13.1` — 2026-06-14 — Live2D foundation (Initiative 6, the real yumi avatar)
+
+Status:
+
+- working tree (commit hash recorded post-commit)
+
+Fact:
+
+- **Spike proved GO** then productionized. New `packages/web/src/live2d/` (7 files):
+  - [`cubismRuntime.ts`](../../packages/web/src/live2d/cubismRuntime.ts) — `webglAvailable()` guard;
+    loads the Cubism core `<script>` at runtime, **then dynamic-imports `pixi-live2d-display/cubism4`**
+    (the plugin checks for the runtime at import time); sets `globalThis.PIXI`, makes the
+    `PIXI.Application`, `registerTicker`.
+  - [`modelDriver.ts`](../../packages/web/src/live2d/modelDriver.ts) — port of Python
+    `model-driver.js`: `setParam` via `internalModel.coreModel.setParameterValueById` (guarded by the
+    model's real parameter-id set), scale + base/offset position.
+  - [`paramMap.ts`](../../packages/web/src/live2d/paramMap.ts) — `FACE_VM_PARAM_MAP` + neutral
+    defaults ported verbatim from Python `config.js`.
+  - [`faceVm.ts`](../../packages/web/src/live2d/faceVm.ts) — **first-cut** 60fps tick: state bias
+    (neutral/thinking/speaking/sleeping) + active expression + lip-sync mouth, smoothed; writes only
+    DISPLACED params so the model's built-in blink/breath idle shows through.
+  - [`expressionMap.ts`](../../packages/web/src/live2d/expressionMap.ts) — the 15 `ExpressionKey`
+    affects → yumi facial poses, blended by `emotion` (0..1).
+  - [`pixiLive2DSink.ts`](../../packages/web/src/live2d/pixiLive2DSink.ts) — the real `Live2DSink`:
+    loads yumi, drives a `FaceVm` on the ticker, **draggable** (pointer → persisted `localStorage`
+    offset, clamped on-screen, double-click recenters); returns `null` to degrade if WebGL/load fails.
+  - tests: `expressionMap.test.ts` (4) + `faceVm.test.ts` (4).
+- **New [`dev-server.ts`](../../packages/web/dev-server.ts)** — a custom Bun dev server
+  (`Bun.serve({ routes:{'/':html}, fetch })`) that bundles the HTML/TS **and** serves the vendored
+  Cubism core + yumi assets from `public/` (runtime-fetched URLs `bun <html>` won't serve). Root
+  `dev:web` now runs it.
+- **Vendored** `packages/web/public/`: `live2dcubismcore.min.js` (204KB) + `models/yumi/` — the 8192²
+  texture **downscaled to 2048²** (15MB→1.3MB; UVs are normalized so it stays correct), unused
+  `yumi.png`/`yumi.vtube.json` removed → **7.7MB** total. Deps: `pixi.js@7.4.2` +
+  `pixi-live2d-display@0.5.0-beta`.
+- **Grew `Live2DSink`** ([`sinks.ts`](../../packages/web/src/sinks.ts)): `+setState(state)` +
+  `setMouthOpen(value)` (console stub updated). [`controller.ts`](../../packages/web/src/controller.ts)
+  drives state: turn.started→thinking, message tool.started→speaking, turn.result→neutral,
+  dream.status→sleeping/neutral.
+- [`app.ts`](../../packages/web/src/app.ts) is async: mounts `pixiLive2DSink` into the model stage
+  (removing the placeholder) when WebGL is present and `localStorage 'luna:live2d' !== '0'`; falls
+  back to the placeholder + console sink otherwise. WS now targets `ws://<host>:8787` so the live
+  model receives real events (resolves the dev WS-reachability gap, task_3571afff).
+- **Validation:** `tsc --noEmit` clean (web + server); `bun test` **287 pass / 0 fail** (+9). Browser
+  smoke (preview tool): yumi renders in the model stage (desktop two-pane + responsive stack),
+  auto-blinks, is draggable + persists, downscaled texture renders, degrades when disabled.
+- **Roadmap renumber:** high-fidelity FaceVM split out as **v0.13.2**; TTS → **v0.13.3**, polish/close
+  → **v0.13.4** (plan files renamed).
+
+Inference:
+
+- **The rewrite has a face.** A full WebGL/Cubism integration dropped in behind the v0.12.0
+  `Live2DSink` with the controller gaining only four `setState` calls and **zero** protocol/wire
+  change — the consumption seam holding under a heavy, foreign rendering stack is the strongest
+  evidence yet that the typed-contract architecture pays off.
+- **The spike earned its keep.** The two real traps — Bun's HTML server won't serve runtime-fetched
+  model assets, and the cubism4 plugin checks for the Cubism runtime at *import* time — would have
+  been expensive to hit mid-build; isolating them first made the production build smooth.
+- **Honest staging over a heroic single version.** "高保真" is delivered in two slices: this
+  foundation (model alive, expressive, draggable, degrade-safe) ships working today; the full
+  emotion/action-library richness is v0.13.2. The first-cut FaceVM is deliberately thin —
+  write-if-displaced lets the model's own blink/breath carry idle rather than re-implementing it.
 
 ### `v0.13.0` — 2026-06-14 — Cute UI shell (Initiative 6, redesigned frontend)
 

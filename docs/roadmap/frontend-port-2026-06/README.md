@@ -95,17 +95,18 @@ The proven runtime to learn from (then rewrite into TS behind the sinks):
 |---|---|---|---|---|---|
 | (shipped) | v0.12.0 | Consumption controller — event→bubble + sink interfaces | — | — | ✅ |
 | [v0.13.0](v0.13.0-cute-ui-shell.md) | v0.13.0 | Cute UI shell — the redesigned page (layout, style, bubbles, timestamps, tool cards, dream button); stub sinks | Low | v0.12.0 | ✅ shipped 2026-06-14 (chat-left/model-right) |
-| [v0.13.1](v0.13.1-live2d.md) | v0.13.1 | Live2D avatar — real `Live2DSink` (pixi-live2d + Cubism + yumi), expression/emotion, draggable + persisted | High | v0.13.0 | ⏳ |
-| [v0.13.2](v0.13.2-tts-lipsync.md) | v0.13.2 | Voice — real `AudioSink` (GPT-SoVITS), playback, on-audio-start → Live2D, lip-sync | Medium | v0.13.1 | ⏳ |
-| [v0.13.3](v0.13.3-polish-close.md) | v0.13.3 | Dream overlay + UX extras + responsive/a11y + integration + initiative close | Low | v0.13.0–v0.13.2 | ⏳ |
+| [v0.13.1](v0.13.1-live2d.md) | v0.13.1 | Live2D **foundation** — real `Live2DSink` (pixi-live2d + Cubism + yumi), first-cut FaceVM, draggable + persisted, degrade-safe | High | v0.13.0 | ✅ shipped 2026-06-14 |
+| [v0.13.2](v0.13.2-live2d-fidelity.md) | v0.13.2 | Live2D **high-fidelity FaceVM** — layered engine + emotion/action libraries + rich affect→emotion map | Medium | v0.13.1 | ⏳ |
+| [v0.13.3](v0.13.3-tts-lipsync.md) | v0.13.3 | Voice — real `AudioSink` (GPT-SoVITS), playback, on-audio-start → Live2D, lip-sync | Medium | v0.13.1 | ⏳ |
+| [v0.13.4](v0.13.4-polish-close.md) | v0.13.4 | Dream overlay + UX extras + responsive/a11y + integration + initiative close | Low | v0.13.0–v0.13.3 | ⏳ |
 
 ## Acceptance criteria for the whole initiative
 
-- [ ] The redesigned cute UI renders: striped light-blue/white bg + Japanese lace borders, two-pane
-      (model left-center, chat right-center), user-left/Luna-right bubbles with per-bubble timestamps,
-      cute tool-action cards, input bar, 🌙 入梦 button.
-- [ ] Live2D yumi renders + animates; her `expression`/`emotion` from each message drive her face;
-      she is draggable and her position persists.
+- [x] The redesigned cute UI renders: striped light-blue/white bg + lace borders, two-pane
+      (**chat left / model right**), user-left/Luna-right bubbles with per-bubble timestamps,
+      cute tool-action cards, input bar, 🌙 入梦 button. (v0.13.0)
+- [x] Live2D yumi renders + animates (built-in blink/breath); her `expression`/`emotion` drive her
+      face (first-cut, v0.13.1); she is draggable + position persists. (rich emotions → v0.13.2)
 - [ ] She speaks (GPT-SoVITS) with lip-sync; audio unlocks on first gesture; on-audio-start Live2D
       commands fire.
 - [ ] Dream overlay on dreaming + ☀️ wake; proactive messages visually distinct; thinking indicator.

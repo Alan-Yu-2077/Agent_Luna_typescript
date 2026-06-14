@@ -15,8 +15,11 @@ function harness() {
     discard: (id) => calls.push(['discard', id]),
     chip: (kind: ChipKind, text) => calls.push(['chip', kind, text]),
   };
+  const states: string[] = [];
   const live2d: Live2DSink = {
     setExpression: (k, e) => calls.push(['expr', k, e]),
+    setState: (s) => states.push(s),
+    setMouthOpen: () => {},
     clear: () => calls.push(['clear']),
   };
   const spoken: string[] = [];
@@ -27,7 +30,7 @@ function harness() {
     stop: () => {},
   };
   const { handle } = createController({ view, live2d, audio });
-  return { handle, calls, spoken };
+  return { handle, calls, spoken, states };
 }
 
 function delivery(over: Partial<MessageDelivery> = {}): MessageDelivery {
@@ -142,5 +145,21 @@ describe('frontend controller — other events', () => {
     const h = harness();
     h.handle({ type: 'pong', seq: 1, server_time_ms: 123 });
     expect(h.calls.length).toBe(0);
+  });
+
+  test('live2d state follows the turn + dream lifecycle', () => {
+    const h = harness();
+    h.handle({ type: 'turn.started', turn_id: 't1' });
+    h.handle({ type: 'tool.started', call_id: 'm1', tool_name: 'message', input: {} });
+    h.handle({
+      type: 'turn.result',
+      turn_id: 't1',
+      text: 'hi',
+      finish_reason: 'end_turn',
+      usage: { input_tokens: 1, output_tokens: 1 },
+    });
+    h.handle({ type: 'dream.status', is_dreaming: true, current_step: null, last_dream_ms: null });
+    h.handle({ type: 'dream.status', is_dreaming: false, current_step: null, last_dream_ms: null });
+    expect(h.states).toEqual(['thinking', 'speaking', 'neutral', 'sleeping', 'neutral']);
   });
 });

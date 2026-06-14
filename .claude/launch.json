@@ -4,7 +4,7 @@
     {
       "name": "web",
       "runtimeExecutable": "/opt/homebrew/bin/bun",
-      "runtimeArgs": ["packages/web/index.html", "--port", "5173"],
+      "runtimeArgs": ["packages/web/dev-server.ts"],
       "port": 5173
     }
   ]

@@ -1,14 +1,19 @@
 import type { ExpressionKey, VoiceParams } from '@luna/protocol';
 
-// The seam between the consumption controller and the (later) Live2D + audio
-// pipelines. The controller drives these interfaces; the real Live2D model
-// driver and GPT-SoVITS audio plug in here in a later pass (Initiative 6 cont.).
-// Until then, console/no-op stubs let the whole consumption path run and be
-// tested without any rendering or audio.
+// The seam between the consumption controller and the Live2D + audio pipelines.
+// The controller drives these interfaces; the real Live2D model driver
+// (v0.13.1, pixiLive2DSink) plugs in here, and GPT-SoVITS audio later. The
+// console/no-op stubs let the whole consumption path run without rendering/audio.
+
+export type Live2DState = 'neutral' | 'thinking' | 'speaking' | 'sleeping';
 
 export interface Live2DSink {
   // emotion is the normalized [0,1] intensity from the message envelope
   setExpression(key: ExpressionKey, emotion?: number): void;
+  // coarse posture/idle state, driven from turn/dream events
+  setState(state: Live2DState): void;
+  // lip-sync mouth-open [0,1] (fed by the audio pipeline; 0 until v0.13.3)
+  setMouthOpen(value: number): void;
   clear(): void;
 }
 
@@ -23,6 +28,12 @@ export interface AudioSink {
 export const consoleLive2DSink: Live2DSink = {
   setExpression(key, emotion) {
     console.log(`[live2d] expression=${key}${emotion === undefined ? '' : ` @${emotion}`}`);
+  },
+  setState(state) {
+    console.log(`[live2d] state=${state}`);
+  },
+  setMouthOpen() {
+    /* no-op stub — would be 60fps spam to log */
   },
   clear() {
     console.log('[live2d] clear');
