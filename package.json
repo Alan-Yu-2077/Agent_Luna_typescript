@@ -4,6 +4,7 @@
   "type": "module",
   "workspaces": ["packages/*"],
   "scripts": {
+    "dev": "bun scripts/dev-all.ts",
     "dev:server": "bun run packages/server/src/main.ts",
     "dev:web": "bun packages/web/dev-server.ts",
     "test": "bun test",

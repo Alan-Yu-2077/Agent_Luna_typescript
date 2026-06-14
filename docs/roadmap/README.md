@@ -10,8 +10,13 @@ they never overlap.
 > cute UI (chat left / model right, light-blue stripes + lace), the live Live2D **yumi** avatar with 14
 > high-fidelity layered emotions, GPT-SoVITS voice + RMS lip-sync, and the 🌙 入梦 dream overlay — the
 > whole `packages/web` frontend consuming the shared `@luna/protocol` types (backend↔frontend drift = a
-> compile error) with zero wire changes across the six frontend versions. See
-> [`../history/DEVELOPMENT.md`](../history/DEVELOPMENT.md).
+> compile error) with zero wire changes across the six frontend versions.
+>
+> **Initiative 7 (open-source packaging) is ❌ cancelled** — the open-source/Docker premise was dropped;
+> TTS stays the original GPT-SoVITS, **local-only, not open-sourced**, already brought up by a local
+> one-command launcher (`bun run dev` → `scripts/dev-all.ts` + `scripts/tts-proxy.cjs`, outside the
+> roadmap). **Next: client-side (C 端) bug-fix pass** driven by real usage feedback — no fixed version
+> plan yet. See [`../history/DEVELOPMENT.md`](../history/DEVELOPMENT.md).
 
 ## Planned initiatives (execution order)
 
@@ -24,6 +29,7 @@ they never overlap.
 | 4 | v0.8.0 – v0.9.0 | **Action integrity rails** — 言行一致 + 工具稳发. **L1 thinking contract** (commitment-to-act + tool-trigger checklist + proportionality) in the cached core; structural/mechanical boundary enforcement (`is_final` promise contract + intent-without-act guard, generalizing the v0.6.2 empty-reply guard); off-hot-path defection audit → `decision` traces + replay tree; `recall` tool (Open Q #9). **No L2 gate harness** (LD #14 corrects a Python misreading) | [`action-integrity-2026-06/`](action-integrity-2026-06/) | ✅ shipped 2026-06-13 (5 versions) |
 | 5 | v0.10.0 – v0.11.0 | **Proactive agency** — autonomous tool-calling turns when no one is talking, not just proactive messaging (the 2026 ambient/Hermes paradigm, companion-scaled). A proactive turn is a `runTurn` with the full tool surface and **`message` optional** (she can act silently). Idle + scheduled wakeups; the wake gate is the one legitimate L2 gate (reuses Initiative 4's audit lane). **Safety contract (LD #15): reversible-silent / irreversible-surfaced** + kill switch + action budget, because Alan chose full-tool-incl-`shell` autonomy. **Carries the deferred dream auto-trigger** + self-continuation (a delayed micro-wake) | [`proactive-agency-2026-06/`](proactive-agency-2026-06/) | ✅ shipped 2026-06-13 (5 versions) |
 | 6 | v0.12.0 – v0.13.4 | **Frontend port — the body** — the consumption controller (v0.12.0, shipped) + a freshly **redesigned** cute UI (Alan's design, not a Python-page port) + the real Live2D avatar (yumi) + GPT-SoVITS voice + lip-sync, all behind the v0.12.0 `Live2DSink`/`AudioSink` interfaces. Reuses the pixi-live2d/Cubism runtime + yumi assets + the SoVITS sidecar; the TS driver glue is ported fresh ("参考 Python 但不照搬"). **v0.12.0 shipped; v0.13.0–v0.13.3 planned** | [`frontend-port-2026-06/`](frontend-port-2026-06/) | ✅ shipped 2026-06-14 (6 versions) |
+| ~~7~~ | ~~v0.14.0 – v0.14.2~~ | **Open-source packaging + one-command startup** — ❌ **cancelled.** Open-source/Docker premise dropped; TTS stays original GPT-SoVITS, local-only, not open-sourced. The local one-command launcher was delivered outside the roadmap (`bun run dev`). The still-useful, OSS-independent bits (LICENSE, README rewrite, secret-scan) may return as a smaller future initiative if/when open-sourcing is revisited. | [`oss-packaging-2026-06/`](oss-packaging-2026-06/) | ❌ cancelled |
 
 ## Ordering philosophy
 
@@ -126,3 +132,19 @@ the GPT-SoVITS sidecar, while porting the TS driver glue + the whole page fresh.
 | v0.13.2 ✅ | [Live2D high-fidelity FaceVM](frontend-port-2026-06/v0.13.2-live2d-fidelity.md) | layered engine + 14 emotions (timelines/overlays/actions) + affect→emotion map — **shipped 2026-06-14** |
 | v0.13.3 ✅ | [Voice + lip-sync](frontend-port-2026-06/v0.13.3-tts-lipsync.md) | Web Audio `AudioSink` + RMS lip-sync + GPT-SoVITS proxy client (sidecar reused as-is) — **shipped 2026-06-14** |
 | v0.13.4 ✅ | [Polish + close](frontend-port-2026-06/v0.13.4-polish-close.md) | dream overlay + ☀️ wake, thinking indicator, proactive glow, mood pip, scroll pill, settings, reduced-motion + responsive — **shipped 2026-06-14; Initiative 6 ✅ complete** |
+
+## Initiative 7 — Open-source packaging + one-command startup (v0.14.0 – v0.14.2) — ❌ CANCELLED
+
+**Cancelled.** The open-source / Docker-distribution premise was dropped: the project stays local for
+now, and TTS keeps the original GPT-SoVITS (local-only, not open-sourced). The one-command startup goal
+was met locally outside the roadmap — `bun run dev` ([`scripts/dev-all.ts`](../../scripts/dev-all.ts))
+spawns server + web + the GPT-SoVITS sidecar ([`scripts/tts-proxy.cjs`](../../scripts/tts-proxy.cjs), a
+thin standalone wrapper over the Python `GptSovitsService`). The plan files below are kept for reference
+only; if open-sourcing is revisited, the OSS-hygiene pieces (LICENSE, README rewrite, secret-scan) can
+return as a smaller standalone initiative. See [`oss-packaging-2026-06/`](oss-packaging-2026-06/).
+
+| Version | Plan | Theme |
+|---|---|---|
+| v0.14.0 | [Bundle GPT-SoVITS service](oss-packaging-2026-06/v0.14.0-bundle-tts.md) | `services/tts/gpt-sovits/` (docker-compose) + dev-server translates `{text,voice}`→`api_v2` (drop the Python proxy); weights gitignored |
+| v0.14.1 | [One-command launcher](oss-packaging-2026-06/v0.14.1-one-command.md) | `bun run dev`/`start` via `concurrently` (server + web + sidecar) + `bun run setup` (pull image + yumi voice model); cross-platform |
+| v0.14.2 | [OSS hygiene + close](oss-packaging-2026-06/v0.14.2-oss-hygiene.md) | MIT LICENSE, README rewrite, `.env.example`, `THIRD_PARTY_LICENSES`, secret-scan, `.gitignore models/` — **Initiative 7 ✅** |
