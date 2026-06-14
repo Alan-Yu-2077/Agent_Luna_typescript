@@ -1,6 +1,6 @@
 # Agent_Luna (TypeScript) — Development History
 
-Last updated: 2026-06-13 (Asia/Shanghai) — v0.12.1 (repo-wide audit + fixes: turn persistence resilience)
+Last updated: 2026-06-14 (Asia/Shanghai) — v0.13.0 (cute UI shell — redesigned vtuber-overlay frontend)
 
 ## Scope
 
@@ -60,7 +60,8 @@ during the rewrite. Its version log is unrelated to this one — `v0.1` here is 
 | `v0.10.3` | 2026-06-13 | Proactive scheduler/heartbeat — idle loop goes autonomous (behind the kill switch) | `ed51967` |
 | `v0.11.0` | 2026-06-13 | Self-continuation + dream auto-trigger + autonomy default-on; Initiative 5 complete | `45bb3cb` |
 | `v0.12.0` | 2026-06-13 | Frontend consumption controller (`packages/web`); Initiative 6 begins | `680e58d` |
-| `v0.12.1` | 2026-06-13 | Repo-wide audit (9 reviewers) + fixes — turn persistence resilience, dev tool_name | `working tree` |
+| `v0.12.1` | 2026-06-13 | Repo-wide audit (9 reviewers) + fixes — turn persistence resilience, dev tool_name | `7cbfdc1` |
+| `v0.13.0` | 2026-06-14 | Cute UI shell — redesigned vtuber-overlay frontend (chat left / model right) | `working tree` |
 
 ## Detailed records
 
@@ -116,6 +117,73 @@ Inference:
   `defineTool`, the dispatcher, and provider logic stay in `packages/server`. Frontend
   (`packages/web`) will consume the same protocol package in Initiative 6, getting
   contract drift as a type error rather than a runtime mismatch.
+
+### `v0.13.0` — 2026-06-14 — Cute UI shell (Initiative 6, redesigned frontend)
+
+Status:
+
+- working tree (commit hash recorded post-commit)
+
+Fact:
+
+- **New `packages/web/src/ui/` module (5 files)** — the redesigned cute frontend, modeled on a
+  vtuber-stream-overlay reference Alan supplied:
+  - [`theme.css`](../../packages/web/src/ui/theme.css) (~155 lines) — cool **yumi** palette (CSS
+    vars: silver-white / sky-blue / lavender + soft pink), light-blue/white **vertical stripes**
+    (`repeating-linear-gradient`), **zigzag** top + **scalloped** bottom lace (inline SVG data-URI
+    backgrounds), grey chat panel + cloud-puff corners, sky-blue/white bubbles, lavender 入梦 button,
+    model-stage placeholder, a gentle float animation gated behind `prefers-reduced-motion`, and a
+    narrow-viewport stacking breakpoint.
+  - [`layout.ts`](../../packages/web/src/ui/layout.ts) (~95 lines) — `buildLayout(root)` constructs
+    the DOM shell (status badge, left chat panel with header/log/input, right model stage with
+    placeholder + floating moon 入梦 button, scattered cloud/diamond/flower motifs) and returns the
+    live mount points `{ statusBadge, chatLog, input, sendBtn, dreamBtn, modelStage }`.
+  - [`cuteBubbleView.ts`](../../packages/web/src/ui/cuteBubbleView.ts) (~95 lines) —
+    `CuteBubbleView implements BubbleView`: `open/append/finalize/discard` render Luna bubbles on the
+    **right** with a per-bubble timestamp (`data-ts` + hover `title`); `chip()` renders cute
+    tool/dream/proactive/error cards; the view-only `userMessage()` renders the **left** user echo.
+  - [`time.ts`](../../packages/web/src/ui/time.ts) — pure `relativeTime(now, then)` (刚刚 / N 分钟前 /
+    N 小时前 / M/D), `absoluteTime`, `dateLabel`, `absoluteStamp`, plus `startTimestampRefresh` that
+    ages every `[data-ts]` label on a 30s timer.
+  - [`toolLabels.ts`](../../packages/web/src/ui/toolLabels.ts) — `toolCardLabel` maps a `ToolName`
+    token in the controller's chip text to a friendly label (`recall`→"翻了翻记忆 🔖", etc.); unknown
+    text falls through stripped.
+- **Rewrote [`app.ts`](../../packages/web/src/app.ts)** — builds the layout, wires the **unchanged**
+  v0.12.0 `createController` with the stub `consoleLive2DSink`/`noopAudioSink`, pipes WS events
+  through `controller.handle`; input send → `view.userMessage` + `chat.send`; 入梦 → `dream.enter`;
+  `dream.status` locks the input; `onStatus` → status badge (the reference's `▶ LIVE` pill repurposed
+  as the connection indicator).
+- **Rewrote [`index.html`](../../packages/web/index.html)** — links `theme.css`, a single `#app`
+  mount, loads `app.ts`. The old dark inline dev host is gone.
+- **No changes** to `controller.ts`, `sinks.ts`, `wsClient.ts`, `bubbles.ts`, or
+  `packages/protocol` — the wire contract + consumption logic are frozen; v0.13.0 is presentation
+  only. `DomBubbleView` stays exported as the superseded reference impl.
+- **New `.claude/launch.json`** — web dev-server config (`bun packages/web/index.html`) for the
+  preview tooling.
+- **Tests:** new [`ui/time.test.ts`](../../packages/web/src/ui/time.test.ts) (7) +
+  [`ui/toolLabels.test.ts`](../../packages/web/src/ui/toolLabels.test.ts) (4). `bun test` = **278
+  pass / 0 fail** (web package: 20 across 3 files). `tsc --noEmit` clean on `packages/web` (now under
+  the type-check) **and** `packages/server`. Browser smoke via the preview tool: the shell + injected
+  sample bubbles/cards/timestamps render correctly (chat left, model right, lace/stripes/motifs).
+- **Design decisions (Alan, this session):** vanilla TS + CSS (no framework — matches the existing
+  `packages/web`); chat panel **LEFT** / model stage **RIGHT** (per the reference, supersedes the
+  earlier model-left wording); credit pills dropped; relative + hover-absolute timestamps; model area
+  is a simple placeholder box (real model = v0.13.1).
+
+Inference:
+
+- **The first visible, on-brand surface of the rewrite.** Luna now has a face-shaped shell; the real
+  Live2D model (v0.13.1) and GPT-SoVITS voice (v0.13.2) drop into the already-wired stub sinks with
+  no consumption-logic change. The v0.12.0 `Live2DSink`/`AudioSink`/`BubbleView` seams proved their
+  worth — an entire UI redesign touched zero controller/protocol code.
+- **Presentation/logic separation held under a real redesign.** Per-tool cute labels live in the view
+  (`toolLabels`), not the controller; the user-echo is a view method, not a wire event — so the
+  shared, tested controller stayed byte-for-byte unchanged. This is the rewrite's drift-elimination
+  thesis paying off at the frontend boundary.
+- **DOM rendering verified by browser smoke, not a DOM test dependency** — matching the repo's
+  thin-DOM discipline (`DomBubbleView` is also untested); the logic that *can* be pure (time
+  formatting, tool-label mapping) carries unit coverage, so the new code adds real assertions with
+  zero risk to the existing 278-test suite.
 
 ### `v0.12.1` — 2026-06-13 — Repo-wide audit + fixes
 

@@ -1,43 +1,64 @@
 import { createController } from './controller';
-import { DomBubbleView } from './bubbles';
-import { LunaWsClient } from './wsClient';
+import { LunaWsClient, type WsStatus } from './wsClient';
 import { consoleLive2DSink, noopAudioSink } from './sinks';
+import { CuteBubbleView } from './ui/cuteBubbleView';
+import { buildLayout } from './ui/layout';
+import { startTimestampRefresh } from './ui/time';
 
-// Browser entry — wires the consumption controller to a DOM bubble view, the
-// (stubbed) Live2D + audio sinks, and the WS client. The real Live2D model
-// driver + GPT-SoVITS audio replace the stubs in a later pass; this proves the
-// consumption path end-to-end in a browser today.
+// Browser entry — builds the cute UI shell, wires the v0.12.0 consumption
+// controller to the CuteBubbleView + (still stubbed) Live2D/audio sinks, and
+// pipes the WS event stream through. The real Live2D model (v0.13.1) and voice
+// (v0.13.2) drop into the stub sinks later; the consumption path is unchanged.
+
+const STATUS_TEXT: Record<WsStatus, string> = {
+  connecting: '连接中…',
+  open: '在线',
+  closed: '重连中…',
+};
+
 function boot(): void {
-  const log = document.getElementById('log');
-  const input = document.getElementById('input') as HTMLInputElement | null;
-  const statusEl = document.getElementById('status');
-  if (!log || !input) return;
+  const root = document.getElementById('app');
+  if (!root) return;
 
-  const view = new DomBubbleView(log);
+  const refs = buildLayout(root);
+  const view = new CuteBubbleView(refs.chatLog);
   const controller = createController({ view, live2d: consoleLive2DSink, audio: noopAudioSink });
+
+  let dreaming = false;
+  function setDreaming(d: boolean): void {
+    dreaming = d;
+    refs.input.disabled = d;
+    refs.input.placeholder = d ? 'Luna 正在做梦…' : '对 Luna 说点什么…';
+  }
 
   const client = new LunaWsClient({
     url: `ws://${location.host}`,
     onEvent: (e) => {
-      if (e.type === 'turn.started') view.chip('tool', '·'); // lightweight turn marker
+      if (e.type === 'dream.status') setDreaming(e.is_dreaming);
       controller.handle(e);
     },
     onStatus: (s) => {
-      if (statusEl) statusEl.textContent = s;
+      refs.statusBadge.textContent = STATUS_TEXT[s];
+      refs.statusBadge.dataset['status'] = s;
     },
   });
   client.connect();
 
   function send(): void {
-    const text = input!.value.trim();
-    if (!text) return;
-    view.finalize(`user:${Date.now()}`, text); // render the user line immediately
+    const text = refs.input.value.trim();
+    if (!text || dreaming) return;
+    view.userMessage(text);
     client.send({ type: 'chat.send', text });
-    input!.value = '';
+    refs.input.value = '';
   }
-  input.addEventListener('keydown', (e) => {
+
+  refs.sendBtn.addEventListener('click', send);
+  refs.input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') send();
   });
+  refs.dreamBtn.addEventListener('click', () => client.send({ type: 'dream.enter' }));
+
+  startTimestampRefresh(refs.chatLog);
 }
 
 boot();
