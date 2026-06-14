@@ -14,6 +14,7 @@ function harness() {
     finalize: (id, t) => calls.push(['finalize', id, t]),
     discard: (id) => calls.push(['discard', id]),
     chip: (kind: ChipKind, text) => calls.push(['chip', kind, text]),
+    renderHistory: (turns) => calls.push(['history', turns]),
   };
   const states: string[] = [];
   const live2d: Live2DSink = {
@@ -60,6 +61,26 @@ describe('frontend controller — message-tool consumption', () => {
       ['expr', 'soft_warmth', 0.6],
     ]);
     expect(h.spoken).toEqual(['想你了']);
+  });
+
+  test('history event replays prior turns through renderHistory (mapped shape)', () => {
+    const h = harness();
+    h.handle({
+      type: 'history',
+      turns: [
+        { user_text: '在吗', assistant_text: '在的', t_ms: 1000 },
+        { user_text: '', assistant_text: '(自言自语)', t_ms: 2000 },
+      ],
+    });
+    expect(h.calls).toEqual([
+      [
+        'history',
+        [
+          { userText: '在吗', assistantText: '在的', tMs: 1000 },
+          { userText: '', assistantText: '(自言自语)', tMs: 2000 },
+        ],
+      ],
+    ]);
   });
 
   test('two message bubbles in one turn stream independently', () => {

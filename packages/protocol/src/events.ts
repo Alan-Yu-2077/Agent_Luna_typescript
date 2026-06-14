@@ -139,8 +139,24 @@ export const ProactiveFinishedEvent = z.object({
   spoke: z.boolean(),
 });
 
+// Sent once on WS connect: replays the persisted conversation so a refresh
+// rehydrates the chat log (Initiative 6 fix). One entry per L2 turn; a proactive
+// turn has empty user_text. t_ms is the real turn time so timestamps are honest.
+export const HistoryTurn = z.object({
+  user_text: z.string(),
+  assistant_text: z.string(),
+  t_ms: z.number().int().nonnegative(),
+});
+export type HistoryTurn = z.infer<typeof HistoryTurn>;
+
+export const HistoryEvent = z.object({
+  type: z.literal('history'),
+  turns: z.array(HistoryTurn),
+});
+
 export const ServerEvent = z.discriminatedUnion('type', [
   PongEvent,
+  HistoryEvent,
   ErrorEvent,
   ToolStartedEvent,
   ToolProgressEvent,

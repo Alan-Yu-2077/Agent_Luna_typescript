@@ -16,6 +16,7 @@ export class WebAudioSink implements AudioSink {
   private readonly lip = new LipSync();
   private raf = 0;
   private disabled = false;
+  private fails = 0;
 
   constructor(private readonly opts: WebAudioSinkOpts) {
     const unlock = (): void => {
@@ -30,8 +31,15 @@ export class WebAudioSink implements AudioSink {
     let data: ArrayBuffer;
     try {
       data = await fetchSpeech(text, { voice, apiBase: this.opts.apiBase });
-    } catch {
-      this.disabled = true; // sidecar unavailable — stay silent for the session
+      this.fails = 0; // recovered
+    } catch (e) {
+      // Don't latch off on the first failure: GPT-SoVITS loads a ~5GB model on
+      // first /speak and returns 503 while warming — that's retryable, so the
+      // next message can succeed. Only give up after several consecutive hard
+      // failures (sidecar genuinely down), so we don't spam a dead endpoint.
+      const status = (e as { status?: number }).status;
+      if (status !== 503) this.fails += 1;
+      if (this.fails >= 5) this.disabled = true;
       return;
     }
     try {

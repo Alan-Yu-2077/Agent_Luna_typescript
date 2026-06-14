@@ -55,6 +55,17 @@ describe('FaceVm — emotion engine', () => {
     expect(last.get('ParamEyeOpenL') ?? 1).toBeLessThan(0.1);
   });
 
+  test('triggerEmotion plays a named preset directly; bad id is a no-op', () => {
+    const { writer, last } = recorder();
+    const vm = new FaceVm(writer);
+    expect(vm.listEmotions()).toContain('shy');
+    vm.triggerEmotion('does-not-exist'); // guarded — must not throw or queue
+    run(vm, 0, 100);
+    vm.triggerEmotion('shy', 1);
+    run(vm, 116, 3000);
+    expect(last.get('Paramsmileshy') ?? 0).toBeGreaterThan(0.5);
+  });
+
   test('emotion intensity scales expression strength', () => {
     const full = recorder();
     const fvm = new FaceVm(full.writer);

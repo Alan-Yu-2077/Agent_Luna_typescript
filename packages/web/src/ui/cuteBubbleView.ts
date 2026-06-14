@@ -1,4 +1,4 @@
-import type { BubbleView, ChipKind } from '../bubbles';
+import type { BubbleView, ChipKind, HistoryTurnView } from '../bubbles';
 import { absoluteStamp, relativeTime } from './time';
 import { toolCardLabel } from './toolLabels';
 
@@ -111,6 +111,37 @@ export class CuteBubbleView implements BubbleView {
     card.textContent = kind === 'tool' ? toolCardLabel(text) : text;
     this.host.appendChild(card);
     this.scroll();
+  }
+
+  renderHistory(turns: ReadonlyArray<HistoryTurnView>): void {
+    // Clear + rerender so it's idempotent across reconnects (the server resends
+    // the full persisted history on every WS open).
+    this.hideThinking();
+    this.bubbles.clear();
+    while (this.host.firstChild) this.host.removeChild(this.host.firstChild);
+    for (const t of turns) {
+      if (t.userText) {
+        const u = this.make('user');
+        u.body.textContent = t.userText;
+        this.host.appendChild(u.row);
+        this.stamp(u.row, t.tMs);
+      }
+      if (t.assistantText) {
+        const l = this.make('luna');
+        l.body.textContent = t.assistantText;
+        this.host.appendChild(l.row);
+        this.stamp(l.row, t.tMs);
+      }
+    }
+    if (turns.length) {
+      const div = this.host.ownerDocument.createElement('div');
+      div.className = 'history-divider';
+      div.textContent = '— 以上为历史对话 —';
+      div.style.cssText =
+        'text-align:center;font-size:11px;opacity:0.5;margin:10px 0 4px;letter-spacing:1px;';
+      this.host.appendChild(div);
+    }
+    this.scrollToBottom();
   }
 
   userMessage(text: string): void {

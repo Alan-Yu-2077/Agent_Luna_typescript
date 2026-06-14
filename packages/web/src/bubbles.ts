@@ -6,7 +6,13 @@
 
 export type ChipKind = 'tool' | 'dream' | 'proactive' | 'expression' | 'error';
 
+// One persisted turn, replayed on (re)connect. user is empty for a proactive turn.
+export type HistoryTurnView = { userText: string; assistantText: string; tMs: number };
+
 export interface BubbleView {
+  // replay the persisted conversation on connect — clears + rerenders so it is
+  // idempotent across reconnects (optional; only the cute view implements it)
+  renderHistory?(turns: ReadonlyArray<HistoryTurnView>): void;
   // create (or no-op if already open) a streaming assistant bubble for `id`
   open(id: string): void;
   // append a streamed fragment to the bubble (creates it if missing)

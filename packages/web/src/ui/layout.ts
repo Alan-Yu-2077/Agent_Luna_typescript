@@ -20,6 +20,7 @@ export type LayoutRefs = {
   ttsToggle: HTMLInputElement;
   live2dToggle: HTMLInputElement;
   motionToggle: HTMLInputElement;
+  gazeToggle: HTMLInputElement;
 };
 
 type Motif = { ch: string; top: string; left: string; size: string; op?: string };
@@ -84,7 +85,8 @@ export function buildLayout(root: HTMLElement): LayoutRefs {
   const ttsToggle = toggleRow(settingsPanel, '语音', localStorage.getItem('luna:tts') !== '0');
   const live2dToggle = toggleRow(settingsPanel, 'Live2D 模型', localStorage.getItem('luna:live2d') !== '0');
   const motionToggle = toggleRow(settingsPanel, '减少动效', localStorage.getItem('luna:reduce-motion') === '1');
-  add(settingsPanel, 'div', 'hint', '语音 / 模型改动需刷新生效');
+  const gazeToggle = toggleRow(settingsPanel, '视线跟随', localStorage.getItem('luna:gaze-follow') !== '0');
+  add(settingsPanel, 'div', 'hint', '语音 / 模型改动需刷新生效 · 滚轮缩放 · 双击复位');
 
   const motifLayer = add(stage, 'div', 'motif-layer');
   for (const m of MOTIFS) {
@@ -158,6 +160,6 @@ export function buildLayout(root: HTMLElement): LayoutRefs {
   return {
     statusBadge, chatLog, input, sendBtn, dreamBtn, modelStage,
     moodPip, scrollPill, dreamOverlay, dreamWakeBtn, dreamCaption,
-    settingsBtn, settingsPanel, ttsToggle, live2dToggle, motionToggle,
+    settingsBtn, settingsPanel, ttsToggle, live2dToggle, motionToggle, gazeToggle,
   };
 }

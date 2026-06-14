@@ -1,7 +1,7 @@
 import { MessageDelivery } from '@luna/protocol';
 import { createController } from './controller';
 import { LunaWsClient, type WsStatus } from './wsClient';
-import { consoleLive2DSink, noopAudioSink, type AudioSink, type Live2DSink } from './sinks';
+import { consoleLive2DSink, noopAudioSink, type AudioSink, type Live2DSink, type Live2DState } from './sinks';
 import { CuteBubbleView } from './ui/cuteBubbleView';
 import { buildLayout } from './ui/layout';
 import { startTimestampRefresh } from './ui/time';
@@ -117,14 +117,79 @@ async function boot(): Promise<void> {
     localStorage.setItem('luna:reduce-motion', on ? '1' : '0');
     root.classList.toggle('reduce-motion', on);
   });
+  refs.gazeToggle.addEventListener('change', () => {
+    // gaze-follow takes effect live (no refresh) — toggles pixi autoFocus
+    localStorage.setItem('luna:gaze-follow', refs.gazeToggle.checked ? '1' : '0');
+    live2d.setGazeFollow?.(refs.gazeToggle.checked);
+  });
 
   if (location.search.includes('dev')) {
     const g = globalThis as unknown as { lunaLive2D?: Live2DSink; lunaAudio?: AudioSink };
     g.lunaLive2D = live2d;
     g.lunaAudio = audio;
+    buildDevPanel(live2d);
   }
 
   startTimestampRefresh(refs.chatLog);
+}
+
+// Dev-only (?dev) floating panel: trigger every preset emotion + the coarse
+// states, so performances are visibly testable without the backend. MVP for the
+// 表演编排 / 挂机 / 睡眠 inspection ask.
+function buildDevPanel(live2d: Live2DSink): void {
+  const btn = 'background:#20242f;color:#e7e9ef;border:1px solid #2c3140;border-radius:6px;padding:3px 8px;cursor:pointer;font:inherit;';
+  const panel = document.createElement('div');
+  panel.style.cssText =
+    'position:fixed;left:10px;bottom:10px;z-index:9999;background:rgba(20,22,28,.92);color:#e7e9ef;' +
+    'border:1px solid #2c3140;border-radius:10px;padding:10px;font:12px ui-monospace,monospace;' +
+    'display:flex;flex-direction:column;gap:6px;max-width:250px;';
+  const title = document.createElement('div');
+  title.textContent = '🎭 dev · 表演触发';
+  title.style.cssText = 'color:#ffa7d1;font-weight:600;';
+  panel.appendChild(title);
+
+  const emotions = live2d.listEmotions?.() ?? [];
+  const row = document.createElement('div');
+  row.style.cssText = 'display:flex;gap:6px;';
+  const sel = document.createElement('select');
+  sel.style.cssText = 'flex:1;background:#20242f;color:inherit;border:1px solid #2c3140;border-radius:6px;padding:3px;';
+  for (const id of emotions) {
+    const o = document.createElement('option');
+    o.value = id;
+    o.textContent = id;
+    sel.appendChild(o);
+  }
+  const play = document.createElement('button');
+  play.textContent = '▶ 表演';
+  play.style.cssText = btn;
+  play.addEventListener('click', () => live2d.triggerEmotion?.(sel.value));
+  row.append(sel, play);
+  panel.appendChild(row);
+
+  const srow = document.createElement('div');
+  srow.style.cssText = 'display:flex;gap:4px;flex-wrap:wrap;';
+  const states: Array<[string, Live2DState]> = [
+    ['待机', 'neutral'],
+    ['思考', 'thinking'],
+    ['说话', 'speaking'],
+    ['睡眠', 'sleeping'],
+  ];
+  for (const [label, st] of states) {
+    const b = document.createElement('button');
+    b.textContent = label;
+    b.style.cssText = btn;
+    b.addEventListener('click', () => live2d.setState(st));
+    srow.appendChild(b);
+  }
+  panel.appendChild(srow);
+
+  if (!emotions.length) {
+    const note = document.createElement('div');
+    note.textContent = '(模型未加载 — 占位 sink)';
+    note.style.cssText = 'color:#8b93a7;';
+    panel.appendChild(note);
+  }
+  document.body.appendChild(panel);
 }
 
 void boot();

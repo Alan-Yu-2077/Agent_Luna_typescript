@@ -15,6 +15,13 @@ export interface Live2DSink {
   // lip-sync mouth-open [0,1] (fed by the audio pipeline; 0 until v0.13.3)
   setMouthOpen(value: number): void;
   clear(): void;
+  // optional — only the real pixi sink implements these:
+  // toggle pointer gaze-follow (autoFocus) vs pure performance-choreography mode
+  setGazeFollow?(on: boolean): void;
+  // play a named preset emotion directly (dev / manual trigger)
+  triggerEmotion?(id: string, intensity?: number): void;
+  // the available preset emotion ids (for a dev trigger UI)
+  listEmotions?(): string[];
 }
 
 export interface AudioSink {

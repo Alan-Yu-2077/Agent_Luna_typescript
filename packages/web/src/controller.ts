@@ -29,6 +29,12 @@ export function createController(deps: ControllerDeps): { handle: (e: ServerEven
       case 'pong':
         return;
 
+      case 'history':
+        deps.view.renderHistory?.(
+          e.turns.map((t) => ({ userText: t.user_text, assistantText: t.assistant_text, tMs: t.t_ms })),
+        );
+        return;
+
       case 'turn.started':
         textStreaming = false;
         deps.live2d.setState('thinking');

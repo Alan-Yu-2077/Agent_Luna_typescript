@@ -13,6 +13,10 @@ export async function fetchSpeech(text: string, opts: FetchSpeechOpts = {}): Pro
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ text, voice: opts.voice?.voice, provider: opts.voice?.provider }),
   });
-  if (!res.ok) throw new Error(`tts request failed: ${res.status}`);
+  if (!res.ok) {
+    const err = new Error(`tts request failed: ${res.status}`) as Error & { status?: number };
+    err.status = res.status; // lets the sink treat 503 (model warming up) as retryable
+    throw err;
+  }
   return res.arrayBuffer();
 }
