@@ -42,7 +42,7 @@ body {
   );
 }
 
-.luna-app { height: 100vh; display: flex; flex-direction: column; }
+.luna-app { position: relative; height: 100vh; display: flex; flex-direction: column; }
 
 .lace-top {
   height: 14px; flex: none;
@@ -173,3 +173,78 @@ body {
   .chat-panel { flex: 1 1 auto; order: 2; }
   .model-stage { flex: 0 0 210px; order: 1; }
 }
+
+/* dream overlay (v0.13.4) */
+.dream-overlay {
+  position: absolute; inset: 0; z-index: 20; display: none;
+  flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+  color: #fff; text-align: center; overflow: hidden;
+  background: linear-gradient(160deg, rgba(74, 86, 140, 0.66), rgba(150, 170, 220, 0.5));
+  backdrop-filter: blur(3px);
+}
+.dream-overlay.on { display: flex; }
+.dream-overlay .moon { font-size: 56px; animation: dream-float 5s ease-in-out infinite; }
+.dream-overlay .dream-title { font-size: 18px; font-weight: 500; text-shadow: 0 1px 6px rgba(40, 50, 90, 0.4); }
+.dream-overlay .dream-caption { font-size: 13px; opacity: 0.85; min-height: 1.2em; padding: 0 24px; }
+.dream-overlay .wake-btn {
+  margin-top: 6px; border: none; cursor: pointer; font: inherit; font-size: 14px; font-weight: 500;
+  background: #ffe9a8; color: #7a5a1a; padding: 9px 18px; border-radius: 999px; box-shadow: 0 3px 0 #e6cf86;
+}
+.dream-overlay .wake-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #e6cf86; }
+.dream-stars { position: absolute; inset: 0; pointer-events: none; }
+.dream-stars span { position: absolute; color: #fff; opacity: 0.6; animation: dream-drift linear infinite; }
+@keyframes dream-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+@keyframes dream-drift { from { transform: translateY(30px); opacity: 0; } 20% { opacity: 0.6; } to { transform: translateY(-60px); opacity: 0; } }
+
+/* thinking indicator */
+.thinking { align-self: flex-end; display: inline-flex; gap: 4px; padding: 9px 12px; background: var(--sky); border-radius: 13px 13px 4px 13px; }
+.thinking i { width: 6px; height: 6px; border-radius: 50%; background: var(--sky-text); opacity: 0.4; animation: think-dots 1.2s infinite; }
+.thinking i:nth-child(2) { animation-delay: 0.2s; }
+.thinking i:nth-child(3) { animation-delay: 0.4s; }
+@keyframes think-dots { 0%, 60%, 100% { opacity: 0.3; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-3px); } }
+
+/* proactive glow (on the existing card) */
+.card.proactive { animation: proactive-glow 2.4s ease-in-out 2; }
+@keyframes proactive-glow { 0%, 100% { box-shadow: 0 0 0 0 rgba(95, 184, 127, 0); } 50% { box-shadow: 0 0 0 6px rgba(95, 184, 127, 0.18); } }
+
+/* mood pip (current affect, near the model) */
+.mood-pip {
+  position: absolute; top: 10px; left: 14px; z-index: 5; opacity: 0; transition: opacity 0.3s;
+  display: inline-flex; align-items: center; gap: 6px; background: #fff; color: var(--ink);
+  font-size: 12px; padding: 4px 10px; border-radius: 999px; box-shadow: 0 1px 4px rgba(90, 120, 160, 0.18);
+}
+.mood-pip.on { opacity: 1; }
+.mood-pip .emoji { font-size: 15px; }
+
+/* scroll-to-latest pill */
+.scroll-pill {
+  position: absolute; left: 50%; transform: translateX(-50%); bottom: 70px; z-index: 6; display: none;
+  align-items: center; gap: 4px; border: none; cursor: pointer; font: inherit; font-size: 12px;
+  background: var(--lavender); color: var(--lavender-text); padding: 5px 12px; border-radius: 999px;
+  box-shadow: 0 2px 6px rgba(90, 120, 160, 0.25);
+}
+.scroll-pill.on { display: inline-flex; }
+
+/* settings */
+.settings-btn {
+  position: absolute; top: 8px; right: 14px; z-index: 7; width: 30px; height: 30px; border-radius: 50%;
+  border: none; cursor: pointer; background: #fff; color: #5b7fa6; font-size: 15px;
+  box-shadow: 0 1px 4px rgba(90, 120, 160, 0.18);
+}
+.settings-panel {
+  position: absolute; top: 44px; right: 14px; z-index: 8; display: none; flex-direction: column; gap: 9px;
+  background: #fff; border-radius: 14px; padding: 12px 14px; min-width: 168px; font-size: 13px; color: var(--ink);
+  box-shadow: 0 4px 16px rgba(90, 120, 160, 0.25);
+}
+.settings-panel.on { display: flex; }
+.settings-panel label { display: flex; align-items: center; justify-content: space-between; gap: 10px; cursor: pointer; }
+.settings-panel .hint { font-size: 11px; color: var(--muted); }
+
+@media (prefers-reduced-motion: reduce) {
+  .model-placeholder, .dream-overlay .moon, .dream-stars span, .thinking i, .card.proactive { animation: none; }
+}
+.reduce-motion .model-placeholder,
+.reduce-motion .dream-overlay .moon,
+.reduce-motion .dream-stars span,
+.reduce-motion .thinking i,
+.reduce-motion .card.proactive { animation: none; }

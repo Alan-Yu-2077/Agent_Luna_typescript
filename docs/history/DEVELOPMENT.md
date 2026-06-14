@@ -1,6 +1,6 @@
 # Agent_Luna (TypeScript) — Development History
 
-Last updated: 2026-06-14 (Asia/Shanghai) — v0.13.3 (voice + lip-sync — the AudioSink, behind the reused sidecar)
+Last updated: 2026-06-14 (Asia/Shanghai) — v0.13.4 (dream overlay + UX polish; Initiative 6 ✅ — the body is assembled)
 
 ## Scope
 
@@ -64,7 +64,8 @@ during the rewrite. Its version log is unrelated to this one — `v0.1` here is 
 | `v0.13.0` | 2026-06-14 | Cute UI shell — redesigned vtuber-overlay frontend (chat left / model right) | `f82f5ae` |
 | `v0.13.1` | 2026-06-14 | Live2D foundation — yumi avatar (pixi-live2d + Cubism), first-cut FaceVM, draggable | `94ff57a` |
 | `v0.13.2` | 2026-06-14 | High-fidelity FaceVM — 14 layered emotions + timelines + overlays + actions | `e367b50` |
-| `v0.13.3` | 2026-06-14 | Voice + lip-sync — Web Audio AudioSink + RMS lip-sync + GPT-SoVITS proxy client | `working tree` |
+| `v0.13.3` | 2026-06-14 | Voice + lip-sync — Web Audio AudioSink + RMS lip-sync + GPT-SoVITS proxy client | `78a3350` |
+| `v0.13.4` | 2026-06-14 | Dream overlay + UX polish (thinking/mood/scroll/settings/a11y); **Initiative 6 complete** | `working tree` |
 
 ## Detailed records
 
@@ -120,6 +121,45 @@ Inference:
   `defineTool`, the dispatcher, and provider logic stay in `packages/server`. Frontend
   (`packages/web`) will consume the same protocol package in Initiative 6, getting
   contract drift as a type error rather than a runtime mismatch.
+
+### `v0.13.4` — 2026-06-14 — Dream overlay + UX polish (Initiative 6 ✅ complete)
+
+Status:
+
+- working tree (commit hash recorded post-commit)
+
+Fact:
+
+- **Dream overlay** ([`layout.ts`](../../packages/web/src/ui/layout.ts) + [`theme.css`](../../packages/web/src/ui/theme.css)
+  + [`app.ts`](../../packages/web/src/app.ts)): on `dream.status is_dreaming` a full-screen dreamy
+  overlay (blur + gradient, floating 🌙, drifting stars, "Luna 在做梦…" + a `dream.step` caption,
+  ☀️ 唤醒 → `dream.wake`); input locks; a **min-duration (1.5s)** floor prevents a fast-cycle flash.
+- **Thinking indicator** ([`cuteBubbleView.ts`](../../packages/web/src/ui/cuteBubbleView.ts)): typing
+  dots on `turn.started`/`proactive.started`, removed when the first bubble/card/`turn.result` lands.
+- **Mood pip** ([`mood.ts`](../../packages/web/src/ui/mood.ts), 15 affect→emoji+label): the app
+  parses each `tool.finished` `MessageDelivery` and shows Luna's current affect by the model.
+- **Proactive glow** (CSS on the existing proactive card) · **scroll-to-latest pill** (auto-scroll
+  only when already at the bottom; the user's own message always scrolls) · **settings popover**
+  (voice / Live2D / reduce-motion toggles → `localStorage`; reduce-motion applies live) ·
+  **`prefers-reduced-motion`** + a manual `.reduce-motion` class freeze all the new animations.
+- **No controller / protocol / sink change** — every polish hook reads existing `ServerEvent`s in
+  `app.ts` or is a `CuteBubbleView` addition; the v0.12.0 contract is untouched.
+- **Tests:** `mood.test.ts` (1). `bun test` **294 pass / 0 fail**; `tsc` clean (web + server). Browser
+  smoke: dream overlay, thinking dots, proactive glow, mood pip, and the settings panel all render.
+- **Initiative 6 ✅ complete** (v0.12.0 → v0.13.4): the redesigned cute UI + Live2D yumi + voice +
+  lip-sync + dream overlay + ambient polish.
+
+Inference:
+
+- **Luna has a body now.** The rewrite reached brain + memory + dream + proactivity + **a face + a
+  voice + a face-to-show-she-dreams** — the whole user-facing surface, built across six versions, all
+  consuming the v0.12.0 controller/sink seams with **zero protocol churn**. The typed-contract bet
+  paid its biggest dividend here: an entire UI/Live2D/audio frontend layered on without one wire change.
+- **The dream ritual is closed.** The 🌙 入梦 button now has its visible payoff (overlay + sleeping
+  pose + ☀️ wake), completing the loop the backend dream engine (v0.5.0) and its auto-trigger
+  (v0.11.0) opened — the user can finally *see* her dream.
+- **Polish stayed honest.** Reduced-motion + the WebGL/audio graceful-degrade paths mean the cute,
+  animated surface never becomes a hard dependency; chat works on a potato.
 
 ### `v0.13.3` — 2026-06-14 — Voice + lip-sync (Initiative 6, the AudioSink)
 

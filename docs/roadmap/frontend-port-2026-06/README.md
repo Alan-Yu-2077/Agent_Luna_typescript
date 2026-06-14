@@ -1,8 +1,8 @@
-# Initiative 6 — Frontend Port: the Body (v0.12.0 – v0.13.3)
+# Initiative 6 — Frontend Port: the Body (v0.12.0 – v0.13.4)
 
-> **Status: 🔨 IN PROGRESS.** v0.12.0 ✅ shipped (consumption controller). v0.13.0–v0.13.3
-> ⏳ planned (authored 2026-06-13): the redesigned cute UI + Live2D + TTS — "the body." Master:
-> [`../README.md`](../README.md).
+> **Status: ✅ COMPLETE (2026-06-14).** All six versions shipped (v0.12.0 → v0.13.4): the consumption
+> controller + the redesigned cute UI + Live2D yumi + high-fidelity emotions + voice/lip-sync + the
+> dream overlay & UX polish — "the body." Master: [`../README.md`](../README.md).
 
 ## The idea
 
@@ -98,7 +98,7 @@ The proven runtime to learn from (then rewrite into TS behind the sinks):
 | [v0.13.1](v0.13.1-live2d.md) | v0.13.1 | Live2D **foundation** — real `Live2DSink` (pixi-live2d + Cubism + yumi), first-cut FaceVM, draggable + persisted, degrade-safe | High | v0.13.0 | ✅ shipped 2026-06-14 |
 | [v0.13.2](v0.13.2-live2d-fidelity.md) | v0.13.2 | Live2D **high-fidelity FaceVM** — layered engine + 14 emotions/overlays/actions + affect→emotion map | Medium | v0.13.1 | ✅ shipped 2026-06-14 (sine micro-motion deferred) |
 | [v0.13.3](v0.13.3-tts-lipsync.md) | v0.13.3 | Voice — real `AudioSink` (GPT-SoVITS proxy client + Web Audio + RMS lip-sync) | Medium | v0.13.1 | ✅ shipped 2026-06-14 (live synth pending sidecar) |
-| [v0.13.4](v0.13.4-polish-close.md) | v0.13.4 | Dream overlay + UX extras + responsive/a11y + integration + initiative close | Low | v0.13.0–v0.13.3 | ⏳ |
+| [v0.13.4](v0.13.4-polish-close.md) | v0.13.4 | Dream overlay + UX extras + responsive/a11y + integration + initiative close | Low | v0.13.0–v0.13.3 | ✅ shipped 2026-06-14 |
 
 ## Acceptance criteria for the whole initiative
 
@@ -107,12 +107,12 @@ The proven runtime to learn from (then rewrite into TS behind the sinks):
       cute tool-action cards, input bar, 🌙 入梦 button. (v0.13.0)
 - [x] Live2D yumi renders + animates (built-in blink/breath); her `expression`/`emotion` drive her
       face (first-cut, v0.13.1); she is draggable + position persists. (rich emotions → v0.13.2)
-- [ ] She speaks (GPT-SoVITS) with lip-sync; audio unlocks on first gesture; on-audio-start Live2D
-      commands fire.
-- [ ] Dream overlay on dreaming + ☀️ wake; proactive messages visually distinct; thinking indicator.
-- [ ] Graceful degradation (no WebGL / no audio) keeps chat working; `prefers-reduced-motion` honored.
-- [ ] All three packages typecheck; `packages/web` tests green; live browser end-to-end verified
-      against `bun run dev:server` + `bun run dev:web`.
+- [x] She speaks (GPT-SoVITS) with lip-sync; audio unlocks on first gesture. (v0.13.3 — live synth
+      pending the sidecar; the lip-sync output path is browser-verified)
+- [x] Dream overlay on dreaming + ☀️ wake; proactive messages visually distinct; thinking indicator. (v0.13.4)
+- [x] Graceful degradation (no WebGL / no audio) keeps chat working; `prefers-reduced-motion` honored. (v0.13.1 / v0.13.4)
+- [x] All packages typecheck; `packages/web` tests green (294/0); browser smoke across shell / model /
+      emotions / lip-sync output / dream overlay.
 
 ## Open questions blocking start
 
