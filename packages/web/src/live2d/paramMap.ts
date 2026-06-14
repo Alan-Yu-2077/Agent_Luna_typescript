@@ -56,3 +56,25 @@ export const FACE_VM_DEFAULT_STATE: Record<FaceStateKey, number> = {
   browLY: 0, browRY: 0, browLX: 0, browRX: 0,
   browLAngle: 0, browRAngle: 0, browLForm: 0, browRForm: 0,
 };
+
+// Per-parameter value clamps, ported from Python face-vm.js clampStateValue.
+export function clampStateValue(key: FaceStateKey, value: number): number {
+  if (
+    key.startsWith('eyeOpen') || key.startsWith('eyeSmile') ||
+    key === 'mouthOpen' || key === 'cheekPuff' || key === 'tongueOut' ||
+    key === 'bow' || key === 'bowPress'
+  ) return clamp(value, 0, 1);
+  if (key === 'jawOpen') return clamp(value, 0, 2);
+  if (key === 'mouthShrug') return clamp(value, -2, 2);
+  if (
+    key === 'mouthForm' || key === 'mouthShift' || key === 'mouthPucker' ||
+    key === 'eyeSize' || key === 'eyeSquintL' || key === 'eyeSquintR' ||
+    key.startsWith('browL') || key.startsWith('browR') ||
+    key === 'gazeX' || key === 'gazeY'
+  ) return clamp(value, -1, 1);
+  return value;
+}
+
+function clamp(v: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, v));
+}

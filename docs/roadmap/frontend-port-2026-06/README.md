@@ -96,7 +96,7 @@ The proven runtime to learn from (then rewrite into TS behind the sinks):
 | (shipped) | v0.12.0 | Consumption controller — event→bubble + sink interfaces | — | — | ✅ |
 | [v0.13.0](v0.13.0-cute-ui-shell.md) | v0.13.0 | Cute UI shell — the redesigned page (layout, style, bubbles, timestamps, tool cards, dream button); stub sinks | Low | v0.12.0 | ✅ shipped 2026-06-14 (chat-left/model-right) |
 | [v0.13.1](v0.13.1-live2d.md) | v0.13.1 | Live2D **foundation** — real `Live2DSink` (pixi-live2d + Cubism + yumi), first-cut FaceVM, draggable + persisted, degrade-safe | High | v0.13.0 | ✅ shipped 2026-06-14 |
-| [v0.13.2](v0.13.2-live2d-fidelity.md) | v0.13.2 | Live2D **high-fidelity FaceVM** — layered engine + emotion/action libraries + rich affect→emotion map | Medium | v0.13.1 | ⏳ |
+| [v0.13.2](v0.13.2-live2d-fidelity.md) | v0.13.2 | Live2D **high-fidelity FaceVM** — layered engine + 14 emotions/overlays/actions + affect→emotion map | Medium | v0.13.1 | ✅ shipped 2026-06-14 (sine micro-motion deferred) |
 | [v0.13.3](v0.13.3-tts-lipsync.md) | v0.13.3 | Voice — real `AudioSink` (GPT-SoVITS), playback, on-audio-start → Live2D, lip-sync | Medium | v0.13.1 | ⏳ |
 | [v0.13.4](v0.13.4-polish-close.md) | v0.13.4 | Dream overlay + UX extras + responsive/a11y + integration + initiative close | Low | v0.13.0–v0.13.3 | ⏳ |
 

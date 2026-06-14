@@ -1,6 +1,6 @@
 # Agent_Luna (TypeScript) — Development History
 
-Last updated: 2026-06-14 (Asia/Shanghai) — v0.13.1 (Live2D foundation — yumi avatar live in the cute UI)
+Last updated: 2026-06-14 (Asia/Shanghai) — v0.13.2 (high-fidelity FaceVM — layered emotions + overlays)
 
 ## Scope
 
@@ -62,7 +62,8 @@ during the rewrite. Its version log is unrelated to this one — `v0.1` here is 
 | `v0.12.0` | 2026-06-13 | Frontend consumption controller (`packages/web`); Initiative 6 begins | `680e58d` |
 | `v0.12.1` | 2026-06-13 | Repo-wide audit (9 reviewers) + fixes — turn persistence resilience, dev tool_name | `7cbfdc1` |
 | `v0.13.0` | 2026-06-14 | Cute UI shell — redesigned vtuber-overlay frontend (chat left / model right) | `f82f5ae` |
-| `v0.13.1` | 2026-06-14 | Live2D foundation — yumi avatar (pixi-live2d + Cubism), first-cut FaceVM, draggable | `working tree` |
+| `v0.13.1` | 2026-06-14 | Live2D foundation — yumi avatar (pixi-live2d + Cubism), first-cut FaceVM, draggable | `94ff57a` |
+| `v0.13.2` | 2026-06-14 | High-fidelity FaceVM — 14 layered emotions + timelines + overlays + actions | `working tree` |
 
 ## Detailed records
 
@@ -118,6 +119,57 @@ Inference:
   `defineTool`, the dispatcher, and provider logic stay in `packages/server`. Frontend
   (`packages/web`) will consume the same protocol package in Initiative 6, getting
   contract drift as a type error rather than a runtime mismatch.
+
+### `v0.13.2` — 2026-06-14 — High-fidelity FaceVM (Initiative 6, layered emotions)
+
+Status:
+
+- working tree (commit hash recorded post-commit)
+
+Fact:
+
+- **New [`faceData.ts`](../../packages/web/src/live2d/faceData.ts)** — ported data from Python
+  `layers/emotion-library.js` + `action-library.js` + `config.js`: **14 emotions** (focused,
+  fakeFierce, adorable, playful, shy, embarrassed, awkwardV2, annoyed, poutyAnnoyed, curious, tender,
+  skeptical, smug, disappointed) each with timeline + `owns` channels + entry/sustained poses +
+  actionRefs + overlayRefs; the **9 actions** those emotions reference (keyframe tracks); **overlays**
+  (脸红/俯身/黑脸/泪汪汪 → `Paramsmileshy`/`Paramdown1`/`Paramheilian`/`Paramleiwangwang`);
+  `FACE_CHANNEL_GROUPS`, `EMOTION_SOFT_BLEND_WEIGHTS`, `FACE_PARAM_GAIN`.
+- **Rewrote [`faceVm.ts`](../../packages/web/src/live2d/faceVm.ts)** into the full layered engine:
+  intro→perform→outro timeline (entry-snapshot blend), soft-blend vs hard-replace, channel ownership
+  (emotion locks keys from the state layer), per-key gains + clamps at flush, **staggered action
+  playback** (queued at perform, `introMs + i·110`), **overlay special-params**, and affect-intensity
+  scaling. A **pending-emotion queue** makes `setExpression` (called outside the tick) share the
+  tick's clock → the whole engine is deterministic on an injected `now`.
+- **Rewrote [`expressionMap.ts`](../../packages/web/src/live2d/expressionMap.ts)** → `AFFECT_TO_EMOTION`
+  (the 15 affects → 14 emotions; `steady_presence` = null baseline) + `affectToEmotion`. **Key
+  finding:** Python had no fixed affect→emotion table (the LLM emitted `emotion_id` directly), but our
+  `MessageDelivery` carries only the 15-affect `expression` + a 0–1 `emotion` intensity — so this map
+  is a new, frontend-owned design piece.
+- [`paramMap.ts`](../../packages/web/src/live2d/paramMap.ts) += `clampStateValue` (per-key ranges).
+  [`app.ts`](../../packages/web/src/app.ts) += a guarded `?dev` hook exposing the sink for manual
+  smoke. **No interface change** to sinks/controller/pixiLive2DSink — `setExpression(affect, emotion)`
+  now triggers a full emotion playback instead of a static pose.
+- **Tests:** rewrote `faceVm.test.ts` (6: perform-pose + overlay, baseline, timeline release,
+  speaking mouth, sleeping, intensity scaling) + `expressionMap.test.ts` (3). `bun test` **288 pass /
+  0 fail**; `tsc` clean (web + server). Browser smoke (`?dev` hook): `bright_delight`→adorable visibly
+  tilts/poses the model.
+- **Deferred (noted):** the per-emotion sine micro-motion (`getEmotionStateWithMotion`), the 6
+  procedural idle profiles, the 36 unreferenced actions, and rich speaking/thinking procedural motion
+  — the model's built-in idle carries neutral; expression identity comes from the poses + actions +
+  overlays.
+
+Inference:
+
+- **Luna's emotions now have Python-level identity** — 14 distinct layered poses with blush /
+  dark-face / teary overlays and staggered micro-actions, evolving over a 6–8s timeline — and the
+  controller/protocol *still* didn't change. The Live2DSink seam absorbed an entire animation engine.
+- **The wire-contract divergence was the real design work.** Because our envelope omits `emotion_id`,
+  the affect→emotion bridge had to be a deliberate, owned frontend mapping rather than a mechanical
+  port — captured in one tunable table.
+- **Determinism by construction.** The pending-queue + injected-`now` design means an intricate,
+  stateful animation engine is fully unit-tested without a browser or a real clock — the same
+  test-first discipline the backend enjoys, now at the rendering layer.
 
 ### `v0.13.1` — 2026-06-14 — Live2D foundation (Initiative 6, the real yumi avatar)
 

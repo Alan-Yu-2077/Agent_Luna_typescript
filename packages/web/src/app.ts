@@ -39,6 +39,12 @@ async function boot(): Promise<void> {
 
   const controller = createController({ view, live2d, audio: noopAudioSink });
 
+  // Guarded dev hook (only with ?dev in the URL): expose the Live2D sink so the
+  // avatar's expressions can be smoke-tested without a backend.
+  if (location.search.includes('dev')) {
+    (globalThis as unknown as { lunaLive2D?: Live2DSink }).lunaLive2D = live2d;
+  }
+
   let dreaming = false;
   function setDreaming(d: boolean): void {
     dreaming = d;
