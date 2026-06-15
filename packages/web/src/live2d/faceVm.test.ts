@@ -68,6 +68,16 @@ describe('FaceVm — emotion engine', () => {
     expect(last.get('ParamEyeOpenL') ?? 1).toBeLessThan(0.1);
   });
 
+  test('head/body pose writes only via flushPose (pre-physics), not tick', () => {
+    const { writer, last } = recorder();
+    const vm = new FaceVm(writer);
+    vm.setState('sleeping'); // STATE_BIAS: headPitch -10 (→ ParamAngleY), headRoll 6
+    run(vm, 0, 2000);
+    expect(last.has('ParamAngleY')).toBe(false); // tick smooths pose but does not write it
+    vm.flushPose();
+    expect(Math.abs(last.get('ParamAngleY') ?? 0)).toBeGreaterThan(2); // now written from cur
+  });
+
   test('triggerEmotion plays a named preset directly; bad id is a no-op', () => {
     const { writer, last } = recorder();
     const vm = new FaceVm(writer);

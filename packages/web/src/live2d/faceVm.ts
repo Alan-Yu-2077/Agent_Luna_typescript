@@ -57,6 +57,13 @@ const SOFT_BLEND_KEYS = new Set(Object.keys(EMOTION_SOFT_BLEND_WEIGHTS) as FaceS
 // when idle so they can't freeze at the last spoken value).
 const MOUTH_KEYS: readonly FaceStateKey[] = ['mouthOpen', 'mouthForm', 'mouthShrug', 'mouthPucker'];
 
+// The head/body "pose" channel — ParamAngle*/ParamBodyAngle*/bow are PHYSICS-INPUT
+// on this model: the deform reads them BEFORE physics runs, so writing them at
+// 'beforeModelUpdate' (after physics) never deforms. They're flushed separately at
+// 'afterMotionUpdate' (pre-physics); the main loop here only smooths them.
+const POSE_KEYS: readonly FaceStateKey[] = FACE_CHANNEL_GROUPS.pose;
+const POSE_SET = new Set<FaceStateKey>(POSE_KEYS);
+
 // Simple state-layer biases (kept from v0.13.1; rich speaking/thinking procedural
 // motion is deferred). Applied additively-as-set, skipping emotion-owned keys.
 const STATE_BIAS: Record<Live2DState, Pose> = {
@@ -84,6 +91,17 @@ export class FaceVm {
   // the mouth back to the emotion/idle layer.
   setMouth(frame: LipSyncFrame | null): void {
     this.lip = frame;
+  }
+
+  // Writes the head/body pose at 'afterMotionUpdate' (pre-physics) so it actually
+  // deforms — those params are physics-input. Uses the value tick() smoothed last
+  // frame (1-frame lag, imperceptible). gaze (focusController) adds on top after.
+  flushPose(): void {
+    for (const key of POSE_KEYS) {
+      if (Math.abs(this.cur[key] - FACE_VM_DEFAULT_STATE[key]) > 1e-3) {
+        this.writer.setParam(FACE_VM_PARAM_MAP[key], clampStateValue(key, this.cur[key] * (FACE_PARAM_GAIN[key] ?? 1)));
+      }
+    }
   }
   setExpression(key: ExpressionKey, emotion = 0.95): void {
     this.pending = { id: affectToEmotion(key), intensity: clamp01(emotion) };
@@ -119,6 +137,7 @@ export class FaceVm {
       let next = this.cur[key] + (target[key] - this.cur[key]) * sm;
       if (Math.abs(target[key] - next) < 0.001) next = target[key];
       this.cur[key] = next;
+      if (POSE_SET.has(key)) continue; // smoothed here, but written pre-physics in flushPose()
       if (Math.abs(next - def) > 1e-3) {
         const gain = FACE_PARAM_GAIN[key] ?? 1;
         this.writer.setParam(FACE_VM_PARAM_MAP[key], clampStateValue(key, next * gain));

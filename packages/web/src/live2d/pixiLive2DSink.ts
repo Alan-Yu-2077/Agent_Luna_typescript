@@ -124,8 +124,12 @@ export async function createPixiLive2DSink(
   // it displaces, while gaze-follow (focus) + physics still drive everything FaceVm
   // leaves at default (it only writes params that differ from rest by >1e-3).
   const internal = model.internalModel as unknown as {
-    on(event: 'beforeModelUpdate', cb: () => void): void;
+    on(event: 'afterMotionUpdate' | 'beforeModelUpdate', cb: () => void): void;
   };
+  // The head/body pose is physics-input, so it must be written BEFORE physics runs
+  // ('afterMotionUpdate'); the rest (brows/eyes/mouth) is written at
+  // 'beforeModelUpdate' (after the built-in eyeBlink/focus) so FaceVm wins there.
+  internal.on('afterMotionUpdate', () => faceVm.flushPose());
   internal.on('beforeModelUpdate', () => faceVm.tick(performance.now()));
 
   // ?dev: expose the model + faceVm so live params can be measured from the console.
