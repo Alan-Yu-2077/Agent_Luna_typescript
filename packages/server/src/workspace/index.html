@@ -126,9 +126,15 @@
         white-space: nowrap;
       }
       tr:hover td { background: var(--rowsel); }
-      td.editable { cursor: text; }
-      td.editable:focus { outline: 1px solid var(--accent); background: #04395e; }
-      td.empty { color: #5a5a5a; font-style: italic; }
+      .cellc { white-space: pre-wrap; word-break: break-word; }
+      .cellc.editable { cursor: text; }
+      .cellc.editable:focus { outline: 1px solid var(--accent); background: #04395e; border-radius: 2px; }
+      .cellc.empty { color: #5a5a5a; font-style: italic; }
+      /* long values (raw_json, payloads, full logs) collapse to ~3 lines until expanded */
+      .cellc.clamp { max-height: 3.4em; overflow: hidden; }
+      .cellc.clamp.open { max-height: none; }
+      .exp { float: right; margin-left: 6px; cursor: pointer; color: var(--accent); user-select: none; font-size: 11px; line-height: 1.5; }
+      .exp:hover { color: var(--fg); }
       td.rowact { width: 28px; text-align: center; border-right: 1px solid var(--line); }
       .del { color: var(--warn); cursor: pointer; opacity: 0.5; }
       tr:hover .del { opacity: 1; }
@@ -172,7 +178,7 @@
           <span class="tname" id="curname">—</span>
           <span class="hint" id="curhint"></span>
           <span class="spacer" style="flex:1"></span>
-          <span class="hint">双击单元格编辑 · 🗑 删行</span>
+          <span class="hint">点击编辑 · ⤢ 展开长内容 · 🗑 删行</span>
         </div>
         <div class="gridwrap" id="grid"><div class="nodata">loading…</div></div>
       </div>
@@ -210,6 +216,23 @@
         ).join('');
         $('tabs').querySelectorAll('.tab').forEach((el) => el.addEventListener('click', () => select(el.dataset.n)));
       }
+      // A cell. Long values (raw_json / payloads / full logs) render collapsed to a
+      // few lines with a ⤢ toggle so they don't flood the grid.
+      function cellHtml(rid, col, v, editable) {
+        const isNull = v === null || v === undefined;
+        const disp = isNull ? '∅' : (typeof v === 'object' ? JSON.stringify(v) : String(v));
+        const long = !isNull && (disp.length > 140 || disp.indexOf('\n') >= 0);
+        const cls = 'cellc' + (isNull ? ' empty' : '') + (editable ? ' editable' : '') + (long ? ' clamp' : '');
+        const ce = editable ? ' contenteditable="true"' : '';
+        const toggle = long ? '<span class="exp" title="展开 / 折叠">⤢</span>' : '';
+        return '<td>' + toggle + '<div class="' + cls + '" data-rid="' + rid + '" data-col="' + esc(col) + '"' + ce + '>' + esc(disp) + '</div></td>';
+      }
+      function bindExpand() {
+        $('grid').querySelectorAll('.exp').forEach((x) => x.addEventListener('click', () => {
+          const cell = x.parentElement.querySelector('.cellc');
+          if (cell) cell.classList.toggle('open');
+        }));
+      }
       function select(name) {
         current = name;
         renderTabs();
@@ -224,29 +247,28 @@
         const body = t.rows.map((r) => {
           const rid = r.__rowid;
           const act = t.editable ? '<td class="rowact"><span class="del" title="delete" data-rid="' + rid + '">✕</span></td>' : '';
-          const cells = cols.map((c) => {
-            const v = r[c];
-            if (v === null || v === undefined) return '<td class="empty' + (t.editable ? ' editable' : '') + '" data-rid="' + rid + '" data-col="' + esc(c) + '">∅</td>';
-            const disp = typeof v === 'object' ? JSON.stringify(v) : v;
-            return '<td' + (t.editable ? ' class="editable" contenteditable="true"' : '') + ' data-rid="' + rid + '" data-col="' + esc(c) + '">' + esc(disp) + '</td>';
-          }).join('');
+          const cells = cols.map((c) => cellHtml(rid, c, r[c], t.editable)).join('');
           return '<tr>' + act + cells + '</tr>';
         }).join('');
         $('grid').innerHTML = '<table>' + thead + body + '</table>';
+        bindExpand();
         if (t.editable) wireEdits(t.name);
       }
       function wireEdits(table) {
-        $('grid').querySelectorAll('td.editable').forEach((td) => {
-          const orig = td.textContent;
-          td.addEventListener('focus', () => { if (td.classList.contains('empty')) td.textContent = ''; });
-          td.addEventListener('blur', async () => {
-            const val = td.textContent;
+        $('grid').querySelectorAll('.cellc.editable').forEach((cell) => {
+          const orig = cell.textContent;
+          cell.addEventListener('focus', () => {
+            if (cell.classList.contains('empty')) { cell.textContent = ''; cell.classList.remove('empty'); }
+            cell.classList.add('open'); // editing always shows the full value
+          });
+          cell.addEventListener('blur', async () => {
+            const val = cell.textContent;
             if (val === orig) return;
             const r = await fetch('/_workspace/api/edit', {
               method: 'POST', headers: { 'content-type': 'application/json' },
-              body: JSON.stringify({ action: 'update', table, rowid: Number(td.dataset.rid), column: td.dataset.col, value: val }),
+              body: JSON.stringify({ action: 'update', table, rowid: Number(cell.dataset.rid), column: cell.dataset.col, value: val }),
             }).then((x) => x.json());
-            toast(r.ok ? 'saved ' + table + '.' + td.dataset.col : 'error: ' + (r.error || '?'));
+            toast(r.ok ? 'saved ' + table + '.' + cell.dataset.col : 'error: ' + (r.error || '?'));
           });
         });
         $('grid').querySelectorAll('.del').forEach((d) => d.addEventListener('click', async () => {
