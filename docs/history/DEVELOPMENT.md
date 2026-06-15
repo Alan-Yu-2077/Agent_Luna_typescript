@@ -1,6 +1,6 @@
 # Agent_Luna (TypeScript) — Development History
 
-Last updated: 2026-06-15 (Asia/Shanghai) — v0.13.10 (persona embodiment fixed + emotion head/body now actually moves)
+Last updated: 2026-06-15 (Asia/Shanghai) — v0.13.11 (clause cap relaxed for English + validation retries kept backstage)
 
 ## Scope
 
@@ -72,6 +72,7 @@ during the rewrite. Its version log is unrelated to this one — `v0.1` here is 
 | `v0.13.8` | 2026-06-15 | TTS lip-sync rebuilt from the Python `lip-sync.js` engine (4 mouth params + stochastic stepping) + serial speech queue (no overlap) | `5ae9d4b` |
 | `v0.13.9` | 2026-06-15 | Lip-sync calmer defaults — slower target stepping (70→100ms) + gentler attack/release/shape smoothing; lowers the mouth change rate per feedback | `ae1dd03` |
 | `v0.13.10` | 2026-06-15 | Two real bugs — persona embodiment now reflects the live Live2D + voice (was "no body/voice yet"); emotion head/body pose deforms via a pre-physics `flushPose` (was dead — those params are physics-input) | `9070861` `b61e42d` |
+| `v0.13.11` | 2026-06-15 | Message clause cap 55→90 (the CJK-tuned 55 retry-stormed English replies) + validation retries kept backstage (no leaked raw-ZodError chips) | `60319f7` `2010e82` |
 
 ## C-side fix pass (2026-06-15) — v0.13.5 / v0.13.6
 
