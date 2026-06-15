@@ -41,11 +41,13 @@ export function loadSession(id: string): PersistedSession | null {
   };
 }
 
-// Append-only CAS commit for the L1 fold: only lands if window_low_water is
-// unchanged since the fold snapshotted it. Returns false on a lost race.
+// CAS commit for the L1 fold: only lands if window_low_water is unchanged since
+// the fold snapshotted it. Returns false on a lost race. v0.17.0: the digest is
+// REPLACED (not appended) — the compressor re-derives a bounded structured digest
+// from the prior one + the new turns, so it never grows unboundedly.
 export function commitFold(
   id: string,
-  summaryChunk: string,
+  newDigest: string,
   newLowWater: number,
   expectedLowWater: number,
 ): boolean {
@@ -53,10 +55,10 @@ export function commitFold(
   const result = db
     .prepare(
       `UPDATE sessions
-       SET rolling_summary = rolling_summary || ?, window_low_water = ?
+       SET rolling_summary = ?, window_low_water = ?
        WHERE id = ? AND window_low_water = ?`,
     )
-    .run(summaryChunk, newLowWater, id, expectedLowWater);
+    .run(newDigest, newLowWater, id, expectedLowWater);
   return result.changes === 1;
 }
 
@@ -114,6 +116,7 @@ export type L2Row = {
   assistant_text: string;
   raw_json: string;
   content_hash: string | null;
+  importance: number | null;
 };
 
 export function listL2(sessionId: string, opts?: { limit?: number }): L2Row[] {
@@ -132,4 +135,21 @@ export function listRecentL2(sessionId: string, limit: number): L2Row[] {
     .prepare('SELECT * FROM l2_turns WHERE session_id = ? ORDER BY t_ms DESC, id DESC LIMIT ?')
     .all(sessionId, limit) as L2Row[];
   return rows.reverse();
+}
+
+// v0.17.0 (Initiative 10): turns not yet rated for salience (importance IS NULL),
+// most-recent first — the dream cycle rates these 1–5.
+export function listUnratedL2(sessionId: string, limit: number): L2Row[] {
+  if (!db) return [];
+  return db
+    .prepare(
+      'SELECT * FROM l2_turns WHERE session_id = ? AND importance IS NULL ORDER BY t_ms DESC, id DESC LIMIT ?',
+    )
+    .all(sessionId, limit) as L2Row[];
+}
+
+// Store a turn's salience score (1–5).
+export function setImportance(id: number, score: number): void {
+  if (!db) return;
+  db.prepare('UPDATE l2_turns SET importance = ? WHERE id = ?').run(score, id);
 }

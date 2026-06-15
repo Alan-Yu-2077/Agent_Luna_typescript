@@ -1,24 +1,45 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import type { Provider } from '../provider/types';
 import type { Session } from '../turn/session';
-import { commitFold, getMemoryDb, listL2 } from './sessionStore';
+import { commitFold, getMemoryDb, listL2, type L2Row } from './sessionStore';
 import { cleanHistoryEnabled, collapseOldToolResults } from './cleanHistory';
 
-const KEEP_MSGS = Number(Bun.env['LUNA_L1_KEEP_MSGS'] ?? 24);
-const FOLD_MIN_BATCH_MSGS = Number(Bun.env['LUNA_L1_FOLD_BATCH_MSGS'] ?? 12);
+// v0.17.0 (Initiative 10): the verbatim window is measured in TURNS, not messages
+// (reversing PR #3's identified unit drift). A "turn" = one L2 row (a user message
+// + its clean assistant reply group). ~100 clean turns ≈ ~20k tokens because
+// v0.16.3 stripped thinking + collapsed tool I/O. Read per-call so the env knob
+// (range 40–150) takes effect live without a redeploy.
+function recentTurns(): number {
+  return Number(Bun.env['LUNA_L1_RECENT_TURNS'] ?? 100);
+}
+function foldBatchTurns(): number {
+  return Number(Bun.env['LUNA_L1_FOLD_BATCH_TURNS'] ?? 10);
+}
+// Hard cap on the structured rolling digest (replaces the old unbounded
+// `rolling_summary` growth). A few hundred tokens.
+function summaryMaxChars(): number {
+  return Number(Bun.env['LUNA_L1_SUMMARY_MAX_CHARS'] ?? 3000);
+}
+// Turns rated at or above this importance (1–5) are flagged salient to the
+// compressor so their specifics resist over-summarization (importance anchors).
+function anchorImportance(): number {
+  return Number(Bun.env['LUNA_L1_ANCHOR_IMPORTANCE'] ?? 4);
+}
 
 export function windowEnabled(): boolean {
   return Bun.env['LUNA_L1_WINDOW'] !== '0';
 }
 
-// The bounded view sent to the model: [summary-as-user-message?] + verbatim tail.
+function msgCount(row: L2Row): number {
+  return (JSON.parse(row.raw_json) as object[]).length;
+}
+
+// The bounded view sent to the model: [structured-digest?] + verbatim tail.
 // session.history itself is never truncated — it is the in-memory mirror of the
 // L2 ground truth, and the fold only ever reads verbatim content.
 export function buildActiveContext(session: Session): Anthropic.MessageParam[] {
   // v0.16.3: collapse older tool-result payloads in the assembled context (keeps
-  // the most-recent ones full + the tool_use records intact). Thinking is already
-  // stripped from completed turns at persist time, so the window holds clean
-  // conversation. Non-mutating — session.history stays the verbatim mirror.
+  // the most-recent ones full + the tool_use records intact). Non-mutating.
   const clean = (msgs: Anthropic.MessageParam[]): Anthropic.MessageParam[] =>
     cleanHistoryEnabled() ? collapseOldToolResults(msgs) : msgs;
 
@@ -39,50 +60,73 @@ export function buildActiveContext(session: Session): Anthropic.MessageParam[] {
   return [summaryMsg, ...clean(tail)];
 }
 
+type FoldedTurn = { text: string; salient: boolean };
 type FoldPlan = {
-  foldText: string;
+  folded: FoldedTurn[];
   newLowWater: number;
 };
 
 // Chooses whole L2 turns to fold so the boundary always lands at a turn start
-// (never splitting a tool_use / tool_result pair). Fold input comes from L2
-// columns (verbatim full text) — NEVER from rollingSummary. That is the
-// no-re-compression invariant: summaries grow by appending freshly-derived
-// chunks; existing summary text is never re-summarized.
+// (never splitting a tool_use / tool_result pair). Fold decision is TURN-based:
+// keep the last RECENT_TURNS verbatim, fold older ones once they exceed the
+// window by a batch. Fold input comes from L2 columns (verbatim) — never from a
+// prior summary directly; the compressor receives the running digest + the new
+// turns and re-derives a BOUNDED digest (v0.17.0 oscillating compression).
 export function planFold(session: Session): FoldPlan | null {
-  const verbatim = session.history.length - session.windowLowWater;
-  if (verbatim <= KEEP_MSGS + FOLD_MIN_BATCH_MSGS) return null;
-
+  if (!getMemoryDb()) return null;
   const rows = listL2(session.id);
   if (rows.length === 0) return null;
 
+  // Walk to the L2 row where the verbatim window currently begins (cumulative
+  // message count must equal windowLowWater, or the bookkeeping drifted — bail).
   let cum = 0;
-  let rowIdx = 0;
-  while (rowIdx < rows.length && cum < session.windowLowWater) {
-    cum += (JSON.parse(rows[rowIdx]!.raw_json) as object[]).length;
-    rowIdx += 1;
+  let foldedRows = 0;
+  while (foldedRows < rows.length && cum < session.windowLowWater) {
+    cum += msgCount(rows[foldedRows]!);
+    foldedRows += 1;
   }
   if (cum !== session.windowLowWater) return null;
 
-  const pieces: string[] = [];
+  const keep = recentTurns();
+  const unfoldedTurns = rows.length - foldedRows;
+  if (unfoldedTurns <= keep + foldBatchTurns()) return null;
+
+  const toFold = unfoldedTurns - keep; // bring the window back to RECENT_TURNS
+  const anchor = anchorImportance();
   let newLowWater = session.windowLowWater;
-  while (rowIdx < rows.length) {
-    const row = rows[rowIdx]!;
-    const msgCount = (JSON.parse(row.raw_json) as object[]).length;
-    const remainingAfter = session.history.length - (newLowWater + msgCount);
-    if (remainingAfter < KEEP_MSGS) break;
-    pieces.push(`User: ${row.user_text}\nLuna: ${row.assistant_text}`);
-    newLowWater += msgCount;
-    rowIdx += 1;
+  const folded: FoldedTurn[] = [];
+  for (let i = 0; i < toFold; i++) {
+    const row = rows[foldedRows + i]!;
+    newLowWater += msgCount(row);
+    folded.push({
+      text: `User: ${row.user_text}\nLuna: ${row.assistant_text}`,
+      salient: (row.importance ?? 0) >= anchor,
+    });
   }
-  if (pieces.length === 0 || newLowWater === session.windowLowWater) return null;
-  return { foldText: pieces.join('\n\n'), newLowWater };
+  if (folded.length === 0) return null;
+  return { folded, newLowWater };
 }
 
-const FOLD_SYSTEM =
-  'You compress conversation history. Summarize the following exchanges into a compact ' +
-  'paragraph that preserves: facts about the user, decisions made, emotional tone shifts, ' +
-  'and any open threads. Write in third person, past tense. Output only the summary.';
+function compressSystem(): string {
+  return (
+    'You maintain a compact, structured memory digest of a long conversation. You are given the ' +
+    'CURRENT DIGEST and some OLDER EXCHANGES now being folded into it. Produce the UPDATED digest ' +
+    'under these rules:\n' +
+    '- Keep four labelled sections: Key facts · Decisions · Open threads · Emotional beats.\n' +
+    '- Merge the older exchanges into the existing sections; condense redundancy.\n' +
+    '- Exchanges marked [salient] hold idiosyncratic, important detail — preserve their specifics ' +
+    'near-verbatim; you may condense unmarked ones aggressively.\n' +
+    `- Hard limit: keep the whole digest under ${summaryMaxChars()} characters. If over, drop the ` +
+    'least important unmarked details first; never drop a [salient] specific.\n' +
+    '- Third person, past tense. Output only the digest.'
+  );
+}
+
+function buildCompressPrompt(currentDigest: string, folded: FoldedTurn[]): string {
+  const older = folded.map((f) => (f.salient ? `[salient] ${f.text}` : f.text)).join('\n\n');
+  const digest = currentDigest.trim().length > 0 ? currentDigest.trim() : '(empty — first fold)';
+  return `CURRENT DIGEST:\n${digest}\n\nOLDER EXCHANGES TO FOLD IN:\n${older}`;
+}
 
 export async function maybeFold(session: Session, provider: Provider): Promise<boolean> {
   if (!windowEnabled() || !getMemoryDb()) return false;
@@ -91,15 +135,19 @@ export async function maybeFold(session: Session, provider: Provider): Promise<b
   const expected = session.windowLowWater;
 
   const result = await provider.complete({
-    system: FOLD_SYSTEM,
-    messages: [{ role: 'user', content: plan.foldText }],
+    system: compressSystem(),
+    messages: [{ role: 'user', content: buildCompressPrompt(session.rollingSummary, plan.folded) }],
     maxTokens: 1024,
   });
-  const chunk = `\n\n${result.text.trim()}`;
+  // Bounded: the digest is re-derived whole and hard-capped, so repeated folds
+  // never grow it unboundedly (the regression vs the old append-only summary).
+  let digest = result.text.trim();
+  const cap = summaryMaxChars();
+  if (digest.length > cap) digest = digest.slice(0, cap);
 
-  const landed = commitFold(session.id, chunk, plan.newLowWater, expected);
+  const landed = commitFold(session.id, digest, plan.newLowWater, expected);
   if (landed && session.windowLowWater === expected) {
-    session.rollingSummary += chunk;
+    session.rollingSummary = digest;
     session.windowLowWater = plan.newLowWater;
   }
   return landed;

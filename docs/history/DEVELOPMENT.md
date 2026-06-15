@@ -1,6 +1,6 @@
 # Agent_Luna (TypeScript) — Development History
 
-Last updated: 2026-06-16 (Asia/Shanghai) — v0.16.3 (clean durable history — strip prior-turn thinking + collapse old tool-result payloads to markers, behind `LUNA_CLEAN_HISTORY` (default on); a stored turn is clean conversation, the foundation for Initiative 10's deep window; **Initiative 9 complete 4/4**, branch)
+Last updated: 2026-06-16 (Asia/Shanghai) — v0.17.0 (memory depth — L1 verbatim window restored to **~100 *turns*** (`LUNA_L1_RECENT_TURNS`, 40–150) replacing the 24-message cap; the unbounded `rolling_summary` replaced by a **structured, size-bounded digest** with **importance anchors** (LLM-rated salience via a new `rate_salience` dream step); amends LD #12 window-part; **Initiative 10 1/2**, branch)
 
 ## Scope
 
@@ -84,6 +84,7 @@ during the rewrite. Its version log is unrelated to this one — `v0.1` here is 
 | `v0.16.1` | 2026-06-15 | Recompute efficiency (Initiative 9, 2/4) — system block memoized per turn via a `memory/epoch` dirty flag bumped by `remember`/`update_self` (A1) + `renderL1Contract` cached; `traces` retention window (`pruneToRetention`, throttled off flush, A4); recall fetches only the recent 500 L2 rows (`listRecentL2`) + reuses a persisted `content_hash` column (migration `0010`, A2); recall embed budget off the first-token path behind `LUNA_RECALL_ASYNC` (P1) | _branch_ |
 | `v0.16.2` | 2026-06-16 | Persistence + dead infra (Initiative 9, 3/4) — incremental `history_json`: `persistSession` writes only bookkeeping (constant `'[]'` blob), `loadSession` rebuilds the full timeline from the append-only L2 `raw_json` — the last O(N²) per-turn write gone (A3/P2); dead `vec0`/`vec_cache` write-path + orphaned virtual table removed, retrieval stays TS cosine (`sqlite-vec` dep kept inert for Initiative 10's potential KNN, D1); text-mode `reply.token` path marked legacy, removal deferred to post-Init-10 (D2) | _branch_ |
 | `v0.16.3` | 2026-06-16 | Clean durable history (Initiative 9, 4/4) — `cleanHistory` strips prior-turn `thinking`/`redacted_thinking` from completed turns at persist time (the API drops them across turns anyway) + collapses old `tool_result` payloads to a marker in `buildActiveContext` (keeps recent + the `tool_use` records), behind `LUNA_CLEAN_HISTORY` (default on). A stored turn is clean conversation — the foundation for Initiative 10's ~100-turn window. **Initiative 9 complete (4/4).** | _branch_ |
+| `v0.17.0` | 2026-06-16 | Memory depth — L1 window (Initiative 10, 1/2) — verbatim window re-unitized to **turns** (`LUNA_L1_RECENT_TURNS`, default ~100, range 40–150) replacing the 24-message cap; `planFold` counts turn-groups; the unbounded append-only `rolling_summary` replaced by a **structured, size-bounded digest** (4 buckets, hard char cap, bounded oscillating compression); **importance anchors** — a new `rate_salience` dream step rates turns 1–5 (LLM, migration `0011`), salient turns marked `[salient]` resist over-summarization; amends LD #12 window-part + marks v0.4.1 superseded | _branch_ |
 
 ## Code-agent capability (2026-06-15) — Initiative 8 begins (v0.15.0)
 
@@ -546,6 +547,49 @@ Inference:
   and gives Alan the variety he remembered, now as a first-class setting rather than a buried constant.
 
 ## Detailed records
+
+### `v0.17.0` — 2026-06-16 — Memory depth: L1 window → ~100 turns (Initiative 10, 1/2)
+
+Status:
+
+- working tree (branch `feat/initiative-10-memory-depth`, stacked on Initiative 9)
+
+Fact:
+
+- `memory/l1Window.ts`: the verbatim window is now measured in **turns** (`LUNA_L1_RECENT_TURNS`,
+  default 100, range 40–150; read per-call so the knob is live), not the old `KEEP_MSGS` 24-message
+  cap. `planFold` keeps the last N L2 turns verbatim and folds older ones in turn-groups.
+- The unbounded append-only `rolling_summary` is replaced by a **structured, size-bounded digest**:
+  the compressor re-derives the whole digest from (prior digest + new turns) under 4 buckets
+  (Key facts · Decisions · Open threads · Emotional beats), hard-capped at
+  `LUNA_L1_SUMMARY_MAX_CHARS` (default 3000). `commitFold` REPLACES (not appends) the digest. This is
+  bounded oscillating compression — superseding v0.4.1's compress-once invariant.
+- **Importance anchors**: migration `0011` adds `l2_turns.importance` (1–5, nullable). A new dream
+  step `rate_salience` (first in the cycle) rates unrated recent turns via the LLM
+  (`saliencePrompt` + `SaliencePatch`), stored by `setImportance`. `planFold` marks turns at/above
+  `LUNA_L1_ANCHOR_IMPORTANCE` (default 4) `[salient]` so the compressor preserves their specifics
+  near-verbatim (resisting over-summarization).
+- `sessionStore`: `+listUnratedL2`, `+setImportance`, `L2Row.importance`.
+- Decision: `REWRITE_CONTEXT.md` LD #12 window-part amended (L1 = ~100 turns, structured bounded
+  compression + importance anchors); `docs/roadmap/.../v0.4.1-l1-rolling-window.md` marked superseded.
+- Tests: `l1Window.test.ts` rewritten for the turns unit (+8: fold-to-N, oscillating compression,
+  hard cap, salient marking, determinism, threshold, passthrough, CAS); `dream.test.ts` +1
+  (salience rating end-to-end). **551 pass / 0 fail**; all three packages `tsc` clean.
+
+Inference:
+
+- Directly fixes the owner's "记得太短" correction at the conversational layer: the verbatim window
+  goes from ~4–9 turns to ~100, and it's affordable (~20k tokens) precisely because v0.16.3 made a
+  stored turn ~200 clean tokens. Cost/depth is one live env knob (40–150), unit *turns*.
+- The compressor is now bounded (the real bug behind "lossy + ever-growing" was the unbounded
+  append-only summary), and importance anchors counter the over-summarization pathology — salient,
+  idiosyncratic moments resist being sanded into generic gist.
+- The salience score built here is the same one v0.17.1 reuses for the Generative-Agents recall
+  ranking (recency × importance × relevance).
+- **Measurement (analytical):** at the default ~100 turns, a clean turn ≈ 200 tokens (v0.16.3 basis)
+  → window ≈ 20k input tokens, in the "sharp" recall regime (context rot mild < 30k); vs the old
+  24-message cap ≈ 2–4k tokens but only ~4–9 exchanges. A live API TTFT measurement should be run
+  before raising the default past 100.
 
 ### `v0.16.3` — 2026-06-16 — Clean durable history (Initiative 9, 4/4)
 

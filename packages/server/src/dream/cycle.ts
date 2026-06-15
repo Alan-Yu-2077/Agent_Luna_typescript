@@ -1,20 +1,40 @@
 import type { DreamStepStatus, ServerEvent } from '@luna/protocol';
 import { runGraph, type Graph } from '../turn/graph';
-import { getMemoryDb, listL2 } from '../memory/sessionStore';
+import { getMemoryDb, listL2, listUnratedL2, setImportance } from '../memory/sessionStore';
 import { addFact, forgetFact, listFacts } from '../memory/l3Store';
 import { getCore, updateCore } from '../memory/coreMemory';
 import { maybeFold } from '../memory/l1Window';
 import { getSession } from '../turn/session';
-import { contentHash, embeddingEnabled, fetchEmbedClient, type EmbedClient } from '../memory/recall/embed';
+import {
+  contentHash,
+  embeddingEnabled,
+  fetchEmbedClient,
+  type EmbedClient,
+} from '../memory/recall/embed';
 import { trace, flushTrace, traceEnabled } from '../trace/instrument';
 import { enterDream, parkFinishedIdle, setStep } from './dreamState';
-import { dreamCall, parseJsonBlock, MemoryPatch, PersonaPatch, type DreamLLM } from './llm';
-import { diaryPrompt, memoryAuditPrompt, personaUpdatePrompt, refineSemanticPrompt } from './prompts';
+import {
+  dreamCall,
+  parseJsonBlock,
+  MemoryPatch,
+  PersonaPatch,
+  SaliencePatch,
+  type DreamLLM,
+} from './llm';
+import {
+  diaryPrompt,
+  memoryAuditPrompt,
+  personaUpdatePrompt,
+  refineSemanticPrompt,
+  saliencePrompt,
+} from './prompts';
 
 const MAX_DIARIES_PER_CYCLE = Number(Bun.env['LUNA_DREAM_MAX_DIARIES_PER_CYCLE'] ?? 20);
 const RECENT_DIALOGUE_TURNS = 30;
+const MAX_SALIENCE_PER_CYCLE = Number(Bun.env['LUNA_DREAM_MAX_SALIENCE_PER_CYCLE'] ?? 40);
 
 export type DreamNode =
+  | 'rate_salience'
   | 'refine_semantic'
   | 'refine_layer1'
   | 'memory_audit'
@@ -34,6 +54,7 @@ export type DreamCycleState = {
 };
 
 const ORDER: DreamNode[] = [
+  'rate_salience',
   'refine_semantic',
   'refine_layer1',
   'memory_audit',
@@ -49,7 +70,9 @@ function nextNode(current: DreamNode): DreamNode | 'end' {
 
 function recentDialogue(sessionId: string, sinceMs: number | null): string {
   const rows = listL2(sessionId);
-  const slice = (sinceMs ? rows.filter((r) => r.t_ms > sinceMs) : rows).slice(-RECENT_DIALOGUE_TURNS);
+  const slice = (sinceMs ? rows.filter((r) => r.t_ms > sinceMs) : rows).slice(
+    -RECENT_DIALOGUE_TURNS,
+  );
   return slice.map((r) => `User: ${r.user_text}\nLuna: ${r.assistant_text}`).join('\n\n');
 }
 
@@ -65,7 +88,11 @@ async function applyMemoryPatch(patch: MemoryPatch): Promise<string> {
   return `removed ${removed}, added ${added}`;
 }
 
-async function runStep(s: DreamCycleState, step: DreamNode, fn: () => Promise<[DreamStepStatus, string]>): Promise<DreamNode | 'end'> {
+async function runStep(
+  s: DreamCycleState,
+  step: DreamNode,
+  fn: () => Promise<[DreamStepStatus, string]>,
+): Promise<DreamNode | 'end'> {
   setStep(step);
   const started = Date.now();
   let status: DreamStepStatus = 'failed';
@@ -98,6 +125,30 @@ async function runStep(s: DreamCycleState, step: DreamNode, fn: () => Promise<[D
 }
 
 const dreamGraph: Graph<DreamCycleState, DreamNode> = {
+  // v0.17.0 (Initiative 10): rate recent unrated turns 1–5 for salience BEFORE the
+  // fold (refine_layer1) uses importance to anchor salient turns against
+  // over-summarization; the score also feeds recall ranking (v0.17.1).
+  rate_salience: (s) =>
+    runStep(s, 'rate_salience', async () => {
+      const unrated = listUnratedL2(s.sessionId, MAX_SALIENCE_PER_CYCLE);
+      if (unrated.length === 0) return ['skipped', 'all turns rated'];
+      const call = await dreamCall(s.llm, saliencePrompt(unrated));
+      if (!call.ok) return ['failed', `${call.failure}: ${call.detail}`];
+      const patch = parseJsonBlock(SaliencePatch, call.text);
+      if (!patch) return ['failed', 'unparseable scores'];
+      let rated = 0;
+      // listUnratedL2 returns most-recent-first; the prompt numbered them in that
+      // same order, so scores[i] maps to unrated[i].
+      unrated.forEach((row, i) => {
+        const score = patch.scores[i];
+        if (typeof score === 'number') {
+          setImportance(row.id, score);
+          rated += 1;
+        }
+      });
+      return rated > 0 ? ['ok', `rated ${rated} turns`] : ['failed', 'no scores applied'];
+    }),
+
   refine_semantic: (s) =>
     runStep(s, 'refine_semantic', async () => {
       const facts = listFacts();
@@ -106,7 +157,8 @@ const dreamGraph: Graph<DreamCycleState, DreamNode> = {
       if (!call.ok) return ['failed', `${call.failure}: ${call.detail}`];
       const patch = parseJsonBlock(MemoryPatch, call.text);
       if (!patch) return ['failed', 'unparseable patch'];
-      if (patch.remove_ids.length === 0 && patch.add.length === 0) return ['skipped', 'nothing to change'];
+      if (patch.remove_ids.length === 0 && patch.add.length === 0)
+        return ['skipped', 'nothing to change'];
       return ['ok', await applyMemoryPatch(patch)];
     }),
 
@@ -126,7 +178,8 @@ const dreamGraph: Graph<DreamCycleState, DreamNode> = {
       if (!call.ok) return ['failed', `${call.failure}: ${call.detail}`];
       const patch = parseJsonBlock(MemoryPatch, call.text);
       if (!patch) return ['failed', 'unparseable patch'];
-      if (patch.remove_ids.length === 0 && patch.add.length === 0) return ['skipped', 'memory consistent'];
+      if (patch.remove_ids.length === 0 && patch.add.length === 0)
+        return ['skipped', 'memory consistent'];
       return ['ok', await applyMemoryPatch(patch)];
     }),
 
@@ -135,7 +188,10 @@ const dreamGraph: Graph<DreamCycleState, DreamNode> = {
       const dialogue = recentDialogue(s.sessionId, null);
       if (dialogue.length === 0) return ['skipped', 'no recent dialogue'];
       const core = getCore();
-      const call = await dreamCall(s.llm, personaUpdatePrompt(core.self_state, core.relationship_status, dialogue));
+      const call = await dreamCall(
+        s.llm,
+        personaUpdatePrompt(core.self_state, core.relationship_status, dialogue),
+      );
       if (!call.ok) return ['failed', `${call.failure}: ${call.detail}`];
       const patch = parseJsonBlock(PersonaPatch, call.text);
       if (!patch) return ['failed', 'unparseable persona patch'];
@@ -185,7 +241,9 @@ const dreamGraph: Graph<DreamCycleState, DreamNode> = {
         const date = new Date(`${d.period_key}T00:00:00Z`);
         const year = date.getUTCFullYear();
         const jan1 = Date.UTC(year, 0, 1);
-        const week = Math.ceil(((date.getTime() - jan1) / 86_400_000 + new Date(jan1).getUTCDay() + 1) / 7);
+        const week = Math.ceil(
+          ((date.getTime() - jan1) / 86_400_000 + new Date(jan1).getUTCDay() + 1) / 7,
+        );
         const key = `${year}-W${String(week).padStart(2, '0')}`;
         const list = byWeek.get(key) ?? [];
         list.push(d);
@@ -254,14 +312,12 @@ export async function runDreamCycle(opts: {
     steps: [],
   };
 
-  db?.prepare('INSERT INTO dream_reports (cycle_id, started_ms, ended_ms, report_json) VALUES (?, ?, NULL, ?)').run(
-    entered.cycleId,
-    startedMs,
-    JSON.stringify({ steps: [] }),
-  );
+  db?.prepare(
+    'INSERT INTO dream_reports (cycle_id, started_ms, ended_ms, report_json) VALUES (?, ?, NULL, ?)',
+  ).run(entered.cycleId, startedMs, JSON.stringify({ steps: [] }));
 
   try {
-    await runGraph(dreamGraph, 'refine_semantic', state);
+    await runGraph(dreamGraph, 'rate_salience', state);
   } finally {
     db?.prepare('UPDATE dream_reports SET ended_ms = ?, report_json = ? WHERE cycle_id = ?').run(
       Date.now(),
