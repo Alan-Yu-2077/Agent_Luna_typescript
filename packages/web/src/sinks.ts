@@ -7,13 +7,18 @@ import type { ExpressionKey, VoiceParams } from '@luna/protocol';
 
 export type Live2DState = 'neutral' | 'thinking' | 'speaking' | 'sleeping';
 
+// One frame of lip-sync mouth articulation (ported from Python lip-sync.js): the
+// four mouth params driven together — open + form/width + shrug + pucker. `null`
+// releases the mouth back to the emotion/idle layer (speech ended).
+export type LipSyncFrame = { open: number; form: number; shrug: number; pucker: number };
+
 export interface Live2DSink {
   // emotion is the normalized [0,1] intensity from the message envelope
   setExpression(key: ExpressionKey, emotion?: number): void;
   // coarse posture/idle state, driven from turn/dream events
   setState(state: Live2DState): void;
-  // lip-sync mouth-open [0,1] (fed by the audio pipeline; 0 until v0.13.3)
-  setMouthOpen(value: number): void;
+  // lip-sync mouth articulation (fed by the audio pipeline); null = release
+  setMouth(frame: LipSyncFrame | null): void;
   clear(): void;
   // optional — only the real pixi sink implements these:
   // toggle pointer gaze-follow (autoFocus) vs pure performance-choreography mode
@@ -39,7 +44,7 @@ export const consoleLive2DSink: Live2DSink = {
   setState(state) {
     console.log(`[live2d] state=${state}`);
   },
-  setMouthOpen() {
+  setMouth() {
     /* no-op stub — would be 60fps spam to log */
   },
   clear() {

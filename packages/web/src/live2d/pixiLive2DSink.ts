@@ -222,7 +222,7 @@ export async function createPixiLive2DSink(
   return {
     setExpression: (key, emotion) => faceVm.setExpression(key, emotion),
     setState: (state: Live2DState) => faceVm.setState(state),
-    setMouthOpen: (value) => faceVm.setMouth(value),
+    setMouth: (frame) => faceVm.setMouth(frame),
     clear: () => faceVm.clear(),
     setGazeFollow: (on) => {
       try {

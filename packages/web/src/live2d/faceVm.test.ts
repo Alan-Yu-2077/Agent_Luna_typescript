@@ -38,13 +38,26 @@ describe('FaceVm — emotion engine', () => {
     expect(Math.abs(last.get('ParamMouthpucker') ?? 0)).toBeLessThan(0.05);
   });
 
-  test('speaking state opens the mouth with the lip-sync value', () => {
+  test('a lip-sync frame owns the mouth (overrides emotion, drives 4 params)', () => {
     const { writer, last } = recorder();
     const vm = new FaceVm(writer);
     vm.setState('speaking');
-    vm.setMouth(0.8);
+    vm.setMouth({ open: 0.8, form: 0.2, shrug: 0.1, pucker: -0.3 });
     run(vm, 0, 2000);
-    expect(last.get('ParamMouthOpenY') ?? 0).toBeCloseTo(0.8, 1);
+    // written raw (lip-sync already smoothed) — exact, not eased
+    expect(last.get('ParamMouthOpenY') ?? 0).toBe(0.8);
+    expect(last.get('ParamMouthForm') ?? 0).toBe(0.2);
+    expect(last.get('ParamMouthpucker') ?? 0).toBe(-0.3);
+  });
+
+  test('clearing the lip frame releases the mouth back toward rest', () => {
+    const { writer, last } = recorder();
+    const vm = new FaceVm(writer);
+    vm.setMouth({ open: 0.9, form: 0.3, shrug: 0.1, pucker: -0.4 });
+    run(vm, 0, 500);
+    vm.setMouth(null);
+    run(vm, 516, 3000);
+    expect(last.get('ParamMouthOpenY') ?? 1).toBeLessThan(0.1);
   });
 
   test('sleeping closes the eyes', () => {

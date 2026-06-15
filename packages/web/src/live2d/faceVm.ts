@@ -1,5 +1,5 @@
 import type { ExpressionKey } from '@luna/protocol';
-import type { Live2DState } from '../sinks';
+import type { Live2DState, LipSyncFrame } from '../sinks';
 import {
   FACE_STATE_KEYS,
   FACE_VM_DEFAULT_STATE,
@@ -53,6 +53,10 @@ type ActionInstance = { action: ActionDef; startAt: number; intensity: number };
 
 const SOFT_BLEND_KEYS = new Set(Object.keys(EMOTION_SOFT_BLEND_WEIGHTS) as FaceStateKey[]);
 
+// The 4 mouth params the lip-sync owns while speaking (and that we always write
+// when idle so they can't freeze at the last spoken value).
+const MOUTH_KEYS: readonly FaceStateKey[] = ['mouthOpen', 'mouthForm', 'mouthShrug', 'mouthPucker'];
+
 // Simple state-layer biases (kept from v0.13.1; rich speaking/thinking procedural
 // motion is deferred). Applied additively-as-set, skipping emotion-owned keys.
 const STATE_BIAS: Record<Live2DState, Pose> = {
@@ -65,7 +69,7 @@ const STATE_BIAS: Record<Live2DState, Pose> = {
 export class FaceVm {
   private readonly cur: Record<FaceStateKey, number> = { ...FACE_VM_DEFAULT_STATE };
   private state: Live2DState = 'neutral';
-  private mouth = 0;
+  private lip: LipSyncFrame | null = null;
   private playback: Playback | null = null;
   private readonly actions = new Map<string, ActionInstance>();
   private pending: { id: EmotionId | null; intensity: number } | undefined;
@@ -75,8 +79,11 @@ export class FaceVm {
   setState(state: Live2DState): void {
     this.state = state;
   }
-  setMouth(value: number): void {
-    this.mouth = clamp01(value);
+  // Lip-sync owns the mouth while speaking: a frame overrides the 4 mouth params
+  // (raw, post-emotion, no extra smoothing — it's already smoothed); null releases
+  // the mouth back to the emotion/idle layer.
+  setMouth(frame: LipSyncFrame | null): void {
+    this.lip = frame;
   }
   setExpression(key: ExpressionKey, emotion = 0.95): void {
     this.pending = { id: affectToEmotion(key), intensity: clamp01(emotion) };
@@ -93,7 +100,7 @@ export class FaceVm {
   clear(): void {
     this.pending = { id: null, intensity: 0 };
     this.state = 'neutral';
-    this.mouth = 0;
+    this.lip = null;
   }
 
   tick(now: number): void {
@@ -103,7 +110,6 @@ export class FaceVm {
     const target: Record<FaceStateKey, number> = { ...FACE_VM_DEFAULT_STATE };
     const owned = this.ownedKeys(now);
     applyPose(target, STATE_BIAS[this.state], owned);
-    target.mouthOpen = Math.max(target.mouthOpen, this.mouth); // lip-sync drives the mouth whenever audio plays
     this.applyEmotion(target, now);
     this.applyActions(target, now);
 
@@ -121,6 +127,24 @@ export class FaceVm {
 
     const overlay = this.overlayParams(now);
     for (const pid of ALL_OVERLAY_PARAMS) this.writer.setParam(pid, overlay[pid] ?? 0);
+
+    // Mouth ownership: while speaking, the lip-sync frame owns the 4 mouth params
+    // (raw, already-smoothed values, written last so they win over the emotion/idle
+    // mouth — mouth params are direct deformers, not physics-driven like head/body).
+    // When NOT speaking we still write them UNCONDITIONALLY from the smoothed
+    // emotion/idle value (with gain), so a just-ended utterance can't leave the
+    // mouth frozen at its last open value (the gated main loop won't rewrite a
+    // near-default param).
+    if (this.lip) {
+      this.writer.setParam(FACE_VM_PARAM_MAP.mouthOpen, clampStateValue('mouthOpen', this.lip.open));
+      this.writer.setParam(FACE_VM_PARAM_MAP.mouthForm, clampStateValue('mouthForm', this.lip.form));
+      this.writer.setParam(FACE_VM_PARAM_MAP.mouthShrug, clampStateValue('mouthShrug', this.lip.shrug));
+      this.writer.setParam(FACE_VM_PARAM_MAP.mouthPucker, clampStateValue('mouthPucker', this.lip.pucker));
+    } else {
+      for (const k of MOUTH_KEYS) {
+        this.writer.setParam(FACE_VM_PARAM_MAP[k], clampStateValue(k, this.cur[k] * (FACE_PARAM_GAIN[k] ?? 1)));
+      }
+    }
   }
 
   private consumePending(now: number): void {

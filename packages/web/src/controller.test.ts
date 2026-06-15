@@ -20,7 +20,7 @@ function harness() {
   const live2d: Live2DSink = {
     setExpression: (k, e) => calls.push(['expr', k, e]),
     setState: (s) => states.push(s),
-    setMouthOpen: () => {},
+    setMouth: () => {},
     clear: () => calls.push(['clear']),
   };
   const spoken: string[] = [];

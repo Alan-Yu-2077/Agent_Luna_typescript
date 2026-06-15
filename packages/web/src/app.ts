@@ -59,7 +59,7 @@ async function boot(): Promise<void> {
 
   let audio: AudioSink = noopAudioSink;
   if (localStorage.getItem('luna:tts') !== '0') {
-    audio = new WebAudioSink({ onMouth: (v) => live2d.setMouthOpen(v) });
+    audio = new WebAudioSink({ onMouth: (frame) => live2d.setMouth(frame) });
   }
 
   const controller = createController({ view, live2d, audio });
