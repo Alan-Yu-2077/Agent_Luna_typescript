@@ -8,6 +8,7 @@ import { startTimestampRefresh } from './ui/time';
 import { moodOf } from './ui/mood';
 import { createPixiLive2DSink } from './live2d/pixiLive2DSink';
 import { WebAudioSink } from './audio/webAudioSink';
+import { createBootGate, warmUpTts } from './ui/bootGate';
 
 // Browser entry — builds the cute UI shell + the live Live2D avatar + voice, and
 // wires the v0.12.0 consumption controller plus the v0.13.4 polish chrome (dream
@@ -25,6 +26,27 @@ async function boot(): Promise<void> {
 
   const refs = buildLayout(root);
   const view = new CuteBubbleView(refs.chatLog, refs.scrollPill);
+
+  // Boot gate: when voice is on, block the UI until GPT-SoVITS has warmed its
+  // (~5GB) model. Skippable, and degrades fast (no block) if no sidecar is up.
+  // The rest of boot (Live2D, WS) proceeds behind the overlay.
+  if (localStorage.getItem('luna:tts') !== '0') {
+    const gate = createBootGate(root);
+    let skipped = false;
+    gate.onSkip(() => {
+      skipped = true;
+      gate.done();
+    });
+    void warmUpTts('/api/gpt-sovits', (s) => {
+      if (!skipped) gate.setStatus(s);
+    }).then((res) => {
+      if (skipped) return;
+      gate.setStatus(
+        res === 'unavailable' ? '未检测到语音服务，直接进入' : res === 'failed' ? '语音加载失败，静音进入' : '语音就绪 ✓',
+      );
+      globalThis.setTimeout(() => gate.done(), res === 'ready' ? 300 : 900);
+    });
+  }
 
   let live2d: Live2DSink = consoleLive2DSink;
   if (localStorage.getItem('luna:live2d') !== '0') {
