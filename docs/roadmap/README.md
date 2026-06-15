@@ -4,19 +4,21 @@ Forward development plan for the TypeScript rewrite. Each initiative is a folder
 self-contained version plans, executed one at a time. Version numbers reserve across initiatives so
 they never overlap.
 
-> **Current shipped head: v0.13.4** (2026-06-14, dream overlay + UX polish — **Initiative 6 complete**).
+> **Current shipped head: v0.13.11** (2026-06-15, clause-cap relaxation + silenced validation retries —
+> end of the C 端 bug-fix pass, tagged `v0.13.11`).
 > **Initiatives 1, 1.5, 2, 3, 4, 5, 6 all ✅ complete.** The rewrite now has the full stack: the agent
 > brain + three-layer memory + dream consolidation + proactive agency, **and the body** — a redesigned
 > cute UI (chat left / model right, light-blue stripes + lace), the live Live2D **yumi** avatar with 14
-> high-fidelity layered emotions, GPT-SoVITS voice + RMS lip-sync, and the 🌙 入梦 dream overlay — the
-> whole `packages/web` frontend consuming the shared `@luna/protocol` types (backend↔frontend drift = a
-> compile error) with zero wire changes across the six frontend versions.
+> high-fidelity layered emotions, GPT-SoVITS voice + Python-ported lip-sync + serial speech queue, a boot
+> gate, and a VSCode-style workspace dev IDE — the whole `packages/web` frontend consuming the shared
+> `@luna/protocol` types (backend↔frontend drift = a compile error).
 >
 > **Initiative 7 (open-source packaging) is ❌ cancelled** — the open-source/Docker premise was dropped;
-> TTS stays the original GPT-SoVITS, **local-only, not open-sourced**, already brought up by a local
-> one-command launcher (`bun run dev` → `scripts/dev-all.ts` + `scripts/tts-proxy.cjs`, outside the
-> roadmap). **Next: client-side (C 端) bug-fix pass** driven by real usage feedback — no fixed version
-> plan yet. See [`../history/DEVELOPMENT.md`](../history/DEVELOPMENT.md).
+> TTS stays the original GPT-SoVITS, **local-only, not open-sourced**, brought up by a local one-command
+> launcher (`bun run dev` → `scripts/dev-all.ts` + `scripts/tts-proxy.cjs`, outside the roadmap). The C 端
+> bug-fix pass (v0.13.5–v0.13.11) is **done** — gaze/physics, lip-sync rewrite, serial queue, boot gate,
+> workspace IDE, persona fixes, clause-cap. **Next: Initiative 8 (code-agent capability)** — see below and
+> [`../history/DEVELOPMENT.md`](../history/DEVELOPMENT.md).
 
 ## Planned initiatives (execution order)
 
@@ -30,6 +32,7 @@ they never overlap.
 | 5 | v0.10.0 – v0.11.0 | **Proactive agency** — autonomous tool-calling turns when no one is talking, not just proactive messaging (the 2026 ambient/Hermes paradigm, companion-scaled). A proactive turn is a `runTurn` with the full tool surface and **`message` optional** (she can act silently). Idle + scheduled wakeups; the wake gate is the one legitimate L2 gate (reuses Initiative 4's audit lane). **Safety contract (LD #15): reversible-silent / irreversible-surfaced** + kill switch + action budget, because Alan chose full-tool-incl-`shell` autonomy. **Carries the deferred dream auto-trigger** + self-continuation (a delayed micro-wake) | [`proactive-agency-2026-06/`](proactive-agency-2026-06/) | ✅ shipped 2026-06-13 (5 versions) |
 | 6 | v0.12.0 – v0.13.4 | **Frontend port — the body** — the consumption controller (v0.12.0, shipped) + a freshly **redesigned** cute UI (Alan's design, not a Python-page port) + the real Live2D avatar (yumi) + GPT-SoVITS voice + lip-sync, all behind the v0.12.0 `Live2DSink`/`AudioSink` interfaces. Reuses the pixi-live2d/Cubism runtime + yumi assets + the SoVITS sidecar; the TS driver glue is ported fresh ("参考 Python 但不照搬"). **v0.12.0 shipped; v0.13.0–v0.13.3 planned** | [`frontend-port-2026-06/`](frontend-port-2026-06/) | ✅ shipped 2026-06-14 (6 versions) |
 | ~~7~~ | ~~v0.14.0 – v0.14.2~~ | **Open-source packaging + one-command startup** — ❌ **cancelled.** Open-source/Docker premise dropped; TTS stays original GPT-SoVITS, local-only, not open-sourced. The local one-command launcher was delivered outside the roadmap (`bun run dev`). The still-useful, OSS-independent bits (LICENSE, README rewrite, secret-scan) may return as a smaller future initiative if/when open-sourcing is revisited. | [`oss-packaging-2026-06/`](oss-packaging-2026-06/) | ❌ cancelled |
+| 8 | v0.15.0 – v0.15.4 | **Code-agent capability** — turn Luna's minimal, directory-locked code tools into a mainstream code-agent loop: a **workspace sandbox** + windowed read / list / ripgrep nav (v0.15.0), **str_replace-native edit** tools with read-before-edit + lint-on-write (v0.15.1), a **sandboxed `shell`** + typecheck/test/lint **verify loop** (v0.15.2), an Aider-style **repo map** + tree-sitter **symbol locator** + `plan` tool (v0.15.3), and a **self-verified skill library + firewalled, human-gated self-edit** (v0.15.4). Ports Python's filesystem/exec capability; diverges to str_replace-native editing + a hard **evaluator firewall** (the agent can never write the code that judges/sandboxes it — the DGM safeguard). v0.14.x skipped (reserved by cancelled Initiative 7). | [`code-agent-2026-06/`](code-agent-2026-06/) | 🟡 planned |
 
 ## Ordering philosophy
 
@@ -148,3 +151,23 @@ return as a smaller standalone initiative. See [`oss-packaging-2026-06/`](oss-pa
 | v0.14.0 | [Bundle GPT-SoVITS service](oss-packaging-2026-06/v0.14.0-bundle-tts.md) | `services/tts/gpt-sovits/` (docker-compose) + dev-server translates `{text,voice}`→`api_v2` (drop the Python proxy); weights gitignored |
 | v0.14.1 | [One-command launcher](oss-packaging-2026-06/v0.14.1-one-command.md) | `bun run dev`/`start` via `concurrently` (server + web + sidecar) + `bun run setup` (pull image + yumi voice model); cross-platform |
 | v0.14.2 | [OSS hygiene + close](oss-packaging-2026-06/v0.14.2-oss-hygiene.md) | MIT LICENSE, README rewrite, `.env.example`, `THIRD_PARTY_LICENSES`, secret-scan, `.gitignore models/` — **Initiative 7 ✅** |
+
+## Initiative 8 — Code-agent capability (v0.15.0 – v0.15.4) — 🟡 PLANNED
+
+Luna's code tools today are minimal, weak at targeting, and locked to one directory. This initiative
+rebuilds them into a mainstream code-agent loop — **locate → read → edit → run → verify → iterate** — by
+porting Python Luna's filesystem/exec capability and the reliability levers SOTA agents converge on
+(read-before-edit, lint-on-write, str_replace-native editing, an Aider-style repo map, a hybrid
+ripgrep→tree-sitter locator). The openclaw/Hermes "自编辑·自进化" ask lands the **safe** way the research
+mandates: a self-verified skill library + a **human-gated, evaluator-firewalled** self-edit — the agent
+can never write the code that judges, sandboxes, or gates it (the Darwin-Gödel-Machine safeguard). Each
+risky version is default-off-flagged, jailed, and `proactiveRisk:'surface'`. v0.14.x is skipped (reserved
+by cancelled Initiative 7). See [`code-agent-2026-06/`](code-agent-2026-06/).
+
+| Version | Plan | Risk | Theme |
+|---|---|---|---|
+| v0.15.0 | [Workspace sandbox + read/nav](code-agent-2026-06/v0.15.0-workspace-sandbox-nav.md) | Medium | `resolveInWorkspace` jail + sensitive-path blocklist; windowed `read_file` (+`content_hash`); new `list_files` + ripgrep `grep`. Read-only, ships on |
+| v0.15.1 | [Edit tools](code-agent-2026-06/v0.15.1-edit-tools.md) | High | `edit` (str_replace + read-before-edit + uniqueness + fuzzy fallback + `expected_hash`), atomic `multi_edit`, `write_file`, lint-on-write. Flag `LUNA_CODE_WRITE` |
+| v0.15.2 | [`shell` + verify loop](code-agent-2026-06/v0.15.2-shell-verify.md) | High | sandboxed `shell` (deny-regex + interactive-block + timeout + jail; subsumes fs-mutation per LD #9) + `typecheck`/`run_tests`/`lint`. Flag `LUNA_SHELL` |
+| v0.15.3 | [Repo map + locator + plan](code-agent-2026-06/v0.15.3-repo-map-locator.md) | Medium | Aider-style mtime-cached `repo_map` (tree-sitter WASM) + hybrid `find_symbol` (ripgrep→tree-sitter verify) + `plan` todo spine. Flag `LUNA_REPO_MAP` |
+| v0.15.4 | [Skills + firewalled self-edit](code-agent-2026-06/v0.15.4-skills-self-edit.md) | High | self-verified skill library (`save_skill` verify-before-persist / `recall_skill`) + propose-only `propose_self_edit` with the evaluator firewall in `resolveInWorkspace`. Flags `LUNA_SKILLS`, `LUNA_SELF_EDIT` — **Initiative 8 ✅** |
