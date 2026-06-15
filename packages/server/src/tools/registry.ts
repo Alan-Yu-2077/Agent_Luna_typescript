@@ -2,14 +2,17 @@ import type { ToolName } from '@luna/protocol';
 import type { Tool } from './defineTool';
 import { editTool } from './builtin/edit';
 import { enterDreamTool } from './builtin/enter_dream';
+import { findSymbolTool } from './builtin/find_symbol';
 import { grepTool } from './builtin/grep';
 import { lintTool } from './builtin/lint';
 import { listFilesTool } from './builtin/list_files';
 import { messageTool } from './builtin/message';
 import { multiEditTool } from './builtin/multi_edit';
+import { planTool } from './builtin/plan';
 import { readFileTool } from './builtin/read_file';
 import { recallTool } from './builtin/recall';
 import { rememberTool } from './builtin/remember';
+import { repoMapTool } from './builtin/repo_map';
 import { runTestsTool } from './builtin/run_tests';
 import { shellTool } from './builtin/shell';
 import { timeNowTool } from './builtin/time_now';
@@ -32,6 +35,9 @@ export const builtinRegistry: ToolRegistry = {
   // workspace.ts → ship on by default, no feature flag.
   list_files: listFilesTool,
   grep: grepTool,
+  // the plan/todo spine (Initiative 8, v0.15.3) — cheap, safe, session-scoped.
+  // Ships on always (owner: "plan ships on"); no flag.
+  plan: planTool,
 };
 
 // Code-write tools (Initiative 8, v0.15.1) — edit / multi_edit / write_file.
@@ -81,6 +87,26 @@ export function shellEnabled(): boolean {
 // Compose a base registry with the shell + verify tools iff the flag is on.
 export function withShell(base: ToolRegistry): ToolRegistry {
   return shellEnabled() ? { ...base, ...shellTools } : { ...base };
+}
+
+// Repo map + hybrid symbol locator (Initiative 8, v0.15.3). Read-only + jailed
+// (like grep/list), but they carry the tree-sitter WASM load + the SQLite cache,
+// so they sit behind their own flag (LUNA_REPO_MAP) — OWNER DECISION #4: default
+// ON (the `=0` is the off switch), the plan's "0 until verified" superseded.
+export const repoMapTools: ToolRegistry = {
+  repo_map: repoMapTool,
+  find_symbol: findSymbolTool,
+};
+
+// Default ON (owner: enable-all-after-E2E); LUNA_REPO_MAP=0 turns the map +
+// locator tools off (the `plan` tool is unaffected — it ships in builtinRegistry).
+export function repoMapEnabled(): boolean {
+  return Bun.env['LUNA_REPO_MAP'] !== '0';
+}
+
+// Compose a base registry with the repo-map + locator tools iff the flag is on.
+export function withRepoMap(base: ToolRegistry): ToolRegistry {
+  return repoMapEnabled() ? { ...base, ...repoMapTools } : { ...base };
 }
 
 // The LD #9 everything-as-tool surface. Mode selection happens once at boot

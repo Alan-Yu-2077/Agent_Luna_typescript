@@ -11,6 +11,9 @@ const CUTE: Partial<Record<ToolName, string>> = {
   time_now: 'checked the time 🕐',
   enter_dream: 'getting ready to dream 🌙',
   message: 'said something 💬',
+  repo_map: 'mapped the codebase 🗺️',
+  find_symbol: 'located a symbol 🔎',
+  plan: 'updated the plan 📋',
 };
 
 function strip(s: string): string {

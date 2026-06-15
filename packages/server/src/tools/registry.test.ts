@@ -3,7 +3,15 @@ import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from '
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { ToolEvent } from '@luna/protocol';
-import { builtinRegistry, codeWriteEnabled, shellEnabled, withCodeWrite, withShell } from './registry';
+import {
+  builtinRegistry,
+  codeWriteEnabled,
+  repoMapEnabled,
+  shellEnabled,
+  withCodeWrite,
+  withRepoMap,
+  withShell,
+} from './registry';
 import { dispatchToolCalls } from './dispatcher';
 import { Mutex } from './mutex';
 import { markRead, resetReadTracking } from './readTracking';
@@ -11,6 +19,7 @@ import { resolveInWorkspace } from './workspace';
 
 const savedFlag = Bun.env['LUNA_CODE_WRITE'];
 const savedShell = Bun.env['LUNA_SHELL'];
+const savedRepoMap = Bun.env['LUNA_REPO_MAP'];
 const savedRoot = Bun.env['LUNA_WORKSPACE_ROOT'];
 
 afterEach(() => {
@@ -18,6 +27,8 @@ afterEach(() => {
   else Bun.env['LUNA_CODE_WRITE'] = savedFlag;
   if (savedShell === undefined) delete Bun.env['LUNA_SHELL'];
   else Bun.env['LUNA_SHELL'] = savedShell;
+  if (savedRepoMap === undefined) delete Bun.env['LUNA_REPO_MAP'];
+  else Bun.env['LUNA_REPO_MAP'] = savedRepoMap;
 });
 
 describe('LUNA_CODE_WRITE flag gates the write tools', () => {
@@ -105,6 +116,34 @@ describe('LUNA_SHELL flag gates the shell + verify tools', () => {
     } else {
       throw new Error('expected a tool_not_found error');
     }
+  });
+});
+
+describe('LUNA_REPO_MAP flag gates repo_map + find_symbol (plan ships on always)', () => {
+  test('plan is in the base registry regardless of any flag', () => {
+    expect(builtinRegistry.plan).toBeDefined();
+  });
+
+  test('default (unset) → repo_map + find_symbol mounted', () => {
+    delete Bun.env['LUNA_REPO_MAP'];
+    expect(repoMapEnabled()).toBe(true);
+    const reg = withRepoMap(builtinRegistry);
+    expect(reg.repo_map).toBeDefined();
+    expect(reg.find_symbol).toBeDefined();
+    expect(reg.plan).toBeDefined();
+  });
+
+  test('LUNA_REPO_MAP=0 → repo_map + find_symbol ABSENT, plan still present', () => {
+    Bun.env['LUNA_REPO_MAP'] = '0';
+    expect(repoMapEnabled()).toBe(false);
+    const reg = withRepoMap(builtinRegistry);
+    expect(reg.repo_map).toBeUndefined();
+    expect(reg.find_symbol).toBeUndefined();
+    // plan is unaffected by the flag (owner: "plan ships on")
+    expect(reg.plan).toBeDefined();
+    // read-only nav tools unaffected
+    expect(reg.grep).toBeDefined();
+    expect(reg.list_files).toBeDefined();
   });
 });
 

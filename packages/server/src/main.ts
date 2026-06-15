@@ -6,8 +6,10 @@ import {
   builtinRegistry,
   codeWriteEnabled,
   messageRegistry,
+  repoMapEnabled,
   shellEnabled,
   withCodeWrite,
+  withRepoMap,
   withShell,
 } from './tools/registry';
 import { closeDb, migrate, openDb } from './sql';
@@ -69,10 +71,14 @@ if (Bun.env['ANTHROPIC_API_KEY']) {
   const writeMode = codeWriteEnabled();
   // Shell + verify loop (v0.15.2) layers on iff LUNA_SHELL != 0 (default ON).
   const shellMode = shellEnabled();
-  const registry = withShell(withCodeWrite(messageMode ? messageRegistry : builtinRegistry));
+  // Repo map + locator (v0.15.3) layer on iff LUNA_REPO_MAP != 0 (default ON).
+  const repoMapMode = repoMapEnabled();
+  const registry = withRepoMap(
+    withShell(withCodeWrite(messageMode ? messageRegistry : builtinRegistry)),
+  );
   setRuntime({ provider, registry, dreamLlm });
   console.log(
-    `[luna-server] provider: ${Bun.env['LUNA_MODEL'] ?? 'claude-opus-4-8'} via ${Bun.env['ANTHROPIC_BASE_URL'] ?? 'https://api.anthropic.com'}${summarizerKey ? ' (+summarizer key)' : ''}${messageMode ? ' [message-tool mode]' : ''}${writeMode ? ' [code-write]' : ''}${shellMode ? ' [shell]' : ''}`,
+    `[luna-server] provider: ${Bun.env['LUNA_MODEL'] ?? 'claude-opus-4-8'} via ${Bun.env['ANTHROPIC_BASE_URL'] ?? 'https://api.anthropic.com'}${summarizerKey ? ' (+summarizer key)' : ''}${messageMode ? ' [message-tool mode]' : ''}${writeMode ? ' [code-write]' : ''}${shellMode ? ' [shell]' : ''}${repoMapMode ? ' [repo-map]' : ''}`,
   );
   // Proactive heartbeat (v0.10.3). The timer runs always; each tick no-ops
   // unless LUNA_PROACTIVE=1 (re-read per tick, so the kill switch toggles

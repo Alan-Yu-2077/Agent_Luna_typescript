@@ -39,5 +39,10 @@ export function renderL1Contract(): string {
       'change code, actually run the check — call typecheck or run_tests — before you say it works. ' +
       'Do not claim a change compiles or passes untested. Use shell for builds, git, and file ' +
       'operations; dangerous commands are blocked and interactive ones (vim, ssh) will not run.',
+    // code-agent map + locate + plan (Initiative 8, v0.15.3)
+    'You have a map. To find where something lives, prefer find_symbol (it returns the definition ' +
+      'and its references, structurally verified) or repo_map (a ranked outline of the codebase) over ' +
+      'reading whole files to hunt for a name. For multi-step code work, set a plan first with the ' +
+      'plan tool and update it as you finish each step — it keeps the work visible and revisable.',
   ].join('\n\n');
 }

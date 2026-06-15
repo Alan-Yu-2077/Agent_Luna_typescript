@@ -2,12 +2,24 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { Mutex } from '../tools/mutex';
 import { loadSession } from '../memory/sessionStore';
 
+// A single todo item on the session's plan spine (Initiative 8, v0.15.3). The
+// plan is the visible, revisable scaffold for multi-step code work — set/update/
+// get via the `plan` tool, surfaced to the web UI as a tool.progress payload.
+export type PlanItem = {
+  id: string;
+  text: string;
+  status: 'pending' | 'in_progress' | 'done';
+};
+
 export type Session = {
   id: string;
   history: Anthropic.MessageParam[];
   turnSeq: number;
   activeTurn: string | null;
   pendingDream: string | null;
+  // The current plan (session-scoped, NOT persisted — a fresh process starts
+  // with no plan, like wakePending).
+  plan: PlanItem[];
   rollingSummary: string;
   windowLowWater: number;
   // True until the first turn after process boot — drives the wake scene
@@ -32,6 +44,7 @@ export function getSession(id: string): Session {
       turnSeq: persisted?.turnSeq ?? 0,
       activeTurn: null,
       pendingDream: null,
+      plan: [],
       rollingSummary: persisted?.rollingSummary ?? '',
       windowLowWater: persisted?.windowLowWater ?? 0,
       wakePending: true,

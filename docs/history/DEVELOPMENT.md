@@ -1,6 +1,6 @@
 # Agent_Luna (TypeScript) — Development History
 
-Last updated: 2026-06-15 (Asia/Shanghai) — v0.15.2 (code-agent shell + verify loop — sandboxed `shell` behind LUNA_SHELL + typecheck/run_tests/lint verifiers via a shared injectable spawner; Initiative 8 3/5, dev branch)
+Last updated: 2026-06-15 (Asia/Shanghai) — v0.15.3 (code-agent repo map + hybrid `find_symbol` locator + `plan` spine — Aider-style ranked/cached `repo_map` + ripgrep→tree-sitter verify behind LUNA_REPO_MAP, session-scoped `plan`; web-tree-sitter + vendored TS/TSX/JS grammars + SQLite cache migration 0008; Initiative 8 4/5, dev branch)
 
 ## Scope
 
@@ -78,6 +78,7 @@ during the rewrite. Its version log is unrelated to this one — `v0.1` here is 
 | `v0.15.0` | 2026-06-15 | Code-agent read/nav foundation (Initiative 8, 1/5) — workspace sandbox (blocklist-only, no root jail) + windowed `read_file` + `list_files` + `grep` (rg w/ JS fallback) | _dev branch_ |
 | `v0.15.1` | 2026-06-15 | Code-agent edit tools (Initiative 8, 2/5) — `edit` / `multi_edit` / `write_file` (read-before-edit + uniqueness + fuzzy-report + CRLF + optimistic `expected_hash` + atomic multi) behind `LUNA_CODE_WRITE` (default on) + lint-on-write (`Bun.Transpiler`, `LUNA_LINT_ON_WRITE`) + firewall-refusal routed through the edit tool | _dev branch_ |
 | `v0.15.2` | 2026-06-15 | Code-agent shell + verify loop (Initiative 8, 3/5) — sandboxed `shell` (deny-regex + interactive-block + process-tree kill + output cap, subsumes fs-mutation) plus `typecheck` / `run_tests` / `lint` verifiers, all behind `LUNA_SHELL` (default on) via a shared injectable spawner | _dev branch_ |
+| `v0.15.3` | 2026-06-15 | Code-agent repo map + hybrid locator + plan (Initiative 8, 4/5) — Aider-style ranked, token-bounded, mtime-cached `repo_map` + hybrid `find_symbol` (ripgrep candidates → tree-sitter verify, comment/string false positives excluded, ripgrep-only fallback marked `verified:false`) behind `LUNA_REPO_MAP` (default on) + session-scoped `plan` todo spine (ships on always); `web-tree-sitter` + vendored TS/TSX/JS grammars; SQLite cache migration `0008` | _dev branch_ |
 
 ## Code-agent capability (2026-06-15) — Initiative 8 begins (v0.15.0)
 
@@ -277,6 +278,85 @@ Inference:
 - The spawner is injectable specifically so v0.15.4's self-verified skill-runner can reuse it — the
   verify tools are exactly what a skill runs before it is allowed to save. Plan note "don't foreclose"
   honored.
+
+**v0.15.3 — repo map + hybrid symbol locator + plan** (dev branch)
+
+The fourth of five. v0.15.0 gave Luna eyes (read/grep/list); v0.15.3 gives her a **map** and a
+**structural locate** so she answers "where is `X` defined / who calls it" with a verified answer, not
+a guessed path — fixing the targeting half of 寻址能力差/目标定位弱. Plus a lightweight `plan` tool so
+multi-step code work has a visible, revisable todo spine.
+
+Fact:
+
+- Added `web-tree-sitter@0.26.9` as a server dependency and vendored three prebuilt grammars under
+  `packages/server/vendor/tree-sitter/` (`tree-sitter-typescript.wasm`, `-tsx.wasm`, `-javascript.wasm`
+  — TS-first per Open Q #4). The runtime auto-locates its own `.wasm` via `Parser.init()`; verified it
+  loads + parses under Bun.
+- Added `code/treeSitter.ts` (~120 lines) — lazy, process-once runtime init + per-grammar `Language`
+  cache, `grammarForPath` ext→grammar map, `loadParserFor(path)`. Every failure path returns **null**
+  (no grammar / runtime fails / `.wasm` missing) so callers fall back, never throw — the plan's
+  never-hard-fail contract. `resetTreeSitterForTests` seam.
+- Added `code/symbols.ts` (~210 lines) — `extractSymbols(path, source)` with two backends behind one
+  shape: tree-sitter (`verified:true`; defs from declaration nodes + arrow/function-expr declarators,
+  refs from `identifier`/`type_identifier` nodes — a name inside a comment/string is **not** an
+  identifier node, so it is structurally excluded) and a comment-stripping regex fallback
+  (`verified:false`). `forceRegexFallbackForTests` seam.
+- Added `code/repoMap.ts` (~230 lines) — `buildRepoMap` walks the source tree (reusing `fsScan`),
+  parses each file cache-aware, builds a def→referencing-file graph, **PageRank**s it (12 iterations,
+  damping 0.85), attributes file rank to defs (×1.5 for exported, ×4 for a `focus` match), sorts, and
+  emits a **token-bounded** outline (`renderRepoMap`, ~1500-token default, truncation marker). Injected
+  `statFn`/`nowMs` for deterministic cache tests.
+- Added `code/repoMapCache.ts` (~70 lines) — mtime+size-keyed `repo_map` table wrapper over the shared
+  memory DB (no-ops when the DB is unset, exactly like `l3Store`). `getCached` returns null on a
+  staleness hit so a touched file always re-parses; `putCached` upserts; `clearRepoMapCache` for tests.
+- Added `code/symbolLocator.ts` (~150 lines) — `locateSymbol`: SICA hybrid. ripgrep (reusing v0.15.0's
+  injectable `runGrep`) produces cheap `\bname\b` candidate lines; each candidate file is re-parsed with
+  tree-sitter to confirm real defs/refs and attach signatures. A file with no grammar / unreadable /
+  runtime-failed degrades to its raw candidate lines marked `verified:false`. Output is structured
+  (file+line+signature), never prose — the locate primitive v0.15.4's self-edit will point with.
+- Added migration `0008_repo_map.sql` — the `repo_map(path, mtime_ms, size, symbols_json, parsed_ms)`
+  cache table (versioned, never an in-place schema edit — the Python drift bug we avoid).
+- Added the three tools: `builtin/repo_map.ts` (`{focus?, path?, max_tokens?}` → ranked outline +
+  entries; `safe-parallel`, `proactiveRisk:'safe'`, jailed), `builtin/find_symbol.ts`
+  (`{name, kind?, path?}` → `{definitions[], references[], verified, truncated}`; same risk tier), and
+  `builtin/plan.ts` (`{action:set|update|get, items?}`; `session-serial`, `safe`; state on the
+  `Session` object, emits a `tool.progress` plan snapshot for the web UI).
+- Modified `packages/protocol/src/tools.ts` — added `'repo_map'`, `'find_symbol'`, `'plan'` to the
+  `ToolName` enum (wire contract).
+- Modified `registry.ts` — `repoMapTools` group (`repo_map`+`find_symbol`) behind `repoMapEnabled()` /
+  `withRepoMap()`, gated by **`LUNA_REPO_MAP`** (OWNER DECISION #4: default ON, the plan's "0 until
+  verified" superseded; `=0` is the off switch). `plan` added to `builtinRegistry` (ships on always).
+  Wired into `main.ts` as `withRepoMap(withShell(withCodeWrite(...)))` with a `[repo-map]` boot marker.
+- Modified `turn/session.ts` — added the `plan: PlanItem[]` field (session-scoped, NOT persisted) +
+  `PlanItem` type. Modified `l1Contract.ts` — the map/locate/plan clause ("prefer find_symbol/repo_map
+  over reading whole files to hunt a name; set a plan first for multi-step work"). Modified
+  `packages/web/src/ui/toolLabels.ts` — friendly chips for the three new tools.
+- Tests added: `code/repoMap.test.ts` (fixture → expected symbol set + verified; most-referenced
+  symbol ranks first; injected-mtime cache returns cached on unchanged + re-parses on touch + clear;
+  tiny token budget truncates with the marker), `code/symbolLocator.test.ts` (def + its refs found;
+  a same-name token in a line/block comment **excluded** by the tree-sitter pass; `kind:'def'` returns
+  defs only; tree-sitter-forced-off and no-grammar `.py` both degrade to `verified:false` candidates),
+  `builtin/plan.test.ts` (set→get round-trip, update flips a status, unknown-id appends, progress event
+  precedes ok + carries the snapshot, lives on the session, summarize, empty-set clears). Extended
+  `registry.test.ts` (`LUNA_REPO_MAP` gate: default mounts, `=0` absent, `plan` present regardless) and
+  `l1Contract.test.ts` (the new clause). 513 tests green; tsc clean across protocol + server + web.
+
+Inference:
+
+- This is the structural answer to the targeting weakness: a guessed path is how an edit lands in the
+  wrong file. `find_symbol`'s tree-sitter verify is the load-bearing part — ripgrep alone counts a name
+  in a comment or string as a hit, which is exactly the false positive that sends an agent editing the
+  wrong line. By confirming each candidate is a real `identifier` node, the locator returns a *verified*
+  def+refs set, and degrades (marked) rather than fails when a grammar is absent.
+- The repo map is advisory by design — every entry is verifiable with `read_file`, so a heuristic
+  mis-rank is a quality issue, not a safety one. The mtime cache makes the map cheap enough to call
+  often (orient-before-read), and the token budget keeps a large tree from blowing context.
+- The vendored-WASM dependency is the only real risk this version adds; it is fully fallback-guarded
+  (missing/broken grammar → ripgrep-only / regex extraction, marked unverified), so a grammar problem
+  degrades capability instead of breaking the tool.
+- The `plan` spine and the structured `find_symbol` output both feed v0.15.4: the repo map is what makes
+  a saved skill addressable ("the skill that touches `runTurn`"), and `find_symbol`'s file+line+signature
+  is the pointer a self-edit proposal uses. Kept structured per the plan's "don't foreclose" note.
 
 ## C-side fix pass (2026-06-15) — v0.13.5 / v0.13.6
 
