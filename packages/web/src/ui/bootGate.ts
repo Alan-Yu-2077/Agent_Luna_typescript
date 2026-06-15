@@ -76,36 +76,52 @@ export async function warmUpTts(
   }
   if (first.status === 502) return 'unavailable'; // dev-server has no upstream configured
   const j0 = (await first.json().catch(() => null)) as HealthShape | null;
-  if (j0?.backend?.ready) return 'ready'; // already warm (e.g. a reload)
+  if (isReady(j0)) return 'ready'; // already warm (e.g. a reload)
   onStatus(TTS_STATE_LABEL[j0?.backend?.state ?? 'idle'] ?? '准备唤醒语音…');
 
-  let polling = true;
-  void (async () => {
-    while (polling) {
-      await new Promise((r) => setTimeout(r, 1500));
-      try {
-        const j = (await (await fetch(`${base}/health`)).json()) as HealthShape;
-        const st = j.backend?.state;
-        if (st) onStatus(TTS_STATE_LABEL[st] ?? `语音引擎：${st}…`);
-        if (j.backend?.ready) return;
-      } catch {
-        /* transient — keep polling */
+  // Resolve as soon as EITHER /health reports ready (the model is loaded — don't
+  // wait for the warmup synth to finish) OR the warmup synth returns. Firing
+  // /speak is what actually triggers the backend to load; health-ready is usually
+  // the earlier signal (the warmup phrase may still be synthesizing after load).
+  return await new Promise<'ready' | 'failed'>((resolve) => {
+    let settled = false;
+    const finish = (r: 'ready' | 'failed'): void => {
+      if (!settled) {
+        settled = true;
+        resolve(r);
       }
-    }
-  })();
+    };
+    void (async () => {
+      while (!settled) {
+        await new Promise((r) => setTimeout(r, 1200));
+        try {
+          const j = (await (await fetch(`${base}/health`)).json()) as HealthShape;
+          const st = j.backend?.state;
+          if (st) onStatus(TTS_STATE_LABEL[st] ?? `语音引擎：${st}…`);
+          if (isReady(j)) finish('ready');
+        } catch {
+          /* transient — keep polling */
+        }
+      }
+    })();
+    void (async () => {
+      try {
+        const r = await fetch(`${base}/speak`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ text: '准备好了' }),
+        });
+        if (r.ok) await r.arrayBuffer().catch(() => undefined); // drain + discard the warmup audio
+        finish(r.ok ? 'ready' : 'failed');
+      } catch {
+        finish('failed');
+      }
+    })();
+  });
+}
 
-  try {
-    // The synth completes only once the model is loaded → this IS the ready signal.
-    const r = await fetch(`${base}/speak`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ text: '准备好了' }),
-    });
-    polling = false;
-    if (r.ok) await r.arrayBuffer().catch(() => undefined); // drain + discard the warmup audio
-    return r.ok ? 'ready' : 'failed';
-  } catch {
-    polling = false;
-    return 'failed';
-  }
+// The service reports loaded via either the `ready` flag or state==='ready';
+// accept either so the gate never hangs on a single field's wording.
+function isReady(j: HealthShape | null): boolean {
+  return Boolean(j?.backend?.ready) || j?.backend?.state === 'ready';
 }
