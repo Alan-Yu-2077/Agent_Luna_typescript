@@ -9,6 +9,9 @@ export const ToolName = z.enum([
   'recall',
   'list_files',
   'grep',
+  'edit',
+  'multi_edit',
+  'write_file',
 ]);
 export type ToolName = z.infer<typeof ToolName>;
 

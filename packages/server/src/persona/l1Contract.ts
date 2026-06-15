@@ -29,5 +29,10 @@ export function renderL1Contract(): string {
     // code-agent locate-first (Initiative 8, v0.15.0)
     'To work in code, locate first — list_files or grep to find where something lives — then read ' +
       'the exact lines with read_file. Do not guess paths or recite code from a hazy memory.',
+    // code-agent read-before-edit / verify-after-edit (Initiative 8, v0.15.1)
+    'Before you edit a file, read it this turn — edit and multi_edit refuse a file you have not ' +
+      'read, because editing from stale memory is how wrong changes happen. After you change code, ' +
+      'verify it: read back the diff the tool returns and address any lint diagnostics it folds in. ' +
+      'Prefer a surgical edit over rewriting a whole file with write_file.',
   ].join('\n\n');
 }

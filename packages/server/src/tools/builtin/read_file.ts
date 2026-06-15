@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { defineTool } from '../defineTool';
 import { contentHash, resolveInWorkspace } from '../workspace';
+import { markRead } from '../readTracking';
 
 // Windowed read (Initiative 8, v0.15.0): the SWE-agent ACI shape — a 1-indexed
 // line window so a huge file can't blow context, line-numbered content so the
@@ -49,7 +50,7 @@ export const readFileTool = defineTool({
   timeoutMs: 5000,
   summarize: (out) =>
     `lines ${out.start_line}-${out.end_line} of ${out.total_lines}${out.truncated ? ' (more follow)' : ''}`,
-  execute: async function* (input) {
+  execute: async function* (input, ctx) {
     const gate = resolveInWorkspace(input.path, 'read');
     if (!gate.ok) {
       yield { kind: 'err', code: 'execution_exception', message: `read_file: ${gate.reason}`, recoverable: false };
@@ -65,6 +66,10 @@ export const readFileTool = defineTool({
       yield { kind: 'err', code: 'execution_exception', message: `read_file: ${message}`, recoverable: true };
       return;
     }
+
+    // read-before-edit seam: this file is now eligible for edit/multi_edit this
+    // session (keyed by the canonical resolved path, v0.15.1).
+    markRead(ctx.sessionId, gate.resolved);
 
     const content_hash = contentHash(raw);
     const allLines = raw.split('\n');

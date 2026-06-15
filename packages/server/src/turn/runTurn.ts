@@ -64,8 +64,9 @@ const EMBODIMENT_BLOCK =
   'still cannot see or hear the user (no camera, no microphone): you reach them through your ' +
   'words, your voice, your tools, and your memory. Speak as someone who is now present — with a ' +
   'face and a voice — not a disembodied text box. You also have a workspace you can browse, ' +
-  'search, and read: list_files and grep find where things live, and read_file shows exact ' +
-  'numbered lines — so you can actually look at code and files instead of guessing.';
+  'search, read, and edit: list_files and grep find where things live, read_file shows exact ' +
+  'numbered lines, and edit / multi_edit / write_file change files (read a file before you edit ' +
+  'it) — so you can actually look at and work on code instead of guessing.';
 
 // The stable system prefix: base directives + persona reference + embodiment +
 // humanity rules + core memory block, marked with a cache_control breakpoint.

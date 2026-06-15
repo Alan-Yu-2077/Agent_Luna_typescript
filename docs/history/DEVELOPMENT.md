@@ -1,6 +1,6 @@
 # Agent_Luna (TypeScript) — Development History
 
-Last updated: 2026-06-15 (Asia/Shanghai) — v0.15.0 (code-agent read/nav foundation — workspace sandbox + windowed read_file + list_files + grep; Initiative 8 begins, dev branch)
+Last updated: 2026-06-15 (Asia/Shanghai) — v0.15.1 (code-agent edit tools — edit/multi_edit/write_file behind LUNA_CODE_WRITE + read-before-edit + lint-on-write; Initiative 8 2/5, dev branch)
 
 ## Scope
 
@@ -76,6 +76,7 @@ during the rewrite. Its version log is unrelated to this one — `v0.1` here is 
 | `v0.13.12` | 2026-06-15 | English tuning — all three humanity caps relaxed (140/4/90 → 280/5/150) to cut the validation over-limit rate; web + dev-chat frontend fully translated to English | `working tree` |
 | `v0.13.13` | 2026-06-15 | Switchable idle animations — the 5 awake idle profiles (default/cute-sway/peek/shy-drift/sweet-bounce) ported from Python `applyIdle` into FaceVm + a settings dropdown; idle yields the eyes to blink + the gaze to mouse-follow | `working tree` |
 | `v0.15.0` | 2026-06-15 | Code-agent read/nav foundation (Initiative 8, 1/5) — workspace sandbox (blocklist-only, no root jail) + windowed `read_file` + `list_files` + `grep` (rg w/ JS fallback) | _dev branch_ |
+| `v0.15.1` | 2026-06-15 | Code-agent edit tools (Initiative 8, 2/5) — `edit` / `multi_edit` / `write_file` (read-before-edit + uniqueness + fuzzy-report + CRLF + optimistic `expected_hash` + atomic multi) behind `LUNA_CODE_WRITE` (default on) + lint-on-write (`Bun.Transpiler`, `LUNA_LINT_ON_WRITE`) + firewall-refusal routed through the edit tool | _dev branch_ |
 
 ## Code-agent capability (2026-06-15) — Initiative 8 begins (v0.15.0)
 
@@ -132,6 +133,78 @@ Inference:
   + an independent evaluator; none of that autonomy is built here.
 - `read_file` already returns `content_hash`, so v0.15.1's `expected_hash` optimistic concurrency drops
   in, and `resolveInWorkspace(_, 'write'|'execute')` is ready for the write/shell tools.
+
+**v0.15.1 — edit tools (str_replace-native + fuzzy fallback)** (dev branch)
+
+The second of five. v0.15.0 gave Luna eyes; v0.15.1 gives her **hands that change code** — the
+Claude-native edit surface plus a safe full-file write, gated behind `LUNA_CODE_WRITE` and routed
+through the v0.15.0 sandbox. The two reliability levers SOTA edit agents converge on are both here:
+**read-before-edit** (no edits from stale memory) and **lint-on-write** (a broken edit is caught at
+edit time, not three turns later).
+
+Fact:
+- New [`packages/server/src/tools/builtin/edit.ts`](../../packages/server/src/tools/builtin/edit.ts) —
+  `{ path, old_string, new_string, replace_all?, expected_hash? }`, the Anthropic `text_editor` /
+  Claude Code `Edit` shape. Gates: **jailed** (`resolveInWorkspace(_, 'write')` → secrets + evaluator
+  firewall), **read-before-edit** (rejects a path not `read_file`'d this session via the v0.15.0
+  `readTracking` seam — recoverable + actionable), **uniqueness** (>1 match w/o `replace_all` →
+  recoverable error w/ the count), **fuzzy fallback** (exact → stripped-line whitespace-tolerant; sets
+  `fuzzed:true` so the model can verify — a silent wrong-fuzz is the dangerous case; CRLF preserved),
+  **optimistic concurrency** (`expected_hash` mismatch → `stale_file`). Every result carries a unified
+  diff + new `content_hash`.
+- New [`multi_edit.ts`](../../packages/server/src/tools/builtin/multi_edit.ts) — `{ path, edits[],
+  expected_hash? }`, **atomic** (Claude Code `MultiEdit` / Python `patch_file`): hunks apply in order to
+  the in-memory text; the first failed hunk aborts with the failing index reported and **nothing
+  written** (the half-edited-file guard). Same jail + read-before-edit + optimistic concurrency.
+- New [`write_file.ts`](../../packages/server/src/tools/builtin/write_file.ts) — `{ path, content,
+  create_dirs?, overwrite?, expected_hash? }`, full-file create/overwrite (Python `write_file` port).
+  Description discourages it for existing files (prefer `edit`); **refuses to clobber** without
+  `overwrite:true`; `create_dirs` defaults on; a successful write marks the path read so a follow-up
+  `edit` is allowed.
+- New [`editCore.ts`](../../packages/server/src/tools/editCore.ts) — the shared, LLM-free matcher
+  (`findEditMatch` exact→stripped-line, the `_find_edit_match` port), CRLF helpers, index-splice
+  `applyReplacement` (no `$`-reinterpretation), a Myers-LCS `unifiedDiff` (no new deps; truncated at 400
+  lines), and a `closestMatchHint` for not-found misses.
+- New [`lintOnWrite.ts`](../../packages/server/src/tools/lintOnWrite.ts) — after a successful edit/write
+  to a `.ts`/`.tsx`/`.js`/`.jsx`/`.mjs`/`.cjs` file, a **fast syntactic parse** (`Bun.Transpiler`, NOT
+  full tsc — that is v0.15.2's `typecheck`) folds diagnostics into the tool result (SWE-agent ACI).
+  v1 **surfaces, does not auto-revert** (reject-broken-edit is a v0.15.2 option). Behind
+  `LUNA_LINT_ON_WRITE` (default on). Type errors are intentionally NOT caught (valid syntax).
+- Wired: `ToolName` already carried `edit`/`multi_edit`/`write_file` (added as names in v0.15.0); they
+  now have implementations. [`registry.ts`](../../packages/server/src/tools/registry.ts) gains
+  `writeTools` + `codeWriteEnabled()` (`LUNA_CODE_WRITE !== '0'`, **default ON** per owner) +
+  `withCodeWrite(base)`; [`main.ts`](../../packages/server/src/main.ts) composes the chosen registry
+  through `withCodeWrite` once at boot (registry content = source of truth, no env read in the turn
+  loop). L1 contract gains a read-before-edit / verify-after-edit clause; `EMBODIMENT_BLOCK` notes the
+  editable workspace.
+- Tests (5 files, 47 tests): `edit.test.ts` (exact/empty-delete; uniqueness + replace_all;
+  read-before-edit rejection; fuzzy `fuzzed:true` + not-found hint; CRLF preserved; `stale_file`;
+  lint-on-write diagnostics; firewall + secret jail), `multi_edit.test.ts` (ordered apply; later-hunk
+  chaining; **failing-2nd-hunk leaves the file untouched + reports the index**; ambiguous-hunk abort;
+  shared gates), `write_file.test.ts` (create + `create_dirs`; refuse-clobber; overwrite + `previous_hash`;
+  stale-hash; marks-read; lint; firewall/secret jail), `lintOnWrite.test.ts` (lintable set; clean/broken
+  TS; multi-error positions; JSX; non-lintable skip; type-error-not-caught; flag off), `registry.test.ts`
+  (**`LUNA_CODE_WRITE=0` → write tools ABSENT** + a dispatched `edit` → `tool_not_found`; and the
+  **firewall refusal routed END-TO-END through the edit tool via the dispatcher** — editing a `*.test.ts`
+  and editing `workspace.ts` itself are both refused with the file untouched — closing safety check (b),
+  which v0.15.0 could only prove by direct `resolveInWorkspace` calls). tsc clean (protocol + server);
+  full suite 403 green (the lone intermittent failure remains the pre-existing flaky `faceVm.test.ts`
+  emotion-timeline timing test — passes in isolation, unrelated to this change).
+
+Inference:
+- This is the first version that **writes the user's files**, hence the layered defenses: default-on but
+  flag-killable, jailed via the v0.15.0 blocklist, read-before-edit + uniqueness + `expected_hash` make a
+  wrong-target edit hard, atomic `multi_edit` prevents half-edited files, and a unified diff in every
+  result keeps changes auditable. The dangerous failure mode for fuzzy matching is a *silent* wrong-fuzz,
+  so the match path always reports `fuzzed:true` and the L1 contract tells her to verify.
+- The DGM safeguard is now load-bearing and proven end-to-end: a write to the evaluator firewall (tests,
+  configs, the sandbox itself, the humanity caps, the L1 contract, the safety gate) is refused not just
+  in a unit call but when an `edit` is dispatched through the registry — Luna cannot write the code that
+  judges/sandboxes/gates her, even with read-tracking satisfied.
+- `lintOnWrite.ts` is the seam where v0.15.2 can add the **reject-broken-edit** hard guard (SWE-agent
+  style) and the heavier `typecheck`/`run_tests` verify tools; the read-tracking + diff plumbing is what
+  `shell`'s "edited then ran tests" loop will lean on. No `shell`, no full `tsc`/test verify, no repo map
+  here (v0.15.2+).
 
 ## C-side fix pass (2026-06-15) — v0.13.5 / v0.13.6
 
