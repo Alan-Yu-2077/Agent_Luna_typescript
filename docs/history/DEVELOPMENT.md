@@ -1,6 +1,6 @@
 # Agent_Luna (TypeScript) — Development History
 
-Last updated: 2026-06-15 (Asia/Shanghai) — v0.13.6 (C-side fix pass — real-usage bug fixes on the assembled body)
+Last updated: 2026-06-15 (Asia/Shanghai) — v0.13.8 (TTS lip-sync rebuilt from the Python engine + serial speech queue)
 
 ## Scope
 
@@ -68,6 +68,8 @@ during the rewrite. Its version log is unrelated to this one — `v0.1` here is 
 | `v0.13.4` | 2026-06-14 | Dream overlay + UX polish (thinking/mood/scroll/settings/a11y); **Initiative 6 complete** | `7465f5d` |
 | `v0.13.5` | 2026-06-15 | One-command local launcher (`bun run dev`) + TTS proxy; Initiative 7 cancelled | `6e18d9a` |
 | `v0.13.6` | 2026-06-15 | C-side fix pass (real-usage bugs) — Live2D override/gaze/zoom, L1 history, thinking-leak, TTS, dev IDE | `17ff3ff` `25e4e2b` |
+| `v0.13.7` | 2026-06-15 | C-side fix pass 2 — gaze head+body via focusController + off-switch, workspace cell-collapse, dev-server idleTimeout, voice boot gate | `06fb132` `bedd1f5` `292ff5a` `c531ab4` `31a123a` `3fb1b4a` `610995e` |
+| `v0.13.8` | 2026-06-15 | TTS lip-sync rebuilt from the Python `lip-sync.js` engine (4 mouth params + stochastic stepping) + serial speech queue (no overlap) | `5ae9d4b` |
 
 ## C-side fix pass (2026-06-15) — v0.13.5 / v0.13.6
 
@@ -107,6 +109,62 @@ Bugs found in real use and their root causes / fixes:
   and the stray empty `packages/server/luna.sqlite` was removed.
 - **Dev tooling**: a `?dev` performance panel (trigger all 14 emotions + states) and a VSCode-style
   `/_workspace` data IDE (sidebar table tree + editable grid + one-click reset + row delete/cell edit).
+
+## C-side fix pass 2 + voice rebuild (2026-06-15) — v0.13.7 / v0.13.8
+
+**v0.13.7 — gaze deep-fix + dev-tooling polish** (already shipped, backfilled here)
+
+Fact:
+- **Gaze head+body now actually move.** Earlier "head/body gaze" wrote `ParamAngleX/BodyAngleX`
+  from FaceVm at `'beforeModelUpdate'` — but those are physics-driven and consumed *before* that
+  hook, so they never deformed (force-pinning them produced zero head turn). Rewired gaze to drive
+  the model's own `focusController` (runs before physics), with a proportional, head-centric offset
+  so pointing at her neck reads level not "up". The off-switch eases the focus back to `(0,0)`
+  (`model.focus()` is direction-only and degenerates to full-right at centre, which had frozen it).
+  (`06fb132`, `bedd1f5`, `292ff5a`)
+- **`/_workspace` collapses oversized cells** — long values (raw_json / payloads / full logs) clamp
+  to ~3 lines with a ⤢ expand toggle; editable cells auto-expand on focus. (`c531ab4`)
+- **dev-server `idleTimeout` → 255s** so a cold GPT-SoVITS first-load isn't killed at Bun's default
+  10s ("request timed out after 10 seconds"). (`31a123a`)
+- **Voice boot gate** — a full-screen splash blocks the UI while GPT-SoVITS warms its ~5GB model;
+  skippable, degrades fast when no sidecar. Closes on `/health`-ready (not the warmup synth, which
+  could hang after the model was already loaded). (`3fb1b4a`, `610995e`)
+
+Inference:
+- The gaze saga's real lesson: in Cubism, head/body angle is physics-output, so only the
+  focusController (pre-physics) can move it — FaceVm (post-physics) can only drive direct deformers
+  (brows/eyes/mouth). This same boundary shapes v0.13.8's mouth design.
+
+**v0.13.8 — TTS lip-sync rebuilt from the Python engine + serial speech queue** (working tree)
+
+Fact:
+- **`lipSync.ts` rewritten as a faithful port of Python `Live2D_Work/js/runtime/lip-sync.js`** (~190
+  lines): the prior TS version implemented only stage 1 (energy ingest) and emitted a single
+  mouth-open scalar. Now all four stages — energy → stochastic open-target stepping on a jittered
+  ~70ms clock (rest/medium/wide weighted by energy) → asymmetric attack(0.74)/release(0.58) +
+  hard-close → form/pucker/shrug articulation (open-bucket lookup + sine micro-motions). Outputs a
+  `LipSyncFrame {open, form, shrug, pucker}`; RNG is injectable for deterministic tests.
+- **Four mouth params now driven** (`ParamMouthOpenY` + `ParamMouthForm` + `ParamMouthShrug` +
+  `ParamMouthpucker`), not one — the single-param amplitude follower was the "ugly/jerky" mouth.
+- **Mouth threaded as a frame**: `Live2DSink.setMouthOpen(number)` → `setMouth(LipSyncFrame | null)`
+  (`sinks.ts`, `pixiLive2DSink.ts`, `app.ts`); `webAudioSink` rAF loop computes `lip.ingest(rms)` +
+  `lip.tick(dt)` → `onMouth(frame)`. `faceVm.setMouth` overrides the 4 mouth params raw (post-emotion,
+  no double-smoothing) while speaking, and writes the emotion/idle mouth unconditionally when
+  released so a finished utterance can't freeze the mouth open.
+- **Serial speech queue** (`serialQueue.ts`, new): `webAudioSink.speak()` prefetches the audio
+  concurrently but plays strictly serially (next utterance starts only after the previous one's
+  `onended`), fixing "上一条没说完就急着说下一条". `stop()` clears the queue + halts current (barge-in).
+  The no-permanent-disable / 503-retry logic is preserved.
+- **Tests**: `lipSync.test.ts` rewritten (5 tests: open/close, sub-floor silence, 4-param shaping,
+  stochastic variation, reset); `serialQueue.test.ts` new (3 tests: serial order, throw-resilience,
+  clear-cancel); `faceVm.test.ts` mouth tests updated (lip override + release). `bun test` 302 green.
+
+Inference:
+- Mouth params are direct deformers (unlike head/body — see v0.13.7), so FaceVm *can* own them at
+  `'beforeModelUpdate'`; the lip-sync engine therefore lives in the audio layer and hands FaceVm a
+  per-frame mouth pose, keeping a single param writer. The stochastic stepping is what reads as
+  speech — a pure RMS follower is the thing that looked "ugly". Synthesis stays concurrent so the
+  serial queue adds no latency beyond the unavoidable one-voice-at-a-time gate.
 
 ## Detailed records
 
