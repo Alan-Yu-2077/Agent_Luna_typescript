@@ -70,6 +70,7 @@ during the rewrite. Its version log is unrelated to this one — `v0.1` here is 
 | `v0.13.6` | 2026-06-15 | C-side fix pass (real-usage bugs) — Live2D override/gaze/zoom, L1 history, thinking-leak, TTS, dev IDE | `17ff3ff` `25e4e2b` |
 | `v0.13.7` | 2026-06-15 | C-side fix pass 2 — gaze head+body via focusController + off-switch, workspace cell-collapse, dev-server idleTimeout, voice boot gate | `06fb132` `bedd1f5` `292ff5a` `c531ab4` `31a123a` `3fb1b4a` `610995e` |
 | `v0.13.8` | 2026-06-15 | TTS lip-sync rebuilt from the Python `lip-sync.js` engine (4 mouth params + stochastic stepping) + serial speech queue (no overlap) | `5ae9d4b` |
+| `v0.13.9` | 2026-06-15 | Lip-sync calmer defaults — slower target stepping (70→100ms) + gentler attack/release/shape smoothing; lowers the mouth change rate per feedback | `a54fdfa` |
 
 ## C-side fix pass (2026-06-15) — v0.13.5 / v0.13.6
 

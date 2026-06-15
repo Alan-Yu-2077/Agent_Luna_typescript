@@ -49,13 +49,17 @@ export class LipSync {
   private currentStepDurationMs: number;
 
   constructor(opts: LipSyncOpts = {}) {
+    // Defaults run a touch calmer than the Python original (smoothing 0.26 /
+    // closeSpeed 0.58 / step 70ms) — per real-use feedback the mouth changed too
+    // fast. Slower target stepping + gentler attack/release lowers the visible
+    // change rate without going mushy. Override via opts for fine-tuning.
     this.gain = opts.gain ?? 32;
-    this.smoothing = opts.smoothing ?? 0.26;
-    this.closeSpeed = opts.closeSpeed ?? 0.58;
-    this.shapeSmoothing = opts.shapeSmoothing ?? 0.5;
+    this.smoothing = opts.smoothing ?? 0.34;
+    this.closeSpeed = opts.closeSpeed ?? 0.46;
+    this.shapeSmoothing = opts.shapeSmoothing ?? 0.38;
     this.floor = opts.floor ?? 0.02;
-    this.mouthStepMs = opts.mouthStepMs ?? 70;
-    this.mouthStepJitterMs = opts.mouthStepJitterMs ?? 20;
+    this.mouthStepMs = opts.mouthStepMs ?? 100;
+    this.mouthStepJitterMs = opts.mouthStepJitterMs ?? 22;
     this.rng = opts.rng ?? Math.random;
     this.shapePhase = this.rng() * Math.PI * 2;
     this.currentStepDurationMs = this.nextStepMs();
