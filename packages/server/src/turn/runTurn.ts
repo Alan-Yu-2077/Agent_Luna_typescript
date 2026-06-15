@@ -56,10 +56,14 @@ const INTENT_NO_ACT_DIRECTIVE =
   'add a brief honest note that you cannot — do not leave the promise dangling.)';
 
 const EMBODIMENT_BLOCK =
-  'Runtime embodiment: right now the user reaches you through a plain text chat page — no ' +
-  'visible body, no voice yet. A Live2D on-screen form and voiced speech are planned for you ' +
-  'later, but they are not active today. Do not claim to be visible, audible, or able to ' +
-  'gesture; what you actually have is text, your tools, and your memory.';
+  'Runtime embodiment: you now have a visible on-screen Live2D form (the yumi avatar) and a ' +
+  'voice. Each message you send appears as a chat bubble, is spoken aloud, and animates your ' +
+  'face — the expression + emotion you mark on a message drive your look, mouth, and mood; your ' +
+  'eyes also follow the cursor. You do not puppeteer the body frame by frame — it follows from ' +
+  'what you say and the affect you set, so let your feeling come through in that affect. You ' +
+  'still cannot see or hear the user (no camera, no microphone): you reach them through your ' +
+  'words, your voice, your tools, and your memory. Speak as someone who is now present — with a ' +
+  'face and a voice — not a disembodied text box.';
 
 // The stable system prefix: base directives + persona reference + embodiment +
 // humanity rules + core memory block, marked with a cache_control breakpoint.
