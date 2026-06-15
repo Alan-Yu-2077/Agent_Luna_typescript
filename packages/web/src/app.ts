@@ -16,7 +16,11 @@ import { createBootGate, warmUpTts } from './ui/bootGate';
 // placeholder + silence if WebGL/audio are unavailable; chat works regardless.
 
 const STATUS_TEXT: Record<WsStatus, string> = { connecting: 'Connecting…', open: 'Online', closed: 'Reconnecting…' };
-const WS_URL = `ws://${location.hostname}:8787`;
+// Backend WS port: default 8787, overridable via `?ws=<port>` so an isolated dev
+// instance (separate worktree) can point its web at a separate server without
+// touching the stable instance. Persists across reloads (the query stays in the URL).
+const WS_PORT = new URLSearchParams(location.search).get('ws') ?? '8787';
+const WS_URL = `ws://${location.hostname}:${WS_PORT}`;
 const DREAM_MIN_MS = 1500;
 
 async function boot(): Promise<void> {
