@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { ClientEvent, ServerEvent } from './events';
+import { CHAT_SEND_MAX_CHARS, ClientEvent, ServerEvent } from './events';
 
 describe('ClientEvent', () => {
   test('parses a valid ping', () => {
@@ -56,6 +56,29 @@ describe('ServerEvent', () => {
       seq: 1,
       server_time_ms: -1,
     });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe('chat.send input cap (S5, v0.16.0)', () => {
+  test('accepts text at the cap', () => {
+    const result = ClientEvent.safeParse({
+      type: 'chat.send',
+      text: 'x'.repeat(CHAT_SEND_MAX_CHARS),
+    });
+    expect(result.success).toBe(true);
+  });
+
+  test('rejects text over the cap', () => {
+    const result = ClientEvent.safeParse({
+      type: 'chat.send',
+      text: 'x'.repeat(CHAT_SEND_MAX_CHARS + 1),
+    });
+    expect(result.success).toBe(false);
+  });
+
+  test('still rejects empty text', () => {
+    const result = ClientEvent.safeParse({ type: 'chat.send', text: '' });
     expect(result.success).toBe(false);
   });
 });

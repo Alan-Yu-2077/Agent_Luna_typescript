@@ -98,6 +98,10 @@ if (Bun.env['ANTHROPIC_API_KEY']) {
 
 const server = Bun.serve<WSData>({
   port,
+  // S1 (v0.16.0): bind loopback by default so WS + /_trace + /_chat + /_workspace
+  // are not reachable (or driveable) off-host. LAN access is explicit opt-in via
+  // LUNA_BIND_HOST=0.0.0.0. Closes S1, S2's exposure, and S3 in one line.
+  hostname: Bun.env['LUNA_BIND_HOST'] ?? '127.0.0.1',
   async fetch(req, srv) {
     if (viewerEnabled) {
       const viewerResponse = traceViewerHandler(req, traceStore);
@@ -111,6 +115,10 @@ const server = Bun.serve<WSData>({
     return new Response('luna-server: WebSocket only', { status: 426 });
   },
   websocket: {
+    // S5 (v0.16.0): cap inbound frames. A chat.send is ≤ ~8KB (text capped at
+    // 8000 chars in the schema); 1MB rejects oversized/abusive payloads while
+    // leaving ample headroom for any legitimate client frame.
+    maxPayloadLength: 1024 * 1024,
     open: handleOpen,
     message: handleMessage,
     close: handleClose,

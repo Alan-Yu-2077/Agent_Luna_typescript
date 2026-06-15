@@ -110,12 +110,22 @@ export async function workspaceHandler(req: Request): Promise<Response | null> {
     const limit = Number.isFinite(raw) ? Math.max(1, Math.min(1000, raw)) : 100;
     return json({ enabled: getMemoryDb() !== null, limit, tables: dumpAll(limit) });
   }
+  // S2 (v0.16.0): the read-only view stays under LUNA_VIEWER, but the MUTATING
+  // routes (reset/edit) require an explicit LUNA_DEV_TOOLS=1 — so even on-host
+  // they are not a stray-click data-wipe, and (with the loopback bind) never an
+  // off-host one.
   if (path === '/_workspace/api/reset' && req.method === 'POST') {
+    if (Bun.env['LUNA_DEV_TOOLS'] !== '1') {
+      return json({ error: 'mutating routes require LUNA_DEV_TOOLS=1' }, 403);
+    }
     const body = (await req.json().catch(() => ({}))) as { confirm?: boolean };
     if (!body.confirm) return json({ error: 'confirm:true required' }, 400);
     return json({ ok: true, cleared: resetData() });
   }
   if (path === '/_workspace/api/edit' && req.method === 'POST') {
+    if (Bun.env['LUNA_DEV_TOOLS'] !== '1') {
+      return json({ error: 'mutating routes require LUNA_DEV_TOOLS=1' }, 403);
+    }
     const db = getMemoryDb();
     if (!db) return json({ error: 'no db' }, 400);
     const body = (await req.json().catch(() => ({}))) as {

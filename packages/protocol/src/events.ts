@@ -13,10 +13,16 @@ export const DevDispatchToolEvent = z.object({
   input: z.unknown(),
 });
 
+// S5 (v0.16.0): cap user input. 8000 chars is far above the 280-char humanity
+// reply cap and any realistic single message, but rejects abusive/accidental
+// oversized payloads (which become large, expensive LLM requests) at the schema
+// boundary — enforced alongside the socket-level maxPayloadLength.
+export const CHAT_SEND_MAX_CHARS = 8000;
+
 export const ChatSendEvent = z.object({
   type: z.literal('chat.send'),
   turn_id: z.string().optional(),
-  text: z.string().min(1),
+  text: z.string().min(1).max(CHAT_SEND_MAX_CHARS),
 });
 
 export const DreamEnterEvent = z.object({

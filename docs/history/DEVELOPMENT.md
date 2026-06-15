@@ -1,6 +1,6 @@
 # Agent_Luna (TypeScript) — Development History
 
-Last updated: 2026-06-15 (Asia/Shanghai) — v0.15.4 (code-agent skill library + propose-only self-edit — `save_skill` verify-before-persist + `recall_skill` behind LUNA_SKILLS; `propose_self_edit` produces a diff for human review and never writes, evaluator firewall hard-rejects edits to her own judge/sandbox code across all write tools, behind LUNA_SELF_EDIT; skills migration 0009; **Initiative 8 complete 5/5**, dev branch)
+Last updated: 2026-06-15 (Asia/Shanghai) — v0.16.0 (security hardening + hygiene — loopback bind `127.0.0.1` default + `LUNA_BIND_HOST` opt-in, `/_workspace` mutating routes gated by `LUNA_DEV_TOOLS`, `chat.send` input cap + WS payload cap, CI workflow, README + orient refresh, WS reconnect buffer/backoff, local quota clock, aligned `fromBlob`; **Initiative 9 1/4**, branch)
 
 ## Scope
 
@@ -80,6 +80,7 @@ during the rewrite. Its version log is unrelated to this one — `v0.1` here is 
 | `v0.15.2` | 2026-06-15 | Code-agent shell + verify loop (Initiative 8, 3/5) — sandboxed `shell` (deny-regex + interactive-block + process-tree kill + output cap, subsumes fs-mutation) plus `typecheck` / `run_tests` / `lint` verifiers, all behind `LUNA_SHELL` (default on) via a shared injectable spawner | _dev branch_ |
 | `v0.15.3` | 2026-06-15 | Code-agent repo map + hybrid locator + plan (Initiative 8, 4/5) — Aider-style ranked, token-bounded, mtime-cached `repo_map` + hybrid `find_symbol` (ripgrep candidates → tree-sitter verify, comment/string false positives excluded, ripgrep-only fallback marked `verified:false`) behind `LUNA_REPO_MAP` (default on) + session-scoped `plan` todo spine (ships on always); `web-tree-sitter` + vendored TS/TSX/JS grammars; SQLite cache migration `0008` | _dev branch_ |
 | `v0.15.4` | 2026-06-15 | Code-agent skill library + propose-only self-edit (Initiative 8, 5/5) — `save_skill` (verify-before-persist: refuses unless the suite is green — Voyager invariant) + `recall_skill` (lexical search) behind `LUNA_SKILLS`; `propose_self_edit` produces a unified diff for human review and **never writes**, with the evaluator firewall (`resolveInWorkspace` `'write'`, built in v0.15.0) hard-rejecting any edit to her own tests/sandbox/safetyGate/humanity/deny-regex/l1Contract **across all write tools** (the keystone test), behind `LUNA_SELF_EDIT`; skills table migration `0009`. Deviation: the `self_edit.proposed` wire event is deferred — the proposal is delivered via `tool.finished` (the diff) for the human to apply. **Initiative 8 complete (5/5).** | _dev branch_ |
+| `v0.16.0` | 2026-06-15 | Security hardening + hygiene (Initiative 9, 1/4) — loopback bind `127.0.0.1` default (S1; closes S2/S3 net exposure) + `LUNA_BIND_HOST` opt-in, `/_workspace` reset/edit gated by `LUNA_DEV_TOOLS` (S2), `chat.send` capped at 8000 chars + WS `maxPayloadLength` (S5), `.github/workflows/ci.yml` (C1), README + orient-skill refresh (Doc1/2), WS reconnect buffer+backoff (C2), local-date quota clock (C3), aligned `fromBlob` (C4) | _branch_ |
 
 ## Code-agent capability (2026-06-15) — Initiative 8 begins (v0.15.0)
 
@@ -542,6 +543,46 @@ Inference:
   and gives Alan the variety he remembered, now as a first-class setting rather than a buried constant.
 
 ## Detailed records
+
+### `v0.16.0` — 2026-06-15 — Security hardening + hygiene (Initiative 9, 1/4)
+
+Status:
+
+- working tree (branch `feat/initiative-9-audit-remediation`)
+
+Fact:
+
+- `main.ts`: `Bun.serve` binds `hostname: LUNA_BIND_HOST ?? '127.0.0.1'` (S1) and sets
+  `websocket.maxPayloadLength = 1MB` (S5).
+- `workspace/workspace.ts`: `/_workspace/api/reset` + `/edit` return 403 unless `LUNA_DEV_TOOLS=1`
+  (S2); the read-only `/all` view is unchanged (still under `LUNA_VIEWER`).
+- `protocol/events.ts`: `ChatSendEvent.text` capped at `CHAT_SEND_MAX_CHARS = 8000` (S5).
+- `proactive/cadence.ts`: `dateKey` returns the **local** date (not UTC), so the daily quota and
+  quiet-hours share one clock (C3).
+- `memory/recall/embed.ts`: `fromBlob` copies into a fresh aligned buffer when the SQLite blob's
+  `byteOffset` isn't 4-byte aligned (C4).
+- `web/src/wsClient.ts`: frames sent while not `OPEN` are buffered (cap 100) and flushed on open;
+  reconnect is now exponential backoff + jitter, capped at 15s (C2).
+- `.github/workflows/ci.yml` (new): installs ripgrep, runs per-package `tsc --noEmit` + `bun test`
+  on push/PR (C1).
+- `README.md`: replaced the stale "scaffolding only … no runtime code yet" intro with the shipped
+  stack + a Run section noting the loopback default (Doc1).
+- `.claude/skills/luna-ts-orient/SKILL.md`: head refreshed v0.12.0 → v0.15.4 + planned Init 9/10,
+  with a note that the file map below predates v0.13+ (Doc2).
+- Tests: `events.test.ts` (+3, input cap), `workspace/workspace.test.ts` (+5, gate — new),
+  `web/src/wsClient.test.ts` (+2, buffer/flush — new). **535 pass / 0 fail**; all three packages
+  `tsc --noEmit` clean.
+
+Inference:
+
+- Closes the audit's P0/P1 network-exposure surface (S1/S2/S3) with one bind + a flag gate: the
+  server is no longer driveable, readable, or wipeable off-host by default; LAN access is now an
+  explicit, documented opt-in via `LUNA_BIND_HOST=0.0.0.0`.
+- The CI gate is the prerequisite that makes the v0.16.1 efficiency refactors safe to land — every
+  test-pinned invariant is now enforced on push.
+- Incidental: `web-tree-sitter` (a v0.15.3 dependency) was missing from `node_modules`; a plain
+  `bun install` materialized it, clearing 4 pre-existing `tsc` errors + 4 failing
+  tree-sitter/locator tests, so the suite is fully green (not merely no-new-failures).
 
 ### `v0.1.0` — 2026-06-11 — Bun skeleton + WS server
 

@@ -35,8 +35,15 @@ export function proactiveEnabled(): boolean {
   return Bun.env['LUNA_PROACTIVE'] !== '0';
 }
 
+// C3 (v0.16.0): the daily quota rolls over on the LOCAL date, the same clock as
+// quiet-hours (`getHours()`). Previously this used UTC (`toISOString`), so for a
+// non-UTC user the "daily" quota reset at a confusing local time. One clock now.
 export function dateKey(nowMs: number): string {
-  return new Date(nowMs).toISOString().slice(0, 10);
+  const d = new Date(nowMs);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 // Local hours in which Luna stays quiet. Default: midnight–6am.
