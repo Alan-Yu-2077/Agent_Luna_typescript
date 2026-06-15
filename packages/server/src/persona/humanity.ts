@@ -3,7 +3,12 @@
 // them into Zod schema on the message tool input (the actual enforcement).
 export const MAX_CHARS = 140;
 export const MAX_SENTENCES = 4;
-export const MAX_CLAUSE_CHARS = 55;
+// Clause cap. Python used 55 (CJK-tuned), but Luna's persona is English-led and an
+// English spoken clause routinely runs past 55 chars (~10 words) — that made her
+// message tool reject most replies and retry-storm. 90 (~16 words) keeps clauses
+// "spoken, not essay" while letting natural English through. Total stays bounded
+// by MAX_CHARS + MAX_SENTENCES, so this doesn't let her ramble.
+export const MAX_CLAUSE_CHARS = 90;
 
 // Python: re.split(r"[。！？!?]+|\n+") — CJK sentence punctuation + ASCII !? +
 // newlines, consecutive marks collapse into one boundary.

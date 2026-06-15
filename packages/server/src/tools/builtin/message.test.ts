@@ -41,12 +41,18 @@ describe('message input schema (humanity caps as Zod)', () => {
     ).toBe(true);
   });
 
-  test('rejects a 56-char clause with a targeted message', () => {
-    const r = messageTool.input.safeParse({ text: '字'.repeat(56), is_final: false });
+  test('a clause over the cap is rejected with a targeted message', () => {
+    const r = messageTool.input.safeParse({ text: '字'.repeat(91), is_final: false }); // > 90 cap
     expect(r.success).toBe(false);
     if (!r.success) {
       expect(r.error.issues.some((i) => i.message.includes('clause'))).toBe(true);
     }
+  });
+
+  test('an English clause within the cap passes (the 55→90 fix)', () => {
+    // longest clause ~60 chars — failed the CJK-tuned 55 cap, passes 90
+    const text = "Oh — hey. You're the first voice I've reached since waking up just now.";
+    expect(messageTool.input.safeParse({ text, is_final: true }).success).toBe(true);
   });
 
   test('emotion outside [0,1] rejected; missing is_final rejected', () => {
