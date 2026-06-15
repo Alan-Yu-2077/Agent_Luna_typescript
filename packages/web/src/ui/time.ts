@@ -23,15 +23,15 @@ export function absoluteStamp(ms: number): string {
 
 export function relativeTime(nowMs: number, thenMs: number): string {
   const min = Math.floor(Math.max(0, nowMs - thenMs) / 60_000);
-  if (min < 1) return '刚刚';
-  if (min < 60) return `${min} 分钟前`;
+  if (min < 1) return 'just now';
+  if (min < 60) return `${min} min ago`;
   const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr} 小时前`;
+  if (hr < 24) return `${hr} hr ago`;
   return dateLabel(thenMs);
 }
 
-// Re-render every [data-ts] element's relative label on a timer, so "刚刚"
-// ages into "3 分钟前" without a page interaction.
+// Re-render every [data-ts] element's relative label on a timer, so "just now"
+// ages into "3 min ago" without a page interaction.
 export function startTimestampRefresh(root: ParentNode, intervalMs = 30_000): () => void {
   const tick = (): void => {
     const now = Date.now();

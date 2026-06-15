@@ -160,6 +160,30 @@ export const EMOTIONS = {
 
 export type EmotionId = keyof typeof EMOTIONS;
 
+// Idle (待机) profiles — the procedural resting-state body language. Ported from
+// Python js/runtime/layers/idle-profiles.js (the awake set; the Python `sleep`
+// profile is covered here by the 'sleeping' Live2DState, so it isn't duplicated).
+// The per-profile motion is procedural sine math living in faceVm.ts (applyIdle),
+// matching Python (these are generated, not keyframe assets); this list is the
+// registry the settings switcher reads.
+export type IdleProfileId =
+  | 'defaultIdleV1'
+  | 'cuteSwayV1'
+  | 'peekyIdleV1'
+  | 'shyDriftV1'
+  | 'sweetBounceV1';
+
+export const IDLE_PROFILES: ReadonlyArray<{ id: IdleProfileId; label: string }> = [
+  { id: 'defaultIdleV1', label: 'Default' },
+  { id: 'cuteSwayV1', label: 'Cute sway' },
+  { id: 'peekyIdleV1', label: 'Peek' },
+  { id: 'shyDriftV1', label: 'Shy drift' },
+  { id: 'sweetBounceV1', label: 'Sweet bounce' },
+];
+
+export const IDLE_PROFILE_IDS: readonly string[] = IDLE_PROFILES.map((p) => p.id);
+export const DEFAULT_IDLE_PROFILE: IdleProfileId = 'defaultIdleV1';
+
 // 9 actions referenced by the emotions above (action-library.js). Keyframe `at`
 // is 0..1 progress; `value` is the raw param value, multiplied by intensity.
 export const ACTIONS: Record<string, ActionDef> = {

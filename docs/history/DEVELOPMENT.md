@@ -1,6 +1,6 @@
 # Agent_Luna (TypeScript) — Development History
 
-Last updated: 2026-06-15 (Asia/Shanghai) — v0.13.11 (clause cap relaxed for English + validation retries kept backstage)
+Last updated: 2026-06-15 (Asia/Shanghai) — v0.13.13 (switchable idle animations — 5 awake idle profiles ported + a settings switcher)
 
 ## Scope
 
@@ -73,6 +73,8 @@ during the rewrite. Its version log is unrelated to this one — `v0.1` here is 
 | `v0.13.9` | 2026-06-15 | Lip-sync calmer defaults — slower target stepping (70→100ms) + gentler attack/release/shape smoothing; lowers the mouth change rate per feedback | `ae1dd03` |
 | `v0.13.10` | 2026-06-15 | Two real bugs — persona embodiment now reflects the live Live2D + voice (was "no body/voice yet"); emotion head/body pose deforms via a pre-physics `flushPose` (was dead — those params are physics-input) | `9070861` `b61e42d` |
 | `v0.13.11` | 2026-06-15 | Message clause cap 55→90 (the CJK-tuned 55 retry-stormed English replies) + validation retries kept backstage (no leaked raw-ZodError chips) | `60319f7` `2010e82` |
+| `v0.13.12` | 2026-06-15 | English tuning — all three humanity caps relaxed (140/4/90 → 280/5/150) to cut the validation over-limit rate; web + dev-chat frontend fully translated to English | `working tree` |
+| `v0.13.13` | 2026-06-15 | Switchable idle animations — the 5 awake idle profiles (default/cute-sway/peek/shy-drift/sweet-bounce) ported from Python `applyIdle` into FaceVm + a settings dropdown; idle yields the eyes to blink + the gaze to mouse-follow | `working tree` |
 
 ## C-side fix pass (2026-06-15) — v0.13.5 / v0.13.6
 
@@ -168,6 +170,93 @@ Inference:
   per-frame mouth pose, keeping a single param writer. The stochastic stepping is what reads as
   speech — a pure RMS follower is the thing that looked "ugly". Synthesis stays concurrent so the
   serial queue adds no latency beyond the unavoidable one-voice-at-a-time gate.
+
+## English tuning (2026-06-15) — v0.13.12
+
+Real-usage feedback: the validation over-limit rate ("超限率") was still too high, and Luna's persona is
+English-led while the UI chrome was Chinese.
+
+**v0.13.12 — English-tuned humanity caps + English frontend** (working tree)
+
+Fact:
+- **All three humanity caps relaxed for English** (`packages/server/src/persona/humanity.ts`):
+  `MAX_CHARS` 140→**280**, `MAX_SENTENCES` 4→**5**, `MAX_CLAUSE_CHARS` 90→**150**. The Python originals
+  were CJK-tuned (1 char ≈ 1 morpheme); English packs ~4–5 chars/word, so the old numbers rejected most
+  natural English replies. The system-prompt `HARD LIMITS` block (`renderHumanityBlock`), the `message`
+  tool's `.max()`/`.describe()`, and the Zod error messages all read these constants, so they updated in
+  lockstep — verified (adversarial sweep) that **no** other length enforcement exists in
+  `packages/server` (protocol `MessageDelivery.text` has no parallel `.max()`; A/B scripts derive from
+  the constants).
+- **Web frontend translated Chinese → English** (`packages/web`): boot gate (`bootGate.ts` splash +
+  `TTS_STATE_LABEL`), layout chrome (`layout.ts` — settings toggles, send/dream/wake buttons, status
+  badge, placeholders, aria-labels, `🌙 Dream`/`☀️ Wake`), `app.ts` (status text, boot-result messages,
+  dream placeholder, the `?dev` performance panel), tool-card labels (`toolLabels.ts`), the 15 mood-pip
+  labels (`mood.ts`), relative timestamps (`time.ts`), the error chip (`controller.ts`), the history
+  divider (`cuteBubbleView.ts`), and `index.html` `lang="zh-CN"`→`"en"`.
+- **Server dev-chat console translated** (`packages/server/src/devchat/devchat.html`): buttons, status
+  line, retry/error chips, dream/proactive notices, `lang` attribute — so the dev surface matches the
+  now-English web app.
+- **Left untranslated on purpose** (verified non-UI): the Live2D overlay keys `脸红/俯身/黑脸/泪汪汪`
+  (`faceData.ts`, referenced by `overlayRefs` — renaming would break the expression→param lookup), the
+  CJK recall stopword list (`memory/recall/lexical.ts`), and CJK test fixtures (controller/ttsClient
+  tests + the `message`/`messageMode` cap-violation fixtures, which exercise the CJK `。` splitter).
+- **Tests**: `time.test.ts` + `toolLabels.test.ts` updated to assert the English strings;
+  `message.test.ts` cap tests rewritten to be constant-relative (`MAX_SENTENCES+1`, `MAX_CLAUSE_CHARS+1`)
+  plus a new English-boundary case; `messageMode.test.ts` violation fixtures bumped 5→6 sentences for the
+  new `MAX_SENTENCES`. `bun test` **306 green**, `tsc` clean (server + web).
+
+Inference:
+- The caps are a single source of truth, so "tune for English" is a three-line change that ripples
+  correctly to the prompt, the schema, the error text, and the measurement scripts — the typed-contract
+  payoff. `280/5/150` keeps Luna "a spoken presence, not an essay" (~50 words / one SMS) while ending the
+  retry-storm; revisit only if telemetry shows replies clustering at the ceiling (cap-as-target).
+- The translation was scoped by *what renders*, not *what contains CJK*: an adversarial 3-critic sweep
+  confirmed every logic-bearing CJK string (object keys, localStorage keys, `/health` state keys, recall
+  stopwords, test fixtures) was left intact — the danger in a bulk translation is renaming a key, not a
+  label.
+
+## Idle animations (2026-06-15) — v0.13.13
+
+The v0.13.1 FaceVM port deferred the procedural idle layer — "idle" was just the model's built-in
+blink/breath while neutral. Python actually shipped several idle profiles, and Alan wanted them back +
+switchable.
+
+**v0.13.13 — switchable idle profiles** (working tree)
+
+Fact:
+- **5 awake idle profiles ported** from Python `js/runtime/face-vm.js` `applyIdle` into `FaceVm`
+  (`packages/web/src/live2d/faceVm.ts`): `defaultIdleV1` (vtuber sway), `cuteSwayV1` (soft sway + bow +
+  cat-mouth), `peekyIdleV1` (head-tilt peek), `shyDriftV1` (head-down slow sway), `sweetBounceV1` (lively
+  up-down bounce). Each is procedural sine math (the per-profile `switch` + the shared look-wander/jitter
+  terms), faithful to Python including the `0.18`/`0.24`/`0.34` neutral/thinking/sleeping smoothing — so
+  the look (incl. the strong default head-roll that pegs `ParamAngleZ`) matches the original. The Python
+  `sleep` profile is not duplicated — the `sleeping` Live2DState covers it.
+- **Registry** in `faceData.ts` (`IDLE_PROFILES` ordered list + labels, `IdleProfileId`,
+  `DEFAULT_IDLE_PROFILE`); the look-wander uses an **injectable rng** (default `Math.random`) so the rest
+  of FaceVm stays deterministic for tests.
+- **Two deliberate divergences for clean integration** with the tuned gaze/blink systems: the idle does
+  **not** drive the eyes (`eyeOpen*`/`eyeSquint*`) so the model's built-in eyeBlink keeps blinking, and it
+  drives the **gaze (`ParamEyeBall*`) only when mouse gaze-follow is off** — when it's on, the
+  focusController owns the eyes. Head/body pose is still flushed pre-physics, so it *adds* with the
+  focusController (idle sway + mouse look-at coexist). The awake idle is gated off while `sleeping`.
+- **Settings switcher**: an "Idle animation" dropdown in the settings panel (`layout.ts` `selectRow` +
+  `idleSelect` ref); `app.ts` persists to `localStorage 'luna:idle-profile'` and calls
+  `live2d.setIdleProfile(id)` live (no refresh). `pixiLive2DSink` constructs FaceVm from the persisted
+  profile + initial gaze state and forwards `setGazeActive` on the gaze toggle. `Live2DSink` grew
+  `setIdleProfile?`/`listIdleProfiles?` (`sinks.ts`).
+- **Tests** (`faceVm.test.ts`, +5): idle drives body sway in neutral (via `flushPose`); two profiles
+  differ at the same clock; `setIdleProfile` switches + guards an unknown id; the idle wanders the gaze
+  only when follow is off; the `sleeping` state suppresses the awake idle. `bun test` 311 green; the 8
+  pre-existing FaceVm tests still pass (emotions own their channels, so the idle layer underneath them
+  doesn't perturb their assertions). Live preview verified: dropdown renders 5 options, the model
+  animates (pose params sweep, AngleZ pegging the model limit as in Python), and switching profiles takes
+  effect + persists live.
+
+Inference:
+- The idle is the lowest layer (idle → state bias → emotion → actions), so it fills the "resting" gap
+  without touching any of the expression/lip-sync/gaze work above it — emotions and the lip frame still
+  win by ownership, the mouse still owns the eyes. Restoring the profiles makes neutral feel alive again
+  and gives Alan the variety he remembered, now as a first-class setting rather than a buried constant.
 
 ## Detailed records
 

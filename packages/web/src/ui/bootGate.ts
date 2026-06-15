@@ -18,11 +18,11 @@ export function createBootGate(root: HTMLElement): BootGate {
   card.innerHTML =
     '<div class="boot-moon">🌙</div>' +
     '<div class="boot-spinner"><i></i><i></i><i></i></div>' +
-    '<div class="boot-title">Luna 正在醒来…</div>' +
-    '<div class="boot-sub">首次启动要加载语音模型（~5GB），请稍候</div>' +
-    '<div class="boot-status">连接中…</div>' +
+    '<div class="boot-title">Luna is waking up…</div>' +
+    '<div class="boot-sub">First launch loads the voice model (~5GB), one moment…</div>' +
+    '<div class="boot-status">Connecting…</div>' +
     '<div class="boot-elapsed"></div>' +
-    '<button class="boot-skip" type="button">跳过 · 静音进入</button>';
+    '<button class="boot-skip" type="button">Skip · enter muted</button>';
   el.appendChild(card);
   root.appendChild(el);
 
@@ -32,7 +32,7 @@ export function createBootGate(root: HTMLElement): BootGate {
 
   const start = performance.now();
   const timer = globalThis.setInterval(() => {
-    elapsedEl.textContent = `已等待 ${Math.round((performance.now() - start) / 1000)}s`;
+    elapsedEl.textContent = `elapsed ${Math.round((performance.now() - start) / 1000)}s`;
   }, 1000);
 
   return {
@@ -49,14 +49,14 @@ export function createBootGate(root: HTMLElement): BootGate {
 }
 
 const TTS_STATE_LABEL: Record<string, string> = {
-  idle: '准备唤醒语音…',
-  starting: '启动语音引擎…',
-  spawning: '启动语音引擎…',
-  booting: '启动语音引擎…',
-  loading: '加载语音模型（~5GB）…',
-  loading_model: '加载语音模型（~5GB）…',
-  warming: '加载语音模型（~5GB）…',
-  ready: '语音就绪 ✓',
+  idle: 'Preparing voice…',
+  starting: 'Starting the voice engine…',
+  spawning: 'Starting the voice engine…',
+  booting: 'Starting the voice engine…',
+  loading: 'Loading the voice model (~5GB)…',
+  loading_model: 'Loading the voice model (~5GB)…',
+  warming: 'Loading the voice model (~5GB)…',
+  ready: 'Voice ready ✓',
 };
 
 type HealthShape = { backend?: { ready?: boolean; state?: string } };
@@ -77,7 +77,7 @@ export async function warmUpTts(
   if (first.status === 502) return 'unavailable'; // dev-server has no upstream configured
   const j0 = (await first.json().catch(() => null)) as HealthShape | null;
   if (isReady(j0)) return 'ready'; // already warm (e.g. a reload)
-  onStatus(TTS_STATE_LABEL[j0?.backend?.state ?? 'idle'] ?? '准备唤醒语音…');
+  onStatus(TTS_STATE_LABEL[j0?.backend?.state ?? 'idle'] ?? 'Preparing voice…');
 
   // Resolve as soon as EITHER /health reports ready (the model is loaded — don't
   // wait for the warmup synth to finish) OR the warmup synth returns. Firing
@@ -97,7 +97,7 @@ export async function warmUpTts(
         try {
           const j = (await (await fetch(`${base}/health`)).json()) as HealthShape;
           const st = j.backend?.state;
-          if (st) onStatus(TTS_STATE_LABEL[st] ?? `语音引擎：${st}…`);
+          if (st) onStatus(TTS_STATE_LABEL[st] ?? `Voice engine: ${st}…`);
           if (isReady(j)) finish('ready');
         } catch {
           /* transient — keep polling */
@@ -109,7 +109,7 @@ export async function warmUpTts(
         const r = await fetch(`${base}/speak`, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ text: '准备好了' }),
+          body: JSON.stringify({ text: 'Ready when you are' }),
         });
         if (r.ok) await r.arrayBuffer().catch(() => undefined); // drain + discard the warmup audio
         finish(r.ok ? 'ready' : 'failed');

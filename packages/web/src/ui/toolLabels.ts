@@ -5,12 +5,12 @@ import { ToolName } from '@luna/protocol';
 // view concern, so it lives here rather than in the controller — keeping the
 // shared controller untouched. Unknown text falls through stripped.
 const CUTE: Partial<Record<ToolName, string>> = {
-  recall: '翻了翻记忆 🔖',
-  remember: '记在心里了 💭',
-  read_file: '读了点东西 📖',
-  time_now: '看了下时间 🕐',
-  enter_dream: '准备做个梦 🌙',
-  message: '说了句话 💬',
+  recall: 'flipped through memories 🔖',
+  remember: 'kept it in mind 💭',
+  read_file: 'read something 📖',
+  time_now: 'checked the time 🕐',
+  enter_dream: 'getting ready to dream 🌙',
+  message: 'said something 💬',
 };
 
 function strip(s: string): string {

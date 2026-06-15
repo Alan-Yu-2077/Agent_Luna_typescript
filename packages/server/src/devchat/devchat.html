@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -53,14 +53,14 @@
       <h1>Luna <span class="accent">·</span> Dev Chat</h1>
       <span id="status">connecting…</span>
       <a href="/_trace" target="_blank">trace ↗</a>
-      <button id="dreamBtn">🌙 入梦</button>
-      <button id="wakeBtn" disabled>☀️ 唤醒</button>
-      <button id="proactiveBtn">🌱 主动</button>
+      <button id="dreamBtn">🌙 Dream</button>
+      <button id="wakeBtn" disabled>☀️ Wake</button>
+      <button id="proactiveBtn">🌱 Proactive</button>
     </header>
     <div id="log"></div>
     <footer>
-      <input id="input" placeholder="对 Luna 说点什么…（Enter 发送）" autocomplete="off" />
-      <button id="sendBtn">发送</button>
+      <input id="input" placeholder="Say something to Luna… (Enter to send)" autocomplete="off" />
+      <button id="sendBtn">Send</button>
     </footer>
     <script>
       const log = document.getElementById('log');
@@ -115,7 +115,7 @@
         input.disabled = on;
         sendBtn.disabled = on;
         statusEl.textContent = on
-          ? (step === 'finished_idle' ? 'Luna 做完梦了，等你唤醒' : 'Luna 在做梦… (' + (step || '准备中') + ')')
+          ? (step === 'finished_idle' ? 'Luna finished dreaming — waiting for you to wake her' : 'Luna is dreaming… (' + (step || 'preparing') + ')')
           : 'connected';
       }
 
@@ -166,11 +166,11 @@
                 } else {
                   bubble.remove();
                   msgCountThisTurn -= 1;
-                  el('chip err', '💬 重说: ' + String(ev.result.message || '').slice(0, 80));
+                  el('chip err', '💬 re-say: ' + String(ev.result.message || '').slice(0, 80));
                 }
                 break;
               }
-              el('chip tool', '🔧 ' + (ev.result.kind === 'ok' ? (ev.result.summary || 'done') : '失败: ' + ev.result.message));
+              el('chip tool', '🔧 ' + (ev.result.kind === 'ok' ? (ev.result.summary || 'done') : 'Failed: ' + ev.result.message));
               break;
             }
             case 'dream.step':
@@ -179,14 +179,14 @@
               break;
             case 'dream.status':
               setDreaming(ev.is_dreaming, ev.current_step);
-              if (!ev.is_dreaming) el('chip dream', '☀️ Luna 醒了');
+              if (!ev.is_dreaming) el('chip dream', '☀️ Luna woke up');
               break;
             case 'proactive.started':
               currentBubble = null; msgCountThisTurn = 0;
-              el('chip dream', '🌱 Luna 自己醒来动了一下…');
+              el('chip dream', '🌱 Luna stirred on her own…');
               break;
             case 'proactive.finished':
-              if (!ev.spoke) el('chip', '🌱 (她安静地做了点什么，没有说话)');
+              if (!ev.spoke) el('chip', '🌱 (she quietly did something, without speaking)');
               currentBubble = null;
               break;
             case 'error':

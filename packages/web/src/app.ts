@@ -15,7 +15,7 @@ import { createBootGate, warmUpTts } from './ui/bootGate';
 // overlay, thinking indicator, mood pip, scroll pill, settings). Degrades to the
 // placeholder + silence if WebGL/audio are unavailable; chat works regardless.
 
-const STATUS_TEXT: Record<WsStatus, string> = { connecting: '连接中…', open: '在线', closed: '重连中…' };
+const STATUS_TEXT: Record<WsStatus, string> = { connecting: 'Connecting…', open: 'Online', closed: 'Reconnecting…' };
 const WS_URL = `ws://${location.hostname}:8787`;
 const DREAM_MIN_MS = 1500;
 
@@ -42,7 +42,11 @@ async function boot(): Promise<void> {
     }).then((res) => {
       if (skipped) return;
       gate.setStatus(
-        res === 'unavailable' ? '未检测到语音服务，直接进入' : res === 'failed' ? '语音加载失败，静音进入' : '语音就绪 ✓',
+        res === 'unavailable'
+          ? 'No voice service detected, entering…'
+          : res === 'failed'
+            ? 'Voice failed to load, entering muted'
+            : 'Voice ready ✓',
       );
       globalThis.setTimeout(() => gate.done(), res === 'ready' ? 300 : 900);
     });
@@ -70,7 +74,7 @@ async function boot(): Promise<void> {
   function setDream(on: boolean): void {
     dreaming = on;
     refs.input.disabled = on;
-    refs.input.placeholder = on ? 'Luna 正在做梦…' : '对 Luna 说点什么…';
+    refs.input.placeholder = on ? 'Luna is dreaming…' : 'Say something to Luna…';
     if (on) {
       clearTimeout(dreamHideTimer);
       dreamShownAt = Date.now();
@@ -144,6 +148,11 @@ async function boot(): Promise<void> {
     localStorage.setItem('luna:gaze-follow', refs.gazeToggle.checked ? '1' : '0');
     live2d.setGazeFollow?.(refs.gazeToggle.checked);
   });
+  refs.idleSelect.addEventListener('change', () => {
+    // idle animation switches live (no refresh) — FaceVm swaps the resting profile
+    localStorage.setItem('luna:idle-profile', refs.idleSelect.value);
+    live2d.setIdleProfile?.(refs.idleSelect.value);
+  });
 
   if (location.search.includes('dev')) {
     const g = globalThis as unknown as { lunaLive2D?: Live2DSink; lunaAudio?: AudioSink };
@@ -166,7 +175,7 @@ function buildDevPanel(live2d: Live2DSink): void {
     'border:1px solid #2c3140;border-radius:10px;padding:10px;font:12px ui-monospace,monospace;' +
     'display:flex;flex-direction:column;gap:6px;max-width:250px;';
   const title = document.createElement('div');
-  title.textContent = '🎭 dev · 表演触发';
+  title.textContent = '🎭 dev · trigger performance';
   title.style.cssText = 'color:#ffa7d1;font-weight:600;';
   panel.appendChild(title);
 
@@ -182,7 +191,7 @@ function buildDevPanel(live2d: Live2DSink): void {
     sel.appendChild(o);
   }
   const play = document.createElement('button');
-  play.textContent = '▶ 表演';
+  play.textContent = '▶ Play';
   play.style.cssText = btn;
   play.addEventListener('click', () => live2d.triggerEmotion?.(sel.value));
   row.append(sel, play);
@@ -191,10 +200,10 @@ function buildDevPanel(live2d: Live2DSink): void {
   const srow = document.createElement('div');
   srow.style.cssText = 'display:flex;gap:4px;flex-wrap:wrap;';
   const states: Array<[string, Live2DState]> = [
-    ['待机', 'neutral'],
-    ['思考', 'thinking'],
-    ['说话', 'speaking'],
-    ['睡眠', 'sleeping'],
+    ['Idle', 'neutral'],
+    ['Thinking', 'thinking'],
+    ['Speaking', 'speaking'],
+    ['Sleeping', 'sleeping'],
   ];
   for (const [label, st] of states) {
     const b = document.createElement('button');
@@ -207,7 +216,7 @@ function buildDevPanel(live2d: Live2DSink): void {
 
   if (!emotions.length) {
     const note = document.createElement('div');
-    note.textContent = '(模型未加载 — 占位 sink)';
+    note.textContent = '(model not loaded — placeholder sink)';
     note.style.cssText = 'color:#8b93a7;';
     panel.appendChild(note);
   }

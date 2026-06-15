@@ -2,6 +2,7 @@ import type { Live2DSink, Live2DState } from '../sinks';
 import { createLive2DRuntime, webglAvailable, type Live2DRuntime } from './cubismRuntime';
 import { ModelDriver, type Live2DModelLike } from './modelDriver';
 import { FaceVm } from './faceVm';
+import { DEFAULT_IDLE_PROFILE, IDLE_PROFILE_IDS, type IdleProfileId } from './faceData';
 
 // The real Live2DSink: loads yumi via pixi-live2d-display, drives her through a
 // FaceVm on the pixi ticker, and makes her draggable with a persisted offset.
@@ -11,6 +12,7 @@ import { FaceVm } from './faceVm';
 const POS_KEY = 'luna:live2d:pos';
 const ZOOM_KEY = 'luna:live2d:zoom';
 const GAZE_KEY = 'luna:gaze-follow';
+const IDLE_KEY = 'luna:idle-profile';
 const ZOOM_MIN = 0.4;
 const ZOOM_MAX = 2.5;
 type Offset = { dx: number; dy: number };
@@ -36,6 +38,15 @@ function saveZoom(z: number): void {
 }
 function gazeFollowEnabled(): boolean {
   return localStorage.getItem(GAZE_KEY) !== '0';
+}
+function loadIdleProfile(): IdleProfileId {
+  try {
+    const v = localStorage.getItem(IDLE_KEY);
+    if (v && IDLE_PROFILE_IDS.includes(v)) return v as IdleProfileId;
+  } catch {
+    /* storage unavailable — fall through */
+  }
+  return DEFAULT_IDLE_PROFILE;
 }
 
 function loadOffset(): Offset {
@@ -113,7 +124,10 @@ export async function createPixiLive2DSink(
     /* older build — ignore */
   }
 
-  const faceVm = new FaceVm(driver);
+  const faceVm = new FaceVm(driver, {
+    idleProfile: loadIdleProfile(),
+    gazeActive: gazeFollowEnabled(),
+  });
   // Drive FaceVm from the model's OWN update cycle, on 'beforeModelUpdate' — the
   // point inside InternalModel.update() right after the built-in controllers
   // (auto idle-motion, eyeBlink, focus/gaze, breath, physics, pose) have run and
@@ -235,9 +249,12 @@ export async function createPixiLive2DSink(
         /* ignore */
       }
       gazeOn = on;
+      faceVm.setGazeActive(on); // off → the idle profile wanders the gaze itself
       if (!on) focusController.focus(0, 0, false); // ease head/body/eyes back to center
     },
     triggerEmotion: (id, intensity) => faceVm.triggerEmotion(id, intensity),
     listEmotions: () => faceVm.listEmotions(),
+    setIdleProfile: (id) => faceVm.setIdleProfile(id),
+    listIdleProfiles: () => faceVm.listIdleProfiles(),
   };
 }

@@ -3,6 +3,8 @@
 // chrome (dream overlay, mood pip, scroll pill, settings popover), and returns
 // the live mount points the app wires events to. Pure DOM construction.
 
+import { DEFAULT_IDLE_PROFILE, IDLE_PROFILES } from '../live2d/faceData';
+
 export type LayoutRefs = {
   statusBadge: HTMLElement;
   chatLog: HTMLElement;
@@ -21,6 +23,7 @@ export type LayoutRefs = {
   live2dToggle: HTMLInputElement;
   motionToggle: HTMLInputElement;
   gazeToggle: HTMLInputElement;
+  idleSelect: HTMLSelectElement;
 };
 
 type Motif = { ch: string; top: string; left: string; size: string; op?: string };
@@ -65,6 +68,27 @@ function toggleRow(parent: Element, labelText: string, checked: boolean): HTMLIn
   return input;
 }
 
+function selectRow(
+  parent: Element,
+  labelText: string,
+  options: ReadonlyArray<{ id: string; label: string }>,
+  selected: string,
+): HTMLSelectElement {
+  const doc = parent.ownerDocument;
+  const label = add(parent, 'label');
+  add(label, 'span', undefined, labelText);
+  const sel = doc.createElement('select');
+  for (const o of options) {
+    const opt = doc.createElement('option');
+    opt.value = o.id;
+    opt.textContent = o.label;
+    if (o.id === selected) opt.selected = true;
+    sel.appendChild(opt);
+  }
+  label.appendChild(sel);
+  return sel;
+}
+
 export function buildLayout(root: HTMLElement): LayoutRefs {
   const doc = root.ownerDocument;
   root.className = 'luna-app';
@@ -73,20 +97,26 @@ export function buildLayout(root: HTMLElement): LayoutRefs {
   add(root, 'div', 'lace-top');
   const stage = add(root, 'div', 'stage');
 
-  const statusBadge = add(stage, 'div', 'status-badge', '连接中…');
+  const statusBadge = add(stage, 'div', 'status-badge', 'Connecting…');
 
   const settingsBtn = doc.createElement('button');
   settingsBtn.className = 'settings-btn';
   settingsBtn.type = 'button';
-  settingsBtn.setAttribute('aria-label', '设置');
+  settingsBtn.setAttribute('aria-label', 'Settings');
   settingsBtn.textContent = '⚙';
   stage.appendChild(settingsBtn);
   const settingsPanel = add(stage, 'div', 'settings-panel');
-  const ttsToggle = toggleRow(settingsPanel, '语音', localStorage.getItem('luna:tts') !== '0');
-  const live2dToggle = toggleRow(settingsPanel, 'Live2D 模型', localStorage.getItem('luna:live2d') !== '0');
-  const motionToggle = toggleRow(settingsPanel, '减少动效', localStorage.getItem('luna:reduce-motion') === '1');
-  const gazeToggle = toggleRow(settingsPanel, '视线跟随', localStorage.getItem('luna:gaze-follow') !== '0');
-  add(settingsPanel, 'div', 'hint', '语音 / 模型改动需刷新生效 · 滚轮缩放 · 双击复位');
+  const ttsToggle = toggleRow(settingsPanel, 'Voice', localStorage.getItem('luna:tts') !== '0');
+  const live2dToggle = toggleRow(settingsPanel, 'Live2D model', localStorage.getItem('luna:live2d') !== '0');
+  const motionToggle = toggleRow(settingsPanel, 'Reduce motion', localStorage.getItem('luna:reduce-motion') === '1');
+  const gazeToggle = toggleRow(settingsPanel, 'Gaze follow', localStorage.getItem('luna:gaze-follow') !== '0');
+  const idleSelect = selectRow(
+    settingsPanel,
+    'Idle animation',
+    IDLE_PROFILES,
+    localStorage.getItem('luna:idle-profile') ?? DEFAULT_IDLE_PROFILE,
+  );
+  add(settingsPanel, 'div', 'hint', 'Voice / model changes need a refresh · scroll to zoom · double-click to reset');
 
   const motifLayer = add(stage, 'div', 'motif-layer');
   for (const m of MOTIFS) {
@@ -101,25 +131,25 @@ export function buildLayout(root: HTMLElement): LayoutRefs {
   for (const c of ['l1', 'l2', 'r1', 'r2']) add(panel, 'span', `puff ${c}`);
   const header = add(panel, 'div', 'chat-header');
   add(header, 'span', 'dot');
-  add(header, 'span', undefined, 'Luna · 在线');
+  add(header, 'span', undefined, 'Luna · online');
   const chatLog = add(panel, 'div', 'chat-log');
   const scrollPill = doc.createElement('button');
   scrollPill.className = 'scroll-pill';
   scrollPill.type = 'button';
-  scrollPill.textContent = '↓ 新消息';
+  scrollPill.textContent = '↓ New messages';
   panel.appendChild(scrollPill);
 
   const inputRow = add(panel, 'div', 'chat-input-row');
   const input = doc.createElement('input');
   input.className = 'chat-input';
   input.type = 'text';
-  input.placeholder = '对 Luna 说点什么…';
+  input.placeholder = 'Say something to Luna…';
   input.autocomplete = 'off';
   inputRow.appendChild(input);
   const sendBtn = doc.createElement('button');
   sendBtn.className = 'send-btn';
   sendBtn.type = 'button';
-  sendBtn.setAttribute('aria-label', '发送');
+  sendBtn.setAttribute('aria-label', 'Send');
   sendBtn.textContent = '➤';
   inputRow.appendChild(sendBtn);
 
@@ -129,12 +159,12 @@ export function buildLayout(root: HTMLElement): LayoutRefs {
   add(moodPip, 'span', 'mood-label', '');
   const ph = add(modelStage, 'div', 'model-placeholder');
   add(ph, 'div', 'ph-circle', 'yumi');
-  add(ph, 'div', 'label', '模型表演区');
-  add(ph, 'div', 'sub', '可拖动 · v0.13.1 接入真模型');
+  add(ph, 'div', 'label', 'Model stage');
+  add(ph, 'div', 'sub', 'Draggable · real model in v0.13.1');
   const dreamBtn = doc.createElement('button');
   dreamBtn.className = 'dream-btn';
   dreamBtn.type = 'button';
-  dreamBtn.textContent = '🌙 入梦';
+  dreamBtn.textContent = '🌙 Dream';
   modelStage.appendChild(dreamBtn);
 
   add(root, 'div', 'lace-bottom');
@@ -149,17 +179,17 @@ export function buildLayout(root: HTMLElement): LayoutRefs {
     s.style.animationDelay = st.delay;
   }
   add(dreamOverlay, 'div', 'moon', '🌙');
-  add(dreamOverlay, 'div', 'dream-title', 'Luna 在做梦…');
+  add(dreamOverlay, 'div', 'dream-title', 'Luna is dreaming…');
   const dreamCaption = add(dreamOverlay, 'div', 'dream-caption', '');
   const dreamWakeBtn = doc.createElement('button');
   dreamWakeBtn.className = 'wake-btn';
   dreamWakeBtn.type = 'button';
-  dreamWakeBtn.textContent = '☀️ 唤醒';
+  dreamWakeBtn.textContent = '☀️ Wake';
   dreamOverlay.appendChild(dreamWakeBtn);
 
   return {
     statusBadge, chatLog, input, sendBtn, dreamBtn, modelStage,
     moodPip, scrollPill, dreamOverlay, dreamWakeBtn, dreamCaption,
-    settingsBtn, settingsPanel, ttsToggle, live2dToggle, motionToggle, gazeToggle,
+    settingsBtn, settingsPanel, ttsToggle, live2dToggle, motionToggle, gazeToggle, idleSelect,
   };
 }

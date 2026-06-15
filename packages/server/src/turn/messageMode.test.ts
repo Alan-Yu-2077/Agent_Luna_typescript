@@ -95,7 +95,7 @@ describe('message-tool mode (LUNA_MESSAGE_TOOL registry)', () => {
 
   test('humanity violation → recoverable validation_failed; re-emit wins; no leak into turn text', async () => {
     const provider = new MockProvider([
-      [stopWithMessages([{ id: 'm1', input: { text: '一。二。三。四。五。', is_final: true } }])],
+      [stopWithMessages([{ id: 'm1', input: { text: '一。二。三。四。五。六。', is_final: true } }])],
       [stopWithMessages([{ id: 'm2', input: { text: '换短的说法。', is_final: true } }])],
       [stopEnd('stray top-level text')],
     ]);
@@ -141,7 +141,7 @@ describe('message-tool mode (LUNA_MESSAGE_TOOL registry)', () => {
   });
 
   test('preview-then-invalid: progress streams, then finished err (discard contract)', async () => {
-    const bad = '一。二。三。四。五。';
+    const bad = '一。二。三。四。五。六。';
     const provider = new MockProvider([
       [
         {

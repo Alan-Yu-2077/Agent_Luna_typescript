@@ -103,3 +103,64 @@ describe('FaceVm — emotion engine', () => {
     );
   });
 });
+
+describe('FaceVm — idle profiles', () => {
+  const rng = (): number => 0.5; // deterministic look-wander for tests
+
+  test('the awake idle drives body sway in neutral (written via flushPose)', () => {
+    const { writer, last } = recorder();
+    const vm = new FaceVm(writer, { rng });
+    run(vm, 0, 2000);
+    vm.flushPose();
+    const moved = ['ParamAngleZ', 'ParamBodyAngleZ', 'ParamBodyAngleY'].some(
+      (p) => Math.abs(last.get(p) ?? 0) > 0.5,
+    );
+    expect(moved).toBe(true);
+  });
+
+  test('different profiles produce different motion at the same clock', () => {
+    const a = recorder();
+    const va = new FaceVm(a.writer, { rng, idleProfile: 'cuteSwayV1' });
+    const b = recorder();
+    const vb = new FaceVm(b.writer, { rng, idleProfile: 'peekyIdleV1' });
+    run(va, 0, 1500);
+    va.flushPose();
+    run(vb, 0, 1500);
+    vb.flushPose();
+    const diff = ['ParamAngleX', 'ParamAngleZ', 'ParamBodyAngleZ'].some(
+      (p) => Math.abs((a.last.get(p) ?? 0) - (b.last.get(p) ?? 0)) > 0.5,
+    );
+    expect(diff).toBe(true);
+  });
+
+  test('setIdleProfile switches the active profile; an unknown id is a no-op', () => {
+    const { writer } = recorder();
+    const vm = new FaceVm(writer, { rng });
+    expect(vm.getIdleProfile()).toBe('defaultIdleV1');
+    vm.setIdleProfile('does-not-exist'); // guarded
+    expect(vm.getIdleProfile()).toBe('defaultIdleV1');
+    vm.setIdleProfile('sweetBounceV1');
+    expect(vm.getIdleProfile()).toBe('sweetBounceV1');
+    expect(vm.listIdleProfiles().map((p) => p.id)).toContain('shyDriftV1');
+  });
+
+  test('the idle wanders the gaze only when gaze-follow is off', () => {
+    const on = recorder();
+    const von = new FaceVm(on.writer, { rng, gazeActive: true });
+    run(von, 0, 1500);
+    expect(on.last.has('ParamEyeBallX')).toBe(false); // mouse owns the eyes
+
+    const off = recorder();
+    const voff = new FaceVm(off.writer, { rng: () => 0.9, gazeActive: false });
+    run(voff, 0, 1500);
+    expect(off.last.has('ParamEyeBallX')).toBe(true); // idle wanders the gaze
+  });
+
+  test('the sleeping state suppresses the awake idle (no idle gaze wander)', () => {
+    const { writer, last } = recorder();
+    const vm = new FaceVm(writer, { rng: () => 0.9, gazeActive: false, idleProfile: 'sweetBounceV1' });
+    vm.setState('sleeping');
+    run(vm, 0, 1500);
+    expect(last.has('ParamEyeBallX')).toBe(false); // idle is gated off while sleeping
+  });
+});

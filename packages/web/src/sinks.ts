@@ -27,6 +27,10 @@ export interface Live2DSink {
   triggerEmotion?(id: string, intensity?: number): void;
   // the available preset emotion ids (for a dev trigger UI)
   listEmotions?(): string[];
+  // switch the resting-state idle animation (settings switcher)
+  setIdleProfile?(id: string): void;
+  // the available idle profiles, ordered, with display labels
+  listIdleProfiles?(): ReadonlyArray<{ id: string; label: string }>;
 }
 
 export interface AudioSink {

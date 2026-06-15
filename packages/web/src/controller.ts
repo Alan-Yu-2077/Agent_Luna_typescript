@@ -94,7 +94,7 @@ export function createController(deps: ControllerDeps): { handle: (e: ServerEven
         }
         // a non-message tool
         if (e.result.kind === 'ok') deps.view.chip('tool', `🔧 ${e.result.summary || 'done'}`);
-        else deps.view.chip('error', `失败: ${e.result.message}`);
+        else deps.view.chip('error', `Failed: ${e.result.message}`);
         return;
       }
 
