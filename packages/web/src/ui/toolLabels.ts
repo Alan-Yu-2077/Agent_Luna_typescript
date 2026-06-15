@@ -14,6 +14,9 @@ const CUTE: Partial<Record<ToolName, string>> = {
   repo_map: 'mapped the codebase 🗺️',
   find_symbol: 'located a symbol 🔎',
   plan: 'updated the plan 📋',
+  save_skill: 'saved a skill 🧠',
+  recall_skill: 'recalled a skill 💡',
+  propose_self_edit: 'proposed a self-edit ✍️',
 };
 
 function strip(s: string): string {

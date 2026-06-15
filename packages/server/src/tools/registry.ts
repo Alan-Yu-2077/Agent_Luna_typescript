@@ -9,8 +9,11 @@ import { listFilesTool } from './builtin/list_files';
 import { messageTool } from './builtin/message';
 import { multiEditTool } from './builtin/multi_edit';
 import { planTool } from './builtin/plan';
+import { proposeSelfEditTool } from './builtin/propose_self_edit';
 import { readFileTool } from './builtin/read_file';
 import { recallTool } from './builtin/recall';
+import { recallSkillTool } from './builtin/recall_skill';
+import { saveSkillTool } from './builtin/save_skill';
 import { rememberTool } from './builtin/remember';
 import { repoMapTool } from './builtin/repo_map';
 import { runTestsTool } from './builtin/run_tests';
@@ -107,6 +110,39 @@ export function repoMapEnabled(): boolean {
 // Compose a base registry with the repo-map + locator tools iff the flag is on.
 export function withRepoMap(base: ToolRegistry): ToolRegistry {
   return repoMapEnabled() ? { ...base, ...repoMapTools } : { ...base };
+}
+
+// Skill library (Initiative 8, v0.15.4) — save_skill (verify-before-persist) +
+// recall_skill. Skills are DATA the model reuses on recall, never auto-executed
+// code. Behind LUNA_SKILLS (OWNER DECISION #4: default ON; `=0` is the off switch).
+export const skillTools: ToolRegistry = {
+  save_skill: saveSkillTool,
+  recall_skill: recallSkillTool,
+};
+
+export function skillsEnabled(): boolean {
+  return Bun.env['LUNA_SKILLS'] !== '0';
+}
+
+export function withSkills(base: ToolRegistry): ToolRegistry {
+  return skillsEnabled() ? { ...base, ...skillTools } : { ...base };
+}
+
+// Propose-only self-edit (Initiative 8, v0.15.4) — the bounded self-evolution
+// surface. It NEVER writes; the evaluator firewall (resolveInWorkspace 'write')
+// hard-rejects any proposed edit to the code that judges/sandboxes/gates Luna, so
+// it cannot disable its own guardrails even when enabled. Behind LUNA_SELF_EDIT
+// (default ON; propose-only ⇒ harmless even on — a human applies every diff).
+export const selfEditTools: ToolRegistry = {
+  propose_self_edit: proposeSelfEditTool,
+};
+
+export function selfEditEnabled(): boolean {
+  return Bun.env['LUNA_SELF_EDIT'] !== '0';
+}
+
+export function withSelfEdit(base: ToolRegistry): ToolRegistry {
+  return selfEditEnabled() ? { ...base, ...selfEditTools } : { ...base };
 }
 
 // The LD #9 everything-as-tool surface. Mode selection happens once at boot

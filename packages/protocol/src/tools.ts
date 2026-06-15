@@ -19,6 +19,9 @@ export const ToolName = z.enum([
   'repo_map',
   'find_symbol',
   'plan',
+  'save_skill',
+  'recall_skill',
+  'propose_self_edit',
 ]);
 export type ToolName = z.infer<typeof ToolName>;
 
