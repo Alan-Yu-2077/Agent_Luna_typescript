@@ -9,6 +9,7 @@ that the same `luna-dev` / `luna-orient` / `luna-roadmap` discipline applies.
 |---|---|---|
 | [`REWRITE_CONTEXT.md`](REWRITE_CONTEXT.md) | Audited facts about Python Luna + locked design decisions for v2 + still-open questions | **Read first** on any non-trivial change |
 | [`history/DEVELOPMENT.md`](history/DEVELOPMENT.md) | Per-version log of what actually shipped in this TS repo | Truth source for "what version are we on" |
+| [`ARCH_EFFICIENCY.md`](ARCH_EFFICIENCY.md) | Design-level inefficiency findings (the "recompute from full corpus every turn" pattern) | Before perf work or anything in the hot path |
 | [`roadmap/README.md`](roadmap/README.md) | Forward plan: initiatives in execution order with status | Before planning the next version |
 | [`roadmap/<initiative>-YYYY-MM/`](roadmap/) | Self-contained version plans, one folder per initiative | When ready to execute a specific version |
 
