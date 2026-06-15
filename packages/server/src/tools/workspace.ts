@@ -22,10 +22,24 @@
 
 import { createHash } from 'node:crypto';
 import { existsSync, realpathSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { homedir, platform } from 'node:os';
 import { isAbsolute, join, resolve, sep } from 'node:path';
 
 export type Access = 'read' | 'write' | 'execute';
+
+// macOS (APFS/HFS+ default) and Windows are case-INsensitive: `.ENV`, `Secret.PEM`,
+// `ID_RSA`, `Foo.Test.ts` all name the same FS entry as their lowercase form. The
+// blocklist must therefore case-fold its basename/named-file/dir comparisons on
+// these platforms, or a case-variant write target slips past BOTH tiers (the
+// load-bearing hole v0.15.1's write tool would plug into). Linux is case-sensitive,
+// so we fold only where the FS does — never weakening Linux matching.
+const CASE_INSENSITIVE_FS = platform() === 'darwin' || platform() === 'win32';
+
+// Fold a path/basename for comparison: lowercased on case-insensitive platforms,
+// untouched on case-sensitive ones.
+function fold(s: string): string {
+  return CASE_INSENSITIVE_FS ? s.toLowerCase() : s;
+}
 
 export type ResolveOk = { ok: true; resolved: string };
 export type ResolveErr = { ok: false; reason: string };
@@ -69,8 +83,11 @@ function secretFiles(): string[] {
 }
 
 // Secret filename / suffix patterns (matched on the basename), rejected for every
-// access wherever they live: .env / .env.* , *.pem , *.key , id_rsa* .
-function isSecretBasename(base: string): boolean {
+// access wherever they live: .env / .env.* , *.pem , *.key , id_rsa* . On a
+// case-insensitive FS the basename is folded first so `.ENV` / `Secret.PEM` /
+// `ID_RSA` are caught too.
+function isSecretBasename(rawBase: string): boolean {
+  const base = fold(rawBase);
   if (base === '.env' || base.startsWith('.env.')) return true;
   if (base.endsWith('.pem') || base.endsWith('.key')) return true;
   if (base.startsWith('id_rsa')) return true;
@@ -106,7 +123,10 @@ function evaluatorFiles(): string[] {
   ];
 }
 
-function isEvaluatorBasename(base: string): boolean {
+// On a case-insensitive FS the basename is folded first so `Foo.Test.ts` /
+// `TSConfig.json` / `.Prettierrc` are caught too.
+function isEvaluatorBasename(rawBase: string): boolean {
+  const base = fold(rawBase);
   if (base.endsWith('.test.ts')) return true;
   if (base.startsWith('tsconfig') && base.endsWith('.json')) return true;
   if (base === '.prettierrc' || (base.startsWith('.prettierrc') && base.endsWith('.json'))) {
@@ -123,12 +143,21 @@ function basename(p: string): string {
   return parts[parts.length - 1] ?? p;
 }
 
+// Full-path equality, case-folded on a case-insensitive FS so `/x/Secret.PEM`
+// matches the named-file `/x/secret.pem`. Both args must already be canonical.
+function pathEq(a: string, b: string): boolean {
+  return fold(a) === fold(b);
+}
+
 // Is `child` equal to, or nested under, `dir`? Boundary-safe: "/a/bc" is NOT
-// under "/a/b". Both args must already be absolute + normalized.
+// under "/a/b". Case-folded on a case-insensitive FS so a `~/.SSH/...` variant is
+// still caught. Both args must already be absolute + normalized.
 function isWithin(child: string, dir: string): boolean {
-  if (child === dir) return true;
-  const base = dir.endsWith(sep) ? dir : dir + sep;
-  return child.startsWith(base);
+  const c = fold(child);
+  const d = fold(dir);
+  if (c === d) return true;
+  const base = d.endsWith(sep) ? d : d + sep;
+  return c.startsWith(base);
 }
 
 // Canonicalize: realpath if the path exists; else realpath the nearest existing
@@ -180,7 +209,7 @@ export function resolveInWorkspace(path: string, access: Access): ResolveResult 
     return { ok: false, reason: `blocked: secret file pattern (${base})` };
   }
   for (const f of secretFiles()) {
-    if (resolved === canonicalize(f)) {
+    if (pathEq(resolved, canonicalize(f))) {
       return { ok: false, reason: `blocked: secret file (${base})` };
     }
   }
@@ -196,7 +225,7 @@ export function resolveInWorkspace(path: string, access: Access): ResolveResult 
       return { ok: false, reason: `blocked: evaluator firewall (${base}) is read-only to Luna` };
     }
     for (const f of evaluatorFiles()) {
-      if (resolved === canonicalize(f)) {
+      if (pathEq(resolved, canonicalize(f))) {
         return {
           ok: false,
           reason: `blocked: evaluator firewall (${base}) — Luna cannot write the code that judges her`,

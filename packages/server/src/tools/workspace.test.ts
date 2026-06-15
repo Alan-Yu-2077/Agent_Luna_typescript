@@ -160,6 +160,59 @@ describe('resolveInWorkspace — EVALUATOR FIREWALL (write/execute blocked, read
   });
 });
 
+// macOS/Windows filesystems are case-insensitive, so `.ENV` / `ID_RSA` / `Secret.PEM`
+// / `Foo.Test.ts` name the same entry as their lowercase form. The blocklist must
+// fold case on those platforms or a case-variant write target bypasses BOTH tiers —
+// the load-bearing hole v0.15.1's write tool plugs into.
+const caseInsensitiveFs = process.platform === 'darwin' || process.platform === 'win32';
+const describeCaseFold = caseInsensitiveFs ? describe : describe.skip;
+
+describeCaseFold('resolveInWorkspace — case-insensitive FS blocklist folding', () => {
+  test('SECRET case variants are BLOCKED for write (no bypass)', () => {
+    for (const name of ['.ENV', '.Env.Local', 'secret.PEM', 'private.Key', 'ID_RSA', 'ID_RSA.PUB']) {
+      const r = resolveInWorkspace(name, 'write');
+      expect(r.ok).toBe(false);
+    }
+  });
+
+  test('SECRET case variants are BLOCKED for read + execute too', () => {
+    for (const name of ['.ENV', 'Server.Pem', 'TLS.Key', 'Id_Rsa']) {
+      expect(resolveInWorkspace(name, 'read').ok).toBe(false);
+      expect(resolveInWorkspace(name, 'execute').ok).toBe(false);
+    }
+  });
+
+  test('EVALUATOR-FIREWALL case variants are BLOCKED for write', () => {
+    for (const name of ['foo.Test.ts', 'Foo.TEST.TS', 'TSConfig.json', 'tsconfig.BASE.json', '.Prettierrc']) {
+      const r = resolveInWorkspace(name, 'write');
+      expect(r.ok).toBe(false);
+    }
+  });
+
+  test('EVALUATOR-FIREWALL case variants stay READABLE (read allowed)', () => {
+    // case-folding must not over-block read access on the firewall tier
+    expect(resolveInWorkspace('foo.Test.ts', 'read').ok).toBe(true);
+    expect(resolveInWorkspace('TSConfig.json', 'read').ok).toBe(true);
+  });
+
+  test('a secret-DIR case variant is blocked (~/.SSH/...)', () => {
+    const fakeHome = join(tmp, 'home-case');
+    const ssh = join(fakeHome, '.ssh');
+    mkdirSync(ssh, { recursive: true });
+    writeFileSync(join(ssh, 'id_ed25519'), 'PRIVATE');
+    Bun.env['HOME'] = fakeHome;
+    // request the upper-case path variant; on a case-insensitive FS it is the same dir
+    const r = resolveInWorkspace(join(fakeHome, '.SSH', 'id_ed25519'), 'read');
+    expect(r.ok).toBe(false);
+  });
+
+  test('case folding does NOT over-block an unrelated source file', () => {
+    const f = join(root, 'Feature.TS');
+    writeFileSync(f, 'export const x = 1;');
+    expect(resolveInWorkspace(f, 'write').ok).toBe(true);
+  });
+});
+
 describe('helpers', () => {
   test('workspaceRoot reflects LUNA_WORKSPACE_ROOT', () => {
     expect(workspaceRoot()).toBe(root);
