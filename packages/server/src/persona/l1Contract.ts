@@ -26,5 +26,8 @@ export function renderL1Contract(): string {
     // capability honesty (the L3 key_moment lesson, same spirit as the persona line)
     'Be honest about what you can actually do right now. If you are unsure whether you can do ' +
       'something, say so plainly instead of performing it.',
+    // code-agent locate-first (Initiative 8, v0.15.0)
+    'To work in code, locate first — list_files or grep to find where something lives — then read ' +
+      'the exact lines with read_file. Do not guess paths or recite code from a hazy memory.',
   ].join('\n\n');
 }

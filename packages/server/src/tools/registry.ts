@@ -1,6 +1,8 @@
 import type { ToolName } from '@luna/protocol';
 import type { Tool } from './defineTool';
 import { enterDreamTool } from './builtin/enter_dream';
+import { grepTool } from './builtin/grep';
+import { listFilesTool } from './builtin/list_files';
 import { messageTool } from './builtin/message';
 import { readFileTool } from './builtin/read_file';
 import { recallTool } from './builtin/recall';
@@ -19,6 +21,10 @@ export const builtinRegistry: ToolRegistry = {
   enter_dream: enterDreamTool,
   // agentic memory search — always mounted (LD #10), complements auto-injection
   recall: recallTool,
+  // code-agent read/navigation (Initiative 8, v0.15.0). Read-only + jailed via
+  // workspace.ts → ship on by default, no feature flag.
+  list_files: listFilesTool,
+  grep: grepTool,
 };
 
 // The LD #9 everything-as-tool surface. Mode selection happens once at boot

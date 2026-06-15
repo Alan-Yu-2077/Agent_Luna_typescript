@@ -1,6 +1,6 @@
 # Agent_Luna (TypeScript) — Development History
 
-Last updated: 2026-06-15 (Asia/Shanghai) — v0.13.13 (switchable idle animations — 5 awake idle profiles ported + a settings switcher)
+Last updated: 2026-06-15 (Asia/Shanghai) — v0.15.0 (code-agent read/nav foundation — workspace sandbox + windowed read_file + list_files + grep; Initiative 8 begins, dev branch)
 
 ## Scope
 
@@ -75,6 +75,63 @@ during the rewrite. Its version log is unrelated to this one — `v0.1` here is 
 | `v0.13.11` | 2026-06-15 | Message clause cap 55→90 (the CJK-tuned 55 retry-stormed English replies) + validation retries kept backstage (no leaked raw-ZodError chips) | `60319f7` `2010e82` |
 | `v0.13.12` | 2026-06-15 | English tuning — all three humanity caps relaxed (140/4/90 → 280/5/150) to cut the validation over-limit rate; web + dev-chat frontend fully translated to English | `working tree` |
 | `v0.13.13` | 2026-06-15 | Switchable idle animations — the 5 awake idle profiles (default/cute-sway/peek/shy-drift/sweet-bounce) ported from Python `applyIdle` into FaceVm + a settings dropdown; idle yields the eyes to blink + the gaze to mouse-follow | `working tree` |
+| `v0.15.0` | 2026-06-15 | Code-agent read/nav foundation (Initiative 8, 1/5) — workspace sandbox (blocklist-only, no root jail) + windowed `read_file` + `list_files` + `grep` (rg w/ JS fallback) | _dev branch_ |
+
+## Code-agent capability (2026-06-15) — Initiative 8 begins (v0.15.0)
+
+The first of five versions giving Luna a real code-agent surface. v0.15.0 ships the **safe,
+read-only half** — a single workspace sandbox every file/shell tool will route through, plus the
+navigation primitives she lacked (windowed reads, tree/glob listing, regex search). Developed on the
+**dev branch** (isolated worktree); the stable instance is untouched.
+
+**v0.15.0 — workspace sandbox + read/navigation** (dev branch)
+
+Fact:
+- New [`packages/server/src/tools/workspace.ts`](../../packages/server/src/tools/workspace.ts) (~230
+  lines) — `resolveInWorkspace(path, access)` canonicalizes (realpath, including the nearest existing
+  ancestor for not-yet-existing write targets) and rejects on a **sensitive-path blocklist**. Per the
+  owner decision this is **NOT a root jail**: read/write/execute may touch any path EXCEPT the
+  blocklist. Two tiers — SECRETS (`.env`/`.env.*`, `*.pem`, `*.key`, `id_rsa*`, `~/.ssh`, `~/.aws`,
+  `~/.gnupg`, `~/.config/gcloud`, `~/Library/Keychains`, browser profiles, `~/.npmrc`/`~/.netrc`/
+  `~/.docker/config.json`) rejected for every access; EVALUATOR FIREWALL (`*.test.ts`,
+  `tsconfig*.json`, prettier/lint config, the shell deny source, `workspace.ts` itself, `humanity.ts`,
+  `l1Contract.ts`, the safety gate) rejected for **write/execute only — read allowed** (DGM safeguard:
+  Luna cannot write the code that judges/sandboxes her). Also `contentHash()` (sha256) for v0.15.1's
+  optimistic concurrency.
+- New [`packages/server/src/tools/fsScan.ts`](../../packages/server/src/tools/fsScan.ts) — ignore-aware
+  walk (built-in set: `.git`/`node_modules`/`.venv`/`dist`/… + simple `.gitignore` segment lines) +
+  binary-extension set, shared by `list_files`/`grep`. Symlinked dirs are not descended.
+- Upgraded [`read_file.ts`](../../packages/server/src/tools/builtin/read_file.ts) — was whole-file/any-
+  path/32KB. Now a 1-indexed line window (`offset`/`limit`, default 800, hard cap 2000), line-numbered
+  content, returns `start_line`/`end_line`/`total_lines`/`truncated`/`content_hash`, routed through the
+  sandbox (read). ENOENT stays recoverable; a secret path is a non-recoverable reject.
+- New `list_files` ([`list_files.ts`](../../packages/server/src/tools/builtin/list_files.ts)) —
+  `{ path?, recursive?, glob?, include_hidden?, max_entries? }` → ignore-aware entry list, `Bun.Glob`
+  filter, truncation flag. New `grep` ([`grep.ts`](../../packages/server/src/tools/builtin/grep.ts)) —
+  `{ query, path?, regex?, case_sensitive?, glob?, max_results? }` via a ripgrep subprocess
+  (`rg --json`) with a **graceful JS-scanner fallback** (injectable runner) returning the identical
+  shape; results capped + reported as `shown`/`total`/`truncated`. Both `proactiveRisk: 'safe'`,
+  `concurrency: 'safe-parallel'`.
+- Wired: `ToolName` enum gains `list_files`/`grep`
+  ([`packages/protocol/src/tools.ts`](../../packages/protocol/src/tools.ts)); both mounted in
+  `builtinRegistry` (read-only → on by default, no flag). L1 contract gains a locate-first clause;
+  `EMBODIMENT_BLOCK` notes the browsable/searchable/readable workspace.
+- Tests (4 files, 41 tests): `workspace.test.ts` (no-jail accept incl. `../`-escape, each secret tier,
+  symlink-into-secret reject, evaluator-firewall read-ok/write-blocked), windowed `read_file.test.ts`,
+  `list_files.test.ts` (glob/ignore/hidden/truncation), `grep.test.ts` (regex/literal/case/glob/cap +
+  rg-absent fallback parity). tsc clean (protocol + server); the only suite failure is the pre-existing
+  flaky `faceVm.test.ts` emotion-timeline test, unrelated to this change.
+
+Inference:
+- This is the foundation the riskier write/shell tools (v0.15.1/2) build on. By landing the *sandbox*
+  and the *read-only* tools first, a bug here can only over-read (bounded by the blocklist), never
+  destroy — the security-load-bearing piece is exhaustively unit-tested before anything mutates.
+- Owner decision diverges from the plan's root-jail: the blocklist is now the **only** guardrail, which
+  is why it is comprehensive and tested per-tier. The evaluator firewall is the concrete DGM safeguard —
+  a future autonomous self-edit loop is explicitly a separate initiative needing container/VM isolation
+  + an independent evaluator; none of that autonomy is built here.
+- `read_file` already returns `content_hash`, so v0.15.1's `expected_hash` optimistic concurrency drops
+  in, and `resolveInWorkspace(_, 'write'|'execute')` is ready for the write/shell tools.
 
 ## C-side fix pass (2026-06-15) — v0.13.5 / v0.13.6
 

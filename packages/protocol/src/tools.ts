@@ -7,6 +7,8 @@ export const ToolName = z.enum([
   'enter_dream',
   'message',
   'recall',
+  'list_files',
+  'grep',
 ]);
 export type ToolName = z.infer<typeof ToolName>;
 
