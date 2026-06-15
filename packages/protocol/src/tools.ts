@@ -12,6 +12,10 @@ export const ToolName = z.enum([
   'edit',
   'multi_edit',
   'write_file',
+  'shell',
+  'typecheck',
+  'run_tests',
+  'lint',
 ]);
 export type ToolName = z.infer<typeof ToolName>;
 

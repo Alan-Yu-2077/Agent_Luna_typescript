@@ -2,7 +2,14 @@ import { join } from 'node:path';
 import { broadcast, handleClose, handleMessage, handleOpen, setRuntime, type WSData } from './ws';
 import { startScheduler } from './proactive/scheduler';
 import { AnthropicProvider } from './provider/anthropic';
-import { builtinRegistry, codeWriteEnabled, messageRegistry, withCodeWrite } from './tools/registry';
+import {
+  builtinRegistry,
+  codeWriteEnabled,
+  messageRegistry,
+  shellEnabled,
+  withCodeWrite,
+  withShell,
+} from './tools/registry';
 import { closeDb, migrate, openDb } from './sql';
 import { TraceStore } from './trace/store';
 import { setTraceStore } from './trace/instrument';
@@ -60,10 +67,12 @@ if (Bun.env['ANTHROPIC_API_KEY']) {
   // Composed once at boot so the registry — not an env read in the hot loop —
   // is the source of truth for "can Luna write files".
   const writeMode = codeWriteEnabled();
-  const registry = withCodeWrite(messageMode ? messageRegistry : builtinRegistry);
+  // Shell + verify loop (v0.15.2) layers on iff LUNA_SHELL != 0 (default ON).
+  const shellMode = shellEnabled();
+  const registry = withShell(withCodeWrite(messageMode ? messageRegistry : builtinRegistry));
   setRuntime({ provider, registry, dreamLlm });
   console.log(
-    `[luna-server] provider: ${Bun.env['LUNA_MODEL'] ?? 'claude-opus-4-8'} via ${Bun.env['ANTHROPIC_BASE_URL'] ?? 'https://api.anthropic.com'}${summarizerKey ? ' (+summarizer key)' : ''}${messageMode ? ' [message-tool mode]' : ''}${writeMode ? ' [code-write]' : ''}`,
+    `[luna-server] provider: ${Bun.env['LUNA_MODEL'] ?? 'claude-opus-4-8'} via ${Bun.env['ANTHROPIC_BASE_URL'] ?? 'https://api.anthropic.com'}${summarizerKey ? ' (+summarizer key)' : ''}${messageMode ? ' [message-tool mode]' : ''}${writeMode ? ' [code-write]' : ''}${shellMode ? ' [shell]' : ''}`,
   );
   // Proactive heartbeat (v0.10.3). The timer runs always; each tick no-ops
   // unless LUNA_PROACTIVE=1 (re-read per tick, so the kill switch toggles

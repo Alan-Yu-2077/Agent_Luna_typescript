@@ -3,18 +3,21 @@ import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from '
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { ToolEvent } from '@luna/protocol';
-import { builtinRegistry, codeWriteEnabled, withCodeWrite } from './registry';
+import { builtinRegistry, codeWriteEnabled, shellEnabled, withCodeWrite, withShell } from './registry';
 import { dispatchToolCalls } from './dispatcher';
 import { Mutex } from './mutex';
 import { markRead, resetReadTracking } from './readTracking';
 import { resolveInWorkspace } from './workspace';
 
 const savedFlag = Bun.env['LUNA_CODE_WRITE'];
+const savedShell = Bun.env['LUNA_SHELL'];
 const savedRoot = Bun.env['LUNA_WORKSPACE_ROOT'];
 
 afterEach(() => {
   if (savedFlag === undefined) delete Bun.env['LUNA_CODE_WRITE'];
   else Bun.env['LUNA_CODE_WRITE'] = savedFlag;
+  if (savedShell === undefined) delete Bun.env['LUNA_SHELL'];
+  else Bun.env['LUNA_SHELL'] = savedShell;
 });
 
 describe('LUNA_CODE_WRITE flag gates the write tools', () => {
@@ -56,6 +59,51 @@ describe('LUNA_CODE_WRITE flag gates the write tools', () => {
     if (final?.kind === 'final') {
       expect(final.result.kind).toBe('err');
       if (final.result.kind === 'err') expect(final.result.code).toBe('tool_not_found');
+    }
+  });
+});
+
+describe('LUNA_SHELL flag gates the shell + verify tools', () => {
+  test('default (unset) → shell + verify tools mounted', () => {
+    delete Bun.env['LUNA_SHELL'];
+    expect(shellEnabled()).toBe(true);
+    const reg = withShell(builtinRegistry);
+    expect(reg.shell).toBeDefined();
+    expect(reg.typecheck).toBeDefined();
+    expect(reg.run_tests).toBeDefined();
+    expect(reg.lint).toBeDefined();
+  });
+
+  test('LUNA_SHELL=0 → shell + verify tools ABSENT from the registry', () => {
+    Bun.env['LUNA_SHELL'] = '0';
+    expect(shellEnabled()).toBe(false);
+    const reg = withShell(builtinRegistry);
+    expect(reg.shell).toBeUndefined();
+    expect(reg.typecheck).toBeUndefined();
+    expect(reg.run_tests).toBeUndefined();
+    expect(reg.lint).toBeUndefined();
+    // read-only tools unaffected
+    expect(reg.read_file).toBeDefined();
+    expect(reg.grep).toBeDefined();
+  });
+
+  test('with LUNA_SHELL off, a dispatched shell resolves to tool_not_found', async () => {
+    Bun.env['LUNA_SHELL'] = '0';
+    const reg = withShell(builtinRegistry);
+    const events: ToolEvent[] = [];
+    for await (const e of dispatchToolCalls(
+      [{ call_id: 'c1', tool_name: 'shell', input: { command: 'echo hi' } }],
+      { sessionId: 's', sessionMutex: new Mutex() },
+      reg,
+    )) {
+      events.push(e);
+    }
+    const final = events.find((e) => e.kind === 'final');
+    expect(final?.kind).toBe('final');
+    if (final?.kind === 'final' && final.result.kind === 'err') {
+      expect(final.result.code).toBe('tool_not_found');
+    } else {
+      throw new Error('expected a tool_not_found error');
     }
   });
 });

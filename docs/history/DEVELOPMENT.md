@@ -1,6 +1,6 @@
 # Agent_Luna (TypeScript) — Development History
 
-Last updated: 2026-06-15 (Asia/Shanghai) — v0.15.1 (code-agent edit tools — edit/multi_edit/write_file behind LUNA_CODE_WRITE + read-before-edit + lint-on-write; Initiative 8 2/5, dev branch)
+Last updated: 2026-06-15 (Asia/Shanghai) — v0.15.2 (code-agent shell + verify loop — sandboxed `shell` behind LUNA_SHELL + typecheck/run_tests/lint verifiers via a shared injectable spawner; Initiative 8 3/5, dev branch)
 
 ## Scope
 
@@ -77,6 +77,7 @@ during the rewrite. Its version log is unrelated to this one — `v0.1` here is 
 | `v0.13.13` | 2026-06-15 | Switchable idle animations — the 5 awake idle profiles (default/cute-sway/peek/shy-drift/sweet-bounce) ported from Python `applyIdle` into FaceVm + a settings dropdown; idle yields the eyes to blink + the gaze to mouse-follow | `working tree` |
 | `v0.15.0` | 2026-06-15 | Code-agent read/nav foundation (Initiative 8, 1/5) — workspace sandbox (blocklist-only, no root jail) + windowed `read_file` + `list_files` + `grep` (rg w/ JS fallback) | _dev branch_ |
 | `v0.15.1` | 2026-06-15 | Code-agent edit tools (Initiative 8, 2/5) — `edit` / `multi_edit` / `write_file` (read-before-edit + uniqueness + fuzzy-report + CRLF + optimistic `expected_hash` + atomic multi) behind `LUNA_CODE_WRITE` (default on) + lint-on-write (`Bun.Transpiler`, `LUNA_LINT_ON_WRITE`) + firewall-refusal routed through the edit tool | _dev branch_ |
+| `v0.15.2` | 2026-06-15 | Code-agent shell + verify loop (Initiative 8, 3/5) — sandboxed `shell` (deny-regex + interactive-block + process-tree kill + output cap, subsumes fs-mutation) plus `typecheck` / `run_tests` / `lint` verifiers, all behind `LUNA_SHELL` (default on) via a shared injectable spawner | _dev branch_ |
 
 ## Code-agent capability (2026-06-15) — Initiative 8 begins (v0.15.0)
 
@@ -205,6 +206,77 @@ Inference:
   style) and the heavier `typecheck`/`run_tests` verify tools; the read-tracking + diff plumbing is what
   `shell`'s "edited then ran tests" loop will lean on. No `shell`, no full `tsc`/test verify, no repo map
   here (v0.15.2+).
+
+**v0.15.2 — shell (sandboxed) + the verify loop** (dev branch)
+
+The third of five. v0.15.1 gave Luna hands that change code; v0.15.2 lets her **run things** and
+**verify her own work** — closing the locate → edit → verify → iterate loop. `shell` is the single
+most dangerous surface in the rewrite, so it lands behind its own flag with a stacked defense, and it
+subsumes directory create/move/copy/delete (LD #9 減負: no separate fs-mutation tools).
+
+Fact:
+
+- Added `shellDeny.ts` (~120 lines) — the deny-regex + interactive-command classifier, a port of
+  Python `exec_command.py:49-106, 240-252`. `classifyShellCommand` hard-refuses `rm -rf`, `sudo`,
+  `dd if=`, `mkfs`/disk-format, fork bombs, `shutdown`/`reboot`, `curl|wget … | sh`, writes into
+  `~/.ssh`/dotfile-rc, keychain dumps, and detached-process (`nohup`/`disown`/`setsid`); blocks
+  interactive first-tokens (`vim`/`less`/`ssh`/`top`/`tmux`/…). Lowercased match (case-insensitive),
+  env-assignment-prefix-aware first-token. This file is itself an **evaluator-firewall** entry
+  (already listed in `workspace.ts`) — Luna may read but never write the regex that gates her shell.
+- Added `shellCore.ts` (~130 lines) — the **injectable** spawner shared by `shell` and the verify
+  tools (so tests run no real destructive command, and v0.15.4's skill-runner can reuse it).
+  `realSpawner` runs `/bin/zsh -lc <cmd>` via `Bun.spawn`, wires the abort signal, **kills the process
+  TREE** on timeout/abort (negative-pid → process group, SIGTERM then SIGKILL escalation), and caps
+  output to ~120 KB **middle-elided** (`capOutput`). `setSpawnerForTests`/`activeSpawner` is the
+  injection seam; `clampTimeout` enforces default 120 s / hard max 1800 s.
+- Added `builtin/shell.ts` (~170 lines) — `shell` tool: `session-serial`, `proactiveRisk:'surface'`,
+  always-on deny-regex inside `execute`. Routes the cwd AND any absolute/`~`-path named in the command
+  text through `resolveInWorkspace('execute')` (so `cat ~/.aws/credentials` is refused exactly like
+  reading it), requires the cwd be a real directory, clamps the per-call `timeout_ms`, streams captured
+  output as `tool.progress`, and returns `{stdout, stderr, exit_code, timed_out}`.
+- Added the three verify tools (`builtin/typecheck.ts`, `run_tests.ts`, `lint.ts`, ~100 lines each) —
+  thin wrappers over the project's own checkers through the shared spawner: `typecheck` runs
+  `bun x tsc --noEmit [-p path]` → `{ok, diagnostics:{file,line,column,message}[]}`; `run_tests` runs
+  `bun test [path]` → `{ok, pass, fail, failures[]}`; `lint` runs `bun x prettier --check` →
+  `{ok, issues[]}`. Each parses its tool's text output into the structured shape (exported parsers:
+  `parseTscOutput`, `parseBunTestOutput`, `parsePrettierOutput`). All `session-serial` +
+  `proactiveRisk:'surface'`, cwd jailed.
+- Modified `packages/protocol/src/tools.ts` — added `'shell'`, `'typecheck'`, `'run_tests'`, `'lint'`
+  to the `ToolName` enum (wire contract).
+- Modified `registry.ts` — `shellTools` group (shell + the three verifiers) behind `shellEnabled()` /
+  `withShell()`, gated by **`LUNA_SHELL`** (OWNER DECISION: default ON; `=0` is the off switch). Wired
+  into `main.ts` boot as `withShell(withCodeWrite(...))` with a `[shell]` boot-log marker.
+- Modified `l1Contract.ts` — added the run-and-verify clause: "after you change code, actually run the
+  check (typecheck/run_tests) before you say it works; do not claim a change compiles or passes
+  untested."
+- Tests added (~per the plan): `shellDeny.test.ts` (every dangerous pattern named + refused,
+  case-insensitive, interactive block, env-prefix, ordinary commands allowed), `shellCore.test.ts`
+  (middle-elide cap, timeout clamp), `shell.test.ts` (safe command → stdout/exit 0 via injected
+  spawner; deny-regex/interactive refused with the spawner never invoked; sensitive cwd + sensitive
+  path-in-command rejected; schema bounds; surface-risk via the real `safetyGate`), and
+  `typecheck`/`run_tests`/`lint` `.test.ts` (parse a known-good and known-bad run into the structured
+  shape; sensitive cwd rejected). Extended `registry.test.ts` with the `LUNA_SHELL` flag gate
+  (default-on mounts, `=0` absent, dispatched `shell` → `tool_not_found`). 491 tests green; tsc clean
+  across protocol + server + web.
+
+Inference:
+
+- The verify loop is the difference between an edit agent and a code agent. With `typecheck`/`run_tests`
+  first-class, Luna can do locate → edit → verify → iterate without the user driving every step, and the
+  L1 contract now pushes her to actually run the check rather than asserting an untested change works —
+  the same capability-honesty pillar, applied to code.
+- `shell` is the highest-risk surface in the rewrite, so the mitigations stack rather than relying on
+  any one: default-flag (`LUNA_SHELL`, flip-after-E2E), per-pattern-tested deny-regex, the
+  blocklist applied to the cwd AND the command text, interactive-block, timeout + process-tree kill +
+  output cap, `session-serial` (no racing shells), and `proactiveRisk:'surface'` (no silent shell in a
+  proactive turn — the gate + `LUNA_PROACTIVE_MAX_ACTIONS` budget). Residual: the deny-regex is a
+  blocklist, not a jail — a creative destructive command could slip; the surface-gate + budget + a
+  future optional WS approval prompt (OWNER DECISION #2 / plan Open Q #2, deferred) are the
+  defense-in-depth, and the safe choice (container/VM isolation) is reserved for the autonomous loop,
+  which is a separate initiative entirely.
+- The spawner is injectable specifically so v0.15.4's self-verified skill-runner can reuse it — the
+  verify tools are exactly what a skill runs before it is allowed to save. Plan note "don't foreclose"
+  honored.
 
 ## C-side fix pass (2026-06-15) — v0.13.5 / v0.13.6
 

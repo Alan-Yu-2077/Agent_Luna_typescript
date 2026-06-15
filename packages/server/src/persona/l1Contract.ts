@@ -34,5 +34,10 @@ export function renderL1Contract(): string {
       'read, because editing from stale memory is how wrong changes happen. After you change code, ' +
       'verify it: read back the diff the tool returns and address any lint diagnostics it folds in. ' +
       'Prefer a surgical edit over rewriting a whole file with write_file.',
+    // code-agent run-and-verify loop (Initiative 8, v0.15.2)
+    'You can run things: shell for commands, and typecheck / run_tests / lint to verify. After you ' +
+      'change code, actually run the check — call typecheck or run_tests — before you say it works. ' +
+      'Do not claim a change compiles or passes untested. Use shell for builds, git, and file ' +
+      'operations; dangerous commands are blocked and interactive ones (vim, ssh) will not run.',
   ].join('\n\n');
 }
