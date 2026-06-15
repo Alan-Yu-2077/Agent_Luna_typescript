@@ -225,6 +225,12 @@ const graph: Graph<TurnState, TurnNode> = {
           // is the model narrating/thinking out loud, NOT a chat bubble. Only
           // stream reply.token in text mode (LUNA_MESSAGE_TOOL=0). (s.text still
           // accumulates for the turn.result canonical join + persistence.)
+          //
+          // D2 (v0.16.2): the text-mode path (this branch, the `reply.token`
+          // ServerEvent, and the controller's text-bubble handling) is LEGACY —
+          // dead under the default message mode. Kept as an escape hatch only;
+          // slated for removal once Initiative 10's window work lands, so there's
+          // a single context-assembly path to reason about. Do not build on it.
           if (!isMessageMode(s.registry)) {
             s.emit({ type: 'reply.token', turn_id: s.turnId, text: ev.text });
           }

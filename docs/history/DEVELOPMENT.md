@@ -1,6 +1,6 @@
 # Agent_Luna (TypeScript) — Development History
 
-Last updated: 2026-06-15 (Asia/Shanghai) — v0.16.1 (recompute efficiency — memoized system block via a memory-epoch dirty flag + cached L1 contract, trace retention window, recall over-fetch fix + persisted `content_hash` column, recall embed budget off the TTFT path behind `LUNA_RECALL_ASYNC`; **Initiative 9 2/4**, branch)
+Last updated: 2026-06-16 (Asia/Shanghai) — v0.16.2 (persistence + dead-infra — incremental `history_json` (persist bookkeeping only; rebuild full history from the append-only L2 on load), dead `vec0`/`vec_cache` write-path + orphaned virtual table removed (retrieval stays TS cosine), text-mode `reply.token` marked legacy; **Initiative 9 3/4**, branch)
 
 ## Scope
 
@@ -82,6 +82,7 @@ during the rewrite. Its version log is unrelated to this one — `v0.1` here is 
 | `v0.15.4` | 2026-06-15 | Code-agent skill library + propose-only self-edit (Initiative 8, 5/5) — `save_skill` (verify-before-persist: refuses unless the suite is green — Voyager invariant) + `recall_skill` (lexical search) behind `LUNA_SKILLS`; `propose_self_edit` produces a unified diff for human review and **never writes**, with the evaluator firewall (`resolveInWorkspace` `'write'`, built in v0.15.0) hard-rejecting any edit to her own tests/sandbox/safetyGate/humanity/deny-regex/l1Contract **across all write tools** (the keystone test), behind `LUNA_SELF_EDIT`; skills table migration `0009`. Deviation: the `self_edit.proposed` wire event is deferred — the proposal is delivered via `tool.finished` (the diff) for the human to apply. **Initiative 8 complete (5/5).** | _dev branch_ |
 | `v0.16.0` | 2026-06-15 | Security hardening + hygiene (Initiative 9, 1/4) — loopback bind `127.0.0.1` default (S1; closes S2/S3 net exposure) + `LUNA_BIND_HOST` opt-in, `/_workspace` reset/edit gated by `LUNA_DEV_TOOLS` (S2), `chat.send` capped at 8000 chars + WS `maxPayloadLength` (S5), `.github/workflows/ci.yml` (C1), README + orient-skill refresh (Doc1/2), WS reconnect buffer+backoff (C2), local-date quota clock (C3), aligned `fromBlob` (C4) | _branch_ |
 | `v0.16.1` | 2026-06-15 | Recompute efficiency (Initiative 9, 2/4) — system block memoized per turn via a `memory/epoch` dirty flag bumped by `remember`/`update_self` (A1) + `renderL1Contract` cached; `traces` retention window (`pruneToRetention`, throttled off flush, A4); recall fetches only the recent 500 L2 rows (`listRecentL2`) + reuses a persisted `content_hash` column (migration `0010`, A2); recall embed budget off the first-token path behind `LUNA_RECALL_ASYNC` (P1) | _branch_ |
+| `v0.16.2` | 2026-06-16 | Persistence + dead infra (Initiative 9, 3/4) — incremental `history_json`: `persistSession` writes only bookkeeping (constant `'[]'` blob), `loadSession` rebuilds the full timeline from the append-only L2 `raw_json` — the last O(N²) per-turn write gone (A3/P2); dead `vec0`/`vec_cache` write-path + orphaned virtual table removed, retrieval stays TS cosine (`sqlite-vec` dep kept inert for Initiative 10's potential KNN, D1); text-mode `reply.token` path marked legacy, removal deferred to post-Init-10 (D2) | _branch_ |
 
 ## Code-agent capability (2026-06-15) — Initiative 8 begins (v0.15.0)
 
@@ -544,6 +545,42 @@ Inference:
   and gives Alan the variety he remembered, now as a first-class setting rather than a buried constant.
 
 ## Detailed records
+
+### `v0.16.2` — 2026-06-16 — Persistence + dead infra (Initiative 9, 3/4)
+
+Status:
+
+- working tree (branch `feat/initiative-9-audit-remediation`)
+
+Fact:
+
+- `memory/sessionStore.ts`: `persistSession` no longer re-serializes `history` — it writes a
+  constant `'[]'` placeholder + turn_seq/updated_ms (A3). `loadSession` rebuilds the full history
+  by concatenating each L2 row's `raw_json` (the messages that turn appended), so the append-only
+  L2 timeline is the single source of truth.
+- `memory/recall/recall.ts`: removed the dead `vec0` write-path — `vecAvailable`, `insertVec`, the
+  `vec_cache` virtual-table creation/inserts, the `vecReady` state, and the `tryLoadVec` import.
+  `storeEmbedding` now only writes `embeddings_cache`; retrieval is unchanged (TS cosine).
+  `resetRecallStateForTests` kept as a no-op for the test API. `sqlite-vec` dep + `vecRuntime`
+  retained inert (D1).
+- `turn/runTurn.ts`: the `reply.token` text-mode branch is annotated LEGACY (D2) — kept as an
+  escape hatch, removal deferred to post-Initiative-10.
+- Tests: `sessionStore.test.ts` — updated the upsert test for the new contract (history rebuilds
+  from L2, blob is constant) + a new A3 reload test (multi-turn → reset → rebuilt verbatim from L2,
+  `history_json` stays `'[]'`). **542 pass / 0 fail**; all three packages `tsc` clean; grep confirms
+  no `vec_cache` write path remains.
+
+Inference:
+
+- Eliminates the last O(N²) persistence cost: a long-lived companion no longer re-writes the entire
+  growing history blob every turn — per-turn persistence is now O(1) (append one L2 row + write
+  bookkeeping), and the full timeline is reconstructed from L2 on the rare reload. Crash-faithful:
+  L2 is written before bookkeeping in the same finally block.
+- Resolves the audit's D1 (write-only `vec0`) by deleting the dead write + the orphaned table; the
+  inert `sqlite-vec` dependency is left for Initiative 10 to decide (wire real KNN over the larger
+  corpus, or drop), per the roadmap's "decide jointly with Init 10."
+- A3's rebuild-from-L2 is the persistence shape Initiative 10 needs to grow the window to ~100 clean
+  turns without ballooning `history_json` (store nothing growing; source of truth stays L2).
 
 ### `v0.16.1` — 2026-06-15 — Recompute efficiency (Initiative 9, 2/4)
 

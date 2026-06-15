@@ -10,7 +10,6 @@ import {
   type EmbedClient,
 } from './embed';
 import { lexicalScore } from './lexical';
-import { tryLoadVec } from './vecRuntime';
 
 const RETRIEVAL_K = Number(Bun.env['LUNA_MEMORY_RETRIEVAL_K'] ?? 12);
 // Caps the cold-cache embedding work a single turn may do; the rest of the
@@ -48,61 +47,18 @@ function storeEmbedding(hash: string, vec: Float32Array): void {
   db.prepare(
     'INSERT INTO embeddings_cache (hash, dim, embedding) VALUES (?, ?, ?) ON CONFLICT(hash) DO NOTHING',
   ).run(hash, vec.length, toBlob(vec));
-  insertVec(hash, vec);
 }
 
-// ── vec0 fast path (proven by scripts/spike-sqlite-vec.ts) ───────────────────
-// The vec0 virtual table is DERIVED data keyed to embeddings_cache.rowid —
-// rebuildable, so it is created lazily at runtime rather than via the
-// migration system (migrations must not depend on a loadable extension).
-let vecReady: boolean | null = null;
+// D1 (v0.16.2): the `vec0`/`vec_cache` virtual table was written on every
+// embedding store but NEVER queried — retrieval is (and stays) the TS cosine in
+// `retrieve()` below. That dead write path + the orphaned virtual table are
+// removed. The `sqlite-vec` dependency + the boot-time extension loader are kept
+// inert because Initiative 10's larger corpus (a ~100-turn window + diary
+// candidates) may wire a real vec0 KNN there; the full dep decision is deferred
+// to that joint call rather than removed-then-readded.
 
-function vecAvailable(): boolean {
-  const db = getMemoryDb();
-  if (!db) return false;
-  if (vecReady !== null) return vecReady;
-  if (!tryLoadVec(db)) {
-    vecReady = false;
-    return false;
-  }
-  try {
-    const probe = db.prepare('SELECT dim FROM embeddings_cache LIMIT 1').get() as {
-      dim: number;
-    } | null;
-    const dim = probe?.dim ?? 3072;
-    db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS vec_cache USING vec0(embedding float[${dim}])`);
-    db.exec(
-      `INSERT OR IGNORE INTO vec_cache (rowid, embedding)
-       SELECT rowid, embedding FROM embeddings_cache WHERE dim = ${dim}`,
-    );
-    vecReady = true;
-  } catch {
-    vecReady = false;
-  }
-  return vecReady;
-}
-
-function insertVec(hash: string, vec: Float32Array): void {
-  const db = getMemoryDb();
-  if (!db || !vecAvailable()) return;
-  try {
-    const row = db.prepare('SELECT rowid FROM embeddings_cache WHERE hash = ?').get(hash) as {
-      rowid: number;
-    } | null;
-    if (row) {
-      db.prepare('INSERT OR IGNORE INTO vec_cache (rowid, embedding) VALUES (?, ?)').run(
-        row.rowid,
-        toBlob(vec),
-      );
-    }
-  } catch {
-    /* vec insert is an optimization; the BLOB cache row is the truth */
-  }
-}
-
-export function resetRecallStateForTests(): void {
-  vecReady = null;
-}
+// Kept as a no-op for the test API (callers reset recall state between cases).
+export function resetRecallStateForTests(): void {}
 
 // ── retrieval ─────────────────────────────────────────────────────────────────
 

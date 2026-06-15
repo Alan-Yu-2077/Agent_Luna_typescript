@@ -1,6 +1,5 @@
 import type { Database } from 'bun:sqlite';
 import type Anthropic from '@anthropic-ai/sdk';
-import type { SessionRow } from '@luna/protocol';
 import { contentHash } from './recall/embed';
 
 let db: Database | null = null;
@@ -22,21 +21,23 @@ export type PersistedSession = {
   windowLowWater: number;
 };
 
-type SessionRowFull = SessionRow & { rolling_summary: string; window_low_water: number };
-
+// A3 (v0.16.2): history is rebuilt from the append-only L2 timeline — the source
+// of truth — not from a per-turn-rewritten `history_json` blob. Each L2 row's
+// raw_json is exactly the messages that turn appended (`history.slice(start)`),
+// so concatenating them in order reconstitutes the full history. This keeps
+// per-turn persistence O(1) (no full re-serialize) while staying crash-faithful.
 export function loadSession(id: string): PersistedSession | null {
   if (!db) return null;
   const row = db
-    .prepare(
-      'SELECT id, turn_seq, history_json, updated_ms, rolling_summary, window_low_water FROM sessions WHERE id = ?',
-    )
-    .get(id) as SessionRowFull | null;
-  if (!row) return null;
+    .prepare('SELECT turn_seq, rolling_summary, window_low_water FROM sessions WHERE id = ?')
+    .get(id) as { turn_seq: number; rolling_summary: string; window_low_water: number } | null;
+  const history = listL2(id).flatMap((r) => JSON.parse(r.raw_json) as Anthropic.MessageParam[]);
+  if (!row && history.length === 0) return null;
   return {
-    history: JSON.parse(row.history_json) as Anthropic.MessageParam[],
-    turnSeq: row.turn_seq,
-    rollingSummary: row.rolling_summary,
-    windowLowWater: row.window_low_water,
+    history,
+    turnSeq: row?.turn_seq ?? 0,
+    rollingSummary: row?.rolling_summary ?? '',
+    windowLowWater: row?.window_low_water ?? 0,
   };
 }
 
@@ -59,20 +60,24 @@ export function commitFold(
   return result.changes === 1;
 }
 
+// A3 (v0.16.2): persist only the session bookkeeping (turn_seq + updated_ms); the
+// `history_json` blob is no longer the source of truth (L2 is — see loadSession),
+// so it is written as a constant placeholder instead of re-serializing the whole
+// growing history every turn (the last O(N²) write). `history` is accepted for
+// signature compatibility but intentionally unused.
 export function persistSession(
   id: string,
-  history: Anthropic.MessageParam[],
+  _history: Anthropic.MessageParam[],
   turnSeq: number,
 ): void {
   if (!db) return;
   db.prepare(
     `INSERT INTO sessions (id, turn_seq, history_json, updated_ms)
-     VALUES (?, ?, ?, ?)
+     VALUES (?, ?, '[]', ?)
      ON CONFLICT(id) DO UPDATE SET
        turn_seq = excluded.turn_seq,
-       history_json = excluded.history_json,
        updated_ms = excluded.updated_ms`,
-  ).run(id, turnSeq, JSON.stringify(history), Date.now());
+  ).run(id, turnSeq, Date.now());
 }
 
 export function appendL2(turn: {

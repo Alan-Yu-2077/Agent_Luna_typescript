@@ -131,13 +131,55 @@ describe('sessionStore', () => {
     expect(listL2('eph')).toEqual([]);
   });
 
-  test('persistSession upserts (second write replaces, not duplicates)', () => {
+  test('persistSession upserts turn_seq bookkeeping (single row, constant blob)', () => {
+    // A3 (v0.16.2): persistSession persists only bookkeeping; the history blob is
+    // a constant placeholder and history is rebuilt from L2 on load.
     persistSession('s1', [{ role: 'user', content: 'a' }], 1);
     persistSession('s1', [{ role: 'user', content: 'a' }, { role: 'assistant', content: 'b' }], 2);
     const loaded = loadSession('s1');
     expect(loaded?.turnSeq).toBe(2);
-    expect(loaded?.history.length).toBe(2);
     const count = db.prepare('SELECT COUNT(*) c FROM sessions').get() as { c: number };
     expect(count.c).toBe(1);
+    const row = db.prepare("SELECT history_json FROM sessions WHERE id = 's1'").get() as {
+      history_json: string;
+    };
+    expect(row.history_json).toBe('[]'); // no longer the growing per-turn blob
+  });
+
+  test('A3: full history rebuilds from L2 on reload; blob stays constant-size', async () => {
+    const session = getSession('default');
+    for (let i = 0; i < 3; i++) {
+      const text = [{ type: 'text', text: `r${i}` }] as unknown as Anthropic.ContentBlock[];
+      await runTurn({
+        session,
+        turnId: `t${i}`,
+        userText: `m${i}`,
+        provider: new MockProvider([
+          [
+            { kind: 'text_delta', text: `r${i}` },
+            {
+              kind: 'message_stop',
+              stopReason: 'end_turn',
+              toolUses: [],
+              assistantContent: text,
+              usage: { input_tokens: 1, output_tokens: 1 },
+            },
+          ],
+        ]),
+        registry: builtinRegistry,
+        emit: () => {},
+      });
+    }
+    const before = JSON.stringify(session.history);
+    expect(session.history.length).toBe(6); // 3 turns × (user + assistant)
+
+    resetSessions();
+    const reload = getSession('default');
+    expect(JSON.stringify(reload.history)).toBe(before); // rebuilt verbatim from L2
+
+    const row = db.prepare("SELECT history_json FROM sessions WHERE id = 'default'").get() as {
+      history_json: string;
+    };
+    expect(row.history_json).toBe('[]'); // not the O(N) blob
   });
 });
