@@ -30,6 +30,13 @@ describe('renderL1Contract', () => {
     expect(c).toContain('backstage'); // no-leak
     expect(c).toContain('honest about what you can actually do'); // capability honesty
   });
+
+  test('states the v0.15.3 map/locate/plan clause', () => {
+    const c = renderL1Contract();
+    expect(c).toContain('find_symbol');
+    expect(c).toContain('repo_map');
+    expect(c).toContain('set a plan first');
+  });
 });
 
 function endRound(text: string): ProviderEvent[] {

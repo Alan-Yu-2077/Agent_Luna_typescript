@@ -1,6 +1,6 @@
 # Agent_Luna (TypeScript) — Development History
 
-Last updated: 2026-06-15 (Asia/Shanghai) — v0.13.13 (switchable idle animations — 5 awake idle profiles ported + a settings switcher)
+Last updated: 2026-06-15 (Asia/Shanghai) — v0.15.4 (code-agent skill library + propose-only self-edit — `save_skill` verify-before-persist + `recall_skill` behind LUNA_SKILLS; `propose_self_edit` produces a diff for human review and never writes, evaluator firewall hard-rejects edits to her own judge/sandbox code across all write tools, behind LUNA_SELF_EDIT; skills migration 0009; **Initiative 8 complete 5/5**, dev branch)
 
 ## Scope
 
@@ -75,6 +75,289 @@ during the rewrite. Its version log is unrelated to this one — `v0.1` here is 
 | `v0.13.11` | 2026-06-15 | Message clause cap 55→90 (the CJK-tuned 55 retry-stormed English replies) + validation retries kept backstage (no leaked raw-ZodError chips) | `60319f7` `2010e82` |
 | `v0.13.12` | 2026-06-15 | English tuning — all three humanity caps relaxed (140/4/90 → 280/5/150) to cut the validation over-limit rate; web + dev-chat frontend fully translated to English | `working tree` |
 | `v0.13.13` | 2026-06-15 | Switchable idle animations — the 5 awake idle profiles (default/cute-sway/peek/shy-drift/sweet-bounce) ported from Python `applyIdle` into FaceVm + a settings dropdown; idle yields the eyes to blink + the gaze to mouse-follow | `working tree` |
+| `v0.15.0` | 2026-06-15 | Code-agent read/nav foundation (Initiative 8, 1/5) — workspace sandbox (blocklist-only, no root jail) + windowed `read_file` + `list_files` + `grep` (rg w/ JS fallback) | _dev branch_ |
+| `v0.15.1` | 2026-06-15 | Code-agent edit tools (Initiative 8, 2/5) — `edit` / `multi_edit` / `write_file` (read-before-edit + uniqueness + fuzzy-report + CRLF + optimistic `expected_hash` + atomic multi) behind `LUNA_CODE_WRITE` (default on) + lint-on-write (`Bun.Transpiler`, `LUNA_LINT_ON_WRITE`) + firewall-refusal routed through the edit tool | _dev branch_ |
+| `v0.15.2` | 2026-06-15 | Code-agent shell + verify loop (Initiative 8, 3/5) — sandboxed `shell` (deny-regex + interactive-block + process-tree kill + output cap, subsumes fs-mutation) plus `typecheck` / `run_tests` / `lint` verifiers, all behind `LUNA_SHELL` (default on) via a shared injectable spawner | _dev branch_ |
+| `v0.15.3` | 2026-06-15 | Code-agent repo map + hybrid locator + plan (Initiative 8, 4/5) — Aider-style ranked, token-bounded, mtime-cached `repo_map` + hybrid `find_symbol` (ripgrep candidates → tree-sitter verify, comment/string false positives excluded, ripgrep-only fallback marked `verified:false`) behind `LUNA_REPO_MAP` (default on) + session-scoped `plan` todo spine (ships on always); `web-tree-sitter` + vendored TS/TSX/JS grammars; SQLite cache migration `0008` | _dev branch_ |
+| `v0.15.4` | 2026-06-15 | Code-agent skill library + propose-only self-edit (Initiative 8, 5/5) — `save_skill` (verify-before-persist: refuses unless the suite is green — Voyager invariant) + `recall_skill` (lexical search) behind `LUNA_SKILLS`; `propose_self_edit` produces a unified diff for human review and **never writes**, with the evaluator firewall (`resolveInWorkspace` `'write'`, built in v0.15.0) hard-rejecting any edit to her own tests/sandbox/safetyGate/humanity/deny-regex/l1Contract **across all write tools** (the keystone test), behind `LUNA_SELF_EDIT`; skills table migration `0009`. Deviation: the `self_edit.proposed` wire event is deferred — the proposal is delivered via `tool.finished` (the diff) for the human to apply. **Initiative 8 complete (5/5).** | _dev branch_ |
+
+## Code-agent capability (2026-06-15) — Initiative 8 begins (v0.15.0)
+
+The first of five versions giving Luna a real code-agent surface. v0.15.0 ships the **safe,
+read-only half** — a single workspace sandbox every file/shell tool will route through, plus the
+navigation primitives she lacked (windowed reads, tree/glob listing, regex search). Developed on the
+**dev branch** (isolated worktree); the stable instance is untouched.
+
+**v0.15.0 — workspace sandbox + read/navigation** (dev branch)
+
+Fact:
+- New [`packages/server/src/tools/workspace.ts`](../../packages/server/src/tools/workspace.ts) (~230
+  lines) — `resolveInWorkspace(path, access)` canonicalizes (realpath, including the nearest existing
+  ancestor for not-yet-existing write targets) and rejects on a **sensitive-path blocklist**. Per the
+  owner decision this is **NOT a root jail**: read/write/execute may touch any path EXCEPT the
+  blocklist. Two tiers — SECRETS (`.env`/`.env.*`, `*.pem`, `*.key`, `id_rsa*`, `~/.ssh`, `~/.aws`,
+  `~/.gnupg`, `~/.config/gcloud`, `~/Library/Keychains`, browser profiles, `~/.npmrc`/`~/.netrc`/
+  `~/.docker/config.json`) rejected for every access; EVALUATOR FIREWALL (`*.test.ts`,
+  `tsconfig*.json`, prettier/lint config, the shell deny source, `workspace.ts` itself, `humanity.ts`,
+  `l1Contract.ts`, the safety gate) rejected for **write/execute only — read allowed** (DGM safeguard:
+  Luna cannot write the code that judges/sandboxes her). Also `contentHash()` (sha256) for v0.15.1's
+  optimistic concurrency.
+- New [`packages/server/src/tools/fsScan.ts`](../../packages/server/src/tools/fsScan.ts) — ignore-aware
+  walk (built-in set: `.git`/`node_modules`/`.venv`/`dist`/… + simple `.gitignore` segment lines) +
+  binary-extension set, shared by `list_files`/`grep`. Symlinked dirs are not descended.
+- Upgraded [`read_file.ts`](../../packages/server/src/tools/builtin/read_file.ts) — was whole-file/any-
+  path/32KB. Now a 1-indexed line window (`offset`/`limit`, default 800, hard cap 2000), line-numbered
+  content, returns `start_line`/`end_line`/`total_lines`/`truncated`/`content_hash`, routed through the
+  sandbox (read). ENOENT stays recoverable; a secret path is a non-recoverable reject.
+- New `list_files` ([`list_files.ts`](../../packages/server/src/tools/builtin/list_files.ts)) —
+  `{ path?, recursive?, glob?, include_hidden?, max_entries? }` → ignore-aware entry list, `Bun.Glob`
+  filter, truncation flag. New `grep` ([`grep.ts`](../../packages/server/src/tools/builtin/grep.ts)) —
+  `{ query, path?, regex?, case_sensitive?, glob?, max_results? }` via a ripgrep subprocess
+  (`rg --json`) with a **graceful JS-scanner fallback** (injectable runner) returning the identical
+  shape; results capped + reported as `shown`/`total`/`truncated`. Both `proactiveRisk: 'safe'`,
+  `concurrency: 'safe-parallel'`.
+- Wired: `ToolName` enum gains `list_files`/`grep`
+  ([`packages/protocol/src/tools.ts`](../../packages/protocol/src/tools.ts)); both mounted in
+  `builtinRegistry` (read-only → on by default, no flag). L1 contract gains a locate-first clause;
+  `EMBODIMENT_BLOCK` notes the browsable/searchable/readable workspace.
+- Tests (4 files, 41 tests): `workspace.test.ts` (no-jail accept incl. `../`-escape, each secret tier,
+  symlink-into-secret reject, evaluator-firewall read-ok/write-blocked), windowed `read_file.test.ts`,
+  `list_files.test.ts` (glob/ignore/hidden/truncation), `grep.test.ts` (regex/literal/case/glob/cap +
+  rg-absent fallback parity). tsc clean (protocol + server); the only suite failure is the pre-existing
+  flaky `faceVm.test.ts` emotion-timeline test, unrelated to this change.
+
+Inference:
+- This is the foundation the riskier write/shell tools (v0.15.1/2) build on. By landing the *sandbox*
+  and the *read-only* tools first, a bug here can only over-read (bounded by the blocklist), never
+  destroy — the security-load-bearing piece is exhaustively unit-tested before anything mutates.
+- Owner decision diverges from the plan's root-jail: the blocklist is now the **only** guardrail, which
+  is why it is comprehensive and tested per-tier. The evaluator firewall is the concrete DGM safeguard —
+  a future autonomous self-edit loop is explicitly a separate initiative needing container/VM isolation
+  + an independent evaluator; none of that autonomy is built here.
+- `read_file` already returns `content_hash`, so v0.15.1's `expected_hash` optimistic concurrency drops
+  in, and `resolveInWorkspace(_, 'write'|'execute')` is ready for the write/shell tools.
+
+**v0.15.1 — edit tools (str_replace-native + fuzzy fallback)** (dev branch)
+
+The second of five. v0.15.0 gave Luna eyes; v0.15.1 gives her **hands that change code** — the
+Claude-native edit surface plus a safe full-file write, gated behind `LUNA_CODE_WRITE` and routed
+through the v0.15.0 sandbox. The two reliability levers SOTA edit agents converge on are both here:
+**read-before-edit** (no edits from stale memory) and **lint-on-write** (a broken edit is caught at
+edit time, not three turns later).
+
+Fact:
+- New [`packages/server/src/tools/builtin/edit.ts`](../../packages/server/src/tools/builtin/edit.ts) —
+  `{ path, old_string, new_string, replace_all?, expected_hash? }`, the Anthropic `text_editor` /
+  Claude Code `Edit` shape. Gates: **jailed** (`resolveInWorkspace(_, 'write')` → secrets + evaluator
+  firewall), **read-before-edit** (rejects a path not `read_file`'d this session via the v0.15.0
+  `readTracking` seam — recoverable + actionable), **uniqueness** (>1 match w/o `replace_all` →
+  recoverable error w/ the count), **fuzzy fallback** (exact → stripped-line whitespace-tolerant; sets
+  `fuzzed:true` so the model can verify — a silent wrong-fuzz is the dangerous case; CRLF preserved),
+  **optimistic concurrency** (`expected_hash` mismatch → `stale_file`). Every result carries a unified
+  diff + new `content_hash`.
+- New [`multi_edit.ts`](../../packages/server/src/tools/builtin/multi_edit.ts) — `{ path, edits[],
+  expected_hash? }`, **atomic** (Claude Code `MultiEdit` / Python `patch_file`): hunks apply in order to
+  the in-memory text; the first failed hunk aborts with the failing index reported and **nothing
+  written** (the half-edited-file guard). Same jail + read-before-edit + optimistic concurrency.
+- New [`write_file.ts`](../../packages/server/src/tools/builtin/write_file.ts) — `{ path, content,
+  create_dirs?, overwrite?, expected_hash? }`, full-file create/overwrite (Python `write_file` port).
+  Description discourages it for existing files (prefer `edit`); **refuses to clobber** without
+  `overwrite:true`; `create_dirs` defaults on; a successful write marks the path read so a follow-up
+  `edit` is allowed.
+- New [`editCore.ts`](../../packages/server/src/tools/editCore.ts) — the shared, LLM-free matcher
+  (`findEditMatch` exact→stripped-line, the `_find_edit_match` port), CRLF helpers, index-splice
+  `applyReplacement` (no `$`-reinterpretation), a Myers-LCS `unifiedDiff` (no new deps; truncated at 400
+  lines), and a `closestMatchHint` for not-found misses.
+- New [`lintOnWrite.ts`](../../packages/server/src/tools/lintOnWrite.ts) — after a successful edit/write
+  to a `.ts`/`.tsx`/`.js`/`.jsx`/`.mjs`/`.cjs` file, a **fast syntactic parse** (`Bun.Transpiler`, NOT
+  full tsc — that is v0.15.2's `typecheck`) folds diagnostics into the tool result (SWE-agent ACI).
+  v1 **surfaces, does not auto-revert** (reject-broken-edit is a v0.15.2 option). Behind
+  `LUNA_LINT_ON_WRITE` (default on). Type errors are intentionally NOT caught (valid syntax).
+- Wired: `ToolName` already carried `edit`/`multi_edit`/`write_file` (added as names in v0.15.0); they
+  now have implementations. [`registry.ts`](../../packages/server/src/tools/registry.ts) gains
+  `writeTools` + `codeWriteEnabled()` (`LUNA_CODE_WRITE !== '0'`, **default ON** per owner) +
+  `withCodeWrite(base)`; [`main.ts`](../../packages/server/src/main.ts) composes the chosen registry
+  through `withCodeWrite` once at boot (registry content = source of truth, no env read in the turn
+  loop). L1 contract gains a read-before-edit / verify-after-edit clause; `EMBODIMENT_BLOCK` notes the
+  editable workspace.
+- Tests (5 files, 47 tests): `edit.test.ts` (exact/empty-delete; uniqueness + replace_all;
+  read-before-edit rejection; fuzzy `fuzzed:true` + not-found hint; CRLF preserved; `stale_file`;
+  lint-on-write diagnostics; firewall + secret jail), `multi_edit.test.ts` (ordered apply; later-hunk
+  chaining; **failing-2nd-hunk leaves the file untouched + reports the index**; ambiguous-hunk abort;
+  shared gates), `write_file.test.ts` (create + `create_dirs`; refuse-clobber; overwrite + `previous_hash`;
+  stale-hash; marks-read; lint; firewall/secret jail), `lintOnWrite.test.ts` (lintable set; clean/broken
+  TS; multi-error positions; JSX; non-lintable skip; type-error-not-caught; flag off), `registry.test.ts`
+  (**`LUNA_CODE_WRITE=0` → write tools ABSENT** + a dispatched `edit` → `tool_not_found`; and the
+  **firewall refusal routed END-TO-END through the edit tool via the dispatcher** — editing a `*.test.ts`
+  and editing `workspace.ts` itself are both refused with the file untouched — closing safety check (b),
+  which v0.15.0 could only prove by direct `resolveInWorkspace` calls). tsc clean (protocol + server);
+  full suite 403 green (the lone intermittent failure remains the pre-existing flaky `faceVm.test.ts`
+  emotion-timeline timing test — passes in isolation, unrelated to this change).
+
+Inference:
+- This is the first version that **writes the user's files**, hence the layered defenses: default-on but
+  flag-killable, jailed via the v0.15.0 blocklist, read-before-edit + uniqueness + `expected_hash` make a
+  wrong-target edit hard, atomic `multi_edit` prevents half-edited files, and a unified diff in every
+  result keeps changes auditable. The dangerous failure mode for fuzzy matching is a *silent* wrong-fuzz,
+  so the match path always reports `fuzzed:true` and the L1 contract tells her to verify.
+- The DGM safeguard is now load-bearing and proven end-to-end: a write to the evaluator firewall (tests,
+  configs, the sandbox itself, the humanity caps, the L1 contract, the safety gate) is refused not just
+  in a unit call but when an `edit` is dispatched through the registry — Luna cannot write the code that
+  judges/sandboxes/gates her, even with read-tracking satisfied.
+- `lintOnWrite.ts` is the seam where v0.15.2 can add the **reject-broken-edit** hard guard (SWE-agent
+  style) and the heavier `typecheck`/`run_tests` verify tools; the read-tracking + diff plumbing is what
+  `shell`'s "edited then ran tests" loop will lean on. No `shell`, no full `tsc`/test verify, no repo map
+  here (v0.15.2+).
+
+**v0.15.2 — shell (sandboxed) + the verify loop** (dev branch)
+
+The third of five. v0.15.1 gave Luna hands that change code; v0.15.2 lets her **run things** and
+**verify her own work** — closing the locate → edit → verify → iterate loop. `shell` is the single
+most dangerous surface in the rewrite, so it lands behind its own flag with a stacked defense, and it
+subsumes directory create/move/copy/delete (LD #9 減負: no separate fs-mutation tools).
+
+Fact:
+
+- Added `shellDeny.ts` (~120 lines) — the deny-regex + interactive-command classifier, a port of
+  Python `exec_command.py:49-106, 240-252`. `classifyShellCommand` hard-refuses `rm -rf`, `sudo`,
+  `dd if=`, `mkfs`/disk-format, fork bombs, `shutdown`/`reboot`, `curl|wget … | sh`, writes into
+  `~/.ssh`/dotfile-rc, keychain dumps, and detached-process (`nohup`/`disown`/`setsid`); blocks
+  interactive first-tokens (`vim`/`less`/`ssh`/`top`/`tmux`/…). Lowercased match (case-insensitive),
+  env-assignment-prefix-aware first-token. This file is itself an **evaluator-firewall** entry
+  (already listed in `workspace.ts`) — Luna may read but never write the regex that gates her shell.
+- Added `shellCore.ts` (~130 lines) — the **injectable** spawner shared by `shell` and the verify
+  tools (so tests run no real destructive command, and v0.15.4's skill-runner can reuse it).
+  `realSpawner` runs `/bin/zsh -lc <cmd>` via `Bun.spawn`, wires the abort signal, **kills the process
+  TREE** on timeout/abort (negative-pid → process group, SIGTERM then SIGKILL escalation), and caps
+  output to ~120 KB **middle-elided** (`capOutput`). `setSpawnerForTests`/`activeSpawner` is the
+  injection seam; `clampTimeout` enforces default 120 s / hard max 1800 s.
+- Added `builtin/shell.ts` (~170 lines) — `shell` tool: `session-serial`, `proactiveRisk:'surface'`,
+  always-on deny-regex inside `execute`. Routes the cwd AND any absolute/`~`-path named in the command
+  text through `resolveInWorkspace('execute')` (so `cat ~/.aws/credentials` is refused exactly like
+  reading it), requires the cwd be a real directory, clamps the per-call `timeout_ms`, streams captured
+  output as `tool.progress`, and returns `{stdout, stderr, exit_code, timed_out}`.
+- Added the three verify tools (`builtin/typecheck.ts`, `run_tests.ts`, `lint.ts`, ~100 lines each) —
+  thin wrappers over the project's own checkers through the shared spawner: `typecheck` runs
+  `bun x tsc --noEmit [-p path]` → `{ok, diagnostics:{file,line,column,message}[]}`; `run_tests` runs
+  `bun test [path]` → `{ok, pass, fail, failures[]}`; `lint` runs `bun x prettier --check` →
+  `{ok, issues[]}`. Each parses its tool's text output into the structured shape (exported parsers:
+  `parseTscOutput`, `parseBunTestOutput`, `parsePrettierOutput`). All `session-serial` +
+  `proactiveRisk:'surface'`, cwd jailed.
+- Modified `packages/protocol/src/tools.ts` — added `'shell'`, `'typecheck'`, `'run_tests'`, `'lint'`
+  to the `ToolName` enum (wire contract).
+- Modified `registry.ts` — `shellTools` group (shell + the three verifiers) behind `shellEnabled()` /
+  `withShell()`, gated by **`LUNA_SHELL`** (OWNER DECISION: default ON; `=0` is the off switch). Wired
+  into `main.ts` boot as `withShell(withCodeWrite(...))` with a `[shell]` boot-log marker.
+- Modified `l1Contract.ts` — added the run-and-verify clause: "after you change code, actually run the
+  check (typecheck/run_tests) before you say it works; do not claim a change compiles or passes
+  untested."
+- Tests added (~per the plan): `shellDeny.test.ts` (every dangerous pattern named + refused,
+  case-insensitive, interactive block, env-prefix, ordinary commands allowed), `shellCore.test.ts`
+  (middle-elide cap, timeout clamp), `shell.test.ts` (safe command → stdout/exit 0 via injected
+  spawner; deny-regex/interactive refused with the spawner never invoked; sensitive cwd + sensitive
+  path-in-command rejected; schema bounds; surface-risk via the real `safetyGate`), and
+  `typecheck`/`run_tests`/`lint` `.test.ts` (parse a known-good and known-bad run into the structured
+  shape; sensitive cwd rejected). Extended `registry.test.ts` with the `LUNA_SHELL` flag gate
+  (default-on mounts, `=0` absent, dispatched `shell` → `tool_not_found`). 491 tests green; tsc clean
+  across protocol + server + web.
+
+Inference:
+
+- The verify loop is the difference between an edit agent and a code agent. With `typecheck`/`run_tests`
+  first-class, Luna can do locate → edit → verify → iterate without the user driving every step, and the
+  L1 contract now pushes her to actually run the check rather than asserting an untested change works —
+  the same capability-honesty pillar, applied to code.
+- `shell` is the highest-risk surface in the rewrite, so the mitigations stack rather than relying on
+  any one: default-flag (`LUNA_SHELL`, flip-after-E2E), per-pattern-tested deny-regex, the
+  blocklist applied to the cwd AND the command text, interactive-block, timeout + process-tree kill +
+  output cap, `session-serial` (no racing shells), and `proactiveRisk:'surface'` (no silent shell in a
+  proactive turn — the gate + `LUNA_PROACTIVE_MAX_ACTIONS` budget). Residual: the deny-regex is a
+  blocklist, not a jail — a creative destructive command could slip; the surface-gate + budget + a
+  future optional WS approval prompt (OWNER DECISION #2 / plan Open Q #2, deferred) are the
+  defense-in-depth, and the safe choice (container/VM isolation) is reserved for the autonomous loop,
+  which is a separate initiative entirely.
+- The spawner is injectable specifically so v0.15.4's self-verified skill-runner can reuse it — the
+  verify tools are exactly what a skill runs before it is allowed to save. Plan note "don't foreclose"
+  honored.
+
+**v0.15.3 — repo map + hybrid symbol locator + plan** (dev branch)
+
+The fourth of five. v0.15.0 gave Luna eyes (read/grep/list); v0.15.3 gives her a **map** and a
+**structural locate** so she answers "where is `X` defined / who calls it" with a verified answer, not
+a guessed path — fixing the targeting half of 寻址能力差/目标定位弱. Plus a lightweight `plan` tool so
+multi-step code work has a visible, revisable todo spine.
+
+Fact:
+
+- Added `web-tree-sitter@0.26.9` as a server dependency and vendored three prebuilt grammars under
+  `packages/server/vendor/tree-sitter/` (`tree-sitter-typescript.wasm`, `-tsx.wasm`, `-javascript.wasm`
+  — TS-first per Open Q #4). The runtime auto-locates its own `.wasm` via `Parser.init()`; verified it
+  loads + parses under Bun.
+- Added `code/treeSitter.ts` (~120 lines) — lazy, process-once runtime init + per-grammar `Language`
+  cache, `grammarForPath` ext→grammar map, `loadParserFor(path)`. Every failure path returns **null**
+  (no grammar / runtime fails / `.wasm` missing) so callers fall back, never throw — the plan's
+  never-hard-fail contract. `resetTreeSitterForTests` seam.
+- Added `code/symbols.ts` (~210 lines) — `extractSymbols(path, source)` with two backends behind one
+  shape: tree-sitter (`verified:true`; defs from declaration nodes + arrow/function-expr declarators,
+  refs from `identifier`/`type_identifier` nodes — a name inside a comment/string is **not** an
+  identifier node, so it is structurally excluded) and a comment-stripping regex fallback
+  (`verified:false`). `forceRegexFallbackForTests` seam.
+- Added `code/repoMap.ts` (~230 lines) — `buildRepoMap` walks the source tree (reusing `fsScan`),
+  parses each file cache-aware, builds a def→referencing-file graph, **PageRank**s it (12 iterations,
+  damping 0.85), attributes file rank to defs (×1.5 for exported, ×4 for a `focus` match), sorts, and
+  emits a **token-bounded** outline (`renderRepoMap`, ~1500-token default, truncation marker). Injected
+  `statFn`/`nowMs` for deterministic cache tests.
+- Added `code/repoMapCache.ts` (~70 lines) — mtime+size-keyed `repo_map` table wrapper over the shared
+  memory DB (no-ops when the DB is unset, exactly like `l3Store`). `getCached` returns null on a
+  staleness hit so a touched file always re-parses; `putCached` upserts; `clearRepoMapCache` for tests.
+- Added `code/symbolLocator.ts` (~150 lines) — `locateSymbol`: SICA hybrid. ripgrep (reusing v0.15.0's
+  injectable `runGrep`) produces cheap `\bname\b` candidate lines; each candidate file is re-parsed with
+  tree-sitter to confirm real defs/refs and attach signatures. A file with no grammar / unreadable /
+  runtime-failed degrades to its raw candidate lines marked `verified:false`. Output is structured
+  (file+line+signature), never prose — the locate primitive v0.15.4's self-edit will point with.
+- Added migration `0008_repo_map.sql` — the `repo_map(path, mtime_ms, size, symbols_json, parsed_ms)`
+  cache table (versioned, never an in-place schema edit — the Python drift bug we avoid).
+- Added the three tools: `builtin/repo_map.ts` (`{focus?, path?, max_tokens?}` → ranked outline +
+  entries; `safe-parallel`, `proactiveRisk:'safe'`, jailed), `builtin/find_symbol.ts`
+  (`{name, kind?, path?}` → `{definitions[], references[], verified, truncated}`; same risk tier), and
+  `builtin/plan.ts` (`{action:set|update|get, items?}`; `session-serial`, `safe`; state on the
+  `Session` object, emits a `tool.progress` plan snapshot for the web UI).
+- Modified `packages/protocol/src/tools.ts` — added `'repo_map'`, `'find_symbol'`, `'plan'` to the
+  `ToolName` enum (wire contract).
+- Modified `registry.ts` — `repoMapTools` group (`repo_map`+`find_symbol`) behind `repoMapEnabled()` /
+  `withRepoMap()`, gated by **`LUNA_REPO_MAP`** (OWNER DECISION #4: default ON, the plan's "0 until
+  verified" superseded; `=0` is the off switch). `plan` added to `builtinRegistry` (ships on always).
+  Wired into `main.ts` as `withRepoMap(withShell(withCodeWrite(...)))` with a `[repo-map]` boot marker.
+- Modified `turn/session.ts` — added the `plan: PlanItem[]` field (session-scoped, NOT persisted) +
+  `PlanItem` type. Modified `l1Contract.ts` — the map/locate/plan clause ("prefer find_symbol/repo_map
+  over reading whole files to hunt a name; set a plan first for multi-step work"). Modified
+  `packages/web/src/ui/toolLabels.ts` — friendly chips for the three new tools.
+- Tests added: `code/repoMap.test.ts` (fixture → expected symbol set + verified; most-referenced
+  symbol ranks first; injected-mtime cache returns cached on unchanged + re-parses on touch + clear;
+  tiny token budget truncates with the marker), `code/symbolLocator.test.ts` (def + its refs found;
+  a same-name token in a line/block comment **excluded** by the tree-sitter pass; `kind:'def'` returns
+  defs only; tree-sitter-forced-off and no-grammar `.py` both degrade to `verified:false` candidates),
+  `builtin/plan.test.ts` (set→get round-trip, update flips a status, unknown-id appends, progress event
+  precedes ok + carries the snapshot, lives on the session, summarize, empty-set clears). Extended
+  `registry.test.ts` (`LUNA_REPO_MAP` gate: default mounts, `=0` absent, `plan` present regardless) and
+  `l1Contract.test.ts` (the new clause). 513 tests green; tsc clean across protocol + server + web.
+
+Inference:
+
+- This is the structural answer to the targeting weakness: a guessed path is how an edit lands in the
+  wrong file. `find_symbol`'s tree-sitter verify is the load-bearing part — ripgrep alone counts a name
+  in a comment or string as a hit, which is exactly the false positive that sends an agent editing the
+  wrong line. By confirming each candidate is a real `identifier` node, the locator returns a *verified*
+  def+refs set, and degrades (marked) rather than fails when a grammar is absent.
+- The repo map is advisory by design — every entry is verifiable with `read_file`, so a heuristic
+  mis-rank is a quality issue, not a safety one. The mtime cache makes the map cheap enough to call
+  often (orient-before-read), and the token budget keeps a large tree from blowing context.
+- The vendored-WASM dependency is the only real risk this version adds; it is fully fallback-guarded
+  (missing/broken grammar → ripgrep-only / regex extraction, marked unverified), so a grammar problem
+  degrades capability instead of breaking the tool.
+- The `plan` spine and the structured `find_symbol` output both feed v0.15.4: the repo map is what makes
+  a saved skill addressable ("the skill that touches `runTurn`"), and `find_symbol`'s file+line+signature
+  is the pointer a self-edit proposal uses. Kept structured per the plan's "don't foreclose" note.
 
 ## C-side fix pass (2026-06-15) — v0.13.5 / v0.13.6
 
