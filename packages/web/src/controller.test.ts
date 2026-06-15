@@ -95,7 +95,7 @@ describe('frontend controller — message-tool consumption', () => {
     expect(h.calls).toContainEqual(['finalize', 'm2', '第二句']);
   });
 
-  test('a failed message delivery (validation) discards the preview + surfaces a re-say', () => {
+  test('a failed message delivery (validation) discards the preview SILENTLY (no leaked error)', () => {
     const h = harness();
     h.handle({ type: 'tool.started', call_id: 'm1', tool_name: 'message', input: {} });
     h.handle({ type: 'tool.progress', call_id: 'm1', tool_name: 'message', payload: { text_delta: '太长了…' } });
@@ -105,7 +105,20 @@ describe('frontend controller — message-tool consumption', () => {
       result: { kind: 'err', code: 'validation_failed', message: 'too long', recoverable: true },
     });
     expect(h.calls).toContainEqual(['discard', 'm1']);
-    expect(h.calls.some((c) => c[0] === 'chip' && c[1] === 'error')).toBe(true);
+    expect(h.calls.some((c) => c[0] === 'chip' && c[1] === 'error')).toBe(false); // backstage
+  });
+
+  test('a message rejected at input-validation (NO tool.started) is still silent, not a raw-error chip', () => {
+    const h = harness();
+    // input-validation failures emit only tool.progress (streaming) + tool.finished{err}
+    h.handle({ type: 'tool.progress', call_id: 'm9', tool_name: 'message', payload: { text_delta: 'a very long clause…' } });
+    h.handle({
+      type: 'tool.finished',
+      call_id: 'm9',
+      result: { kind: 'err', code: 'validation_failed', message: 'input: [{ ...ZodError... }]', recoverable: true },
+    });
+    expect(h.calls).toContainEqual(['discard', 'm9']);
+    expect(h.calls.some((c) => c[0] === 'chip')).toBe(false); // no failure chip at all
   });
 
   test('no expression / no voice → finalize only, no live2d/audio', () => {

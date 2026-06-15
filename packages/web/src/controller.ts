@@ -60,6 +60,11 @@ export function createController(deps: ControllerDeps): { handle: (e: ServerEven
 
       case 'tool.progress':
         if (e.tool_name === 'message' && e.payload && typeof e.payload === 'object') {
+          // Track the call here too: input-validation failures yield NO tool.started
+          // (the dispatcher rejects before it), so without this a rejected message
+          // would fall through to the generic-tool error branch and leak the raw
+          // ZodError as a chip. Streaming a message means it's a message call.
+          messageBubbles.add(e.call_id);
           const delta = (e.payload as { text_delta?: unknown }).text_delta;
           if (typeof delta === 'string') deps.view.append(e.call_id, delta);
         }
@@ -79,9 +84,11 @@ export function createController(deps: ControllerDeps): { handle: (e: ServerEven
               deps.view.finalize(e.call_id, ''); // delivery shape unexpected — degrade, don't crash
             }
           } else {
-            // a streamed preview that failed validation → discard, surface the re-say
+            // A message that failed validation (e.g. a too-long clause) is internal
+            // retry machinery — the model re-says it shorter. Discard the half-
+            // streamed preview SILENTLY; never leak the raw error to the user (the
+            // L1 "keep the machinery backstage" rule).
             deps.view.discard(e.call_id);
-            deps.view.chip('error', `重说: ${e.result.message}`);
           }
           return;
         }
