@@ -4,8 +4,8 @@ Forward development plan for the TypeScript rewrite. Each initiative is a folder
 self-contained version plans, executed one at a time. Version numbers reserve across initiatives so
 they never overlap.
 
-> **Current shipped head: v0.13.11** (2026-06-15, clause-cap relaxation + silenced validation retries —
-> end of the C 端 bug-fix pass, tagged `v0.13.11`).
+> **Current shipped head: v0.13.13** (2026-06-15, English-tuned humanity caps + English UI + switchable
+> idle animations — `1e92c48`).
 > **Initiatives 1, 1.5, 2, 3, 4, 5, 6 all ✅ complete.** The rewrite now has the full stack: the agent
 > brain + three-layer memory + dream consolidation + proactive agency, **and the body** — a redesigned
 > cute UI (chat left / model right, light-blue stripes + lace), the live Live2D **yumi** avatar with 14
@@ -33,6 +33,8 @@ they never overlap.
 | 6 | v0.12.0 – v0.13.4 | **Frontend port — the body** — the consumption controller (v0.12.0, shipped) + a freshly **redesigned** cute UI (Alan's design, not a Python-page port) + the real Live2D avatar (yumi) + GPT-SoVITS voice + lip-sync, all behind the v0.12.0 `Live2DSink`/`AudioSink` interfaces. Reuses the pixi-live2d/Cubism runtime + yumi assets + the SoVITS sidecar; the TS driver glue is ported fresh ("参考 Python 但不照搬"). **v0.12.0 shipped; v0.13.0–v0.13.3 planned** | [`frontend-port-2026-06/`](frontend-port-2026-06/) | ✅ shipped 2026-06-14 (6 versions) |
 | ~~7~~ | ~~v0.14.0 – v0.14.2~~ | **Open-source packaging + one-command startup** — ❌ **cancelled.** Open-source/Docker premise dropped; TTS stays original GPT-SoVITS, local-only, not open-sourced. The local one-command launcher was delivered outside the roadmap (`bun run dev`). The still-useful, OSS-independent bits (LICENSE, README rewrite, secret-scan) may return as a smaller future initiative if/when open-sourcing is revisited. | [`oss-packaging-2026-06/`](oss-packaging-2026-06/) | ❌ cancelled |
 | 8 | v0.15.0 – v0.15.4 | **Code-agent capability** — turn Luna's minimal, directory-locked code tools into a mainstream code-agent loop: a **workspace sandbox** + windowed read / list / ripgrep nav (v0.15.0), **str_replace-native edit** tools with read-before-edit + lint-on-write (v0.15.1), a **sandboxed `shell`** + typecheck/test/lint **verify loop** (v0.15.2), an Aider-style **repo map** + tree-sitter **symbol locator** + `plan` tool (v0.15.3), and a **self-verified skill library + firewalled, human-gated self-edit** (v0.15.4). Ports Python's filesystem/exec capability; diverges to str_replace-native editing + a hard **evaluator firewall** (the agent can never write the code that judges/sandboxes it — the DGM safeguard). v0.14.x skipped (reserved by cancelled Initiative 7). | [`code-agent-2026-06/`](code-agent-2026-06/) | 🟡 planned |
+| 9 | v0.16.0 – v0.16.3 | **Audit remediation** — fix the code-verified findings from the audits in PRs #1/#2 (all re-confirmed at HEAD v0.13.13): close the **unauthenticated network surface** (loopback bind closes S1/S2/S3; dev-tools gate; input caps — v0.16.0), kill the **recompute-every-turn** pattern (memoize the system block, trace retention, recall over-fetch + `content_hash`, recall off the TTFT path — v0.16.1), finish the **structural** items (incremental `history_json`, decide `vec0` wire-or-remove, drop the dead text-mode path — v0.16.2), and **clean durable history** (strip thinking + collapse old tool I/O so a turn ≈ 200 tokens — v0.16.3, the foundation Init 10's deeper window builds on). `read_file` sandbox (S4) is already owned by Init 8/v0.15.0, not duplicated. | [`audit-remediation-2026-06/`](audit-remediation-2026-06/) | 🟡 planned |
+| 10 | v0.17.0 – v0.17.1 | **Memory depth correction** — the **owner's design correction** (PR #3, all claims code-confirmed), target design settled with the owner after a SOTA review: the shipped L1 window is ~4–9 turns (a 24-message cap) and diaries are written but **never injected**. Restore depth as a **memory gradient** — a **~100 clean-turn verbatim window** (`LUNA_L1_RECENT_TURNS` 40–150; affordable because v0.16.3 makes a turn ≈ 200 tokens) + **structured bounded compression** + **importance anchors** (v0.17.0) + the **diary as the injected cross-day/week layer** (standing digest + recall candidates; monthly; recency×importance×relevance ranking — v0.17.1; amend LD #12). Ordered after Init 9 by *dependency* (clean history + efficiency fixes make the deep window cheap), not by priority. | [`memory-depth-2026-06/`](memory-depth-2026-06/) | 🟡 planned |
 
 ## Ordering philosophy
 
@@ -171,3 +173,37 @@ by cancelled Initiative 7). See [`code-agent-2026-06/`](code-agent-2026-06/).
 | v0.15.2 | [`shell` + verify loop](code-agent-2026-06/v0.15.2-shell-verify.md) | High | sandboxed `shell` (deny-regex + interactive-block + timeout + jail; subsumes fs-mutation per LD #9) + `typecheck`/`run_tests`/`lint`. Flag `LUNA_SHELL` |
 | v0.15.3 | [Repo map + locator + plan](code-agent-2026-06/v0.15.3-repo-map-locator.md) | Medium | Aider-style mtime-cached `repo_map` (tree-sitter WASM) + hybrid `find_symbol` (ripgrep→tree-sitter verify) + `plan` todo spine. Flag `LUNA_REPO_MAP` |
 | v0.15.4 | [Skills + firewalled self-edit](code-agent-2026-06/v0.15.4-skills-self-edit.md) | High | self-verified skill library (`save_skill` verify-before-persist / `recall_skill`) + propose-only `propose_self_edit` with the evaluator firewall in `resolveInWorkspace`. Flags `LUNA_SKILLS`, `LUNA_SELF_EDIT` — **Initiative 8 ✅** |
+
+## Initiative 9 — Audit remediation (v0.16.0 – v0.16.3) — 🟡 PLANNED
+
+Remediates the **code-verified** findings from two audits (PRs #1 `CODE_AUDIT.md` + #2
+`ARCH_EFFICIENCY.md`), every claim re-confirmed against HEAD v0.13.13 (28/28, 0 refuted). Three
+risk-ordered slices: cheap-and-safe security/hygiene, then per-turn recompute removal, then the
+structural persistence/dead-infra items. `read_file` sandbox (audit S4) is **not** here — Initiative 8 /
+v0.15.0 already owns it. See [`audit-remediation-2026-06/`](audit-remediation-2026-06/).
+
+| Version | Plan | Risk | Theme |
+|---|---|---|---|
+| v0.16.0 | [Security + hygiene](audit-remediation-2026-06/v0.16.0-security-hygiene.md) | Low | Loopback bind (S1→closes S2/S3 net exposure), `LUNA_DEV_TOOLS` gate (S2), `chat.send` caps + `maxPayloadLength` (S5), CI (C1), README/orient refresh (Doc1/2), WS-resilience / clock / blob nits (C2/C3/C4) |
+| v0.16.1 | [Recompute efficiency](audit-remediation-2026-06/v0.16.1-recompute-efficiency.md) | Low–Med | Memoize the system block per turn w/ dirty-flag (A1), `traces` retention + bounded viewer (A4), cap `listL2` + persist `content_hash` column (A2), recall query-embed off the TTFT path (P1, `LUNA_RECALL_ASYNC`) |
+| v0.16.2 | [Persistence + vec0](audit-remediation-2026-06/v0.16.2-persistence-vec0.md) | Medium | Incremental `history_json` / rebuild-window-from-L2 (A3/P2), **decide `vec0`** — wire KNN or remove the dep (D1/P3), remove the dead text-mode/`reply.token` path (D2) |
+| v0.16.3 | [Clean durable history](audit-remediation-2026-06/v0.16.3-clean-history.md) | Low–Med | **Strip thinking + collapse old tool-result payloads** from stored history (keep the `tool_use` record, drop the re-fetchable payload — Anthropic's own context-editing pattern) → a turn ≈ 200 clean tokens. *Discussion-derived; the efficiency foundation Init 10's deep window needs* — **Initiative 9 ✅** |
+
+## Initiative 10 — Memory depth correction (v0.17.0 – v0.17.1) — 🟡 PLANNED
+
+The **project owner's** correction of memory-design intent (PR #3 `MEMORY_DESIGN_DIVERGENCE.md`, all 8
+code claims confirmed): the shipped L1 window is ~4–9 turns (a hard 24-*message* cap) and the diary /
+weekly summaries are written but **never injected** into context — so Luna "记得太短". Target design
+settled with the owner after a SOTA review (Letta/MemGPT, Mem0, Generative Agents): restore depth as a
+**memory gradient** — a **~100 clean-turn verbatim window** (`LUNA_L1_RECENT_TURNS` 40–150) + structured
+bounded compression + importance anchors + the **diary as the injected cross-day/week layer** — amending
+**LD #12**. Affordable because Luna's replies are short (a *clean* turn ≈ 200 tokens, so ~100 turns ≈ 20k
+tokens) once thinking + tool-spew are kept out of durable history (v0.16.3). Ordered after Initiative 9 by
+*dependency* — v0.16.3 clean history + the memoize/incremental/off-hot-path fixes make the deep window
+cheap; *reorderable* if the owner wants depth first (then v0.16.3 + A1/A3/P1 land alongside v0.17.0). See
+[`memory-depth-2026-06/`](memory-depth-2026-06/).
+
+| Version | Plan | Risk | Theme |
+|---|---|---|---|
+| v0.17.0 | [L1 window depth](memory-depth-2026-06/v0.17.0-l1-window-depth.md) | Medium | L1 verbatim window → **~100 clean turns** (`LUNA_L1_RECENT_TURNS` 40–150, ≈ 20k tokens via v0.16.3) + **structured bounded compression** of older history (replaces the unbounded `rolling_summary`) + **importance anchors**; unit back to *turns*; amend LD #12 + supersede v0.4.1; cost measured before flip |
+| v0.17.1 | [Diary injection](memory-depth-2026-06/v0.17.1-diary-injection.md) | Medium | Inject day/week/**month** diaries (standing system-block digest + `'diary'` recall candidates so `rag_refresh`'s embeddings are finally retrieved); generate monthly diaries; amend LD #12 diary part — **Initiative 10 ✅** |
