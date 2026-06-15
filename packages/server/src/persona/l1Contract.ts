@@ -3,8 +3,12 @@
 // convert to acts. A stable block in the cached system core (deterministic, no
 // per-turn interpolation — the prompt-cache invariant). It guides; the v0.8.2
 // guards catch a violation; the v0.8.0 audit measures it.
+// A1 (v0.16.1): the contract is a pure constant string — build it once.
+let cached: string | null = null;
+
 export function renderL1Contract(): string {
-  return [
+  if (cached !== null) return cached;
+  cached = [
     'How you think on a turn:',
     // commitment-to-act — the 言行一致 core
     'When your thinking concludes you need to look something up, read a file, or save a ' +
@@ -45,4 +49,5 @@ export function renderL1Contract(): string {
       'reading whole files to hunt for a name. For multi-step code work, set a plan first with the ' +
       'plan tool and update it as you finish each step — it keeps the work visible and revisable.',
   ].join('\n\n');
+  return cached;
 }

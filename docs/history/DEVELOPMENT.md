@@ -1,6 +1,6 @@
 # Agent_Luna (TypeScript) — Development History
 
-Last updated: 2026-06-15 (Asia/Shanghai) — v0.16.0 (security hardening + hygiene — loopback bind `127.0.0.1` default + `LUNA_BIND_HOST` opt-in, `/_workspace` mutating routes gated by `LUNA_DEV_TOOLS`, `chat.send` input cap + WS payload cap, CI workflow, README + orient refresh, WS reconnect buffer/backoff, local quota clock, aligned `fromBlob`; **Initiative 9 1/4**, branch)
+Last updated: 2026-06-15 (Asia/Shanghai) — v0.16.1 (recompute efficiency — memoized system block via a memory-epoch dirty flag + cached L1 contract, trace retention window, recall over-fetch fix + persisted `content_hash` column, recall embed budget off the TTFT path behind `LUNA_RECALL_ASYNC`; **Initiative 9 2/4**, branch)
 
 ## Scope
 
@@ -81,6 +81,7 @@ during the rewrite. Its version log is unrelated to this one — `v0.1` here is 
 | `v0.15.3` | 2026-06-15 | Code-agent repo map + hybrid locator + plan (Initiative 8, 4/5) — Aider-style ranked, token-bounded, mtime-cached `repo_map` + hybrid `find_symbol` (ripgrep candidates → tree-sitter verify, comment/string false positives excluded, ripgrep-only fallback marked `verified:false`) behind `LUNA_REPO_MAP` (default on) + session-scoped `plan` todo spine (ships on always); `web-tree-sitter` + vendored TS/TSX/JS grammars; SQLite cache migration `0008` | _dev branch_ |
 | `v0.15.4` | 2026-06-15 | Code-agent skill library + propose-only self-edit (Initiative 8, 5/5) — `save_skill` (verify-before-persist: refuses unless the suite is green — Voyager invariant) + `recall_skill` (lexical search) behind `LUNA_SKILLS`; `propose_self_edit` produces a unified diff for human review and **never writes**, with the evaluator firewall (`resolveInWorkspace` `'write'`, built in v0.15.0) hard-rejecting any edit to her own tests/sandbox/safetyGate/humanity/deny-regex/l1Contract **across all write tools** (the keystone test), behind `LUNA_SELF_EDIT`; skills table migration `0009`. Deviation: the `self_edit.proposed` wire event is deferred — the proposal is delivered via `tool.finished` (the diff) for the human to apply. **Initiative 8 complete (5/5).** | _dev branch_ |
 | `v0.16.0` | 2026-06-15 | Security hardening + hygiene (Initiative 9, 1/4) — loopback bind `127.0.0.1` default (S1; closes S2/S3 net exposure) + `LUNA_BIND_HOST` opt-in, `/_workspace` reset/edit gated by `LUNA_DEV_TOOLS` (S2), `chat.send` capped at 8000 chars + WS `maxPayloadLength` (S5), `.github/workflows/ci.yml` (C1), README + orient-skill refresh (Doc1/2), WS reconnect buffer+backoff (C2), local-date quota clock (C3), aligned `fromBlob` (C4) | _branch_ |
+| `v0.16.1` | 2026-06-15 | Recompute efficiency (Initiative 9, 2/4) — system block memoized per turn via a `memory/epoch` dirty flag bumped by `remember`/`update_self` (A1) + `renderL1Contract` cached; `traces` retention window (`pruneToRetention`, throttled off flush, A4); recall fetches only the recent 500 L2 rows (`listRecentL2`) + reuses a persisted `content_hash` column (migration `0010`, A2); recall embed budget off the first-token path behind `LUNA_RECALL_ASYNC` (P1) | _branch_ |
 
 ## Code-agent capability (2026-06-15) — Initiative 8 begins (v0.15.0)
 
@@ -543,6 +544,46 @@ Inference:
   and gives Alan the variety he remembered, now as a first-class setting rather than a buried constant.
 
 ## Detailed records
+
+### `v0.16.1` — 2026-06-15 — Recompute efficiency (Initiative 9, 2/4)
+
+Status:
+
+- working tree (branch `feat/initiative-9-audit-remediation`)
+
+Fact:
+
+- `memory/epoch.ts` (new): a monotonic `memoryEpoch()` bumped by `bumpMemoryEpoch()`.
+- `l3Store.addFact`/`forgetFact` and `coreMemory.updateCore` call `bumpMemoryEpoch()` on a real
+  change (A1 dirty flag).
+- `turn/runTurn.ts`: `TurnState` gains `systemBlock` + `systemBlockEpoch`; `open_stream` builds the
+  system block once and reuses it across tool iterations, rebuilding only when the epoch moved (A1).
+- `persona/l1Contract.ts`: `renderL1Contract` memoizes its constant string (A1).
+- `trace/store.ts`: `pruneToRetention(keep)` deletes traces for all but the most-recent N turns
+  (`LUNA_TRACE_RETENTION_TURNS`, default 1000), called throttled every 200 flushes (A4).
+- `migrations/0010_content_hash.sql` (new): `content_hash` column on `l2_turns` + `l3_facts`.
+- `sessionStore.appendL2` stores the L2 content hash; `listRecentL2(sessionId, limit)` fetches only
+  the recent N rows; `l3Store.addFact` stores its hash (A2).
+- `memory/recall/recall.ts`: `collectCandidates` uses `listRecentL2` + carries the stored hash;
+  `retrieve` reuses it (hashes on the fly only for L3 / pre-migration rows), and takes an
+  `embedBudgetMs` that races the embedding work against a timeout (P1).
+- `turn/runTurn.ts parse_input`: passes `embedBudgetMs` (`LUNA_RECALL_BUDGET_MS`, default 200) when
+  `LUNA_RECALL_ASYNC=1` (default off) — recall query-embed off the first-token path (P1).
+- Tests: recall (+4: `listRecentL2`/hash golden, epoch dirty flag, embed-budget fallback), trace
+  store (+2: retention). **541 pass / 0 fail**; all three packages `tsc` clean.
+
+Inference:
+
+- Removes the per-tool-iteration recompute the audit flagged: a multi-iteration turn now builds the
+  system block once (≈6 DB queries + an L1-contract concat) instead of every iteration, and recall
+  stops re-hashing ~500 candidates + over-fetching up to 10 000 L2 rows each call — the per-turn,
+  O(N²)-over-a-session waste that was pulling against the speed goal.
+- A1's correctness hinges on the dirty flag: a mid-turn `remember` that changes core/L3 still
+  re-renders (epoch moved), pinned by the epoch test; otherwise the block is byte-stable and the
+  prompt cache still hits.
+- These are the prerequisite that makes Initiative 10's ~100-turn window affordable; `content_hash`
+  + the `collectCandidates` seam are also what diary candidates (v0.17.1) and a future `vec0` KNN
+  will lean on.
 
 ### `v0.16.0` — 2026-06-15 — Security hardening + hygiene (Initiative 9, 1/4)
 

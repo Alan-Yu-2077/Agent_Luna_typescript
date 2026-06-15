@@ -1,5 +1,6 @@
 import type { CoreMemory } from '@luna/protocol';
 import { getMemoryDb } from './sessionStore';
+import { bumpMemoryEpoch } from './epoch';
 
 const EMPTY: CoreMemory = { self_state: '', relationship_status: '', updated_ms: 0 };
 
@@ -32,6 +33,7 @@ export function updateCore(patch: CorePatch, source: string): CoreMemory | null 
   db.prepare(
     'UPDATE core_memory SET self_state = ?, relationship_status = ?, updated_ms = ? WHERE id = 1',
   ).run(next.self_state, next.relationship_status, next.updated_ms);
+  bumpMemoryEpoch(); // A1: the cached system block embeds core memory — re-render
   return next;
 }
 

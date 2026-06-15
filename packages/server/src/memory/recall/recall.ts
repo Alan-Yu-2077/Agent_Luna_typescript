@@ -1,4 +1,4 @@
-import { getMemoryDb, listL2 } from '../sessionStore';
+import { getMemoryDb, listRecentL2 } from '../sessionStore';
 import { listFacts } from '../l3Store';
 import {
   contentHash,
@@ -106,17 +106,22 @@ export function resetRecallStateForTests(): void {
 
 // ── retrieval ─────────────────────────────────────────────────────────────────
 
-type Candidate = { source: 'l2' | 'l3'; id: string; text: string; t_ms: number };
+// `hash` carries the stored content_hash for L2 rows (A2, v0.16.1) so retrieve()
+// reuses it instead of re-hashing; undefined → hashed on the fly (L3 facts, and
+// pre-v0.16.1 L2 rows whose column is null).
+type Candidate = { source: 'l2' | 'l3'; id: string; text: string; t_ms: number; hash?: string };
 
 function collectCandidates(sessionId: string): Candidate[] {
   const out: Candidate[] = [];
-  const l2 = listL2(sessionId);
-  for (const row of l2.slice(-L2_CANDIDATE_LIMIT)) {
+  // A2: fetch only the most-recent L2_CANDIDATE_LIMIT rows (was: pull up to
+  // 10 000 then slice the last 500).
+  for (const row of listRecentL2(sessionId, L2_CANDIDATE_LIMIT)) {
     out.push({
       source: 'l2',
       id: String(row.id),
       text: `${row.user_text}\n${row.assistant_text}`,
       t_ms: row.t_ms,
+      ...(row.content_hash ? { hash: row.content_hash } : {}),
     });
   }
   for (const fact of listFacts()) {
@@ -133,7 +138,11 @@ function recencyBoost(tMs: number, now: number): number {
 export async function retrieve(
   sessionId: string,
   query: string,
-  opts?: { k?: number },
+  // P1 (v0.16.1): embedBudgetMs bounds the embedding network work so a cold
+  // cache can't block the caller (the hot-path auto-recall) past the budget —
+  // on timeout the turn scores lexical-only. Set by parse_input under
+  // LUNA_RECALL_ASYNC; the agentic recall tool leaves it unset (full embed).
+  opts?: { k?: number; embedBudgetMs?: number },
 ): Promise<Hit[]> {
   const k = opts?.k ?? RETRIEVAL_K;
   const candidates = collectCandidates(sessionId);
@@ -142,8 +151,11 @@ export async function retrieve(
 
   const lexScores = candidates.map((c) => lexicalScore(query, c.text));
 
-  let cosScores: (number | null)[] = candidates.map(() => null);
-  if (embeddingEnabled() && getMemoryDb()) {
+  const nullScores = (): (number | null)[] => candidates.map(() => null);
+
+  // Cosine scoring against the embedding cache (may make 1–2 network calls on a
+  // cold cache). Returns all-null on any failure → lexical-only fallback.
+  const scoreCosine = async (): Promise<(number | null)[]> => {
     try {
       const queryHash = contentHash(query);
       let queryVec = cachedEmbedding(queryHash);
@@ -154,27 +166,41 @@ export async function retrieve(
           queryVec = v;
         }
       }
-      if (queryVec) {
-        const hashes = candidates.map((c) => contentHash(c.text));
-        const vecs: (Float32Array | null)[] = hashes.map((h) => cachedEmbedding(h));
+      if (!queryVec) return nullScores();
+      // A2: reuse the stored content_hash where present (L2); hash on the fly
+      // only for L3 facts and pre-v0.16.1 rows.
+      const hashes = candidates.map((c) => c.hash ?? contentHash(c.text));
+      const vecs: (Float32Array | null)[] = hashes.map((h) => cachedEmbedding(h));
 
-        const missingIdx = vecs
-          .map((v, i) => (v === null ? i : -1))
-          .filter((i) => i >= 0)
-          .slice(0, MAX_EMBED_PER_TURN);
-        if (missingIdx.length > 0) {
-          const fresh = await embedClient(missingIdx.map((i) => candidates[i]!.text));
-          fresh.forEach((v, j) => {
-            const idx = missingIdx[j]!;
-            storeEmbedding(hashes[idx]!, v);
-            vecs[idx] = v;
-          });
-        }
-
-        cosScores = vecs.map((v) => (v ? cosine(queryVec!, v) : null));
+      const missingIdx = vecs
+        .map((v, i) => (v === null ? i : -1))
+        .filter((i) => i >= 0)
+        .slice(0, MAX_EMBED_PER_TURN);
+      if (missingIdx.length > 0) {
+        const fresh = await embedClient(missingIdx.map((i) => candidates[i]!.text));
+        fresh.forEach((v, j) => {
+          const idx = missingIdx[j]!;
+          storeEmbedding(hashes[idx]!, v);
+          vecs[idx] = v;
+        });
       }
+      return vecs.map((v) => (v ? cosine(queryVec!, v) : null));
     } catch {
-      /* embedding outage → lexical-only this turn */
+      return nullScores();
+    }
+  };
+
+  let cosScores: (number | null)[] = nullScores();
+  if (embeddingEnabled() && getMemoryDb()) {
+    if (opts?.embedBudgetMs && opts.embedBudgetMs > 0) {
+      // The losing (still-running) scoreCosine keeps populating the cache for
+      // the next turn; this turn proceeds lexical-only past the budget.
+      cosScores = await Promise.race([
+        scoreCosine(),
+        new Promise<(number | null)[]>((r) => setTimeout(() => r(nullScores()), opts.embedBudgetMs)),
+      ]);
+    } else {
+      cosScores = await scoreCosine();
     }
   }
 

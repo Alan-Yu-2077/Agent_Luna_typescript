@@ -98,4 +98,28 @@ describe('TraceStore', () => {
     expect(turns[1]?.turn_id).toBe('early');
     expect(turns[0]?.event_count).toBe(1);
   });
+
+  test('retention: pruneToRetention keeps only the most-recent N turns (A4, v0.16.1)', () => {
+    for (let t = 0; t < 10; t++) {
+      const turnId = `turn-${t}`;
+      store.record(nodeEvent(turnId, t)); // t_ms = 1000 + t, so turn-9 is newest
+      store.flush(turnId);
+    }
+    expect(store.listTurns(100).length).toBe(10);
+
+    const removed = store.pruneToRetention(3);
+    expect(removed).toBeGreaterThan(0);
+
+    const ids = store.listTurns(100).map((t) => t.turn_id);
+    expect(ids.length).toBe(3);
+    expect(ids).toContain('turn-9');
+    expect(ids).not.toContain('turn-0');
+  });
+
+  test('retention: pruneToRetention(0) is a no-op', () => {
+    store.record(nodeEvent('only', 0));
+    store.flush('only');
+    expect(store.pruneToRetention(0)).toBe(0);
+    expect(store.listTurns(100).length).toBe(1);
+  });
 });

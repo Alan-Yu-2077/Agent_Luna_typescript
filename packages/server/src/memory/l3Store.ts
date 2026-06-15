@@ -1,5 +1,7 @@
 import type { L3Category, L3Confidence, L3Fact } from '@luna/protocol';
 import { getMemoryDb } from './sessionStore';
+import { bumpMemoryEpoch } from './epoch';
+import { contentHash } from './recall/embed';
 
 const ACTIVE_THREAD_TTL_MS = Number(Bun.env['LUNA_ACTIVE_THREAD_TTL_DAYS'] ?? 14) * 86_400_000;
 
@@ -39,9 +41,10 @@ export function addFact(
   const id = `${ID_PREFIX[category]}_${now.toString(36)}${Math.floor(Math.random() * 1296).toString(36)}`;
   const expires = category === 'active_threads' ? now + ACTIVE_THREAD_TTL_MS : null;
   db.prepare(
-    `INSERT INTO l3_facts (id, category, text, dedup_key, confidence, created_ms, expires_ms, deleted_ms)
-     VALUES (?, ?, ?, ?, ?, ?, ?, NULL)`,
-  ).run(id, category, text, key, confidence ?? null, now, expires);
+    `INSERT INTO l3_facts (id, category, text, dedup_key, confidence, created_ms, expires_ms, deleted_ms, content_hash)
+     VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
+  ).run(id, category, text, key, confidence ?? null, now, expires, contentHash(text));
+  bumpMemoryEpoch(); // A1: the cached system block must re-render after a new fact
   return { status: 'added', id };
 }
 
@@ -55,6 +58,7 @@ export function forgetFact(id: string): ForgetResult | null {
   const result = db
     .prepare('UPDATE l3_facts SET deleted_ms = ? WHERE id = ? AND deleted_ms IS NULL')
     .run(Date.now(), id);
+  if (result.changes === 1) bumpMemoryEpoch(); // A1: re-render the cached system block
   return { status: result.changes === 1 ? 'forgotten' : 'not_found', id };
 }
 

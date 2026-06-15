@@ -1,6 +1,7 @@
 import type { Database } from 'bun:sqlite';
 import type Anthropic from '@anthropic-ai/sdk';
 import type { SessionRow } from '@luna/protocol';
+import { contentHash } from './recall/embed';
 
 let db: Database | null = null;
 
@@ -82,9 +83,12 @@ export function appendL2(turn: {
   rawContent: unknown;
 }): void {
   if (!db) return;
+  // A2 (v0.16.1): store the recall content hash (of the exact text recall keys
+  // on) at insert, so retrieve() reads it back instead of re-hashing per turn.
+  const hash = contentHash(`${turn.userText}\n${turn.assistantText}`);
   db.prepare(
-    `INSERT INTO l2_turns (session_id, turn_id, t_ms, user_text, assistant_text, raw_json)
-     VALUES (?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO l2_turns (session_id, turn_id, t_ms, user_text, assistant_text, raw_json, content_hash)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     turn.sessionId,
     turn.turnId,
@@ -92,6 +96,7 @@ export function appendL2(turn: {
     turn.userText,
     turn.assistantText,
     JSON.stringify(turn.rawContent),
+    hash,
   );
 }
 
@@ -103,6 +108,7 @@ export type L2Row = {
   user_text: string;
   assistant_text: string;
   raw_json: string;
+  content_hash: string | null;
 };
 
 export function listL2(sessionId: string, opts?: { limit?: number }): L2Row[] {
@@ -112,4 +118,15 @@ export function listL2(sessionId: string, opts?: { limit?: number }): L2Row[] {
       'SELECT * FROM l2_turns WHERE session_id = ? ORDER BY t_ms ASC, id ASC LIMIT ?',
     )
     .all(sessionId, opts?.limit ?? 10000) as L2Row[];
+}
+
+// A2 (v0.16.1): the most-recent `limit` turns in ascending order, read with a
+// DESC LIMIT so only those rows are fetched (recall used to pull up to 10 000
+// rows to keep the last 500).
+export function listRecentL2(sessionId: string, limit: number): L2Row[] {
+  if (!db) return [];
+  const rows = db
+    .prepare('SELECT * FROM l2_turns WHERE session_id = ? ORDER BY t_ms DESC, id DESC LIMIT ?')
+    .all(sessionId, limit) as L2Row[];
+  return rows.reverse();
 }
