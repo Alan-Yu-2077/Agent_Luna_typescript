@@ -182,8 +182,22 @@ describe('system prompt cache invariant with recall', () => {
     }
     const provider = new MockProvider([endRound('a'), endRound('b')]);
 
-    await runTurn({ session, turnId: 't1', userText: 'tell me about coffee', provider, registry: builtinRegistry, emit: () => {} });
-    await runTurn({ session, turnId: 't2', userText: '天气怎么样', provider, registry: builtinRegistry, emit: () => {} });
+    await runTurn({
+      session,
+      turnId: 't1',
+      userText: 'tell me about coffee',
+      provider,
+      registry: builtinRegistry,
+      emit: () => {},
+    });
+    await runTurn({
+      session,
+      turnId: 't2',
+      userText: '天气怎么样',
+      provider,
+      registry: builtinRegistry,
+      emit: () => {},
+    });
 
     expect(JSON.stringify(provider.requests[0]?.system)).toBe(
       JSON.stringify(provider.requests[1]?.system),
@@ -200,7 +214,13 @@ describe('system prompt cache invariant with recall', () => {
 describe('A2 — recall over-fetch + content_hash (v0.16.1)', () => {
   test('listRecentL2 returns the most-recent N in ascending order, with stored hash', () => {
     for (let i = 0; i < 5; i++) {
-      appendL2({ sessionId: 'r', turnId: `t${i}`, userText: `u${i}`, assistantText: `a${i}`, rawContent: [] });
+      appendL2({
+        sessionId: 'r',
+        turnId: `t${i}`,
+        userText: `u${i}`,
+        assistantText: `a${i}`,
+        rawContent: [],
+      });
     }
     const recent = listRecentL2('r', 2);
     expect(recent.length).toBe(2);
@@ -211,7 +231,13 @@ describe('A2 — recall over-fetch + content_hash (v0.16.1)', () => {
   });
 
   test('recall results are unchanged when the stored hash is reused (golden)', async () => {
-    appendL2({ sessionId: 'g', turnId: 't', userText: 'I love matcha lattes', assistantText: 'noted', rawContent: [] });
+    appendL2({
+      sessionId: 'g',
+      turnId: 't',
+      userText: 'I love matcha lattes',
+      assistantText: 'noted',
+      rawContent: [],
+    });
     const hits = await retrieve('g', 'matcha latte');
     expect(hits.length).toBeGreaterThan(0);
     expect(hits[0]?.text).toContain('matcha');
@@ -231,7 +257,13 @@ describe('A1 — memory epoch dirty flag (v0.16.1)', () => {
 
 describe('P1 — recall embed budget (v0.16.1)', () => {
   test('falls back to lexical when the embed exceeds the budget', async () => {
-    appendL2({ sessionId: 'b', turnId: 't', userText: 'matcha dessert', assistantText: 'yes', rawContent: [] });
+    appendL2({
+      sessionId: 'b',
+      turnId: 't',
+      userText: 'matcha dessert',
+      assistantText: 'yes',
+      rawContent: [],
+    });
     setEmbedClientForTests(async (texts) => {
       await new Promise((r) => setTimeout(r, 300));
       return texts.map(fakeVec);

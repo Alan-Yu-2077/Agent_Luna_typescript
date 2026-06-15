@@ -17,6 +17,7 @@ import { loadPersona } from '../persona/loader';
 import { renderHumanityBlock } from '../persona/humanity';
 import { renderL1Contract } from '../persona/l1Contract';
 import { memoryEpoch } from '../memory/epoch';
+import { cleanHistoryEnabled, stripThinking } from '../memory/cleanHistory';
 import { WAKE_SCENE_BLOCK } from '../persona/scene';
 import { detectDefection, runDefectionAudit } from './integrity/defectionAudit';
 import {
@@ -353,8 +354,10 @@ const graph: Graph<TurnState, TurnNode> = {
             t_ms: Date.now(),
             call_id: evt.call_id,
             tool_name: evt.tool_name,
-            phase: evt.kind === 'started' ? 'started' : evt.kind === 'progress' ? 'progress' : 'final',
-            payload: evt.kind === 'final' ? evt.result : evt.kind === 'progress' ? evt.payload : evt.input,
+            phase:
+              evt.kind === 'started' ? 'started' : evt.kind === 'progress' ? 'progress' : 'final',
+            payload:
+              evt.kind === 'final' ? evt.result : evt.kind === 'progress' ? evt.payload : evt.input,
           });
         }
         switch (evt.kind) {
@@ -654,6 +657,11 @@ export async function runTurn(opts: RunTurnOptions): Promise<TurnState> {
     // await it) and must never skip the trace/fold cleanup below. A SQLite
     // throw here (locked/readonly/disk-full) is logged + surfaced, not fatal.
     try {
+      // v0.16.3: strip thinking from this now-completed turn before it becomes
+      // durable history — both the in-memory window and the L2 raw_json that
+      // loadSession rebuilds from. Safe here (the turn is done; no in-flight
+      // signed-thinking continuity to preserve).
+      if (cleanHistoryEnabled()) stripThinking(opts.session.history, historyStart);
       appendL2({
         sessionId: opts.session.id,
         turnId: opts.turnId,
@@ -665,7 +673,11 @@ export async function runTurn(opts: RunTurnOptions): Promise<TurnState> {
     } catch (e) {
       console.error('[runTurn] persistence failed:', e);
       try {
-        state.emit({ type: 'error', code: 'persistence_failed', message: 'turn data failed to persist' });
+        state.emit({
+          type: 'error',
+          code: 'persistence_failed',
+          message: 'turn data failed to persist',
+        });
       } catch {
         /* emit is best-effort */
       }

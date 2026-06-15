@@ -153,7 +153,9 @@ export async function retrieve(
       // the next turn; this turn proceeds lexical-only past the budget.
       cosScores = await Promise.race([
         scoreCosine(),
-        new Promise<(number | null)[]>((r) => setTimeout(() => r(nullScores()), opts.embedBudgetMs)),
+        new Promise<(number | null)[]>((r) =>
+          setTimeout(() => r(nullScores()), opts.embedBudgetMs),
+        ),
       ]);
     } else {
       cosScores = await scoreCosine();

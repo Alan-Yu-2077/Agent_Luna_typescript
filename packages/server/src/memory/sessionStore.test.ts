@@ -22,12 +22,17 @@ beforeEach(() => {
   db = freshDb();
   setMemoryDb(db);
   resetSessions();
+  // These tests verify RAW persistence/L2-rebuild fidelity, so disable the
+  // v0.16.3 history cleaning (which intentionally strips thinking). The cleaning
+  // behavior is covered in cleanHistory.test.ts.
+  Bun.env['LUNA_CLEAN_HISTORY'] = '0';
 });
 
 afterEach(() => {
   setMemoryDb(null);
   db.close(false);
   resetSessions();
+  delete Bun.env['LUNA_CLEAN_HISTORY'];
 });
 
 function toolTurnRounds(): ProviderEvent[][] {
@@ -135,7 +140,14 @@ describe('sessionStore', () => {
     // A3 (v0.16.2): persistSession persists only bookkeeping; the history blob is
     // a constant placeholder and history is rebuilt from L2 on load.
     persistSession('s1', [{ role: 'user', content: 'a' }], 1);
-    persistSession('s1', [{ role: 'user', content: 'a' }, { role: 'assistant', content: 'b' }], 2);
+    persistSession(
+      's1',
+      [
+        { role: 'user', content: 'a' },
+        { role: 'assistant', content: 'b' },
+      ],
+      2,
+    );
     const loaded = loadSession('s1');
     expect(loaded?.turnSeq).toBe(2);
     const count = db.prepare('SELECT COUNT(*) c FROM sessions').get() as { c: number };

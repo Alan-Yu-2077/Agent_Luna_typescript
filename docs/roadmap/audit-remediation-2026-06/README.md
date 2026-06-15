@@ -1,7 +1,8 @@
 # Initiative 9 — Audit remediation (security · efficiency · hygiene)
 
-> **Status: 📋 PLANNED.** Priority: after Initiative 8 (code-agent). Version range:
-> **v0.16.0 – v0.16.3** (4 versions). Master index: [`../README.md`](../README.md).
+> **Status: ✅ SHIPPED 2026-06-16** (branch `feat/initiative-9-audit-remediation`, 4 versions,
+> 548 tests green / `tsc` clean). Version range: **v0.16.0 – v0.16.3**. Master index:
+> [`../README.md`](../README.md).
 > Source: the code-verified audits in PRs #1 ([`CODE_AUDIT.md`]) and #2 ([`ARCH_EFFICIENCY.md`]),
 > every finding re-verified against HEAD (v0.13.13) before this roadmap was written.
 
@@ -98,10 +99,10 @@ breakpoint on a stable prefix (A1's waste is server-side only). Streaming is **b
 
 | Plan | Version | Theme | Risk | Depends | Status |
 |---|---|---|---|---|---|
-| [v0.16.0](v0.16.0-security-hygiene.md) | v0.16.0 | Security + hygiene — loopback bind (S1→closes S2/S3 net exposure), dev-tools gate (S2), input caps (S5), CI (C1), README/orient (Doc1/2), small robustness (C2/C3/C4) | Low | nothing | 📋 |
-| [v0.16.1](v0.16.1-recompute-efficiency.md) | v0.16.1 | Recompute efficiency — memoize system block (A1), trace retention (A4), recall over-fetch + `content_hash` column (A2), recall off the TTFT path (P1) | Low–Med | v0.16.0 | 📋 |
-| [v0.16.2](v0.16.2-persistence-vec0.md) | v0.16.2 | Persistence + dead infra — incremental `history_json` (A3/P2), decide `vec0` (wire KNN or remove, D1/P3), remove the dead text-mode path (D2) | Medium | v0.16.1 | 📋 |
-| [v0.16.3](v0.16.3-clean-history.md) | v0.16.3 | **Clean durable history** — strip thinking blocks + collapse old tool-result payloads from stored history (a turn → ~200 clean tokens). *Discussion-derived; the efficiency foundation Initiative 10's deeper window builds on.* | Low–Med | v0.16.2 | 📋 |
+| [v0.16.0](v0.16.0-security-hygiene.md) | v0.16.0 | Security + hygiene — loopback bind (S1→closes S2/S3 net exposure), dev-tools gate (S2), input caps (S5), CI (C1), README/orient (Doc1/2), small robustness (C2/C3/C4) | Low | nothing | ✅ |
+| [v0.16.1](v0.16.1-recompute-efficiency.md) | v0.16.1 | Recompute efficiency — memoize system block (A1), trace retention (A4), recall over-fetch + `content_hash` column (A2), recall off the TTFT path (P1) | Low–Med | v0.16.0 | ✅ |
+| [v0.16.2](v0.16.2-persistence-vec0.md) | v0.16.2 | Persistence + dead infra — incremental `history_json` (A3/P2), decide `vec0` (wire KNN or remove, D1/P3), remove the dead text-mode path (D2) | Medium | v0.16.1 | ✅ |
+| [v0.16.3](v0.16.3-clean-history.md) | v0.16.3 | **Clean durable history** — strip thinking blocks + collapse old tool-result payloads from stored history (a turn → ~200 clean tokens). *Discussion-derived; the efficiency foundation Initiative 10's deeper window builds on.* | Low–Med | v0.16.2 | ✅ |
 
 ## Acceptance criteria (whole initiative)
 - [ ] Server is not reachable off-host by default (loopback bind), mutating dev routes are flag-gated,
@@ -116,13 +117,13 @@ breakpoint on a stable prefix (A1's waste is server-side only). Streaming is **b
 - [ ] `tsc` clean + `bun test` green at every version; each behavior-changing item default-off-flagged,
       verified, then flipped.
 
-## Open questions blocking start
-1. **Loopback default** — bind `127.0.0.1` unconditionally, or keep `0.0.0.0` behind an explicit
-   `LUNA_BIND_HOST` for users who *want* LAN access? (Recommend: default loopback; opt-in host var.)
-2. **vec0 decision (D1)** — wire `vec0` KNN into `retrieve()` (keeps the dep, fixes P3) **or** remove
-   `sqlite-vec` + the `vec_cache` machinery and document TS cosine? (Recommend: at single-user scale,
-   *remove* — TS cosine over ≤512 vectors is fine; revisit if the corpus grows. But see Initiative 10:
-   a ~100-clean-turn window + diary candidates enlarges the corpus, which may tip this toward *wire it*.)
-3. **Text-mode removal (D2)** — is message mode permanent (remove the `LUNA_MESSAGE_TOOL=0` path
-   entirely) or kept as an escape hatch? (Recommend: remove once Initiative 10's window work is done,
-   so there's a single context-assembly path to reason about.)
+## Open questions — RESOLVED at build
+1. **Loopback default** — ✅ **default `127.0.0.1`, opt-in `LUNA_BIND_HOST`** (v0.16.0). LAN access is
+   an explicit, documented opt-in.
+2. **vec0 decision (D1)** — ✅ **removed the dead write-path + the orphaned `vec_cache` virtual table**
+   (v0.16.2); retrieval stays TS cosine. The `sqlite-vec` dependency + the boot-time extension loader
+   are **kept inert** — the full drop-vs-wire-KNN decision is **deferred to Initiative 10**, whose
+   larger corpus (≈100-clean-turn window + diary candidates) may tip it toward *wire it* (decided
+   jointly there, per the roadmap note).
+3. **Text-mode removal (D2)** — ✅ **kept as a legacy escape hatch, annotated in `runTurn`**; removal
+   **deferred to post-Initiative-10** so there is a single context-assembly path to reason about then.

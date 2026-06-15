@@ -134,7 +134,9 @@ export class TraceStore {
 
   getEventsByTurn(turnId: string): EventRow[] {
     return this.db
-      .prepare('SELECT kind, payload_json, t_ms FROM traces WHERE turn_id = ? ORDER BY t_ms ASC, id ASC')
+      .prepare(
+        'SELECT kind, payload_json, t_ms FROM traces WHERE turn_id = ? ORDER BY t_ms ASC, id ASC',
+      )
       .all(turnId) as EventRow[];
   }
 }

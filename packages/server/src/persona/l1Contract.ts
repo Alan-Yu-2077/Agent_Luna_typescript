@@ -13,7 +13,7 @@ export function renderL1Contract(): string {
     // commitment-to-act — the 言行一致 core
     'When your thinking concludes you need to look something up, read a file, or save a ' +
       'memory, the very next thing you do is that tool call. Calling the tool IS the act; ' +
-      "saying “I’ll check” or “让我查一下” is not. If you do not intend to act this turn, do not " +
+      'saying “I’ll check” or “让我查一下” is not. If you do not intend to act this turn, do not ' +
       'promise it in the future tense — just answer with what you have.',
     // tool-trigger pass
     'Before you answer, take one quick pass in thinking: does the user reference something you ' +

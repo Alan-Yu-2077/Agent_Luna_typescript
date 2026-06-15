@@ -1,6 +1,6 @@
 # Agent_Luna (TypeScript) — Development History
 
-Last updated: 2026-06-16 (Asia/Shanghai) — v0.16.2 (persistence + dead-infra — incremental `history_json` (persist bookkeeping only; rebuild full history from the append-only L2 on load), dead `vec0`/`vec_cache` write-path + orphaned virtual table removed (retrieval stays TS cosine), text-mode `reply.token` marked legacy; **Initiative 9 3/4**, branch)
+Last updated: 2026-06-16 (Asia/Shanghai) — v0.16.3 (clean durable history — strip prior-turn thinking + collapse old tool-result payloads to markers, behind `LUNA_CLEAN_HISTORY` (default on); a stored turn is clean conversation, the foundation for Initiative 10's deep window; **Initiative 9 complete 4/4**, branch)
 
 ## Scope
 
@@ -83,6 +83,7 @@ during the rewrite. Its version log is unrelated to this one — `v0.1` here is 
 | `v0.16.0` | 2026-06-15 | Security hardening + hygiene (Initiative 9, 1/4) — loopback bind `127.0.0.1` default (S1; closes S2/S3 net exposure) + `LUNA_BIND_HOST` opt-in, `/_workspace` reset/edit gated by `LUNA_DEV_TOOLS` (S2), `chat.send` capped at 8000 chars + WS `maxPayloadLength` (S5), `.github/workflows/ci.yml` (C1), README + orient-skill refresh (Doc1/2), WS reconnect buffer+backoff (C2), local-date quota clock (C3), aligned `fromBlob` (C4) | _branch_ |
 | `v0.16.1` | 2026-06-15 | Recompute efficiency (Initiative 9, 2/4) — system block memoized per turn via a `memory/epoch` dirty flag bumped by `remember`/`update_self` (A1) + `renderL1Contract` cached; `traces` retention window (`pruneToRetention`, throttled off flush, A4); recall fetches only the recent 500 L2 rows (`listRecentL2`) + reuses a persisted `content_hash` column (migration `0010`, A2); recall embed budget off the first-token path behind `LUNA_RECALL_ASYNC` (P1) | _branch_ |
 | `v0.16.2` | 2026-06-16 | Persistence + dead infra (Initiative 9, 3/4) — incremental `history_json`: `persistSession` writes only bookkeeping (constant `'[]'` blob), `loadSession` rebuilds the full timeline from the append-only L2 `raw_json` — the last O(N²) per-turn write gone (A3/P2); dead `vec0`/`vec_cache` write-path + orphaned virtual table removed, retrieval stays TS cosine (`sqlite-vec` dep kept inert for Initiative 10's potential KNN, D1); text-mode `reply.token` path marked legacy, removal deferred to post-Init-10 (D2) | _branch_ |
+| `v0.16.3` | 2026-06-16 | Clean durable history (Initiative 9, 4/4) — `cleanHistory` strips prior-turn `thinking`/`redacted_thinking` from completed turns at persist time (the API drops them across turns anyway) + collapses old `tool_result` payloads to a marker in `buildActiveContext` (keeps recent + the `tool_use` records), behind `LUNA_CLEAN_HISTORY` (default on). A stored turn is clean conversation — the foundation for Initiative 10's ~100-turn window. **Initiative 9 complete (4/4).** | _branch_ |
 
 ## Code-agent capability (2026-06-15) — Initiative 8 begins (v0.15.0)
 
@@ -545,6 +546,43 @@ Inference:
   and gives Alan the variety he remembered, now as a first-class setting rather than a buried constant.
 
 ## Detailed records
+
+### `v0.16.3` — 2026-06-16 — Clean durable history (Initiative 9, 4/4)
+
+Status:
+
+- working tree (branch `feat/initiative-9-audit-remediation`)
+
+Fact:
+
+- `memory/cleanHistory.ts` (new): `stripThinking(messages, from)` drops `thinking`/`redacted_thinking`
+  blocks from completed assistant messages (never to empty); `collapseOldToolResults(messages, keepRecent)`
+  returns a copy with older `tool_result` payloads replaced by `[tool_result elided]` (block + `tool_use_id`
+  preserved); `cleanHistoryEnabled()` (`LUNA_CLEAN_HISTORY`, default on).
+- `turn/runTurn.ts`: in finalize, `stripThinking` is applied to the just-completed turn's messages
+  before `appendL2`, so both the in-memory window and the L2 `raw_json` (which `loadSession` rebuilds
+  from) store clean turns. Never touches the in-flight turn (runs after it ends).
+- `memory/l1Window.ts buildActiveContext`: collapses old tool-result payloads (non-mutating) in the
+  assembled context, keeping the recent slice + summary path intact.
+- Tests: `cleanHistory.test.ts` (new, +6: strip/keep/round-trip/no-empty, collapse/keep-recent/non-mutating);
+  `sessionStore.test.ts` pinned to `LUNA_CLEAN_HISTORY=0` for its raw-fidelity assertions. **548 pass /
+  0 fail**; all three packages `tsc` clean.
+
+Inference:
+
+- A stored "turn" now costs what a conversational turn should: thinking (ephemeral by Anthropic's own
+  design across turns) is out of durable history, and bulky tool payloads collapse beyond a recent
+  slice. This shrinks every turn's input on its own and is the load-bearing dependency for Initiative
+  10 — a ~100-turn verbatim window is ~20k tokens *because* each stored turn is clean.
+- Safety: stripping only applies to completed turns (the in-flight signed-thinking loop is untouched —
+  modifying it is a 400), and collapse keeps `tool_use`↔`tool_result` structurally valid, both pinned
+  by tests.
+
+**Initiative 9 (Audit remediation) complete — v0.16.0–v0.16.3.** The audit's P0/P1 security surface is
+closed (loopback bind + dev-tools gate + input caps), the per-turn/per-iteration recompute is gone
+(memoized system block, capped + hashed recall, retention, recall off the TTFT path), the last O(N²)
+persistence write is removed (rebuild-from-L2), the dead `vec0` write path is gone, and durable history
+is clean. CI now enforces it all on push.
 
 ### `v0.16.2` — 2026-06-16 — Persistence + dead infra (Initiative 9, 3/4)
 

@@ -119,9 +119,7 @@ export type L2Row = {
 export function listL2(sessionId: string, opts?: { limit?: number }): L2Row[] {
   if (!db) return [];
   return db
-    .prepare(
-      'SELECT * FROM l2_turns WHERE session_id = ? ORDER BY t_ms ASC, id ASC LIMIT ?',
-    )
+    .prepare('SELECT * FROM l2_turns WHERE session_id = ? ORDER BY t_ms ASC, id ASC LIMIT ?')
     .all(sessionId, opts?.limit ?? 10000) as L2Row[];
 }
 

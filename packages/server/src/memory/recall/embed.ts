@@ -11,7 +11,10 @@ export function embeddingEnabled(): boolean {
 // provider path) — chat stays on the Anthropic SDK; embeddings have no
 // Anthropic API, so this thin client is the whole integration.
 export const fetchEmbedClient: EmbedClient = async (texts) => {
-  const base = (Bun.env['LUNA_EMBEDDING_BASE_URL'] ?? Bun.env['OPENAI_BASE_URL'] ?? '').replace(/\/$/, '');
+  const base = (Bun.env['LUNA_EMBEDDING_BASE_URL'] ?? Bun.env['OPENAI_BASE_URL'] ?? '').replace(
+    /\/$/,
+    '',
+  );
   const model = Bun.env['LUNA_EMBEDDING_MODEL'] ?? 'text-embedding-3-large';
   const key = Bun.env['LUNA_EMBEDDING_API_KEY'] ?? '';
 

@@ -72,7 +72,11 @@ export function listFacts(opts: ListOptions = {}): L3Fact[] {
   const db = getMemoryDb();
   if (!db) return [];
   const at = opts.asOf ?? Date.now();
-  const clauses = ['created_ms <= ?', '(deleted_ms IS NULL OR deleted_ms > ?)', '(expires_ms IS NULL OR expires_ms > ?)'];
+  const clauses = [
+    'created_ms <= ?',
+    '(deleted_ms IS NULL OR deleted_ms > ?)',
+    '(expires_ms IS NULL OR expires_ms > ?)',
+  ];
   const params: (string | number)[] = [at, at, at];
   if (opts.category) {
     clauses.push('category = ?');

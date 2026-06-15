@@ -31,7 +31,9 @@ describe('workspace mutating-route gate', () => {
 
   test('/edit is 403 without LUNA_DEV_TOOLS', async () => {
     delete Bun.env['LUNA_DEV_TOOLS'];
-    const res = await workspaceHandler(post('/_workspace/api/edit', { action: 'delete', table: 'l2_turns', rowid: 1 }));
+    const res = await workspaceHandler(
+      post('/_workspace/api/edit', { action: 'delete', table: 'l2_turns', rowid: 1 }),
+    );
     expect(res?.status).toBe(403);
   });
 

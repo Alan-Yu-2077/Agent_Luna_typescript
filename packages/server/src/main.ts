@@ -34,7 +34,9 @@ initCustomSqlite();
 
 // Pin the DB to the repo root regardless of cwd (../../../ from packages/server/src),
 // so launching from a subdirectory can't silently create a second empty luna.sqlite.
-const db = openDb(Bun.env['LUNA_DB_PATH'] ?? join(import.meta.dir, '..', '..', '..', 'luna.sqlite'));
+const db = openDb(
+  Bun.env['LUNA_DB_PATH'] ?? join(import.meta.dir, '..', '..', '..', 'luna.sqlite'),
+);
 const version = migrate(db, join(import.meta.dir, 'migrations'));
 const traceStore = new TraceStore(db);
 setTraceStore(traceStore);
@@ -82,7 +84,9 @@ if (Bun.env['ANTHROPIC_API_KEY']) {
   const skillMode = skillsEnabled();
   const selfEditMode = selfEditEnabled();
   const registry = withSelfEdit(
-    withSkills(withRepoMap(withShell(withCodeWrite(messageMode ? messageRegistry : builtinRegistry)))),
+    withSkills(
+      withRepoMap(withShell(withCodeWrite(messageMode ? messageRegistry : builtinRegistry))),
+    ),
   );
   setRuntime({ provider, registry, dreamLlm });
   console.log(

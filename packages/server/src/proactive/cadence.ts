@@ -62,7 +62,10 @@ export type WakeContext = { lastUserMs: number; nowMs: number; nowHour: number }
 // Pure cheap-exit prefilter: returns whether the (expensive) wake judgment
 // should run at all. Lull anchoring counts Luna's OWN last proactive message
 // toward the silence measurement so she can't nudge into a lull she just broke.
-export function shouldConsiderWake(c: Cadence, x: WakeContext): { consider: boolean; reason: string } {
+export function shouldConsiderWake(
+  c: Cadence,
+  x: WakeContext,
+): { consider: boolean; reason: string } {
   if (!proactiveEnabled()) return { consider: false, reason: 'disabled' };
   if (quietHours().has(x.nowHour)) return { consider: false, reason: 'quiet_hours' };
 
@@ -152,6 +155,14 @@ export function saveCadence(sessionId: string, c: Cadence): void {
   if (changes === 0) {
     db.prepare(
       'INSERT INTO sessions (id, updated_ms, proactive_phase, proactive_quota_used, proactive_quota_date, proactive_last_ms, proactive_nudges) VALUES (?,?,?,?,?,?,?)',
-    ).run(sessionId, Date.now(), c.phase, c.quotaUsed, c.quotaDate, c.lastProactiveMs, c.nudgesSent);
+    ).run(
+      sessionId,
+      Date.now(),
+      c.phase,
+      c.quotaUsed,
+      c.quotaDate,
+      c.lastProactiveMs,
+      c.nudgesSent,
+    );
   }
 }
