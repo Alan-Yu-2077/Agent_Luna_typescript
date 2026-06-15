@@ -199,6 +199,37 @@ describe('dream cycle', () => {
     expect(weeks.length).toBeGreaterThanOrEqual(1);
   });
 
+  test('4b. monthly diaries: 28 day-diaries in a month roll into a month entry (v0.17.1)', async () => {
+    // run_diaries skips when L2 is empty, so give it a turn to chew on.
+    seedDialogue('default', [['hello', 'hi']]);
+    // Pre-seed 28 day diaries for 2026-05 directly (the day-gen cap is 20/cycle).
+    for (let d = 1; d <= 28; d++) {
+      const key = `2026-05-${String(d).padStart(2, '0')}`;
+      db.prepare(
+        'INSERT INTO diaries (kind, period_key, text, generated_ms) VALUES (?, ?, ?, ?)',
+      ).run('day', key, `day ${key}`, Date.now());
+    }
+    const { llm } = scriptedLlm();
+    await runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
+
+    const months = db.prepare("SELECT period_key FROM diaries WHERE kind = 'month'").all() as {
+      period_key: string;
+    }[];
+    expect(months.some((m) => m.period_key === '2026-05')).toBe(true);
+
+    // idempotent: a second cycle does not create a duplicate month entry
+    resetDreamStateForTests();
+    await runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
+    const monthCount = (
+      db
+        .prepare("SELECT COUNT(*) c FROM diaries WHERE kind = 'month' AND period_key = '2026-05'")
+        .get() as {
+        c: number;
+      }
+    ).c;
+    expect(monthCount).toBe(1);
+  });
+
   test('5. persona_update writes core memory with dream source + audit', async () => {
     seedDialogue('default', [['I trust you with this', 'that means a lot']]);
     const { llm } = scriptedLlm({

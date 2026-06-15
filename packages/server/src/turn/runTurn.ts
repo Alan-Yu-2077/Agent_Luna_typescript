@@ -11,6 +11,7 @@ import { trace, flushTrace, traceEnabled } from '../trace/instrument';
 import { appendL2, persistSession } from '../memory/sessionStore';
 import { buildActiveContext, maybeFold } from '../memory/l1Window';
 import { renderCoreBlock } from '../memory/renderCoreBlock';
+import { renderDiaryDigest } from '../memory/diaries';
 import { renderRecallBlock, retrieve } from '../memory/recall/recall';
 import { getMemoryDb } from '../memory/sessionStore';
 import { loadPersona } from '../persona/loader';
@@ -97,6 +98,11 @@ export function buildSystemPrompt(
   if (Bun.env['LUNA_MEMORY_INJECT'] !== '0') {
     const core = renderCoreBlock();
     if (core.length > 0) parts.push(core);
+    // v0.17.1: the standing diary digest (latest day/week/month) — the long-range
+    // narrative memory, behind LUNA_DIARY_INJECT. Stable between dream writes, so
+    // it stays inside the one cached block.
+    const diary = renderDiaryDigest();
+    if (diary.length > 0) parts.push(diary);
   }
   return [{ type: 'text', text: parts.join('\n\n'), cache_control: { type: 'ephemeral' } }];
 }

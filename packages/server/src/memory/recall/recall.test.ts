@@ -275,3 +275,42 @@ describe('P1 — recall embed budget (v0.16.1)', () => {
     expect(hits.length).toBeGreaterThan(0); // lexical path still found it
   });
 });
+
+describe('v0.17.1 — diaries as recall candidates + GA ranking', () => {
+  test('a diary is a retrievable candidate (source=diary)', async () => {
+    db.prepare(
+      'INSERT INTO diaries (kind, period_key, text, generated_ms) VALUES (?, ?, ?, ?)',
+    ).run('day', '2026-06-15', '我们今天聊了煮咖啡的事，很温暖', Date.now());
+    const hits = await retrieve('s', '咖啡');
+    const diaryHit = hits.find((h) => h.source === 'diary');
+    expect(diaryHit).toBeDefined();
+    expect(diaryHit?.text).toContain('咖啡');
+  });
+
+  test('GA ranking: a high-importance L2 turn outranks a same-relevance unrated one', async () => {
+    appendL2({
+      sessionId: 's',
+      turnId: 'lo',
+      userText: '咖啡 一般',
+      assistantText: 'ok',
+      rawContent: [],
+    });
+    appendL2({
+      sessionId: 's',
+      turnId: 'hi',
+      userText: '咖啡 一般',
+      assistantText: 'ok',
+      rawContent: [],
+    });
+    // rate the 'hi' turn salient
+    const hiId = (db.prepare("SELECT id FROM l2_turns WHERE turn_id='hi'").get() as { id: number })
+      .id;
+    db.prepare('UPDATE l2_turns SET importance = 5 WHERE id = ?').run(hiId);
+    const hits = await retrieve('s', '咖啡', { k: 5 });
+    const hi = hits.find((h) => h.id === String(hiId));
+    const lo = hits.find((h) => h.id !== String(hiId) && h.source === 'l2');
+    expect(hi).toBeDefined();
+    expect(lo).toBeDefined();
+    expect(hi!.score).toBeGreaterThan(lo!.score); // importance term lifts it
+  });
+});

@@ -259,6 +259,25 @@ const dreamGraph: Graph<DreamCycleState, DreamNode> = {
         written += 1;
       }
 
+      // v0.17.1: monthly retrospectives — roll a month's day-diaries (≥28) into a
+      // 'month' entry once, idempotent via INSERT OR IGNORE + the hasDiary check.
+      const byMonth = new Map<string, { period_key: string; text: string }[]>();
+      for (const d of dayDiaries) {
+        const key = d.period_key.slice(0, 7); // YYYY-MM
+        const list = byMonth.get(key) ?? [];
+        list.push(d);
+        byMonth.set(key, list);
+      }
+      for (const [month, days] of [...byMonth.entries()].sort()) {
+        if (written >= MAX_DIARIES_PER_CYCLE) break;
+        if (days.length < 28 || hasDiary.get('month', month)) continue;
+        const source = days.map((d) => `${d.period_key}:\n${d.text}`).join('\n\n');
+        const call = await dreamCall(s.llm, diaryPrompt('month', month, source), 2000);
+        if (!call.ok) return ['failed', `month ${month}: ${call.failure}: ${call.detail}`];
+        insertDiary.run('month', month, call.text.trim(), Date.now());
+        written += 1;
+      }
+
       return written > 0 ? ['ok', `${written} diaries written`] : ['skipped', 'diaries up to date'];
     }),
 

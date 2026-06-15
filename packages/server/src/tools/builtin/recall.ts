@@ -13,18 +13,12 @@ const Input = z.object({
     .enum(['facts', 'timeline', 'both'])
     .optional()
     .describe('facts = durable things you know; timeline = past conversation; default both'),
-  limit: z
-    .number()
-    .int()
-    .min(1)
-    .max(10)
-    .optional()
-    .describe('how many hits to return (default 5)'),
+  limit: z.number().int().min(1).max(10).optional().describe('how many hits to return (default 5)'),
 });
 
 const RecallHit = z.object({
   id: z.string(),
-  source: z.enum(['l2', 'l3']),
+  source: z.enum(['l2', 'l3', 'diary']),
   text: z.string(),
   score: z.number(),
   when_ms: z.number(),
