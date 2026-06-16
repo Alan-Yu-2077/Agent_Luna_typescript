@@ -16,6 +16,8 @@ import { getMemoryDb } from '../memory/sessionStore';
 import { loadPersona } from '../persona/loader';
 import { renderHumanityBlock } from '../persona/humanity';
 import { renderL1Contract } from '../persona/l1Contract';
+import { memoryEpoch } from '../memory/epoch';
+import { cleanHistoryEnabled, stripThinking } from '../memory/cleanHistory';
 import { WAKE_SCENE_BLOCK } from '../persona/scene';
 import { detectDefection, runDefectionAudit } from './integrity/defectionAudit';
 import {
@@ -107,6 +109,12 @@ export type TurnState = {
   registry: ToolRegistry;
   emit: (e: ServerEvent) => void;
   anthropicTools: Anthropic.Tool[];
+  // A1 (v0.16.1): the rendered system block, memoized across this turn's tool
+  // iterations. Rebuilt only when the memory epoch changed since it was built
+  // (a mid-turn `remember`/`update_self`) — otherwise the same bytes every
+  // iteration, so building it (6 DB queries + an L1-contract concat) once is enough.
+  systemBlock: Anthropic.TextBlockParam[] | null;
+  systemBlockEpoch: number;
   text: string;
   thinking: string;
   iteration: number;
@@ -168,7 +176,14 @@ const graph: Graph<TurnState, TurnNode> = {
     // text" is an internal stage direction, not a query, so skip it (core
     // memory still injects via the system prompt).
     if (Bun.env['LUNA_MEMORY_INJECT'] !== '0' && getMemoryDb() && !s.proactiveTurn) {
-      const hits = await retrieve(s.session.id, s.userText);
+      // P1 (v0.16.1): under LUNA_RECALL_ASYNC, bound the embedding work so a cold
+      // cache can't delay the first LLM token past the budget (lexical-only
+      // fallback). Default off → current synchronous behavior.
+      const budget =
+        Bun.env['LUNA_RECALL_ASYNC'] === '1'
+          ? { embedBudgetMs: Number(Bun.env['LUNA_RECALL_BUDGET_MS'] ?? 200) }
+          : undefined;
+      const hits = await retrieve(s.session.id, s.userText, budget);
       const recall = renderRecallBlock(hits);
       if (recall) blocks.push({ type: 'text', text: recall });
     }
@@ -191,8 +206,14 @@ const graph: Graph<TurnState, TurnNode> = {
     // validated delivery happens later at dispatch; a preview that fails
     // validation ends in tool.finished{err} and the consumer discards it
     const messageStreams = new Map<string, JsonTextStream>();
+    // A1: reuse the memoized system block unless memory changed since it was built.
+    const epoch = memoryEpoch();
+    if (!s.systemBlock || s.systemBlockEpoch !== epoch) {
+      s.systemBlock = buildSystemPrompt(s.session, isMessageMode(s.registry));
+      s.systemBlockEpoch = epoch;
+    }
     for await (const ev of s.provider.chatStream({
-      system: buildSystemPrompt(s.session, isMessageMode(s.registry)),
+      system: s.systemBlock,
       messages: buildActiveContext(s.session),
       tools: s.anthropicTools,
     })) {
@@ -205,6 +226,12 @@ const graph: Graph<TurnState, TurnNode> = {
           // is the model narrating/thinking out loud, NOT a chat bubble. Only
           // stream reply.token in text mode (LUNA_MESSAGE_TOOL=0). (s.text still
           // accumulates for the turn.result canonical join + persistence.)
+          //
+          // D2 (v0.16.2): the text-mode path (this branch, the `reply.token`
+          // ServerEvent, and the controller's text-bubble handling) is LEGACY —
+          // dead under the default message mode. Kept as an escape hatch only;
+          // slated for removal once Initiative 10's window work lands, so there's
+          // a single context-assembly path to reason about. Do not build on it.
           if (!isMessageMode(s.registry)) {
             s.emit({ type: 'reply.token', turn_id: s.turnId, text: ev.text });
           }
@@ -327,8 +354,10 @@ const graph: Graph<TurnState, TurnNode> = {
             t_ms: Date.now(),
             call_id: evt.call_id,
             tool_name: evt.tool_name,
-            phase: evt.kind === 'started' ? 'started' : evt.kind === 'progress' ? 'progress' : 'final',
-            payload: evt.kind === 'final' ? evt.result : evt.kind === 'progress' ? evt.payload : evt.input,
+            phase:
+              evt.kind === 'started' ? 'started' : evt.kind === 'progress' ? 'progress' : 'final',
+            payload:
+              evt.kind === 'final' ? evt.result : evt.kind === 'progress' ? evt.payload : evt.input,
           });
         }
         switch (evt.kind) {
@@ -568,6 +597,8 @@ export async function runTurn(opts: RunTurnOptions): Promise<TurnState> {
     registry: opts.registry,
     emit: tracedEmit,
     anthropicTools: [],
+    systemBlock: null,
+    systemBlockEpoch: -1,
     text: '',
     thinking: '',
     iteration: 0,
@@ -626,6 +657,11 @@ export async function runTurn(opts: RunTurnOptions): Promise<TurnState> {
     // await it) and must never skip the trace/fold cleanup below. A SQLite
     // throw here (locked/readonly/disk-full) is logged + surfaced, not fatal.
     try {
+      // v0.16.3: strip thinking from this now-completed turn before it becomes
+      // durable history — both the in-memory window and the L2 raw_json that
+      // loadSession rebuilds from. Safe here (the turn is done; no in-flight
+      // signed-thinking continuity to preserve).
+      if (cleanHistoryEnabled()) stripThinking(opts.session.history, historyStart);
       appendL2({
         sessionId: opts.session.id,
         turnId: opts.turnId,
@@ -637,7 +673,11 @@ export async function runTurn(opts: RunTurnOptions): Promise<TurnState> {
     } catch (e) {
       console.error('[runTurn] persistence failed:', e);
       try {
-        state.emit({ type: 'error', code: 'persistence_failed', message: 'turn data failed to persist' });
+        state.emit({
+          type: 'error',
+          code: 'persistence_failed',
+          message: 'turn data failed to persist',
+        });
       } catch {
         /* emit is best-effort */
       }

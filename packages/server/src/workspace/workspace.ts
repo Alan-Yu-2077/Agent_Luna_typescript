@@ -11,12 +11,16 @@ import { resetSessions } from '../turn/session';
 const INDEX_HTML = readFileSync(join(import.meta.dir, 'index.html'), 'utf8');
 
 function json(data: unknown, status = 200): Response {
-  return new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } });
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { 'content-type': 'application/json' },
+  });
 }
 
 function sanitize(v: unknown): unknown {
   if (v instanceof Uint8Array) return `‹blob ${v.byteLength}b›`;
-  if (typeof v === 'string' && v.length > 4000) return `${v.slice(0, 4000)}… (+${v.length - 4000} chars)`;
+  if (typeof v === 'string' && v.length > 4000)
+    return `${v.slice(0, 4000)}… (+${v.length - 4000} chars)`;
   return v;
 }
 
@@ -25,7 +29,9 @@ function tableNames(): string[] {
   if (!db) return [];
   return (
     db
-      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
+      .prepare(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
+      )
       .all() as Array<{ name: string }>
   ).map((r) => r.name);
 }
@@ -46,24 +52,35 @@ function dumpAll(limit: number): TableDump[] {
   for (const name of tableNames()) {
     try {
       const count = (db.prepare(`SELECT count(*) AS c FROM "${name}"`).get() as { c: number }).c;
-      const columns = (db.prepare(`PRAGMA table_info("${name}")`).all() as Array<{ name: string }>).map(
-        (c) => c.name,
-      );
+      const columns = (
+        db.prepare(`PRAGMA table_info("${name}")`).all() as Array<{ name: string }>
+      ).map((c) => c.name);
       // __rowid lets the UI delete/edit; WITHOUT ROWID / virtual tables lack it → read-only
       let editable = true;
       let raw: Array<Record<string, unknown>>;
       try {
-        raw = db.prepare(`SELECT rowid AS __rowid, * FROM "${name}" ORDER BY rowid DESC LIMIT ?`).all(limit) as Array<
-          Record<string, unknown>
-        >;
+        raw = db
+          .prepare(`SELECT rowid AS __rowid, * FROM "${name}" ORDER BY rowid DESC LIMIT ?`)
+          .all(limit) as Array<Record<string, unknown>>;
       } catch {
         editable = false;
-        raw = db.prepare(`SELECT * FROM "${name}" LIMIT ?`).all(limit) as Array<Record<string, unknown>>;
+        raw = db.prepare(`SELECT * FROM "${name}" LIMIT ?`).all(limit) as Array<
+          Record<string, unknown>
+        >;
       }
-      const rows = raw.map((r) => Object.fromEntries(Object.entries(r).map(([k, val]) => [k, sanitize(val)])));
+      const rows = raw.map((r) =>
+        Object.fromEntries(Object.entries(r).map(([k, val]) => [k, sanitize(val)])),
+      );
       out.push({ name, count, columns, rows, editable });
     } catch (e) {
-      out.push({ name, count: -1, columns: [], rows: [], editable: false, error: (e as Error).message });
+      out.push({
+        name,
+        count: -1,
+        columns: [],
+        rows: [],
+        editable: false,
+        error: (e as Error).message,
+      });
     }
   }
   return out;
@@ -110,12 +127,22 @@ export async function workspaceHandler(req: Request): Promise<Response | null> {
     const limit = Number.isFinite(raw) ? Math.max(1, Math.min(1000, raw)) : 100;
     return json({ enabled: getMemoryDb() !== null, limit, tables: dumpAll(limit) });
   }
+  // S2 (v0.16.0): the read-only view stays under LUNA_VIEWER, but the MUTATING
+  // routes (reset/edit) require an explicit LUNA_DEV_TOOLS=1 — so even on-host
+  // they are not a stray-click data-wipe, and (with the loopback bind) never an
+  // off-host one.
   if (path === '/_workspace/api/reset' && req.method === 'POST') {
+    if (Bun.env['LUNA_DEV_TOOLS'] !== '1') {
+      return json({ error: 'mutating routes require LUNA_DEV_TOOLS=1' }, 403);
+    }
     const body = (await req.json().catch(() => ({}))) as { confirm?: boolean };
     if (!body.confirm) return json({ error: 'confirm:true required' }, 400);
     return json({ ok: true, cleared: resetData() });
   }
   if (path === '/_workspace/api/edit' && req.method === 'POST') {
+    if (Bun.env['LUNA_DEV_TOOLS'] !== '1') {
+      return json({ error: 'mutating routes require LUNA_DEV_TOOLS=1' }, 403);
+    }
     const db = getMemoryDb();
     if (!db) return json({ error: 'no db' }, 400);
     const body = (await req.json().catch(() => ({}))) as {
@@ -134,9 +161,13 @@ export async function workspaceHandler(req: Request): Promise<Response | null> {
         return json({ ok: true, changes: r.changes });
       }
       if (action === 'update') {
-        const cols = (db.prepare(`PRAGMA table_info("${table}")`).all() as Array<{ name: string }>).map((c) => c.name);
+        const cols = (
+          db.prepare(`PRAGMA table_info("${table}")`).all() as Array<{ name: string }>
+        ).map((c) => c.name);
         if (!column || !cols.includes(column)) return json({ error: 'unknown column' }, 400);
-        const r = db.prepare(`UPDATE "${table}" SET "${column}" = ? WHERE rowid = ?`).run(body.value as never, rowid);
+        const r = db
+          .prepare(`UPDATE "${table}" SET "${column}" = ? WHERE rowid = ?`)
+          .run(body.value as never, rowid);
         return json({ ok: true, changes: r.changes });
       }
       return json({ error: 'unknown action' }, 400);

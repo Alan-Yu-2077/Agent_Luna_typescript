@@ -2,6 +2,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 import type { Provider } from '../provider/types';
 import type { Session } from '../turn/session';
 import { commitFold, getMemoryDb, listL2 } from './sessionStore';
+import { cleanHistoryEnabled, collapseOldToolResults } from './cleanHistory';
 
 const KEEP_MSGS = Number(Bun.env['LUNA_L1_KEEP_MSGS'] ?? 24);
 const FOLD_MIN_BATCH_MSGS = Number(Bun.env['LUNA_L1_FOLD_BATCH_MSGS'] ?? 12);
@@ -14,11 +15,18 @@ export function windowEnabled(): boolean {
 // session.history itself is never truncated — it is the in-memory mirror of the
 // L2 ground truth, and the fold only ever reads verbatim content.
 export function buildActiveContext(session: Session): Anthropic.MessageParam[] {
+  // v0.16.3: collapse older tool-result payloads in the assembled context (keeps
+  // the most-recent ones full + the tool_use records intact). Thinking is already
+  // stripped from completed turns at persist time, so the window holds clean
+  // conversation. Non-mutating — session.history stays the verbatim mirror.
+  const clean = (msgs: Anthropic.MessageParam[]): Anthropic.MessageParam[] =>
+    cleanHistoryEnabled() ? collapseOldToolResults(msgs) : msgs;
+
   if (!windowEnabled() || session.windowLowWater === 0) {
-    return session.history;
+    return clean(session.history);
   }
   const tail = session.history.slice(session.windowLowWater);
-  if (session.rollingSummary.length === 0) return tail;
+  if (session.rollingSummary.length === 0) return clean(tail);
   const summaryMsg: Anthropic.MessageParam = {
     role: 'user',
     content: [
@@ -28,7 +36,7 @@ export function buildActiveContext(session: Session): Anthropic.MessageParam[] {
       },
     ],
   };
-  return [summaryMsg, ...tail];
+  return [summaryMsg, ...clean(tail)];
 }
 
 type FoldPlan = {

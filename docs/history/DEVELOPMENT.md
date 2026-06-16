@@ -1,6 +1,6 @@
 # Agent_Luna (TypeScript) — Development History
 
-Last updated: 2026-06-15 (Asia/Shanghai) — v0.15.4 (code-agent skill library + propose-only self-edit — `save_skill` verify-before-persist + `recall_skill` behind LUNA_SKILLS; `propose_self_edit` produces a diff for human review and never writes, evaluator firewall hard-rejects edits to her own judge/sandbox code across all write tools, behind LUNA_SELF_EDIT; skills migration 0009; **Initiative 8 complete 5/5**, dev branch)
+Last updated: 2026-06-16 (Asia/Shanghai) — v0.16.3 (clean durable history — strip prior-turn thinking + collapse old tool-result payloads to markers, behind `LUNA_CLEAN_HISTORY` (default on); a stored turn is clean conversation, the foundation for Initiative 10's deep window; **Initiative 9 complete 4/4**, branch)
 
 ## Scope
 
@@ -80,6 +80,10 @@ during the rewrite. Its version log is unrelated to this one — `v0.1` here is 
 | `v0.15.2` | 2026-06-15 | Code-agent shell + verify loop (Initiative 8, 3/5) — sandboxed `shell` (deny-regex + interactive-block + process-tree kill + output cap, subsumes fs-mutation) plus `typecheck` / `run_tests` / `lint` verifiers, all behind `LUNA_SHELL` (default on) via a shared injectable spawner | _dev branch_ |
 | `v0.15.3` | 2026-06-15 | Code-agent repo map + hybrid locator + plan (Initiative 8, 4/5) — Aider-style ranked, token-bounded, mtime-cached `repo_map` + hybrid `find_symbol` (ripgrep candidates → tree-sitter verify, comment/string false positives excluded, ripgrep-only fallback marked `verified:false`) behind `LUNA_REPO_MAP` (default on) + session-scoped `plan` todo spine (ships on always); `web-tree-sitter` + vendored TS/TSX/JS grammars; SQLite cache migration `0008` | _dev branch_ |
 | `v0.15.4` | 2026-06-15 | Code-agent skill library + propose-only self-edit (Initiative 8, 5/5) — `save_skill` (verify-before-persist: refuses unless the suite is green — Voyager invariant) + `recall_skill` (lexical search) behind `LUNA_SKILLS`; `propose_self_edit` produces a unified diff for human review and **never writes**, with the evaluator firewall (`resolveInWorkspace` `'write'`, built in v0.15.0) hard-rejecting any edit to her own tests/sandbox/safetyGate/humanity/deny-regex/l1Contract **across all write tools** (the keystone test), behind `LUNA_SELF_EDIT`; skills table migration `0009`. Deviation: the `self_edit.proposed` wire event is deferred — the proposal is delivered via `tool.finished` (the diff) for the human to apply. **Initiative 8 complete (5/5).** | _dev branch_ |
+| `v0.16.0` | 2026-06-15 | Security hardening + hygiene (Initiative 9, 1/4) — loopback bind `127.0.0.1` default (S1; closes S2/S3 net exposure) + `LUNA_BIND_HOST` opt-in, `/_workspace` reset/edit gated by `LUNA_DEV_TOOLS` (S2), `chat.send` capped at 8000 chars + WS `maxPayloadLength` (S5), `.github/workflows/ci.yml` (C1), README + orient-skill refresh (Doc1/2), WS reconnect buffer+backoff (C2), local-date quota clock (C3), aligned `fromBlob` (C4) | _branch_ |
+| `v0.16.1` | 2026-06-15 | Recompute efficiency (Initiative 9, 2/4) — system block memoized per turn via a `memory/epoch` dirty flag bumped by `remember`/`update_self` (A1) + `renderL1Contract` cached; `traces` retention window (`pruneToRetention`, throttled off flush, A4); recall fetches only the recent 500 L2 rows (`listRecentL2`) + reuses a persisted `content_hash` column (migration `0010`, A2); recall embed budget off the first-token path behind `LUNA_RECALL_ASYNC` (P1) | _branch_ |
+| `v0.16.2` | 2026-06-16 | Persistence + dead infra (Initiative 9, 3/4) — incremental `history_json`: `persistSession` writes only bookkeeping (constant `'[]'` blob), `loadSession` rebuilds the full timeline from the append-only L2 `raw_json` — the last O(N²) per-turn write gone (A3/P2); dead `vec0`/`vec_cache` write-path + orphaned virtual table removed, retrieval stays TS cosine (`sqlite-vec` dep kept inert for Initiative 10's potential KNN, D1); text-mode `reply.token` path marked legacy, removal deferred to post-Init-10 (D2) | _branch_ |
+| `v0.16.3` | 2026-06-16 | Clean durable history (Initiative 9, 4/4) — `cleanHistory` strips prior-turn `thinking`/`redacted_thinking` from completed turns at persist time (the API drops them across turns anyway) + collapses old `tool_result` payloads to a marker in `buildActiveContext` (keeps recent + the `tool_use` records), behind `LUNA_CLEAN_HISTORY` (default on). A stored turn is clean conversation — the foundation for Initiative 10's ~100-turn window. **Initiative 9 complete (4/4).** | _branch_ |
 
 ## Code-agent capability (2026-06-15) — Initiative 8 begins (v0.15.0)
 
@@ -542,6 +546,159 @@ Inference:
   and gives Alan the variety he remembered, now as a first-class setting rather than a buried constant.
 
 ## Detailed records
+
+### `v0.16.3` — 2026-06-16 — Clean durable history (Initiative 9, 4/4)
+
+Status:
+
+- working tree (branch `feat/initiative-9-audit-remediation`)
+
+Fact:
+
+- `memory/cleanHistory.ts` (new): `stripThinking(messages, from)` drops `thinking`/`redacted_thinking`
+  blocks from completed assistant messages (never to empty); `collapseOldToolResults(messages, keepRecent)`
+  returns a copy with older `tool_result` payloads replaced by `[tool_result elided]` (block + `tool_use_id`
+  preserved); `cleanHistoryEnabled()` (`LUNA_CLEAN_HISTORY`, default on).
+- `turn/runTurn.ts`: in finalize, `stripThinking` is applied to the just-completed turn's messages
+  before `appendL2`, so both the in-memory window and the L2 `raw_json` (which `loadSession` rebuilds
+  from) store clean turns. Never touches the in-flight turn (runs after it ends).
+- `memory/l1Window.ts buildActiveContext`: collapses old tool-result payloads (non-mutating) in the
+  assembled context, keeping the recent slice + summary path intact.
+- Tests: `cleanHistory.test.ts` (new, +6: strip/keep/round-trip/no-empty, collapse/keep-recent/non-mutating);
+  `sessionStore.test.ts` pinned to `LUNA_CLEAN_HISTORY=0` for its raw-fidelity assertions. **548 pass /
+  0 fail**; all three packages `tsc` clean.
+
+Inference:
+
+- A stored "turn" now costs what a conversational turn should: thinking (ephemeral by Anthropic's own
+  design across turns) is out of durable history, and bulky tool payloads collapse beyond a recent
+  slice. This shrinks every turn's input on its own and is the load-bearing dependency for Initiative
+  10 — a ~100-turn verbatim window is ~20k tokens *because* each stored turn is clean.
+- Safety: stripping only applies to completed turns (the in-flight signed-thinking loop is untouched —
+  modifying it is a 400), and collapse keeps `tool_use`↔`tool_result` structurally valid, both pinned
+  by tests.
+
+**Initiative 9 (Audit remediation) complete — v0.16.0–v0.16.3.** The audit's P0/P1 security surface is
+closed (loopback bind + dev-tools gate + input caps), the per-turn/per-iteration recompute is gone
+(memoized system block, capped + hashed recall, retention, recall off the TTFT path), the last O(N²)
+persistence write is removed (rebuild-from-L2), the dead `vec0` write path is gone, and durable history
+is clean. CI now enforces it all on push.
+
+### `v0.16.2` — 2026-06-16 — Persistence + dead infra (Initiative 9, 3/4)
+
+Status:
+
+- working tree (branch `feat/initiative-9-audit-remediation`)
+
+Fact:
+
+- `memory/sessionStore.ts`: `persistSession` no longer re-serializes `history` — it writes a
+  constant `'[]'` placeholder + turn_seq/updated_ms (A3). `loadSession` rebuilds the full history
+  by concatenating each L2 row's `raw_json` (the messages that turn appended), so the append-only
+  L2 timeline is the single source of truth.
+- `memory/recall/recall.ts`: removed the dead `vec0` write-path — `vecAvailable`, `insertVec`, the
+  `vec_cache` virtual-table creation/inserts, the `vecReady` state, and the `tryLoadVec` import.
+  `storeEmbedding` now only writes `embeddings_cache`; retrieval is unchanged (TS cosine).
+  `resetRecallStateForTests` kept as a no-op for the test API. `sqlite-vec` dep + `vecRuntime`
+  retained inert (D1).
+- `turn/runTurn.ts`: the `reply.token` text-mode branch is annotated LEGACY (D2) — kept as an
+  escape hatch, removal deferred to post-Initiative-10.
+- Tests: `sessionStore.test.ts` — updated the upsert test for the new contract (history rebuilds
+  from L2, blob is constant) + a new A3 reload test (multi-turn → reset → rebuilt verbatim from L2,
+  `history_json` stays `'[]'`). **542 pass / 0 fail**; all three packages `tsc` clean; grep confirms
+  no `vec_cache` write path remains.
+
+Inference:
+
+- Eliminates the last O(N²) persistence cost: a long-lived companion no longer re-writes the entire
+  growing history blob every turn — per-turn persistence is now O(1) (append one L2 row + write
+  bookkeeping), and the full timeline is reconstructed from L2 on the rare reload. Crash-faithful:
+  L2 is written before bookkeeping in the same finally block.
+- Resolves the audit's D1 (write-only `vec0`) by deleting the dead write + the orphaned table; the
+  inert `sqlite-vec` dependency is left for Initiative 10 to decide (wire real KNN over the larger
+  corpus, or drop), per the roadmap's "decide jointly with Init 10."
+- A3's rebuild-from-L2 is the persistence shape Initiative 10 needs to grow the window to ~100 clean
+  turns without ballooning `history_json` (store nothing growing; source of truth stays L2).
+
+### `v0.16.1` — 2026-06-15 — Recompute efficiency (Initiative 9, 2/4)
+
+Status:
+
+- working tree (branch `feat/initiative-9-audit-remediation`)
+
+Fact:
+
+- `memory/epoch.ts` (new): a monotonic `memoryEpoch()` bumped by `bumpMemoryEpoch()`.
+- `l3Store.addFact`/`forgetFact` and `coreMemory.updateCore` call `bumpMemoryEpoch()` on a real
+  change (A1 dirty flag).
+- `turn/runTurn.ts`: `TurnState` gains `systemBlock` + `systemBlockEpoch`; `open_stream` builds the
+  system block once and reuses it across tool iterations, rebuilding only when the epoch moved (A1).
+- `persona/l1Contract.ts`: `renderL1Contract` memoizes its constant string (A1).
+- `trace/store.ts`: `pruneToRetention(keep)` deletes traces for all but the most-recent N turns
+  (`LUNA_TRACE_RETENTION_TURNS`, default 1000), called throttled every 200 flushes (A4).
+- `migrations/0010_content_hash.sql` (new): `content_hash` column on `l2_turns` + `l3_facts`.
+- `sessionStore.appendL2` stores the L2 content hash; `listRecentL2(sessionId, limit)` fetches only
+  the recent N rows; `l3Store.addFact` stores its hash (A2).
+- `memory/recall/recall.ts`: `collectCandidates` uses `listRecentL2` + carries the stored hash;
+  `retrieve` reuses it (hashes on the fly only for L3 / pre-migration rows), and takes an
+  `embedBudgetMs` that races the embedding work against a timeout (P1).
+- `turn/runTurn.ts parse_input`: passes `embedBudgetMs` (`LUNA_RECALL_BUDGET_MS`, default 200) when
+  `LUNA_RECALL_ASYNC=1` (default off) — recall query-embed off the first-token path (P1).
+- Tests: recall (+4: `listRecentL2`/hash golden, epoch dirty flag, embed-budget fallback), trace
+  store (+2: retention). **541 pass / 0 fail**; all three packages `tsc` clean.
+
+Inference:
+
+- Removes the per-tool-iteration recompute the audit flagged: a multi-iteration turn now builds the
+  system block once (≈6 DB queries + an L1-contract concat) instead of every iteration, and recall
+  stops re-hashing ~500 candidates + over-fetching up to 10 000 L2 rows each call — the per-turn,
+  O(N²)-over-a-session waste that was pulling against the speed goal.
+- A1's correctness hinges on the dirty flag: a mid-turn `remember` that changes core/L3 still
+  re-renders (epoch moved), pinned by the epoch test; otherwise the block is byte-stable and the
+  prompt cache still hits.
+- These are the prerequisite that makes Initiative 10's ~100-turn window affordable; `content_hash`
+  + the `collectCandidates` seam are also what diary candidates (v0.17.1) and a future `vec0` KNN
+  will lean on.
+
+### `v0.16.0` — 2026-06-15 — Security hardening + hygiene (Initiative 9, 1/4)
+
+Status:
+
+- working tree (branch `feat/initiative-9-audit-remediation`)
+
+Fact:
+
+- `main.ts`: `Bun.serve` binds `hostname: LUNA_BIND_HOST ?? '127.0.0.1'` (S1) and sets
+  `websocket.maxPayloadLength = 1MB` (S5).
+- `workspace/workspace.ts`: `/_workspace/api/reset` + `/edit` return 403 unless `LUNA_DEV_TOOLS=1`
+  (S2); the read-only `/all` view is unchanged (still under `LUNA_VIEWER`).
+- `protocol/events.ts`: `ChatSendEvent.text` capped at `CHAT_SEND_MAX_CHARS = 8000` (S5).
+- `proactive/cadence.ts`: `dateKey` returns the **local** date (not UTC), so the daily quota and
+  quiet-hours share one clock (C3).
+- `memory/recall/embed.ts`: `fromBlob` copies into a fresh aligned buffer when the SQLite blob's
+  `byteOffset` isn't 4-byte aligned (C4).
+- `web/src/wsClient.ts`: frames sent while not `OPEN` are buffered (cap 100) and flushed on open;
+  reconnect is now exponential backoff + jitter, capped at 15s (C2).
+- `.github/workflows/ci.yml` (new): installs ripgrep, runs per-package `tsc --noEmit` + `bun test`
+  on push/PR (C1).
+- `README.md`: replaced the stale "scaffolding only … no runtime code yet" intro with the shipped
+  stack + a Run section noting the loopback default (Doc1).
+- `.claude/skills/luna-ts-orient/SKILL.md`: head refreshed v0.12.0 → v0.15.4 + planned Init 9/10,
+  with a note that the file map below predates v0.13+ (Doc2).
+- Tests: `events.test.ts` (+3, input cap), `workspace/workspace.test.ts` (+5, gate — new),
+  `web/src/wsClient.test.ts` (+2, buffer/flush — new). **535 pass / 0 fail**; all three packages
+  `tsc --noEmit` clean.
+
+Inference:
+
+- Closes the audit's P0/P1 network-exposure surface (S1/S2/S3) with one bind + a flag gate: the
+  server is no longer driveable, readable, or wipeable off-host by default; LAN access is now an
+  explicit, documented opt-in via `LUNA_BIND_HOST=0.0.0.0`.
+- The CI gate is the prerequisite that makes the v0.16.1 efficiency refactors safe to land — every
+  test-pinned invariant is now enforced on push.
+- Incidental: `web-tree-sitter` (a v0.15.3 dependency) was missing from `node_modules`; a plain
+  `bun install` materialized it, clearing 4 pre-existing `tsc` errors + 4 failing
+  tree-sitter/locator tests, so the suite is fully green (not merely no-new-failures).
 
 ### `v0.1.0` — 2026-06-11 — Bun skeleton + WS server
 

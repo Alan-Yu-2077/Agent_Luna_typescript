@@ -11,7 +11,10 @@ export function embeddingEnabled(): boolean {
 // provider path) — chat stays on the Anthropic SDK; embeddings have no
 // Anthropic API, so this thin client is the whole integration.
 export const fetchEmbedClient: EmbedClient = async (texts) => {
-  const base = (Bun.env['LUNA_EMBEDDING_BASE_URL'] ?? Bun.env['OPENAI_BASE_URL'] ?? '').replace(/\/$/, '');
+  const base = (Bun.env['LUNA_EMBEDDING_BASE_URL'] ?? Bun.env['OPENAI_BASE_URL'] ?? '').replace(
+    /\/$/,
+    '',
+  );
   const model = Bun.env['LUNA_EMBEDDING_MODEL'] ?? 'text-embedding-3-large';
   const key = Bun.env['LUNA_EMBEDDING_API_KEY'] ?? '';
 
@@ -38,7 +41,13 @@ export function toBlob(vec: Float32Array): Uint8Array {
 }
 
 export function fromBlob(blob: Uint8Array): Float32Array {
-  return new Float32Array(blob.buffer, blob.byteOffset, blob.byteLength / 4);
+  // C4 (v0.16.0): a Float32Array view requires a 4-byte-aligned byteOffset; a
+  // BLOB read from SQLite is not guaranteed to be aligned. If it isn't, copy the
+  // bytes into a fresh (aligned) buffer instead of throwing a RangeError.
+  if (blob.byteOffset % 4 === 0) {
+    return new Float32Array(blob.buffer, blob.byteOffset, blob.byteLength / 4);
+  }
+  return new Float32Array(blob.slice().buffer);
 }
 
 export function contentHash(text: string): string {

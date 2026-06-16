@@ -1,0 +1,41 @@
+name: CI
+
+# C1 (v0.16.0): enforce the green test bar + clean types on every push/PR, so the
+# test-pinned invariants (byte-stable system prompt, soft-delete, dream-never-
+# overlaps-turn, the input caps, the memoized system block, …) can't silently
+# regress.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # ripgrep is required by the code-agent symbol locator (Initiative 8); the
+      # hosted runner doesn't ship it by default.
+      - name: Install ripgrep
+        run: sudo apt-get update && sudo apt-get install -y ripgrep
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Type-check (protocol)
+        run: bun x tsc --noEmit -p packages/protocol/tsconfig.json
+
+      - name: Type-check (server)
+        run: bun x tsc --noEmit -p packages/server/tsconfig.json
+
+      - name: Type-check (web)
+        run: bun x tsc --noEmit -p packages/web/tsconfig.json
+
+      - name: Test
+        run: bun test

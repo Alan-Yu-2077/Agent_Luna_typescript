@@ -5,6 +5,12 @@ import { TRACE_SCHEMA_V } from '@luna/protocol';
 export const MAX_EVENTS_PER_TURN = 500;
 const MAX_PAYLOAD_BYTES = 4096;
 
+// A4 (v0.16.1): keep traces bounded. An always-on companion (proactive turns +
+// dreams) writes traces indefinitely; retain only the most-recent N turns,
+// pruned periodically off the flush path so it costs nothing per turn.
+const RETENTION_TURNS = Number(Bun.env['LUNA_TRACE_RETENTION_TURNS'] ?? 1000);
+const PRUNE_EVERY_FLUSHES = 200;
+
 type TurnRow = {
   turn_id: string;
   session_id: string;
@@ -33,8 +39,22 @@ function clampPayload(json: string): string {
 export class TraceStore {
   private buffers = new Map<string, TraceEvent[]>();
   private dropped = new Map<string, number>();
+  private flushCount = 0;
 
   constructor(private db: Database) {}
+
+  // A4: drop traces for all but the most-recent `keep` turns (by last activity).
+  // Exposed for tests + the dream cycle; also called throttled from flush().
+  pruneToRetention(keep = RETENTION_TURNS): number {
+    if (keep <= 0) return 0;
+    return this.db
+      .prepare(
+        `DELETE FROM traces WHERE turn_id NOT IN (
+           SELECT turn_id FROM traces GROUP BY turn_id ORDER BY MAX(t_ms) DESC LIMIT ?
+         )`,
+      )
+      .run(keep).changes;
+  }
 
   record(event: TraceEvent): void {
     const buf = this.buffers.get(event.turn_id) ?? [];
@@ -90,6 +110,10 @@ export class TraceStore {
         );
       }
     })();
+
+    // A4: prune periodically (not every flush) so retention costs ~nothing per turn.
+    this.flushCount += 1;
+    if (this.flushCount % PRUNE_EVERY_FLUSHES === 0) this.pruneToRetention();
   }
 
   listTurns(limit = 50): TurnRow[] {
@@ -110,7 +134,9 @@ export class TraceStore {
 
   getEventsByTurn(turnId: string): EventRow[] {
     return this.db
-      .prepare('SELECT kind, payload_json, t_ms FROM traces WHERE turn_id = ? ORDER BY t_ms ASC, id ASC')
+      .prepare(
+        'SELECT kind, payload_json, t_ms FROM traces WHERE turn_id = ? ORDER BY t_ms ASC, id ASC',
+      )
       .all(turnId) as EventRow[];
   }
 }

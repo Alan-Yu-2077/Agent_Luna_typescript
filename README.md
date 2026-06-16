@@ -9,10 +9,27 @@ two goals the Python version cannot reach without further surgery:
 2. **A single typed contract shared by backend and frontend** — eliminate the silent SSE / tool /
    memory drift that has accumulated over 47 versions of Python iteration.
 
-This repo is **scaffolding only** at this point. No runtime code yet. See
-[`docs/roadmap/README.md`](docs/roadmap/README.md) for the planned development sequence and
-[`docs/REWRITE_CONTEXT.md`](docs/REWRITE_CONTEXT.md) for the audited facts about Python Luna that
-inform every decision here.
+The full stack ships: the agent brain (Bun + WebSocket runtime, interleaved tool-use), three-layer
+SQLite memory + dream consolidation, proactive agency, action-integrity rails, a code-agent
+capability, and the body — a Live2D avatar with voice and lip-sync. See
+[`docs/history/DEVELOPMENT.md`](docs/history/DEVELOPMENT.md) for the per-version log (the truth source
+for the current shipped version), [`docs/roadmap/README.md`](docs/roadmap/README.md) for the forward
+plan, and [`docs/REWRITE_CONTEXT.md`](docs/REWRITE_CONTEXT.md) for the audited facts + locked design
+decisions.
+
+## Run
+
+```sh
+bun install
+bun run dev          # one-command local launcher (server + web + TTS proxy)
+# or individually:
+bun run dev:server   # Bun WS server (needs .env — see .env.example)
+bun run dev:web      # the web frontend
+bun test             # the test suite
+```
+
+The server binds **loopback (`127.0.0.1`) by default**; set `LUNA_BIND_HOST=0.0.0.0` to expose it on
+the LAN (only on a trusted network).
 
 ## Layout (planned)
 
