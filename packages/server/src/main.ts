@@ -10,11 +10,13 @@ import {
   selfEditEnabled,
   shellEnabled,
   skillsEnabled,
+  webSearchEnabled,
   withCodeWrite,
   withRepoMap,
   withSelfEdit,
   withShell,
   withSkills,
+  withWebSearch,
 } from './tools/registry';
 import { closeDb, migrate, openDb } from './sql';
 import { TraceStore } from './trace/store';
@@ -83,14 +85,19 @@ if (Bun.env['ANTHROPIC_API_KEY']) {
   // LUNA_SELF_EDIT != 0 (default ON; self-edit is propose-only so it never writes).
   const skillMode = skillsEnabled();
   const selfEditMode = selfEditEnabled();
-  const registry = withSelfEdit(
-    withSkills(
-      withRepoMap(withShell(withCodeWrite(messageMode ? messageRegistry : builtinRegistry))),
+  // Web search (v0.18.0) layers on iff LUNA_WEB_SEARCH=1 (default OFF — network +
+  // cost surface; flipped on in v0.18.2 after cost is measured).
+  const webSearchMode = webSearchEnabled();
+  const registry = withWebSearch(
+    withSelfEdit(
+      withSkills(
+        withRepoMap(withShell(withCodeWrite(messageMode ? messageRegistry : builtinRegistry))),
+      ),
     ),
   );
   setRuntime({ provider, registry, dreamLlm });
   console.log(
-    `[luna-server] provider: ${Bun.env['LUNA_MODEL'] ?? 'claude-opus-4-8'} via ${Bun.env['ANTHROPIC_BASE_URL'] ?? 'https://api.anthropic.com'}${summarizerKey ? ' (+summarizer key)' : ''}${messageMode ? ' [message-tool mode]' : ''}${writeMode ? ' [code-write]' : ''}${shellMode ? ' [shell]' : ''}${repoMapMode ? ' [repo-map]' : ''}${skillMode ? ' [skills]' : ''}${selfEditMode ? ' [self-edit]' : ''}`,
+    `[luna-server] provider: ${Bun.env['LUNA_MODEL'] ?? 'claude-opus-4-8'} via ${Bun.env['ANTHROPIC_BASE_URL'] ?? 'https://api.anthropic.com'}${summarizerKey ? ' (+summarizer key)' : ''}${messageMode ? ' [message-tool mode]' : ''}${writeMode ? ' [code-write]' : ''}${shellMode ? ' [shell]' : ''}${repoMapMode ? ' [repo-map]' : ''}${skillMode ? ' [skills]' : ''}${selfEditMode ? ' [self-edit]' : ''}${webSearchMode ? ' [web-search]' : ''}`,
   );
   // Proactive heartbeat (v0.10.3). The timer runs always; each tick no-ops
   // unless LUNA_PROACTIVE=1 (re-read per tick, so the kill switch toggles

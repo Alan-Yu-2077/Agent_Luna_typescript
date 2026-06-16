@@ -2,7 +2,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import { ToolName, type ServerEvent, type ToolCall, type FinishReason } from '@luna/protocol';
 import type { Provider, ProviderToolUse, ProviderUsage } from '../provider/types';
-import { isMessageMode, type ToolRegistry } from '../tools/registry';
+import { isMessageMode, isWebSearchMode, type ToolRegistry } from '../tools/registry';
 import { dispatchToolCalls } from '../tools/dispatcher';
 import { runGraph, type Graph, type TransitionHook, type TurnNode, type NodeName } from './graph';
 import { JsonTextStream } from './jsonTextStream';
@@ -78,13 +78,15 @@ const EMBODIMENT_BLOCK =
 export function buildSystemPrompt(
   _session: Session,
   messageMode = false,
+  webSearchMounted = false,
 ): Anthropic.TextBlockParam[] {
   const parts: string[] = [BASE_DIRECTIVES];
   if (messageMode) parts.push(MESSAGE_MODE_DIRECTIVE);
   // L1 thinking contract governs HOW she reasons, so it scopes everything below
   // it. Stable text → stays inside the one cached block (cache invariant).
-  // Default ON since v0.9.0; LUNA_L1_CONTRACT=0 opts out.
-  if (Bun.env['LUNA_L1_CONTRACT'] !== '0') parts.push(renderL1Contract());
+  // Default ON since v0.9.0; LUNA_L1_CONTRACT=0 opts out. The web clause rides
+  // here too (gated on web_search being mounted) — stable per process.
+  if (Bun.env['LUNA_L1_CONTRACT'] !== '0') parts.push(renderL1Contract(webSearchMounted));
   if (Bun.env['LUNA_PERSONA'] !== '0') {
     const persona = loadPersona();
     parts.push(
@@ -215,7 +217,11 @@ const graph: Graph<TurnState, TurnNode> = {
     // A1: reuse the memoized system block unless memory changed since it was built.
     const epoch = memoryEpoch();
     if (!s.systemBlock || s.systemBlockEpoch !== epoch) {
-      s.systemBlock = buildSystemPrompt(s.session, isMessageMode(s.registry));
+      s.systemBlock = buildSystemPrompt(
+        s.session,
+        isMessageMode(s.registry),
+        isWebSearchMode(s.registry),
+      );
       s.systemBlockEpoch = epoch;
     }
     for await (const ev of s.provider.chatStream({
@@ -716,6 +722,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<TurnState> {
       thinking: state.thinking,
       toolNamesThisTurn: state.toolNamesThisTurn,
       finishReason: state.finishReason,
+      webSearchMounted: isWebSearchMode(state.registry),
     });
     try {
       flushTrace(opts.turnId);

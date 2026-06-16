@@ -3,12 +3,29 @@
 // convert to acts. A stable block in the cached system core (deterministic, no
 // per-turn interpolation — the prompt-cache invariant). It guides; the v0.8.2
 // guards catch a violation; the v0.8.0 audit measures it.
-// A1 (v0.16.1): the contract is a pure constant string — build it once.
-let cached: string | null = null;
+// A1 (v0.16.1): the contract is a pure constant string — build it once. v0.18.0:
+// the only variant is whether web_search is mounted (one extra clause), so cache
+// per-variant by that boolean — still byte-stable within a process (the flag is
+// fixed at boot), preserving the prompt-cache invariant.
+const cache = new Map<boolean, string>();
 
-export function renderL1Contract(): string {
-  if (cached !== null) return cached;
-  cached = [
+// Web-search clause (Initiative 11, v0.18.0). Appended only when web_search is
+// mounted (LUNA_WEB_SEARCH=1). Combines the "when to reach for the web"
+// conservatism with the commitment-to-act clause that LD #14 + Python v0.58.0.1
+// proved a directive alone cannot carry (the 嘴上说手没动 defection).
+const WEB_SEARCH_CLAUSE =
+  'You can search the live web with web_search. Default to NOT searching: stable knowledge, ' +
+  'brainstorming, and ordinary chat need no lookup, and recall comes first for anything you may ' +
+  'already know. Reach for web_search only when the moment genuinely needs a current fact past ' +
+  'your training, or the user asks you to look something up. And when your thinking does decide a ' +
+  'lookup is warranted, emit the web_search (or recall) call in THIS SAME turn — saying “let me ' +
+  'look that up” or “我去查一下” and then ending the turn without the call is the failure mode, ' +
+  'never the right move. Calling the tool IS the act of searching.';
+
+export function renderL1Contract(webSearchMounted = false): string {
+  const hit = cache.get(webSearchMounted);
+  if (hit !== undefined) return hit;
+  const clauses = [
     'How you think on a turn:',
     // commitment-to-act — the 言行一致 core
     'When your thinking concludes you need to look something up, read a file, or save a ' +
@@ -48,6 +65,9 @@ export function renderL1Contract(): string {
       'and its references, structurally verified) or repo_map (a ranked outline of the codebase) over ' +
       'reading whole files to hunt for a name. For multi-step code work, set a plan first with the ' +
       'plan tool and update it as you finish each step — it keeps the work visible and revisable.',
-  ].join('\n\n');
-  return cached;
+  ];
+  if (webSearchMounted) clauses.push(WEB_SEARCH_CLAUSE);
+  const out = clauses.join('\n\n');
+  cache.set(webSearchMounted, out);
+  return out;
 }

@@ -21,6 +21,7 @@ import { shellTool } from './builtin/shell';
 import { timeNowTool } from './builtin/time_now';
 import { typecheckTool } from './builtin/typecheck';
 import { writeFileTool } from './builtin/write_file';
+import { webSearchTool } from './web/web_search';
 
 // Partial: `message` is mounted conditionally (LUNA_MESSAGE_TOOL), so a
 // registry without it must typecheck. Missing tools resolve to tool_not_found
@@ -143,6 +144,34 @@ export function selfEditEnabled(): boolean {
 
 export function withSelfEdit(base: ToolRegistry): ToolRegistry {
   return selfEditEnabled() ? { ...base, ...selfEditTools } : { ...base };
+}
+
+// Web search (Initiative 11, v0.18.0) — client-side live-web lookup. Unlike the
+// code tools (default ON), this is a network + real-credit-cost surface, so it
+// ships default OFF behind LUNA_WEB_SEARCH and is flipped on only in v0.18.2
+// after cost is measured. Read-only ⇒ proactiveRisk:'safe' (set on the tool).
+export const webSearchTools: ToolRegistry = {
+  web_search: webSearchTool,
+};
+
+// Default OFF (cost/abuse surface — opposite polarity to the code tools);
+// LUNA_WEB_SEARCH=1 mounts web_search this session.
+export function webSearchEnabled(): boolean {
+  return Bun.env['LUNA_WEB_SEARCH'] === '1';
+}
+
+// Compose a base registry with web_search iff the flag is on. Wired at boot in
+// main.ts so the registry — not an env read in the turn loop — is the source of
+// truth for "can Luna search the web this session".
+export function withWebSearch(base: ToolRegistry): ToolRegistry {
+  return webSearchEnabled() ? { ...base, ...webSearchTools } : { ...base };
+}
+
+// Registry-derived mode check (mirrors isMessageMode): the L1 web clause + the
+// intent-no-call audit key off whether web_search is actually mounted, never an
+// env read.
+export function isWebSearchMode(registry: ToolRegistry): boolean {
+  return registry.web_search !== undefined;
 }
 
 // The LD #9 everything-as-tool surface. Mode selection happens once at boot

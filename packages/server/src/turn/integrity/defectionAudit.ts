@@ -21,6 +21,26 @@ export const PROMISE_PATTERNS: readonly RegExp[] = [
   /\b(?:going to|gonna)\s+(?:search|check|look|read|find)\b/i,
 ];
 
+// Web-lookup intent phrasings (Initiative 11, v0.18.0). Matched against the
+// thinking summary to detect the web-specific 嘴上说手没动 defection: thinking
+// decided to search the web, but the turn ended with no web_search call. Audit-
+// only (no forced retry — Python deferred it pending data; same here), so
+// breadth is acceptable. Leans to search/lookup phrasing rather than generic
+// recall so the signal stays web-shaped.
+export const WEB_INTENT_PATTERNS: readonly RegExp[] = [
+  /搜索|搜一下|上网查|联网搜|网上查|查一下|查查|查询|去查|搜一搜/,
+  /\b(?:search (?:the web|online|for)|web ?search|look (?:it|this|that) up|google (?:it|this|that)|do a (?:web )?search)\b/i,
+];
+
+// Returns the first matched lookup keyword, or null. Pure.
+export function detectWebSearchIntentNoCall(thinking: string): string | null {
+  for (const re of WEB_INTENT_PATTERNS) {
+    const m = re.exec(thinking);
+    if (m) return m[0];
+  }
+  return null;
+}
+
 export type DefectionKind = 'is_final_promise' | 'message_intent' | 'thinking_intent';
 
 export type DefectionResult =
@@ -100,6 +120,9 @@ export type AuditState = {
   thinking: string;
   toolNamesThisTurn: string[];
   finishReason: string;
+  // v0.18.0: whether web_search was mounted this turn. The web intent-no-call
+  // audit only fires when it was — you cannot defect on a tool you do not have.
+  webSearchMounted?: boolean;
 };
 
 // Synchronous, gated, never throws into the turn (override-not-depend). Records
@@ -132,6 +155,31 @@ export function runDefectionAudit(s: AuditState): DefectionResult {
           called_tools: s.toolNamesThisTurn,
         },
       });
+    }
+    // Web-search intent-no-call audit (v0.18.0): a separate decision surface,
+    // independent of the generic defection above. Fires only when web_search was
+    // mounted, no web_search call fired this turn, and the thinking shows a web-
+    // lookup intent. Zero cost on success turns. No forced retry.
+    if (s.webSearchMounted === true && !s.toolNamesThisTurn.includes('web_search')) {
+      const keyword = detectWebSearchIntentNoCall(s.thinking);
+      if (keyword) {
+        trace({
+          schema_v: 1,
+          kind: 'decision',
+          trace_id: s.turnId,
+          turn_id: s.turnId,
+          session_id: s.sessionId,
+          t_ms: Date.now(),
+          surface: 'web_search_intent_no_call',
+          decision: 'defected',
+          reason: keyword,
+          evidence: {
+            matched_keyword: keyword,
+            thinking_tail: s.thinking.slice(-200),
+            called_tools: s.toolNamesThisTurn,
+          },
+        });
+      }
     }
     return result;
   } catch {

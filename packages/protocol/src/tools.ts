@@ -22,6 +22,9 @@ export const ToolName = z.enum([
   'save_skill',
   'recall_skill',
   'propose_self_edit',
+  // Initiative 11 (v0.18.0) — client-side live-web search. Read-only; mounted
+  // only under LUNA_WEB_SEARCH=1 (default off).
+  'web_search',
 ]);
 export type ToolName = z.infer<typeof ToolName>;
 
