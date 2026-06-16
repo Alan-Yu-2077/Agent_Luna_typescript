@@ -1,5 +1,6 @@
 import { getMemoryDb, listRecentL2 } from '../sessionStore';
 import { listFacts } from '../l3Store';
+import { listRecentDiaries } from '../diaries';
 import {
   contentHash,
   cosine,
@@ -17,9 +18,19 @@ const RETRIEVAL_K = Number(Bun.env['LUNA_MEMORY_RETRIEVAL_K'] ?? 12);
 // (v0.5.0) is the bulk pre-warmer.
 const MAX_EMBED_PER_TURN = 64;
 const L2_CANDIDATE_LIMIT = 500;
+const DIARY_CANDIDATE_LIMIT = Number(Bun.env['LUNA_DIARY_CANDIDATE_LIMIT'] ?? 30);
+
+// v0.17.1: Generative-Agents recall score = α·recency + β·importance + γ·relevance
+// (Park et al.). Weights default to the GA baseline (equal); tune via env.
+const W_RECENCY = Number(Bun.env['LUNA_RECALL_W_RECENCY'] ?? 1);
+const W_IMPORTANCE = Number(Bun.env['LUNA_RECALL_W_IMPORTANCE'] ?? 1);
+const W_RELEVANCE = Number(Bun.env['LUNA_RECALL_W_RELEVANCE'] ?? 1);
+// Default normalized importance for candidates without a per-turn salience score.
+const DEFAULT_IMPORTANCE = 0.4;
+const DIARY_IMPORTANCE = 0.7; // diaries are distilled summaries — inherently salient
 
 export type Hit = {
-  source: 'l2' | 'l3';
+  source: 'l2' | 'l3' | 'diary';
   id: string;
   text: string;
   score: number;
@@ -65,7 +76,21 @@ export function resetRecallStateForTests(): void {}
 // `hash` carries the stored content_hash for L2 rows (A2, v0.16.1) so retrieve()
 // reuses it instead of re-hashing; undefined → hashed on the fly (L3 facts, and
 // pre-v0.16.1 L2 rows whose column is null).
-type Candidate = { source: 'l2' | 'l3'; id: string; text: string; t_ms: number; hash?: string };
+// `importance` is the 0–1 normalized salience used by the GA recall score
+// (v0.17.1); `hash` reuses a stored content_hash where present (A2).
+type Candidate = {
+  source: 'l2' | 'l3' | 'diary';
+  id: string;
+  text: string;
+  t_ms: number;
+  importance: number;
+  hash?: string;
+};
+
+// Normalize a 1–5 turn salience score to 0–1; unrated → DEFAULT_IMPORTANCE.
+function imp01(score: number | null): number {
+  return score == null ? DEFAULT_IMPORTANCE : Math.min(1, Math.max(0, (score - 1) / 4));
+}
 
 function collectCandidates(sessionId: string): Candidate[] {
   const out: Candidate[] = [];
@@ -77,18 +102,38 @@ function collectCandidates(sessionId: string): Candidate[] {
       id: String(row.id),
       text: `${row.user_text}\n${row.assistant_text}`,
       t_ms: row.t_ms,
+      importance: imp01(row.importance),
       ...(row.content_hash ? { hash: row.content_hash } : {}),
     });
   }
   for (const fact of listFacts()) {
-    out.push({ source: 'l3', id: fact.id, text: fact.text, t_ms: fact.created_ms });
+    out.push({
+      source: 'l3',
+      id: fact.id,
+      text: fact.text,
+      t_ms: fact.created_ms,
+      importance: DEFAULT_IMPORTANCE,
+    });
+  }
+  // v0.17.1: diaries are now recall candidates — their rag_refresh embeddings
+  // (keyed by contentHash(text)) finally become retrievable (fixes the dead-work
+  // finding); hash is computed on the fly like L3.
+  for (const d of listRecentDiaries(DIARY_CANDIDATE_LIMIT)) {
+    out.push({
+      source: 'diary',
+      id: `${d.kind}:${d.period_key}`,
+      text: d.text,
+      t_ms: d.generated_ms,
+      importance: DIARY_IMPORTANCE,
+    });
   }
   return out;
 }
 
-function recencyBoost(tMs: number, now: number): number {
+// Recency as a 0–1 decay over age in days (GA recency term).
+function recencyScore(tMs: number, now: number): number {
   const ageDays = Math.max(0, (now - tMs) / 86_400_000);
-  return 0.1 / (1 + ageDays);
+  return 1 / (1 + ageDays);
 }
 
 export async function retrieve(
@@ -162,11 +207,22 @@ export async function retrieve(
     }
   }
 
+  // v0.17.1: Generative-Agents ranking — α·recency + β·importance + γ·relevance.
+  // relevance is the existing cosine/lexical blend (clamped 0–1); recency and
+  // importance are 0–1. Equal weights by default (GA baseline); tune via env
+  // (lower W_RECENCY/W_IMPORTANCE if recall surfaces too much recent/salient-but-
+  // off-topic material).
+  const sumW = W_RECENCY + W_IMPORTANCE + W_RELEVANCE || 1;
   const hits: Hit[] = candidates.map((c, i) => {
     const lex = lexScores[i]!;
     const cos = cosScores[i];
-    const base = cos !== null && cos !== undefined ? 0.7 * cos + 0.3 * lex : lex;
-    return { ...c, score: base + recencyBoost(c.t_ms, now) };
+    const blended = cos !== null && cos !== undefined ? 0.7 * cos + 0.3 * lex : lex;
+    const rel = Math.min(1, Math.max(0, blended));
+    // normalize back to ~0–1 so the floor + downstream consumers are weight-stable
+    const score =
+      (W_RECENCY * recencyScore(c.t_ms, now) + W_IMPORTANCE * c.importance + W_RELEVANCE * rel) /
+      sumW;
+    return { source: c.source, id: c.id, text: c.text, t_ms: c.t_ms, score };
   });
 
   return hits

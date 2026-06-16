@@ -63,12 +63,14 @@ function scriptedLlm(script?: Partial<Record<string, string | (() => string)>>):
     else if (prompt.includes('reflecting during sleep')) key = 'persona';
     else if (prompt.includes('private diary')) key = 'diary';
     else if (prompt.includes('compress conversation history')) key = 'fold';
+    else if (prompt.includes('how memorable each')) key = 'salience';
     const handler = script?.[key];
     if (typeof handler === 'function') return handler();
     if (typeof handler === 'string') return handler;
     if (key === 'refine' || key === 'audit') return NOOP_PATCH;
     if (key === 'persona') return NOOP_PERSONA;
     if (key === 'diary') return 'A quiet day; we talked and I noted things worth keeping.';
+    if (key === 'salience') return JSON.stringify({ scores: Array(50).fill(3) });
     return '[mock]';
   };
   return { llm: { primary: provider, fallback: null }, provider };
@@ -139,6 +141,24 @@ describe('dream cycle', () => {
     expect(wake().ok).toBe(false);
   });
 
+  test('2b. salience: dream rates unrated turns 1–5 and stores the scores (v0.17.0)', async () => {
+    seedDialogue('default', [
+      ['I adopted a dog named Mochi', 'Mochi! what a name'],
+      ['nice weather', 'mm'],
+    ]);
+    // listUnratedL2 is most-recent-first → unrated[0]='nice weather', [1]='Mochi'.
+    const { llm } = scriptedLlm({ salience: JSON.stringify({ scores: [5, 1] }) });
+    await runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
+
+    const rows = db.prepare('SELECT user_text, importance FROM l2_turns').all() as {
+      user_text: string;
+      importance: number | null;
+    }[];
+    const byText = Object.fromEntries(rows.map((r) => [r.user_text, r.importance]));
+    expect(byText['nice weather']).toBe(5);
+    expect(byText['I adopted a dog named Mochi']).toBe(1);
+  });
+
   test('3. reconciliation: planted contradiction → exactly one active fact survives', async () => {
     const cat = addFact('preferences', 'User loves cats and wants one');
     seedDialogue('default', [
@@ -179,6 +199,37 @@ describe('dream cycle', () => {
     expect(weeks.length).toBeGreaterThanOrEqual(1);
   });
 
+  test('4b. monthly diaries: 28 day-diaries in a month roll into a month entry (v0.17.1)', async () => {
+    // run_diaries skips when L2 is empty, so give it a turn to chew on.
+    seedDialogue('default', [['hello', 'hi']]);
+    // Pre-seed 28 day diaries for 2026-05 directly (the day-gen cap is 20/cycle).
+    for (let d = 1; d <= 28; d++) {
+      const key = `2026-05-${String(d).padStart(2, '0')}`;
+      db.prepare(
+        'INSERT INTO diaries (kind, period_key, text, generated_ms) VALUES (?, ?, ?, ?)',
+      ).run('day', key, `day ${key}`, Date.now());
+    }
+    const { llm } = scriptedLlm();
+    await runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
+
+    const months = db.prepare("SELECT period_key FROM diaries WHERE kind = 'month'").all() as {
+      period_key: string;
+    }[];
+    expect(months.some((m) => m.period_key === '2026-05')).toBe(true);
+
+    // idempotent: a second cycle does not create a duplicate month entry
+    resetDreamStateForTests();
+    await runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
+    const monthCount = (
+      db
+        .prepare("SELECT COUNT(*) c FROM diaries WHERE kind = 'month' AND period_key = '2026-05'")
+        .get() as {
+        c: number;
+      }
+    ).c;
+    expect(monthCount).toBe(1);
+  });
+
   test('5. persona_update writes core memory with dream source + audit', async () => {
     seedDialogue('default', [['I trust you with this', 'that means a lot']]);
     const { llm } = scriptedLlm({
@@ -191,7 +242,7 @@ describe('dream cycle', () => {
     await runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
     expect(getCore().relationship_status).toBe('trusted confidant');
     const audit = db
-      .prepare("SELECT source FROM core_memory_audit ORDER BY id DESC LIMIT 1")
+      .prepare('SELECT source FROM core_memory_audit ORDER BY id DESC LIMIT 1')
       .get() as { source: string };
     expect(audit.source).toBe('dream');
   });
@@ -204,10 +255,7 @@ describe('dream cycle', () => {
     const fallback = new MockProvider([]);
     fallback.completeResponder = () => 'fallback says hi';
 
-    const result = await dreamCall(
-      { primary, fallback },
-      'test prompt',
-    );
+    const result = await dreamCall({ primary, fallback }, 'test prompt');
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.text).toBe('fallback says hi');
 
@@ -235,7 +283,9 @@ describe('dream cycle', () => {
     setTraceStore(store);
     const { llm } = scriptedLlm({
       persona: () => {
-        tracesAtPersona = store.getEventsByTurn(`dream:${dreamStatus().is_dreaming ? currentCycleId() : ''}`).length;
+        tracesAtPersona = store.getEventsByTurn(
+          `dream:${dreamStatus().is_dreaming ? currentCycleId() : ''}`,
+        ).length;
         return NOOP_PERSONA;
       },
     });
@@ -271,7 +321,9 @@ describe('dream cycle', () => {
           kind: 'message_stop',
           stopReason: 'end_turn',
           toolUses: [],
-          assistantContent: [{ type: 'text', text: 'good night' }] as unknown as Anthropic.ContentBlock[],
+          assistantContent: [
+            { type: 'text', text: 'good night' },
+          ] as unknown as Anthropic.ContentBlock[],
           usage: { input_tokens: 1, output_tokens: 1 },
         },
       ],
@@ -291,8 +343,12 @@ describe('dream cycle', () => {
   });
 
   test('9. boot reconciliation: stale dreaming state parks awake', () => {
-    db.prepare("UPDATE dream_state SET is_dreaming = 1, current_step = 'memory_audit', cycle_id = 'dream-stale' WHERE id = 1").run();
-    db.prepare("INSERT INTO dream_reports (cycle_id, started_ms, ended_ms, report_json) VALUES ('dream-stale', 1, NULL, '{}')").run();
+    db.prepare(
+      "UPDATE dream_state SET is_dreaming = 1, current_step = 'memory_audit', cycle_id = 'dream-stale' WHERE id = 1",
+    ).run();
+    db.prepare(
+      "INSERT INTO dream_reports (cycle_id, started_ms, ended_ms, report_json) VALUES ('dream-stale', 1, NULL, '{}')",
+    ).run();
     resetDreamStateForTests();
     bootReconcile();
     expect(isDreaming()).toBe(false);

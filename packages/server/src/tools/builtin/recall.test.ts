@@ -70,7 +70,9 @@ describe('recall tool execute', () => {
 
   test('respects limit', async () => {
     for (let i = 0; i < 6; i++) addFact('key_moments', `关于猫的第${i}个回忆，猫咪很可爱`);
-    const e = await run({ query: '猫', limit: 2 });
+    // query a 2-char term that lexically matches (bigram) so the assertion is
+    // about the limit, independent of GA recency/importance weighting.
+    const e = await run({ query: '猫咪', limit: 2 });
     expect(e.data!.hits.length).toBe(2);
   });
 
@@ -96,9 +98,9 @@ describe('recall tool execute', () => {
   });
 
   test('summarize renders hit count', () => {
-    expect(recallTool.summarize({ hits: [{ id: 'a', source: 'l3', text: 'x', score: 1, when_ms: 0 }] })).toBe(
-      '1 hit',
-    );
+    expect(
+      recallTool.summarize({ hits: [{ id: 'a', source: 'l3', text: 'x', score: 1, when_ms: 0 }] }),
+    ).toBe('1 hit');
     expect(recallTool.summarize({ hits: [] })).toBe('0 hits');
   });
 });

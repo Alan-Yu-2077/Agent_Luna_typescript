@@ -1,6 +1,7 @@
 # Initiative 10 — Memory depth correction (owner's design correction)
 
-> **Status: 📋 PLANNED.** Priority: after Initiative 9 (audit remediation) — *by dependency, not by
+> **Status: ✅ SHIPPED 2026-06-16** (branch `feat/initiative-10-memory-depth`, stacked on Init 9, 559 tests green).
+> Priority: after Initiative 9 (audit remediation) — *by dependency, not by
 > importance*. Version range: **v0.17.0 – v0.17.1** (2 versions). Master index:
 > [`../README.md`](../README.md). Source: PR #3 ([`MEMORY_DESIGN_DIVERGENCE.md`]), the **project
 > owner's** correction of memory-design intent, every code claim re-verified against HEAD (v0.13.13);
@@ -81,8 +82,8 @@ turns) — so ~100 sits in the sharp regime with env headroom to 150.
 
 | Plan | Version | Theme | Risk | Depends | Status |
 |---|---|---|---|---|---|
-| [v0.17.0](v0.17.0-l1-window-depth.md) | v0.17.0 | L1 window → **~100 clean turns** (`LUNA_L1_RECENT_TURNS` 40–150) + structured bounded compression + importance anchors; amend LD #12 / v0.4.1 | Medium | Init 9 (v0.16.3, A1/A3/P1) | 📋 |
-| [v0.17.1](v0.17.1-diary-injection.md) | v0.17.1 | Diary **injection** (standing digest + `'diary'` recall candidates) + monthly diaries + GA-style recency×importance×relevance recall; amend LD #12 diary part | Medium | v0.17.0 | 📋 |
+| [v0.17.0](v0.17.0-l1-window-depth.md) | v0.17.0 | L1 window → **~100 clean turns** (`LUNA_L1_RECENT_TURNS` 40–150) + structured bounded compression + importance anchors; amend LD #12 / v0.4.1 | Medium | Init 9 (v0.16.3, A1/A3/P1) | ✅ |
+| [v0.17.1](v0.17.1-diary-injection.md) | v0.17.1 | Diary **injection** (standing digest + `'diary'` recall candidates) + monthly diaries + GA-style recency×importance×relevance recall; amend LD #12 diary part | Medium | v0.17.0 | ✅ |
 
 ## Acceptance criteria (whole initiative)
 - [ ] L1 verbatim window = **~100 clean turns** (env 40–150), unit *turns*; older history compressed to a
