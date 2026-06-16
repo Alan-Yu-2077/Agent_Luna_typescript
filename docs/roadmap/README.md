@@ -4,12 +4,10 @@ Forward development plan for the TypeScript rewrite. Each initiative is a folder
 self-contained version plans, executed one at a time. Version numbers reserve across initiatives so
 they never overlap.
 
-> **Main head: v0.15.4** (Initiative 8 — code-agent capability — complete, merged in `b5e68b3`).
-> **On branch `feat/initiative-9-audit-remediation`: v0.16.3 — Initiative 9 (audit remediation) ✅
-> complete** (v0.16.0–v0.16.3: loopback bind + dev-tools gate + input caps; memoized system block +
-> trace retention + recall over-fetch/`content_hash` + recall-off-TTFT; incremental `history_json`
-> rebuilt-from-L2 + dead-`vec0` removal; clean durable history; CI added — 548 tests green, `tsc`
-> clean). Pending PR/merge.
+> **Main head: v0.17.3** (on `main`). **Initiatives 8, 9, 10 all ✅ shipped + merged**: code-agent
+> capability (v0.15.0–v0.15.4), audit remediation (v0.16.0–v0.16.3), and the owner's memory-depth
+> correction (v0.17.0–v0.17.1) — plus C-side patches v0.17.2 (failed/empty turns no longer poison memory)
+> and v0.17.3 (today's day-diary is updateable). 561 tests green, `tsc` clean.
 > **Initiatives 1, 1.5, 2, 3, 4, 5, 6 all ✅ complete.** The rewrite now has the full stack: the agent
 > brain + three-layer memory + dream consolidation + proactive agency, **and the body** — a redesigned
 > cute UI (chat left / model right, light-blue stripes + lace), the live Live2D **yumi** avatar with 14
@@ -21,8 +19,8 @@ they never overlap.
 > TTS stays the original GPT-SoVITS, **local-only, not open-sourced**, brought up by a local one-command
 > launcher (`bun run dev` → `scripts/dev-all.ts` + `scripts/tts-proxy.cjs`, outside the roadmap). The C 端
 > bug-fix pass (v0.13.5–v0.13.11) is **done** — gaze/physics, lip-sync rewrite, serial queue, boot gate,
-> workspace IDE, persona fixes, clause-cap. **Next: Initiative 8 (code-agent capability)** — see below and
-> [`../history/DEVELOPMENT.md`](../history/DEVELOPMENT.md).
+> workspace IDE, persona fixes, clause-cap. **Next: Initiative 11 (web tools — agent-side networking)** — see
+> below and [`../history/DEVELOPMENT.md`](../history/DEVELOPMENT.md).
 
 ## Planned initiatives (execution order)
 
@@ -39,6 +37,7 @@ they never overlap.
 | 8 | v0.15.0 – v0.15.4 | **Code-agent capability** — turn Luna's minimal, directory-locked code tools into a mainstream code-agent loop: a **workspace sandbox** + windowed read / list / ripgrep nav (v0.15.0), **str_replace-native edit** tools with read-before-edit + lint-on-write (v0.15.1), a **sandboxed `shell`** + typecheck/test/lint **verify loop** (v0.15.2), an Aider-style **repo map** + tree-sitter **symbol locator** + `plan` tool (v0.15.3), and a **self-verified skill library + firewalled, human-gated self-edit** (v0.15.4). Ports Python's filesystem/exec capability; diverges to str_replace-native editing + a hard **evaluator firewall** (the agent can never write the code that judges/sandboxes it — the DGM safeguard). v0.14.x skipped (reserved by cancelled Initiative 7). | [`code-agent-2026-06/`](code-agent-2026-06/) | ✅ shipped 2026-06-15 (5 versions) |
 | 9 | v0.16.0 – v0.16.3 | **Audit remediation** — fix the code-verified findings from the audits in PRs #1/#2 (all re-confirmed at HEAD v0.13.13): close the **unauthenticated network surface** (loopback bind closes S1/S2/S3; dev-tools gate; input caps — v0.16.0), kill the **recompute-every-turn** pattern (memoize the system block, trace retention, recall over-fetch + `content_hash`, recall off the TTFT path — v0.16.1), finish the **structural** items (incremental `history_json`, decide `vec0` wire-or-remove, drop the dead text-mode path — v0.16.2), and **clean durable history** (strip thinking + collapse old tool I/O so a turn ≈ 200 tokens — v0.16.3, the foundation Init 10's deeper window builds on). `read_file` sandbox (S4) is already owned by Init 8/v0.15.0, not duplicated. | [`audit-remediation-2026-06/`](audit-remediation-2026-06/) | ✅ shipped 2026-06-16 (4 versions) |
 | 10 | v0.17.0 – v0.17.1 | **Memory depth correction** — the **owner's design correction** (PR #3, all claims code-confirmed), target design settled with the owner after a SOTA review: the shipped L1 window is ~4–9 turns (a 24-message cap) and diaries are written but **never injected**. Restore depth as a **memory gradient** — a **~100 clean-turn verbatim window** (`LUNA_L1_RECENT_TURNS` 40–150; affordable because v0.16.3 makes a turn ≈ 200 tokens) + **structured bounded compression** + **importance anchors** (v0.17.0) + the **diary as the injected cross-day/week layer** (standing digest + recall candidates; monthly; recency×importance×relevance ranking — v0.17.1; amend LD #12). Ordered after Init 9 by *dependency* (clean history + efficiency fixes make the deep window cheap), not by priority. | [`memory-depth-2026-06/`](memory-depth-2026-06/) | ✅ shipped 2026-06-16 (2 versions) |
+| 11 | v0.18.0 – v0.18.2 | **Web tools (agent-side networking)** — give Luna the open web: `web_search` (client-side, provider abstraction, Tavily default; the Python `web_search` ported + the *"嘴上说手没动"* defection guard) — v0.18.0; `web_fetch` + the **SSRF/extraction safety core** (deny-list IP guard + redirect re-validation + DNS-rebinding pin + Readability/Turndown extraction + `<untrusted_content>` delimiting) — v0.18.1; then **integration** — the search→fetch loop, standing injection system-rule + read/write boundary, citation surfacing, optional fetch cache, measured + **default-flipped on** — v0.18.2. Client-side because the yunwu gateway strips Anthropic's native server tools. | [`web-tools-2026-06/`](web-tools-2026-06/) | 🟡 PLANNED |
 
 ## Ordering philosophy
 
@@ -211,3 +210,20 @@ cheap; *reorderable* if the owner wants depth first (then v0.16.3 + A1/A3/P1 lan
 |---|---|---|---|
 | v0.17.0 | [L1 window depth](memory-depth-2026-06/v0.17.0-l1-window-depth.md) | Medium | L1 verbatim window → **~100 clean turns** (`LUNA_L1_RECENT_TURNS` 40–150, ≈ 20k tokens via v0.16.3) + **structured bounded compression** of older history (replaces the unbounded `rolling_summary`) + **importance anchors**; unit back to *turns*; amend LD #12 + supersede v0.4.1; cost measured before flip |
 | v0.17.1 | [Diary injection](memory-depth-2026-06/v0.17.1-diary-injection.md) | Medium | Inject day/week/**month** diaries (standing system-block digest + `'diary'` recall candidates so `rag_refresh`'s embeddings are finally retrieved); generate monthly diaries; amend LD #12 diary part — **Initiative 10 ✅** |
+
+## Initiative 11 — Web tools (agent-side networking) (v0.18.0 – v0.18.2) — 🟡 PLANNED
+
+The brain, memory, dream, proactivity, body, and code-agent all ship; the missing capability is **the open
+web**. Give Luna both halves of agent networking — **find** (`web_search`) and **read** (`web_fetch`) — driving
+the search→fetch→reason loop herself. Python shipped only `web_search` (Tavily); this **ports that and adds the
+fetch half she never had**, with the security a URL-reader demands done **client-side**, because the yunwu
+gateway strips Anthropic's native server tools. The tools are ordinary `defineTool`s (inherit timeout/abort/
+tracing), `proactiveRisk:'safe'` per LD #15 (*searches may run silently*), flag-gated until proven. The
+risk-isolating split lands the SSRF/injection surface in its own version, the Initiative-8 `shell` discipline.
+See [`web-tools-2026-06/`](web-tools-2026-06/).
+
+| Version | Plan | Risk | Theme |
+|---|---|---|---|
+| v0.18.0 | [web_search](web-tools-2026-06/v0.18.0-web-search.md) | Medium | Client-side `web_search` on the dispatcher (provider abstraction, **Tavily** default); soft-fail + `[N]` citations; the **defection guard** (L1 commitment clause + intent-no-call audit, extending LD #14); conservative L1 "when to reach for the web". `proactiveRisk:'safe'`. Flag `LUNA_WEB_SEARCH` |
+| v0.18.1 | [web_fetch + safety core](web-tools-2026-06/v0.18.1-web-fetch-safety.md) | High | `web_fetch` + the **SSRF guard** (`assertPublicUrl`: deny-list IPs + non-`http(s)` + redirect re-validation + DNS-rebinding pin) + `@mozilla/readability`→Turndown extraction + size/time caps + `<untrusted_content>` envelope. Guard joins the evaluator-firewall set. Flag `LUNA_WEB_FETCH` |
+| v0.18.2 | [Integration + hardening](web-tools-2026-06/v0.18.2-integration-hardening.md) | Medium | search→fetch loop validated; standing injection system-rule + read/write boundary audit; **citation surfacing** (wire + L2 + UI source cards); optional fetch cache (migration `0012`); cost measured; **default-flip both on** — **Initiative 11 ✅** |
