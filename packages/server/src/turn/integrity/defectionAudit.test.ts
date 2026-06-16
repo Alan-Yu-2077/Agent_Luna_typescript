@@ -279,6 +279,42 @@ describe('web_search intent-no-call audit (v0.18.0)', () => {
     store.flush('w1');
     expect(webDecisions('w1').length).toBe(0);
   });
+
+  // Review fix: the audit must not flag an honest turn that DISCHARGED the lookup
+  // through another tool — recall (which the L1 web clause explicitly blesses),
+  // read_file, grep… A turn that acted via any tool is not 嘴上说手没动.
+  test('discharged via recall / read_file → no web defection', () => {
+    runDefectionAudit({
+      ...base,
+      webSearchMounted: true,
+      thinking: '用户提到上次聊的事，我上网查一下再说',
+      toolNamesThisTurn: ['message', 'recall'],
+    });
+    runDefectionAudit({
+      ...base,
+      turnId: 'w2',
+      webSearchMounted: true,
+      thinking: '我上网查一下这个文件的内容',
+      toolNamesThisTurn: ['read_file'],
+    });
+    store.flush('w1');
+    store.flush('w2');
+    expect(webDecisions('w1').length).toBe(0);
+    expect(webDecisions('w2').length).toBe(0);
+  });
+
+  // Review fix: a bare generic lookup verb (查一下 / 查询) is no longer web-shaped,
+  // so it does not even match — it was poisoning the dataset with non-web turns.
+  test('a generic non-web lookup verb (查一下 alone) no longer matches', () => {
+    runDefectionAudit({
+      ...base,
+      webSearchMounted: true,
+      thinking: '我查一下记忆里有没有相关的事',
+      toolNamesThisTurn: ['message'],
+    });
+    store.flush('w1');
+    expect(webDecisions('w1').length).toBe(0);
+  });
 });
 
 describe('web_to_action boundary audit (v0.18.2)', () => {

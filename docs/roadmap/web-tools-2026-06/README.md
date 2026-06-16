@@ -1,6 +1,10 @@
 # Initiative 11 — Web tools (agent-side networking)
 
-> **Status: ✅ COMPLETE (3/3 shipped 2026-06-16).** Order 11 — the first capability initiative after
+> **Status: ✅ COMPLETE (3/3, review-remediated 2026-06-16)** · 🟡 **v0.18.3 follow-up** (verified DNS
+> pin + live measurement + citation polish). PR #6 review fixed two prompt-injection holes (unwrapped
+> search snippets + an envelope-escape) and a defection false-positive, and **reverted `web_fetch` to
+> opt-in** until v0.18.3's DNS pin closes the rebinding TOCTOU; `web_search` stays default-on.
+> Order 11 — the first capability initiative after
 > the memory work (Initiatives 9/10). Version range: **v0.18.0 – v0.18.2** (3 versions), all shipped on
 > branch `feat/initiative-11-web-search`: v0.18.0 (web_search), v0.18.1 (web_fetch + SSRF/extraction
 > safety core), v0.18.2 (integration + citations + cache + default-flip). Luna now has complete, safe
@@ -125,7 +129,8 @@ Initiative 8 used for `shell`.
 |---|---|---|---|---|---|
 | [v0.18.0](v0.18.0-web-search.md) | v0.18.0 | **web_search** — client-side search (provider abstraction, Tavily default) on the dispatcher; soft-fail + `[N]` citations; the defection guard (L1 clause + intent-no-call audit) extending LD #14; L1 "when to reach for the web" clause. `proactiveRisk:'safe'`. Flag `LUNA_WEB_SEARCH` | Medium | nothing | ✅ shipped 2026-06-16 |
 | [v0.18.1](v0.18.1-web-fetch-safety.md) | v0.18.1 | **web_fetch + SSRF/extraction safety core** — read one URL safely: the SSRF IP-guard module (deny-list + redirect re-validation + rebinding pin), `@mozilla/readability`→Turndown extraction, size/timeout caps, `<untrusted_content>` delimiting. Flag `LUNA_WEB_FETCH` | High | v0.18.0 (shared web infra) | ✅ shipped 2026-06-16 |
-| [v0.18.2](v0.18.2-integration-hardening.md) | v0.18.2 | **complete networking** — the search→fetch loop validated end-to-end; standing injection system-rule + intent-anchored boundary; citation surfacing (UI card + L2 persistence); optional fetch cache (migration `0012`); latency/cost measured; **default-flip both on**; persona framing; close Initiative 11 | Medium | v0.18.0, v0.18.1 | ✅ shipped 2026-06-16 |
+| [v0.18.2](v0.18.2-integration-hardening.md) | v0.18.2 | **complete networking** — the search→fetch loop validated end-to-end; standing injection system-rule + intent-anchored boundary; citation surfacing (UI card + L2 persistence); optional fetch cache (migration `0012`); latency/cost measured; **default-flip both on**; persona framing; close Initiative 11 | Medium | v0.18.0, v0.18.1 | ✅ shipped 2026-06-16 (review: `web_search` on, `web_fetch` opt-in pending v0.18.3 pin; measurement deferred) |
+| [v0.18.3](v0.18.3-fetch-pin-followup.md) | v0.18.3 | **review follow-up** — a **verified DNS-pinned fetch** (undici/`node:https` `Agent` with a validated `lookup`, single resolution, no TOCTOU) closing the rebinding gap → re-flip `web_fetch` ON; the live latency/token **measurement**; **citation polish** (clickable + scheme-validated chips, reload-persistent via L2 `citations_json` + migration `0013`) | Medium | v0.18.2 | 🟡 PLANNED |
 
 ## Acceptance criteria (whole initiative)
 

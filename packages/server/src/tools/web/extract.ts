@@ -79,9 +79,26 @@ export function extractMarkdown(html: string, maxChars?: number): Extracted {
   return { title: title.trim(), markdown, truncated };
 }
 
+// Defuse any envelope delimiter the page (or a search snippet) embeds itself: a
+// body containing a literal </untrusted_content> would otherwise CLOSE the
+// envelope early and smuggle the trailing text out as "trusted" — the classic
+// delimiter-injection escape (and stripTags above even decodes &lt;/&gt; back to
+// real brackets, making a crafted page worse). Neutralize every
+// <…untrusted_content…> tag-shaped sequence to fullwidth brackets so the only
+// real envelope tags are the ones we add. The model still reads the text fine.
+function defuseDelimiter(text: string): string {
+  return text.replace(/<\s*\/?\s*untrusted_content[^>]*>?/gi, (m) =>
+    m.replace(/</g, '＜').replace(/>/g, '＞'),
+  );
+}
+
 // The untrusted-content envelope (v0.18.1): every web-returned body is wrapped so
 // the delimiter is intrinsic from the first fetch. v0.18.2 adds the standing
 // system rule that tells the model what the delimiter MEANS (data, not orders).
+// The body is defused (above) so it cannot break out, and the source URL is
+// stripped of <>" so it cannot break the attribute (v0.18.x review fix).
 export function wrapUntrusted(markdown: string, sourceUrl: string): string {
-  return `<untrusted_content source="${sourceUrl}">\n${markdown}\n</untrusted_content>`;
+  const body = defuseDelimiter(markdown);
+  const src = sourceUrl.replace(/["<>]/g, '');
+  return `<untrusted_content source="${src}">\n${body}\n</untrusted_content>`;
 }

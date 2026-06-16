@@ -22,11 +22,13 @@ export const ToolName = z.enum([
   'save_skill',
   'recall_skill',
   'propose_self_edit',
-  // Initiative 11 (v0.18.0) — client-side live-web search. Read-only; mounted
-  // only under LUNA_WEB_SEARCH=1 (default off).
+  // Initiative 11 (v0.18.0) — client-side live-web search. Read-only; default ON
+  // since v0.18.2 (LUNA_WEB_SEARCH=0 is the off switch; auto-degrades off with no
+  // API key).
   'web_search',
   // Initiative 11 (v0.18.1) — read one URL safely (SSRF-guarded). Read-only;
-  // mounted only under LUNA_WEB_FETCH=1 (default off).
+  // OPT-IN (default off): LUNA_WEB_FETCH=1 mounts it (held opt-in until the
+  // v0.18.3 pinned-lookup DNS fix — the rebinding defense narrows, not closes).
   'web_fetch',
 ]);
 export type ToolName = z.infer<typeof ToolName>;

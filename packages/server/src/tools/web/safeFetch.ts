@@ -3,10 +3,19 @@ import { isIP } from 'node:net';
 
 // SSRF guard + safe fetcher (Initiative 11, v0.18.1) — the security keystone.
 // The URL analogue of resolveInWorkspace (workspace.ts): canonicalize → resolve
-// → validate the RESOLVED IP against a deny-list → re-validate on every redirect
-// and at connect (DNS-rebinding). Always-on inside the tool (LD #10), pure +
-// table-driven + exhaustively tested. This file is in the evaluator-firewall set
-// (workspace.ts): a future propose_self_edit can never rewrite the guard.
+// → validate the RESOLVED IP against a deny-list → re-validate on every redirect.
+//
+// DNS-rebinding caveat (be honest): Bun's fetch exposes no IP-pin hook, so
+// safeFetch cannot force the socket onto the exact IP it validated. It re-resolves
+// + re-checks immediately before connect, which NARROWS but does not fully close
+// the TOCTOU window — a sub-second TTL=0 rebind between the check and fetch's own
+// internal resolution can still slip a private IP past it. Because of this residual
+// gap, web_fetch ships OPT-IN (LUNA_WEB_FETCH, default off) until a verified
+// pinned-lookup fetch lands (v0.18.3 follow-up); web_search has no such surface.
+//
+// Always-on inside the tool (LD #10), pure + table-driven + tested. In the
+// evaluator-firewall set (workspace.ts): a future propose_self_edit can never
+// rewrite the guard.
 
 const MAX_URL_LEN = 2048;
 const MAX_REDIRECTS = 5;
@@ -81,6 +90,24 @@ function isBlockedIpv6(raw: string): boolean {
     const lo = parseInt(mappedHex[2]!, 16);
     const v4 = `${(hi >> 8) & 255}.${hi & 255}.${(lo >> 8) & 255}.${lo & 255}`;
     return isBlockedIpv4(v4);
+  }
+  // NAT64 (64:ff9b::/96) wraps an internal v4 in the low 32 bits — validate it as
+  // v4 (else 64:ff9b::a9fe:a9fe would reach 169.254.169.254 on a NAT64 host).
+  const nat64 = ip.match(
+    /^64:ff9b::(?:([0-9a-f]{1,4}):([0-9a-f]{1,4})|(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}))$/,
+  );
+  if (nat64) {
+    if (nat64[3]) return isBlockedIpv4(nat64[3]);
+    const hi = parseInt(nat64[1]!, 16);
+    const lo = parseInt(nat64[2]!, 16);
+    return isBlockedIpv4(`${(hi >> 8) & 255}.${hi & 255}.${(lo >> 8) & 255}.${lo & 255}`);
+  }
+  // 6to4 (2002::/16) wraps the v4 in the first two embedded hextets (2002:AABB:CCDD::).
+  const sixToFour = ip.match(/^2002:([0-9a-f]{1,4}):([0-9a-f]{1,4})(?::|$)/);
+  if (sixToFour) {
+    const hi = parseInt(sixToFour[1]!, 16);
+    const lo = parseInt(sixToFour[2]!, 16);
+    return isBlockedIpv4(`${(hi >> 8) & 255}.${hi & 255}.${(lo >> 8) & 255}.${lo & 255}`);
   }
   const head = parseInt(ip.split(':')[0] || '0', 16);
   if ((head & 0xffc0) === 0xfe80) return true; // fe80::/10 link-local
@@ -219,8 +246,11 @@ export async function safeFetch(
     const guard = await assertPublicUrl(current, resolve);
     if (!guard.ok) throw new SafeFetchError('blocked_url', guard.reason);
 
-    // DNS-rebinding re-check: for a hostname (not an IP literal), re-resolve
-    // immediately before connect and treat a now-private answer as an attack.
+    // DNS-rebinding re-check (window-narrowing, NOT a true pin): for a hostname,
+    // re-resolve immediately before connect and reject a now-private answer.
+    // fetch() below still performs its OWN resolution we cannot observe, so this
+    // shrinks the TOCTOU window but does not close it — see the header note and
+    // the v0.18.3 pinned-lookup follow-up.
     const host = hostOf(guard.url);
     if (isIP(host) === 0) {
       let ips: string[];

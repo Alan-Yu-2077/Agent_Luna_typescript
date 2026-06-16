@@ -66,4 +66,30 @@ describe('cachedSafeFetch (v0.18.2)', () => {
     const row = db.prepare('SELECT COUNT(*) AS n FROM web_cache').get() as { n: number };
     expect(row.n).toBe(0);
   });
+
+  test('a TTL-expired row triggers a re-fetch, not a stale serve', async () => {
+    // pre-seed a stale row, backdated well past the 15-min TTL
+    db.prepare(
+      'INSERT INTO web_cache (url, fetched_ms, status, content_type, body, final_url) VALUES (?, ?, ?, ?, ?, ?)',
+    ).run(
+      'http://example.com/stale',
+      Date.now() - 1_000_000,
+      200,
+      'text/html',
+      'OLD BODY',
+      'http://example.com/stale',
+    );
+    let networkCalls = 0;
+    const fetchImpl: FetchImpl = async () => {
+      networkCalls += 1;
+      return htmlResponse('<html><body>FRESH BODY</body></html>');
+    };
+    const r = await cachedSafeFetch('http://example.com/stale', {
+      resolve: publicResolve,
+      fetchImpl,
+    });
+    expect(networkCalls).toBe(1); // stale row → re-fetched through safeFetch
+    expect(r.body).toContain('FRESH BODY');
+    expect(r.body).not.toContain('OLD BODY');
+  });
 });

@@ -1,13 +1,15 @@
 import { z } from 'zod';
 import { defineTool } from '../defineTool';
 import { resolveProvider, type WebSearchProvider } from './provider';
+import { wrapUntrusted } from './extract';
 
 // web_search (Initiative 11, v0.18.0) — Luna's "look it up" capability. A
 // client-side live-web search on the existing dispatcher (LD #9: an ordinary
 // side-effect tool, no special-casing), inheriting timeout/abort/tracing for
 // free. Read-only ⇒ proactiveRisk:'safe' (LD #15 lists searches as silent-OK).
-// Default OFF behind LUNA_WEB_SEARCH; flipped on in v0.18.2 after cost is
-// measured. The yunwu gateway strips Anthropic's native web_search, so this is
+// Default ON since v0.18.2 (LUNA_WEB_SEARCH=0 is the off switch; auto-degrades
+// off when no LUNA_WEB_SEARCH_API_KEY is set — no SSRF surface, a fixed provider
+// endpoint). The yunwu gateway strips Anthropic's native web_search, so this is
 // implemented in Luna's backend behind a provider abstraction.
 
 const Input = z.object({
@@ -54,9 +56,10 @@ const Output = z.object({
   ts: z.number().int().nonnegative(),
 });
 
-function timeoutMs(): number {
-  return Number(Bun.env['LUNA_WEB_SEARCH_TIMEOUT_MS'] ?? 15000);
-}
+// Read once at module load — the dispatcher reads tool.timeoutMs as a static
+// field (it owns the AbortController), so a per-call wrapper would falsely imply
+// runtime liveness. Env is set at boot, so the fixed value equals the live value.
+const TIMEOUT_MS = Number(Bun.env['LUNA_WEB_SEARCH_TIMEOUT_MS'] ?? 15000);
 
 export const webSearchTool = defineTool({
   name: 'web_search',
@@ -69,7 +72,7 @@ export const webSearchTool = defineTool({
   output: Output,
   concurrency: 'safe-parallel',
   proactiveRisk: 'safe',
-  timeoutMs: timeoutMs(),
+  timeoutMs: TIMEOUT_MS,
   summarize: (out) => {
     const cites = out.results.map((r, i) => `[${i + 1}] ${r.url}`).join('; ');
     const n = out.results.length;
@@ -131,7 +134,12 @@ export const webSearchTool = defineTool({
           results: results.map((r) => ({
             title: r.title,
             url: r.url,
-            snippet: r.snippet,
+            // A snippet is untrusted web text (attacker-influenceable via SEO) —
+            // wrap it in the same <untrusted_content> envelope web_fetch uses so
+            // the standing injection rule has a delimiter to anchor on. Without
+            // this the search half of the rule ("search snippets, fetched pages")
+            // pointed at a marker that was never present (v0.18.2 fix).
+            snippet: wrapUntrusted(r.snippet, r.url),
             ...(r.score !== undefined ? { score: r.score } : {}),
             ...(r.ageHint !== undefined ? { age_hint: r.ageHint } : {}),
           })),

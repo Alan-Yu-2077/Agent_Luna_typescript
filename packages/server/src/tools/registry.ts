@@ -147,10 +147,10 @@ export function withSelfEdit(base: ToolRegistry): ToolRegistry {
   return selfEditEnabled() ? { ...base, ...selfEditTools } : { ...base };
 }
 
-// Web search (Initiative 11, v0.18.0) — client-side live-web lookup. Unlike the
-// code tools (default ON), this is a network + real-credit-cost surface, so it
-// ships default OFF behind LUNA_WEB_SEARCH and is flipped on only in v0.18.2
-// after cost is measured. Read-only ⇒ proactiveRisk:'safe' (set on the tool).
+// Web search (Initiative 11, v0.18.0) — client-side live-web lookup. A network +
+// real-credit-cost surface, but no SSRF surface (a fixed provider endpoint), so
+// it is default ON since v0.18.2 (degrading off with no API key, below).
+// Read-only ⇒ proactiveRisk:'safe' (set on the tool).
 export const webSearchTools: ToolRegistry = {
   web_search: webSearchTool,
 };
@@ -185,10 +185,13 @@ export const webFetchTools: ToolRegistry = {
   web_fetch: webFetchTool,
 };
 
-// Default ON since v0.18.2; no key needed (the SSRF guard, not a key, is the
-// gate). LUNA_WEB_FETCH=0 turns the read-a-page surface off.
+// OPT-IN, default OFF: set LUNA_WEB_FETCH=1 to mount. Reverted from the v0.18.2
+// default-on flip during review — safeFetch's DNS-rebinding defense NARROWS but
+// does not fully close the TOCTOU (Bun fetch exposes no IP-pin hook), so the
+// read-a-URL surface stays opt-in until a verified pinned-lookup fetch lands
+// (v0.18.3 follow-up). No key needed; the SSRF guard, not a key, is the gate.
 export function webFetchEnabled(): boolean {
-  return Bun.env['LUNA_WEB_FETCH'] !== '0';
+  return Bun.env['LUNA_WEB_FETCH'] === '1';
 }
 
 export function withWebFetch(base: ToolRegistry): ToolRegistry {

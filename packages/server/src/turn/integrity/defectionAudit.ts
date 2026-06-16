@@ -25,10 +25,12 @@ export const PROMISE_PATTERNS: readonly RegExp[] = [
 // thinking summary to detect the web-specific 嘴上说手没动 defection: thinking
 // decided to search the web, but the turn ended with no web_search call. Audit-
 // only (no forced retry — Python deferred it pending data; same here), so
-// breadth is acceptable. Leans to search/lookup phrasing rather than generic
-// recall so the signal stays web-shaped.
+// breadth is acceptable. Kept WEB-SHAPED (search/网上/联网/上网) on purpose: bare
+// 查一下 / 查询 are generic lookup verbs the L1 contract treats as discharged by
+// recall / read_file too, so matching them flagged honest non-web turns and
+// poisoned the very dataset this audit collects (v0.18.x review fix).
 export const WEB_INTENT_PATTERNS: readonly RegExp[] = [
-  /搜索|搜一下|上网查|联网搜|网上查|查一下|查查|查询|去查|搜一搜/,
+  /搜索|搜一下|搜一搜|上网查|上网搜|联网搜|联网查|网上查|网上搜/,
   /\b(?:search (?:the web|online|for)|web ?search|look (?:it|this|that) up|google (?:it|this|that)|do a (?:web )?search)\b/i,
 ];
 
@@ -165,7 +167,14 @@ export function runDefectionAudit(s: AuditState): DefectionResult {
     // independent of the generic defection above. Fires only when web_search was
     // mounted, no web_search call fired this turn, and the thinking shows a web-
     // lookup intent. Zero cost on success turns. No forced retry.
-    if (s.webSearchMounted === true && !s.toolNamesThisTurn.includes('web_search')) {
+    // Fire only on a TRUE 嘴上说手没动: web_search mounted, thinking shows a
+    // web-lookup intent, and the turn acted via NO tool at all. A turn that
+    // discharged the intent through ANY tool — recall (which the L1 web clause
+    // explicitly blesses), web_fetch, read_file, grep… — has acted, so it is not
+    // a web-search defection. Mirrors detectDefection's actedViaTool short-circuit
+    // (line 98); !actedViaAnyTool already subsumes the old !includes('web_search').
+    const actedViaAnyTool = s.toolNamesThisTurn.some((n) => n !== 'message');
+    if (s.webSearchMounted === true && !actedViaAnyTool) {
       const keyword = detectWebSearchIntentNoCall(s.thinking);
       if (keyword) {
         trace({

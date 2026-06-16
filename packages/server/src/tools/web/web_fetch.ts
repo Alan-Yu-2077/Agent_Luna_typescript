@@ -28,8 +28,11 @@ export function setWebFetcher(fn: Fetcher | null): void {
 // web_fetch (Initiative 11, v0.18.1) — read one web page, safely. The half Python
 // never had. Resolves the URL through the SSRF guard (safeFetch), fetches under
 // hard size/time caps, extracts the article to markdown, and returns it wrapped
-// in <untrusted_content>. Read-only ⇒ proactiveRisk:'safe' (Open Q #2). Default
-// OFF behind LUNA_WEB_FETCH; flipped on in v0.18.2.
+// in <untrusted_content>. Read-only ⇒ proactiveRisk:'safe' (Open Q #2). OPT-IN
+// (default OFF, set LUNA_WEB_FETCH=1): held opt-in until safeFetch gains a
+// verified DNS pin — its rebinding defense narrows but does not fully close the
+// TOCTOU (Bun fetch has no IP-pin hook), so the read-a-URL surface waits for the
+// v0.18.3 pinned-lookup follow-up before going default-on.
 
 const Input = z.object({
   url: z.string().url().describe('the http(s) URL of the page to read'),
