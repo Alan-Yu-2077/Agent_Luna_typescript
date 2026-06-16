@@ -33,12 +33,19 @@ beforeEach(() => {
   setTraceStore(store);
   delete Bun.env['LUNA_TRACE'];
   Bun.env['LUNA_PROACTIVE'] = '1';
+  // Disable quiet-hours so the tick is clock-independent: these tests use the real
+  // wall clock, and the default quiet hours (0–5) short-circuit shouldConsiderWake
+  // before the wake gate, making them fail whenever the run lands in 00:00–05:59 of
+  // the process TZ (e.g. the UTC CI runner). Pin it off here; the dedicated
+  // quiet-hours behaviour is covered in cadence.test.ts.
+  Bun.env['LUNA_PROACTIVE_QUIET_HOURS'] = '';
   resetSessions();
 });
 afterEach(() => {
   setMemoryDb(null);
   setTraceStore(null);
   delete Bun.env['LUNA_PROACTIVE'];
+  delete Bun.env['LUNA_PROACTIVE_QUIET_HOURS'];
   delete Bun.env['LUNA_TRACE'];
   db.close(false);
 });
