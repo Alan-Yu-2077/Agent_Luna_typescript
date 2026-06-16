@@ -663,18 +663,35 @@ export async function runTurn(opts: RunTurnOptions): Promise<TurnState> {
     // await it) and must never skip the trace/fold cleanup below. A SQLite
     // throw here (locked/readonly/disk-full) is logged + surfaced, not fatal.
     try {
-      // v0.16.3: strip thinking from this now-completed turn before it becomes
-      // durable history — both the in-memory window and the L2 raw_json that
-      // loadSession rebuilds from. Safe here (the turn is done; no in-flight
-      // signed-thinking continuity to preserve).
-      if (cleanHistoryEnabled()) stripThinking(opts.session.history, historyStart);
-      appendL2({
-        sessionId: opts.session.id,
-        turnId: opts.turnId,
-        userText: opts.userText,
-        assistantText: state.text,
-        rawContent: opts.session.history.slice(historyStart),
-      });
+      // A turn only becomes durable if it delivered a real reply: the message
+      // tool's text in message mode, the streamed text in text mode. A turn that
+      // delivered nothing — a provider auth/network failure that threw before the
+      // first token (finishReason 'error'), or a double-silent degraded turn —
+      // must leave NO trace: an empty-assistant L2 row poisons recall and the
+      // rebuilt window ("you said X, I said nothing") and, post-A3, survives every
+      // reload (this is what made Luna look amnesiac through a 401 outage). Drop it
+      // from L2 AND roll the in-memory history back to the pre-turn point so the
+      // dangling user message can't double up a retry. A turn that errors *after*
+      // delivering messages is still kept — the user already saw those words.
+      const realReply = isMessageMode(state.registry)
+        ? state.messageTexts.join('\n').trim()
+        : state.text.trim();
+      if (realReply.length > 0) {
+        // v0.16.3: strip thinking from this now-completed turn before it becomes
+        // durable history — both the in-memory window and the L2 raw_json that
+        // loadSession rebuilds from. Safe here (the turn is done; no in-flight
+        // signed-thinking continuity to preserve).
+        if (cleanHistoryEnabled()) stripThinking(opts.session.history, historyStart);
+        appendL2({
+          sessionId: opts.session.id,
+          turnId: opts.turnId,
+          userText: opts.userText,
+          assistantText: state.text,
+          rawContent: opts.session.history.slice(historyStart),
+        });
+      } else {
+        opts.session.history.length = historyStart;
+      }
       persistSession(opts.session.id, opts.session.history, opts.session.turnSeq);
     } catch (e) {
       console.error('[runTurn] persistence failed:', e);

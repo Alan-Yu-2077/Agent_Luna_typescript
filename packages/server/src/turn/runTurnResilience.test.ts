@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import type Anthropic from '@anthropic-ai/sdk';
 import type { ServerEvent } from '@luna/protocol';
 import { migrate } from '../sql';
-import { setMemoryDb } from '../memory/sessionStore';
+import { listL2, setMemoryDb } from '../memory/sessionStore';
 import { MockProvider } from '../provider/mock';
 import { builtinRegistry } from '../tools/registry';
 import { getSession, resetSessions } from './session';
@@ -36,8 +36,11 @@ describe('runTurn persistence resilience', () => {
   });
 
   test('a persistence failure is caught, surfaced, and never skips trace flush', async () => {
-    const session = getSession('r1'); // load while the table exists
-    db.exec('DROP TABLE l2_turns'); // now appendL2 will throw (no such table)
+    const session = getSession('r1'); // load while the tables exist
+    // Sabotage persistSession's target (not l2_turns, whose loss would also break
+    // the upstream retrieve() and stop the turn from ever producing a reply). The
+    // turn delivers 'hi', appendL2 succeeds, persistSession throws in the finally.
+    db.exec('DROP TABLE sessions'); // now persistSession will throw (no such table)
 
     const events: ServerEvent[] = [];
     const provider = new MockProvider([
@@ -62,5 +65,31 @@ describe('runTurn persistence resilience', () => {
     expect(events.some((e) => e.type === 'error' && e.code === 'persistence_failed')).toBe(true);
     // and the trace flush still ran despite the persistence throw
     expect(store.getEventsByTurn('rt1').length).toBeGreaterThan(0);
+  });
+
+  // Regression for the 401 "amnesia": a turn that throws before delivering any
+  // reply must not persist an empty-assistant L2 row (which would poison recall +
+  // the rebuilt window) and must roll its dangling user message out of history.
+  test('a turn that fails before any reply leaves no L2 row and rolls history back', async () => {
+    const session = getSession('r2');
+    const historyBefore = session.history.length;
+
+    const events: ServerEvent[] = [];
+    const provider = new MockProvider([[{ kind: 'thinking_delta', text: '__THROW__' }]]);
+
+    await expect(
+      runTurn({
+        session,
+        turnId: 'rt2',
+        userText: 'New version, Luna',
+        provider,
+        registry: builtinRegistry,
+        emit: (e) => events.push(e),
+      }),
+    ).resolves.toBeDefined();
+
+    expect(events.some((e) => e.type === 'error' && e.code === 'turn_failure')).toBe(true);
+    expect(listL2('r2')).toEqual([]); // no empty-assistant row persisted
+    expect(session.history.length).toBe(historyBefore); // dangling user message rolled back
   });
 });
