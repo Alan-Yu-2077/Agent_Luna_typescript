@@ -25,6 +25,9 @@ export const ToolName = z.enum([
   // Initiative 11 (v0.18.0) — client-side live-web search. Read-only; mounted
   // only under LUNA_WEB_SEARCH=1 (default off).
   'web_search',
+  // Initiative 11 (v0.18.1) — read one URL safely (SSRF-guarded). Read-only;
+  // mounted only under LUNA_WEB_FETCH=1 (default off).
+  'web_fetch',
 ]);
 export type ToolName = z.infer<typeof ToolName>;
 

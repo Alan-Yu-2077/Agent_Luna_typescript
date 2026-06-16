@@ -18,6 +18,7 @@ const CUTE: Partial<Record<ToolName, string>> = {
   recall_skill: 'recalled a skill 💡',
   propose_self_edit: 'proposed a self-edit ✍️',
   web_search: 'searched the web 🔍',
+  web_fetch: 'read a web page 🌐',
 };
 
 function strip(s: string): string {

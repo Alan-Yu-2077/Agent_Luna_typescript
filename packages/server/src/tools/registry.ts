@@ -22,6 +22,7 @@ import { timeNowTool } from './builtin/time_now';
 import { typecheckTool } from './builtin/typecheck';
 import { writeFileTool } from './builtin/write_file';
 import { webSearchTool } from './web/web_search';
+import { webFetchTool } from './web/web_fetch';
 
 // Partial: `message` is mounted conditionally (LUNA_MESSAGE_TOOL), so a
 // registry without it must typecheck. Missing tools resolve to tool_not_found
@@ -172,6 +173,30 @@ export function withWebSearch(base: ToolRegistry): ToolRegistry {
 // env read.
 export function isWebSearchMode(registry: ToolRegistry): boolean {
   return registry.web_search !== undefined;
+}
+
+// web_fetch (Initiative 11, v0.18.1) — read one URL through the SSRF guard. Same
+// default-OFF cost/risk polarity as web_search; LUNA_WEB_FETCH=1 mounts it.
+export const webFetchTools: ToolRegistry = {
+  web_fetch: webFetchTool,
+};
+
+export function webFetchEnabled(): boolean {
+  return Bun.env['LUNA_WEB_FETCH'] === '1';
+}
+
+export function withWebFetch(base: ToolRegistry): ToolRegistry {
+  return webFetchEnabled() ? { ...base, ...webFetchTools } : { ...base };
+}
+
+export function isWebFetchMode(registry: ToolRegistry): boolean {
+  return registry.web_fetch !== undefined;
+}
+
+// True when EITHER web tool is mounted — the gate for the standing untrusted-
+// content injection rule (v0.18.2) and the citation-collection path.
+export function isWebMode(registry: ToolRegistry): boolean {
+  return isWebSearchMode(registry) || isWebFetchMode(registry);
 }
 
 // The LD #9 everything-as-tool surface. Mode selection happens once at boot

@@ -10,12 +10,14 @@ import {
   selfEditEnabled,
   shellEnabled,
   skillsEnabled,
+  webFetchEnabled,
   webSearchEnabled,
   withCodeWrite,
   withRepoMap,
   withSelfEdit,
   withShell,
   withSkills,
+  withWebFetch,
   withWebSearch,
 } from './tools/registry';
 import { closeDb, migrate, openDb } from './sql';
@@ -85,19 +87,22 @@ if (Bun.env['ANTHROPIC_API_KEY']) {
   // LUNA_SELF_EDIT != 0 (default ON; self-edit is propose-only so it never writes).
   const skillMode = skillsEnabled();
   const selfEditMode = selfEditEnabled();
-  // Web search (v0.18.0) layers on iff LUNA_WEB_SEARCH=1 (default OFF — network +
-  // cost surface; flipped on in v0.18.2 after cost is measured).
+  // Web tools (v0.18.0 search, v0.18.1 fetch) layer on iff their flags are set.
+  // v0.18.2 flips both default ON; search degrades to off when no API key.
   const webSearchMode = webSearchEnabled();
-  const registry = withWebSearch(
-    withSelfEdit(
-      withSkills(
-        withRepoMap(withShell(withCodeWrite(messageMode ? messageRegistry : builtinRegistry))),
+  const webFetchMode = webFetchEnabled();
+  const registry = withWebFetch(
+    withWebSearch(
+      withSelfEdit(
+        withSkills(
+          withRepoMap(withShell(withCodeWrite(messageMode ? messageRegistry : builtinRegistry))),
+        ),
       ),
     ),
   );
   setRuntime({ provider, registry, dreamLlm });
   console.log(
-    `[luna-server] provider: ${Bun.env['LUNA_MODEL'] ?? 'claude-opus-4-8'} via ${Bun.env['ANTHROPIC_BASE_URL'] ?? 'https://api.anthropic.com'}${summarizerKey ? ' (+summarizer key)' : ''}${messageMode ? ' [message-tool mode]' : ''}${writeMode ? ' [code-write]' : ''}${shellMode ? ' [shell]' : ''}${repoMapMode ? ' [repo-map]' : ''}${skillMode ? ' [skills]' : ''}${selfEditMode ? ' [self-edit]' : ''}${webSearchMode ? ' [web-search]' : ''}`,
+    `[luna-server] provider: ${Bun.env['LUNA_MODEL'] ?? 'claude-opus-4-8'} via ${Bun.env['ANTHROPIC_BASE_URL'] ?? 'https://api.anthropic.com'}${summarizerKey ? ' (+summarizer key)' : ''}${messageMode ? ' [message-tool mode]' : ''}${writeMode ? ' [code-write]' : ''}${shellMode ? ' [shell]' : ''}${repoMapMode ? ' [repo-map]' : ''}${skillMode ? ' [skills]' : ''}${selfEditMode ? ' [self-edit]' : ''}${webSearchMode ? ' [web-search]' : ''}${webFetchMode ? ' [web-fetch]' : ''}`,
   );
   // Proactive heartbeat (v0.10.3). The timer runs always; each tick no-ops
   // unless LUNA_PROACTIVE=1 (re-read per tick, so the kill switch toggles

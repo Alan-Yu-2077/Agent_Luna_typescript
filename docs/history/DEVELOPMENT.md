@@ -1,6 +1,6 @@
 # Agent_Luna (TypeScript) — Development History
 
-Last updated: 2026-06-16 (Asia/Shanghai) — v0.18.0 (web tools — **web_search**: Luna's "look it up" capability, a client-side live-web search on the existing dispatcher behind a `WebSearchProvider` abstraction (Tavily default, gateway-safe since yunwu strips Anthropic's native web_search), soft-fail + `[N]` citation summary, `proactiveRisk:'safe'`; ships with the **defection guard** — an L1 commitment/when-to-reach clause + an off-hot-path `web_search_intent_no_call` audit extending LD #14; default **OFF** behind `LUNA_WEB_SEARCH`; **Initiative 11 begins 1/3**, branch) · v0.17.3 (dream: today's day-diary is **rewritten on every dream** so a daytime dream captures the whole day instead of freezing it at the first dream — owner's "option 2"; past days stay write-once) · v0.17.2 (fix: a failed/empty turn — e.g. a 401 gateway outage — no longer persists an empty-assistant L2 row and rolls its dangling user message out of history, killing the "短暂失忆" pollution that survived restarts post-A3) · v0.17.1 (memory depth — **diary injection**: a standing day/week/month digest in the cached system block + diaries as recall candidates (the long-range narrative memory finally reaches the model; rag_refresh's diary embeddings now retrievable), Generative-Agents recency×importance×relevance recall ranking, monthly diaries; amends LD #12 diary-part; **Initiative 10 complete 2/2**, branch)
+Last updated: 2026-06-16 (Asia/Shanghai) — v0.18.1 (web tools — **web_fetch + SSRF/extraction safety core**: read one URL safely — `assertPublicUrl` deny-lists private/loopback/link-local/metadata/ULA/IPv4-mapped/encoded IPs + non-http(s) + credentials + over-long, `safeFetch` does manual redirect re-validation + DNS-rebinding re-check + byte/time caps + content-type gate, Readability→Turndown extraction wrapped in `<untrusted_content>`; the guard joins the evaluator-firewall set; default **OFF** behind `LUNA_WEB_FETCH`; **Initiative 11 2/3**, branch) · v0.18.0 (web tools — **web_search**: Luna's "look it up" capability, a client-side live-web search on the existing dispatcher behind a `WebSearchProvider` abstraction (Tavily default, gateway-safe since yunwu strips Anthropic's native web_search), soft-fail + `[N]` citation summary, `proactiveRisk:'safe'`; ships with the **defection guard** — an L1 commitment/when-to-reach clause + an off-hot-path `web_search_intent_no_call` audit extending LD #14; default **OFF** behind `LUNA_WEB_SEARCH`; **Initiative 11 begins 1/3**, branch) · v0.17.3 (dream: today's day-diary is **rewritten on every dream** so a daytime dream captures the whole day instead of freezing it at the first dream — owner's "option 2"; past days stay write-once) · v0.17.2 (fix: a failed/empty turn — e.g. a 401 gateway outage — no longer persists an empty-assistant L2 row and rolls its dangling user message out of history, killing the "短暂失忆" pollution that survived restarts post-A3) · v0.17.1 (memory depth — **diary injection**: a standing day/week/month digest in the cached system block + diaries as recall candidates (the long-range narrative memory finally reaches the model; rag_refresh's diary embeddings now retrievable), Generative-Agents recency×importance×relevance recall ranking, monthly diaries; amends LD #12 diary-part; **Initiative 10 complete 2/2**, branch)
 
 ## Scope
 
@@ -89,6 +89,7 @@ during the rewrite. Its version log is unrelated to this one — `v0.1` here is 
 | `v0.17.2` | 2026-06-16 | Fix — failed/empty turns no longer poison memory (C-side) — `runTurn`'s `finally` persists a turn only if it delivered a **real reply** (message-tool text in message mode, streamed text in text mode); a turn that threw before any token (a 401/network outage → `finishReason 'error'`) or ended double-silent leaves **no** empty-assistant L2 row and has its dangling user message rolled back to the pre-turn point (post-A3 those empty rows otherwise survive every reload → the "短暂失忆" symptom). Retargeted the Bug-A resilience test (`DROP TABLE sessions`, not `l2_turns`, so the upstream `retrieve()` still runs and the failure lands in `persistSession`). 560 tests green. | `working tree` |
 | `v0.17.3` | 2026-06-16 | Dream — today's day-diary is **updateable** (owner's option 2) — `run_diaries` upserts the current **UTC day** on every cycle (`ON CONFLICT(kind,period_key) DO UPDATE`), regenerated from all of that day's L2; past days keep `INSERT OR IGNORE` (write-once). Fixes the mid-day-freeze: a self-/scheduler-triggered daytime dream no longer locks the day diary at noon and lose the afternoon. Day boundary stays UTC (08:00 Asia/Shanghai). 561 tests green. | `working tree` |
 | `v0.18.0` | 2026-06-16 | Web tools — **web_search** (Initiative 11, 1/3) — client-side live-web search on the existing dispatcher behind a `WebSearchProvider` abstraction (`tools/web/`: `provider.ts` + `tavily.ts` + `web_search.ts`), Tavily default, gateway-safe (yunwu strips Anthropic's native web_search), soft-fail (every failure a recoverable `err`, nothing throws past the generator) + `[N] url` citation summary + a `正在查一下…` progress line; `concurrency:'safe-parallel'`, `proactiveRisk:'safe'`. Ships with the **defection guard** extending LD #14 — an L1 commitment/when-to-reach clause (gated on the tool being mounted) + an off-hot-path `web_search_intent_no_call` decision-trace audit (thinking shows web-lookup intent but no `web_search` call fired). Default **OFF** behind `LUNA_WEB_SEARCH`; +18 tests, 577 green. | `working tree` |
+| `v0.18.1` | 2026-06-16 | Web tools — **web_fetch + SSRF/extraction safety core** (Initiative 11, 2/3) — read one URL safely. New `tools/web/safeFetch.ts` (the keystone): `assertPublicUrl` canonicalizes + DNS-resolves + deny-lists every resolved IP (loopback/RFC1918/CGNAT/link-local incl. `169.254.169.254`/ULA/IPv4-mapped/encoded forms/`0.0.0.0`/broadcast/multicast/reserved) + blocks non-`http(s)`/credentials/`>2048`; `safeFetch` does **manual** redirect re-validation (≤5 hops), a DNS-**rebinding** re-check at connect, byte (`LUNA_WEB_FETCH_MAX_BYTES` 3MB, streamed) + time caps, and a `text/html`/`text/plain` gate. `extract.ts` = linkedom→`@mozilla/readability`→turndown → markdown (char-capped, never-throw fallback) wrapped in `<untrusted_content source=…>`. `web_fetch` tool (`safe-parallel`, `proactiveRisk:'safe'`, soft-fail). `safeFetch.ts` added to the **evaluator firewall**. New deps `@mozilla/readability`+`linkedom`+`turndown`. Default **OFF** behind `LUNA_WEB_FETCH`; +37 tests, 614 green. | `working tree` |
 
 ## Code-agent capability (2026-06-15) — Initiative 8 begins (v0.15.0)
 
@@ -551,6 +552,57 @@ Inference:
   and gives Alan the variety he remembered, now as a first-class setting rather than a buried constant.
 
 ## Detailed records
+
+### `v0.18.1` — 2026-06-16 — Web tools: web_fetch + SSRF/extraction safety core (Initiative 11, 2/3)
+
+Status:
+
+- working tree (branch `feat/initiative-11-web-search`)
+
+Fact:
+
+- New `packages/server/src/tools/web/safeFetch.ts` (~230 lines) — the **SSRF guard**, the security
+  keystone. `assertPublicUrl(rawUrl, resolve?)`: rejects non-`http(s)` schemes, embedded
+  `user:pass@` credentials, and `>2048`-char URLs; for an IP-literal host (the WHATWG URL parser
+  already collapses decimal/hex/octal IPv4) validates directly, else DNS-resolves and validates
+  **every** A/AAAA record. `isBlockedIp` (pure, table-driven): IPv4 loopback/`0.0.0.0`/RFC1918/CGNAT/
+  link-local (incl. cloud-metadata `169.254.169.254`)/TEST-NET/benchmark/multicast/reserved/broadcast,
+  IPv6 `::1`/`::`/`fe80::/10`/`fc00::/7`/`ff00::/8`/IPv4-mapped — fail-closed on an unparseable
+  address. `safeFetch(url, {maxBytes,signal,resolve?,fetchImpl?})`: `redirect:'manual'` (re-validates
+  each `Location`, ≤5 hops), a DNS-**rebinding** re-resolve+re-check immediately before connect,
+  byte cap (streamed, aborts over) + `text/html`/`text/plain` content-type gate; injectable
+  `resolve`/`fetchImpl` seams so tests never touch network/DNS.
+- New `extract.ts` (~95 lines) — `extractMarkdown(html, maxChars?)`: linkedom DOM →
+  `@mozilla/readability` (article isolation) → turndown (markdown), whitespace-collapsed, char-capped
+  with a `…[truncated]` marker, with a tag-strip **never-throw fallback**. `wrapUntrusted(md, url)` →
+  the `<untrusted_content source="…">…</untrusted_content>` envelope.
+- New `web_fetch.ts` (~110 lines) — the tool. `input {url, max_chars?}`, `output {url, final_url,
+  title, content, truncated, fetched_ms}` (content is the wrapped markdown), `safe-parallel`,
+  `proactiveRisk:'safe'`, soft-fails every error (SSRF block, HTTP error, oversize, unsupported type,
+  abort) as a recoverable `err`. A `setWebFetcher` test seam mirrors `setWebSearchProvider`.
+- New `'web_fetch'` `ToolName`; registry `webFetchEnabled`/`withWebFetch`/`isWebFetchMode` +
+  `isWebMode` (either web tool, the v0.18.2 gate); `main.ts` boot wiring + `[web-fetch]` log marker;
+  `toolLabels` chip; `.env.example` block (`LUNA_WEB_FETCH`, `_TIMEOUT_MS`, `_MAX_BYTES`, `_MAX_CHARS`).
+- `safeFetch.ts` added to the **evaluator-firewall set** (`workspace.ts evaluatorFiles()`) — a future
+  `propose_self_edit` can never rewrite the SSRF guard (DGM safeguard), test-asserted.
+- New deps: `@mozilla/readability`, `linkedom`, `turndown` (+ `@types/turndown`) in
+  `packages/server/package.json` — pure-Node, no native build.
+- Tests (+37; **614 pass / 0 fail**, `tsc` clean ×3): `safeFetch.test.ts` (the SSRF deny-list table
+  across every class incl. encoded/IPv6/credential/over-long, redirect-to-metadata re-validation,
+  DNS-rebinding, byte/content-type/HTTP/redirect-loop caps); `extract.test.ts` (article isolation
+  drops nav/footer/script, truncation, never-throw fallback, the envelope); `web_fetch.test.ts`
+  (extraction + envelope happy path, soft-fail matrix, gating, the firewall assertion).
+
+Inference:
+
+- Adds the **read** half of agent-side networking Python never had, the riskiest surface of the
+  initiative — isolated into its own version the way Initiative 8 isolated `shell`. The SSRF guard
+  lives *inside the tool* (LD #10), the URL analogue of `resolveInWorkspace`: a miss would expose the
+  user's LAN + cloud metadata, so it is table-driven, redirect- and rebinding-aware, exhaustively
+  tested, and firewall-protected from self-edit.
+- Ships **off**: the structural `<untrusted_content>` delimiter is intrinsic here, but the *behavioral*
+  system rule that tells the model what it means — plus citation surfacing, the optional cache, and the
+  default-flip — land in v0.18.2, so no unguarded web content reaches a real turn until then.
 
 ### `v0.18.0` — 2026-06-16 — Web tools: web_search (Initiative 11, 1/3)
 
