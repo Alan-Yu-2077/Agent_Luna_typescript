@@ -197,3 +197,37 @@ describe('frontend controller — other events', () => {
     expect(h.states).toEqual(['thinking', 'speaking', 'neutral', 'sleeping', 'neutral']);
   });
 });
+
+describe('frontend controller — web citations (v0.18.2)', () => {
+  test('turn.result citations render as source chips', () => {
+    const h = harness();
+    h.handle({
+      type: 'turn.result',
+      turn_id: 't1',
+      text: 'answer',
+      finish_reason: 'end_turn',
+      usage: { input_tokens: 1, output_tokens: 1 },
+      citations: [
+        { url: 'https://a.example/x', title: 'Alpha' },
+        { url: 'https://b.example/y', title: '' },
+      ],
+    });
+    const sources = h.calls.filter((c) => c[0] === 'chip' && c[1] === 'source');
+    expect(sources.length).toBe(2);
+    expect(String(sources[0]![2])).toContain('Alpha');
+    expect(String(sources[0]![2])).toContain('https://a.example/x');
+    expect(String(sources[1]![2])).toContain('https://b.example/y');
+  });
+
+  test('turn.result without citations renders no source chip', () => {
+    const h = harness();
+    h.handle({
+      type: 'turn.result',
+      turn_id: 't2',
+      text: 'hi',
+      finish_reason: 'end_turn',
+      usage: { input_tokens: 1, output_tokens: 1 },
+    });
+    expect(h.calls.filter((c) => c[1] === 'source').length).toBe(0);
+  });
+});

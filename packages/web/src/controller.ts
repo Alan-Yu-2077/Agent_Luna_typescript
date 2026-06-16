@@ -100,8 +100,13 @@ export function createController(deps: ControllerDeps): { handle: (e: ServerEven
 
       case 'turn.result':
         // Message bubbles + reply.token already rendered the visible reply; the
-        // turn.result text is the canonical join. Nothing more to draw here
-        // (text-mode-empty fallback is a later refinement).
+        // turn.result text is the canonical join. Surface any web sources she used
+        // this turn as source cards (Initiative 11, v0.18.2) so she cites visibly.
+        if (e.citations && e.citations.length > 0) {
+          for (const c of e.citations) {
+            deps.view.chip('source', `🔗 ${c.title || c.url} — ${c.url}`);
+          }
+        }
         textStreaming = false;
         deps.live2d.setState('neutral');
         return;

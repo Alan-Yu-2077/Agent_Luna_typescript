@@ -12,7 +12,12 @@ import { runTurn } from '../runTurn';
 import type { TraceEvent } from '@luna/protocol';
 import { TraceStore } from '../../trace/store';
 import { setTraceStore } from '../../trace/instrument';
-import { detectDefection, runDefectionAudit, type AuditState } from './defectionAudit';
+import {
+  detectDefection,
+  detectWebSearchIntentNoCall,
+  runDefectionAudit,
+  type AuditState,
+} from './defectionAudit';
 
 // Throws only on the decision-trace write — simulates a DB error isolated to
 // that record. Exercises the sole guard of override-not-depend (the catch in
@@ -187,6 +192,185 @@ describe('runDefectionAudit (gated trace write)', () => {
     }).not.toThrow();
     // detection said "defected", but the trace write threw → caught → no-op result
     expect(result).toEqual({ defected: false });
+  });
+});
+
+describe('detectWebSearchIntentNoCall (pure, v0.18.0)', () => {
+  test('matches CN web-lookup intent', () => {
+    expect(detectWebSearchIntentNoCall('用户问最新汇率，我应该上网查一下')).toBeTruthy();
+    expect(detectWebSearchIntentNoCall('让我搜索一下今天的新闻')).toBeTruthy();
+  });
+
+  test('matches EN web-lookup intent', () => {
+    expect(detectWebSearchIntentNoCall('I should search the web for this')).toBeTruthy();
+    expect(detectWebSearchIntentNoCall('let me look it up online')).toBeTruthy();
+  });
+
+  test('no lookup intent → null', () => {
+    expect(detectWebSearchIntentNoCall('just answering from what I know')).toBeNull();
+    expect(detectWebSearchIntentNoCall('')).toBeNull();
+  });
+});
+
+describe('web_search intent-no-call audit (v0.18.0)', () => {
+  let db: Database;
+  let store: TraceStore;
+
+  const base: AuditState = {
+    turnId: 'w1',
+    sessionId: 'default',
+    messageTexts: ['你好。'],
+    lastMessageIsFinal: true,
+    thinking: '用户问最新天气，我应该上网查一下',
+    toolNamesThisTurn: ['message'],
+    finishReason: 'end_turn',
+  };
+
+  function webDecisions(turnId: string): unknown[] {
+    return store
+      .getEventsByTurn(turnId)
+      .filter((e) => e.kind === 'decision')
+      .map((e) => JSON.parse(e.payload_json))
+      .filter((p) => p.surface === 'web_search_intent_no_call');
+  }
+
+  beforeEach(() => {
+    db = new Database(':memory:', { strict: true });
+    db.exec(readFileSync(join(import.meta.dir, '..', '..', 'migrations', '0001_traces.sql'), 'utf8'));
+    store = new TraceStore(db);
+    setTraceStore(store);
+    Bun.env['LUNA_DECISION_AUDIT'] = '1';
+    delete Bun.env['LUNA_TRACE'];
+  });
+
+  afterEach(() => {
+    setTraceStore(null);
+    delete Bun.env['LUNA_DECISION_AUDIT'];
+    delete Bun.env['LUNA_TRACE'];
+    db.close(false);
+  });
+
+  test('mounted + lookup intent + no web_search call → web_search_intent_no_call trace', () => {
+    runDefectionAudit({ ...base, webSearchMounted: true });
+    store.flush('w1');
+    const web = webDecisions('w1');
+    expect(web.length).toBe(1);
+    expect((web[0] as { evidence: { matched_keyword: string } }).evidence.matched_keyword).toBeTruthy();
+  });
+
+  test('web_search WAS called → no web trace even with lookup intent', () => {
+    runDefectionAudit({
+      ...base,
+      webSearchMounted: true,
+      toolNamesThisTurn: ['message', 'web_search'],
+    });
+    store.flush('w1');
+    expect(webDecisions('w1').length).toBe(0);
+  });
+
+  test('web_search NOT mounted → no web trace (cannot defect on an absent tool)', () => {
+    runDefectionAudit({ ...base, webSearchMounted: false });
+    store.flush('w1');
+    expect(webDecisions('w1').length).toBe(0);
+  });
+
+  test('mounted but no lookup intent in thinking → no web trace', () => {
+    runDefectionAudit({ ...base, webSearchMounted: true, thinking: '直接回答就好' });
+    store.flush('w1');
+    expect(webDecisions('w1').length).toBe(0);
+  });
+
+  // Review fix: the audit must not flag an honest turn that DISCHARGED the lookup
+  // through another tool — recall (which the L1 web clause explicitly blesses),
+  // read_file, grep… A turn that acted via any tool is not 嘴上说手没动.
+  test('discharged via recall / read_file → no web defection', () => {
+    runDefectionAudit({
+      ...base,
+      webSearchMounted: true,
+      thinking: '用户提到上次聊的事，我上网查一下再说',
+      toolNamesThisTurn: ['message', 'recall'],
+    });
+    runDefectionAudit({
+      ...base,
+      turnId: 'w2',
+      webSearchMounted: true,
+      thinking: '我上网查一下这个文件的内容',
+      toolNamesThisTurn: ['read_file'],
+    });
+    store.flush('w1');
+    store.flush('w2');
+    expect(webDecisions('w1').length).toBe(0);
+    expect(webDecisions('w2').length).toBe(0);
+  });
+
+  // Review fix: a bare generic lookup verb (查一下 / 查询) is no longer web-shaped,
+  // so it does not even match — it was poisoning the dataset with non-web turns.
+  test('a generic non-web lookup verb (查一下 alone) no longer matches', () => {
+    runDefectionAudit({
+      ...base,
+      webSearchMounted: true,
+      thinking: '我查一下记忆里有没有相关的事',
+      toolNamesThisTurn: ['message'],
+    });
+    store.flush('w1');
+    expect(webDecisions('w1').length).toBe(0);
+  });
+});
+
+describe('web_to_action boundary audit (v0.18.2)', () => {
+  let db: Database;
+  let store: TraceStore;
+
+  const base: AuditState = {
+    turnId: 'b1',
+    sessionId: 'default',
+    messageTexts: ['done.'],
+    lastMessageIsFinal: true,
+    thinking: '',
+    toolNamesThisTurn: ['web_fetch', 'edit'],
+    finishReason: 'end_turn',
+  };
+
+  function w2a(turnId: string): unknown[] {
+    return store
+      .getEventsByTurn(turnId)
+      .filter((e) => e.kind === 'decision')
+      .map((e) => JSON.parse(e.payload_json))
+      .filter((p) => p.surface === 'web_to_action');
+  }
+
+  beforeEach(() => {
+    db = new Database(':memory:', { strict: true });
+    db.exec(readFileSync(join(import.meta.dir, '..', '..', 'migrations', '0001_traces.sql'), 'utf8'));
+    store = new TraceStore(db);
+    setTraceStore(store);
+    Bun.env['LUNA_DECISION_AUDIT'] = '1';
+    delete Bun.env['LUNA_TRACE'];
+  });
+
+  afterEach(() => {
+    setTraceStore(null);
+    delete Bun.env['LUNA_DECISION_AUDIT'];
+    delete Bun.env['LUNA_TRACE'];
+    db.close(false);
+  });
+
+  test('web content + a surface-risk action → one web_to_action trace', () => {
+    runDefectionAudit({ ...base, webContentThisTurn: true, surfaceActionThisTurn: true });
+    store.flush('b1');
+    expect(w2a('b1').length).toBe(1);
+  });
+
+  test('web content but no surface action → no trace', () => {
+    runDefectionAudit({ ...base, webContentThisTurn: true, surfaceActionThisTurn: false });
+    store.flush('b1');
+    expect(w2a('b1').length).toBe(0);
+  });
+
+  test('a surface action without web content → no trace', () => {
+    runDefectionAudit({ ...base, webContentThisTurn: false, surfaceActionThisTurn: true });
+    store.flush('b1');
+    expect(w2a('b1').length).toBe(0);
   });
 });
 

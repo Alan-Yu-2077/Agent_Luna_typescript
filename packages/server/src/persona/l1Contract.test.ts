@@ -37,6 +37,18 @@ describe('renderL1Contract', () => {
     expect(c).toContain('repo_map');
     expect(c).toContain('set a plan first');
   });
+
+  test('web clause is gated on web_search being mounted (v0.18.0)', () => {
+    const off = renderL1Contract(false);
+    const on = renderL1Contract(true);
+    expect(off).not.toContain('search the live web');
+    expect(on).toContain('search the live web');
+    // commitment-to-act for the web (the 嘴上说手没动 fix)
+    expect(on).toContain('THIS SAME turn');
+    // each variant is byte-stable across calls (per-variant cache invariant)
+    expect(renderL1Contract(true)).toBe(on);
+    expect(renderL1Contract(false)).toBe(off);
+  });
 });
 
 function endRound(text: string): ProviderEvent[] {

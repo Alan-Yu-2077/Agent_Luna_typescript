@@ -5,6 +5,7 @@ import { MockProvider } from '../provider/mock';
 import type { ProviderEvent } from '../provider/types';
 import { messageRegistry } from '../tools/registry';
 import { getSession, resetSessions } from '../turn/session';
+import { resetDreamStateForTests } from '../dream/dreamState';
 import { fireContinuation, shouldContinue } from './continuation';
 
 const endRound: ProviderEvent = {
@@ -17,6 +18,11 @@ const endRound: ProviderEvent = {
 
 beforeEach(() => {
   resetSessions();
+  // The dream gate is a process-global; another test file that left Luna
+  // "dreaming" makes fireContinuation early-return on its isDreaming() guard
+  // (a cross-file ordering flake that surfaces on CI but not always locally).
+  // Reset it so this test is order-independent.
+  resetDreamStateForTests();
   Bun.env['LUNA_PROACTIVE'] = '1';
 });
 afterEach(() => {

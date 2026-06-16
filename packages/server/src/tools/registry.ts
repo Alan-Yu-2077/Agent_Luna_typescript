@@ -21,6 +21,8 @@ import { shellTool } from './builtin/shell';
 import { timeNowTool } from './builtin/time_now';
 import { typecheckTool } from './builtin/typecheck';
 import { writeFileTool } from './builtin/write_file';
+import { webSearchTool } from './web/web_search';
+import { webFetchTool } from './web/web_fetch';
 
 // Partial: `message` is mounted conditionally (LUNA_MESSAGE_TOOL), so a
 // registry without it must typecheck. Missing tools resolve to tool_not_found
@@ -143,6 +145,67 @@ export function selfEditEnabled(): boolean {
 
 export function withSelfEdit(base: ToolRegistry): ToolRegistry {
   return selfEditEnabled() ? { ...base, ...selfEditTools } : { ...base };
+}
+
+// Web search (Initiative 11, v0.18.0) — client-side live-web lookup. A network +
+// real-credit-cost surface, but no SSRF surface (a fixed provider endpoint), so
+// it is default ON since v0.18.2 (degrading off with no API key, below).
+// Read-only ⇒ proactiveRisk:'safe' (set on the tool).
+export const webSearchTools: ToolRegistry = {
+  web_search: webSearchTool,
+};
+
+// Default ON since v0.18.2 (Initiative 11 close), BUT degrades to off when there
+// is no API key: a search with no key would only ever error, so the tool is
+// simply not mounted (graceful no-key degrade, no crash). LUNA_WEB_SEARCH=0 is
+// the explicit off switch.
+export function webSearchEnabled(): boolean {
+  return (
+    Bun.env['LUNA_WEB_SEARCH'] !== '0' && (Bun.env['LUNA_WEB_SEARCH_API_KEY'] ?? '').length > 0
+  );
+}
+
+// Compose a base registry with web_search iff the flag is on. Wired at boot in
+// main.ts so the registry — not an env read in the turn loop — is the source of
+// truth for "can Luna search the web this session".
+export function withWebSearch(base: ToolRegistry): ToolRegistry {
+  return webSearchEnabled() ? { ...base, ...webSearchTools } : { ...base };
+}
+
+// Registry-derived mode check (mirrors isMessageMode): the L1 web clause + the
+// intent-no-call audit key off whether web_search is actually mounted, never an
+// env read.
+export function isWebSearchMode(registry: ToolRegistry): boolean {
+  return registry.web_search !== undefined;
+}
+
+// web_fetch (Initiative 11, v0.18.1) — read one URL through the SSRF guard. Same
+// default-OFF cost/risk polarity as web_search; LUNA_WEB_FETCH=1 mounts it.
+export const webFetchTools: ToolRegistry = {
+  web_fetch: webFetchTool,
+};
+
+// OPT-IN, default OFF: set LUNA_WEB_FETCH=1 to mount. Reverted from the v0.18.2
+// default-on flip during review — safeFetch's DNS-rebinding defense NARROWS but
+// does not fully close the TOCTOU (Bun fetch exposes no IP-pin hook), so the
+// read-a-URL surface stays opt-in until a verified pinned-lookup fetch lands
+// (v0.18.3 follow-up). No key needed; the SSRF guard, not a key, is the gate.
+export function webFetchEnabled(): boolean {
+  return Bun.env['LUNA_WEB_FETCH'] === '1';
+}
+
+export function withWebFetch(base: ToolRegistry): ToolRegistry {
+  return webFetchEnabled() ? { ...base, ...webFetchTools } : { ...base };
+}
+
+export function isWebFetchMode(registry: ToolRegistry): boolean {
+  return registry.web_fetch !== undefined;
+}
+
+// True when EITHER web tool is mounted — the gate for the standing untrusted-
+// content injection rule (v0.18.2) and the citation-collection path.
+export function isWebMode(registry: ToolRegistry): boolean {
+  return isWebSearchMode(registry) || isWebFetchMode(registry);
 }
 
 // The LD #9 everything-as-tool surface. Mode selection happens once at boot

@@ -110,6 +110,7 @@ function evaluatorFiles(): string[] {
     join(serverSrc, 'persona', 'humanity.ts'),
     join(serverSrc, 'persona', 'l1Contract.ts'),
     join(serverSrc, 'tools', 'shellDeny.ts'), // shell deny-regex source (v0.15.2)
+    join(serverSrc, 'tools', 'web', 'safeFetch.ts'), // SSRF guard source (v0.18.1)
     // safetyGate* — both the module and any sibling variants live here:
     join(serverSrc, 'proactive', 'safetyGate.ts'),
     // this blocklist file (alias of workspace.ts, kept explicit for intent):

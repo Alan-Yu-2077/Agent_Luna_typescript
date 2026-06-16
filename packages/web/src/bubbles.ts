@@ -4,7 +4,7 @@
 // multiple message bubbles per turn each stream independently — the v0.6.2
 // reality, not the Python single-bubble merge.
 
-export type ChipKind = 'tool' | 'dream' | 'proactive' | 'expression' | 'error';
+export type ChipKind = 'tool' | 'dream' | 'proactive' | 'expression' | 'error' | 'source';
 
 // One persisted turn, replayed on (re)connect. user is empty for a proactive turn.
 export type HistoryTurnView = { userText: string; assistantText: string; tMs: number };

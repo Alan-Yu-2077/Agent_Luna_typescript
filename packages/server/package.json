@@ -11,9 +11,15 @@
   "dependencies": {
     "@anthropic-ai/sdk": "0.104.1",
     "@luna/protocol": "workspace:*",
+    "@mozilla/readability": "^0.6.0",
+    "linkedom": "^0.18.12",
     "sqlite-vec": "0.1.9",
+    "turndown": "^7.2.4",
     "web-tree-sitter": "0.26.9",
     "zod": "^3.25.0",
     "zod-to-json-schema": "^3.25"
+  },
+  "devDependencies": {
+    "@types/turndown": "^5.0.6"
   }
 }
