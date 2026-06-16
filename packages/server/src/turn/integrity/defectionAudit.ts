@@ -123,6 +123,11 @@ export type AuditState = {
   // v0.18.0: whether web_search was mounted this turn. The web intent-no-call
   // audit only fires when it was — you cannot defect on a tool you do not have.
   webSearchMounted?: boolean;
+  // v0.18.2 read/write boundary: this turn pulled untrusted web content (a
+  // web_search / web_fetch call) AND fired a surface-risk (irreversible) tool.
+  // Both true → a web_to_action decision trace (detection only, no hard gate).
+  webContentThisTurn?: boolean;
+  surfaceActionThisTurn?: boolean;
 };
 
 // Synchronous, gated, never throws into the turn (override-not-depend). Records
@@ -180,6 +185,23 @@ export function runDefectionAudit(s: AuditState): DefectionResult {
           },
         });
       }
+    }
+    // Read/write trust boundary (v0.18.2): a turn that read untrusted web content
+    // and then fired an irreversible/surface-risk tool. Recorded as an observable
+    // pattern (a hard gate only if the data later shows abuse — LD #14 discipline).
+    if (s.webContentThisTurn === true && s.surfaceActionThisTurn === true) {
+      trace({
+        schema_v: 1,
+        kind: 'decision',
+        trace_id: s.turnId,
+        turn_id: s.turnId,
+        session_id: s.sessionId,
+        t_ms: Date.now(),
+        surface: 'web_to_action',
+        decision: 'observed',
+        reason: 'surface-risk tool fired in a turn that read untrusted web content',
+        evidence: { called_tools: s.toolNamesThisTurn },
+      });
     }
     return result;
   } catch {

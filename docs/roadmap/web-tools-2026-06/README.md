@@ -1,10 +1,10 @@
 # Initiative 11 — Web tools (agent-side networking)
 
-> **Status: 🟡 IN PROGRESS (1/3 shipped).** Order 11 — the first capability initiative after the
-> memory work (Initiatives 9/10). Version range: **v0.18.0 – v0.18.2** (3 versions). **v0.18.0
-> (web_search) ✅ shipped 2026-06-16** on branch `feat/initiative-11-web-search`; v0.18.1 (web_fetch +
-> SSRF/extraction) and v0.18.2 (integration + default-flip) remain. Master index:
-> [`../README.md`](../README.md).
+> **Status: ✅ COMPLETE (3/3 shipped 2026-06-16).** Order 11 — the first capability initiative after
+> the memory work (Initiatives 9/10). Version range: **v0.18.0 – v0.18.2** (3 versions), all shipped on
+> branch `feat/initiative-11-web-search`: v0.18.0 (web_search), v0.18.1 (web_fetch + SSRF/extraction
+> safety core), v0.18.2 (integration + citations + cache + default-flip). Luna now has complete, safe
+> agent-side networking. Master index: [`../README.md`](../README.md).
 > Source: Python parity (`web_search`, shipped Python v0.58.0–v0.58.1) **plus** a 2026 SOTA review of
 > mainstream agent web tools (Anthropic native `web_search`/`web_fetch`, Tavily/Brave/Exa, Readability
 > + Turndown, SSRF + indirect-prompt-injection defense). Every TS hook point below was read from source.
@@ -124,8 +124,8 @@ Initiative 8 used for `shell`.
 | Plan | Version | Theme | Risk | Depends | Status |
 |---|---|---|---|---|---|
 | [v0.18.0](v0.18.0-web-search.md) | v0.18.0 | **web_search** — client-side search (provider abstraction, Tavily default) on the dispatcher; soft-fail + `[N]` citations; the defection guard (L1 clause + intent-no-call audit) extending LD #14; L1 "when to reach for the web" clause. `proactiveRisk:'safe'`. Flag `LUNA_WEB_SEARCH` | Medium | nothing | ✅ shipped 2026-06-16 |
-| [v0.18.1](v0.18.1-web-fetch-safety.md) | v0.18.1 | **web_fetch + SSRF/extraction safety core** — read one URL safely: the SSRF IP-guard module (deny-list + redirect re-validation + rebinding pin), `@mozilla/readability`→Turndown extraction, size/timeout caps, `<untrusted_content>` delimiting. Flag `LUNA_WEB_FETCH` | High | v0.18.0 (shared web infra) | 🟡 |
-| [v0.18.2](v0.18.2-integration-hardening.md) | v0.18.2 | **complete networking** — the search→fetch loop validated end-to-end; standing injection system-rule + intent-anchored boundary; citation surfacing (UI card + L2 persistence); optional fetch cache (migration `0012`); latency/cost measured; **default-flip both on**; persona framing; close Initiative 11 | Medium | v0.18.0, v0.18.1 | 🟡 |
+| [v0.18.1](v0.18.1-web-fetch-safety.md) | v0.18.1 | **web_fetch + SSRF/extraction safety core** — read one URL safely: the SSRF IP-guard module (deny-list + redirect re-validation + rebinding pin), `@mozilla/readability`→Turndown extraction, size/timeout caps, `<untrusted_content>` delimiting. Flag `LUNA_WEB_FETCH` | High | v0.18.0 (shared web infra) | ✅ shipped 2026-06-16 |
+| [v0.18.2](v0.18.2-integration-hardening.md) | v0.18.2 | **complete networking** — the search→fetch loop validated end-to-end; standing injection system-rule + intent-anchored boundary; citation surfacing (UI card + L2 persistence); optional fetch cache (migration `0012`); latency/cost measured; **default-flip both on**; persona framing; close Initiative 11 | Medium | v0.18.0, v0.18.1 | ✅ shipped 2026-06-16 |
 
 ## Acceptance criteria (whole initiative)
 

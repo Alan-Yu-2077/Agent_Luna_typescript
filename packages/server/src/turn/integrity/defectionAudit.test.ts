@@ -281,6 +281,63 @@ describe('web_search intent-no-call audit (v0.18.0)', () => {
   });
 });
 
+describe('web_to_action boundary audit (v0.18.2)', () => {
+  let db: Database;
+  let store: TraceStore;
+
+  const base: AuditState = {
+    turnId: 'b1',
+    sessionId: 'default',
+    messageTexts: ['done.'],
+    lastMessageIsFinal: true,
+    thinking: '',
+    toolNamesThisTurn: ['web_fetch', 'edit'],
+    finishReason: 'end_turn',
+  };
+
+  function w2a(turnId: string): unknown[] {
+    return store
+      .getEventsByTurn(turnId)
+      .filter((e) => e.kind === 'decision')
+      .map((e) => JSON.parse(e.payload_json))
+      .filter((p) => p.surface === 'web_to_action');
+  }
+
+  beforeEach(() => {
+    db = new Database(':memory:', { strict: true });
+    db.exec(readFileSync(join(import.meta.dir, '..', '..', 'migrations', '0001_traces.sql'), 'utf8'));
+    store = new TraceStore(db);
+    setTraceStore(store);
+    Bun.env['LUNA_DECISION_AUDIT'] = '1';
+    delete Bun.env['LUNA_TRACE'];
+  });
+
+  afterEach(() => {
+    setTraceStore(null);
+    delete Bun.env['LUNA_DECISION_AUDIT'];
+    delete Bun.env['LUNA_TRACE'];
+    db.close(false);
+  });
+
+  test('web content + a surface-risk action → one web_to_action trace', () => {
+    runDefectionAudit({ ...base, webContentThisTurn: true, surfaceActionThisTurn: true });
+    store.flush('b1');
+    expect(w2a('b1').length).toBe(1);
+  });
+
+  test('web content but no surface action → no trace', () => {
+    runDefectionAudit({ ...base, webContentThisTurn: true, surfaceActionThisTurn: false });
+    store.flush('b1');
+    expect(w2a('b1').length).toBe(0);
+  });
+
+  test('a surface action without web content → no trace', () => {
+    runDefectionAudit({ ...base, webContentThisTurn: false, surfaceActionThisTurn: true });
+    store.flush('b1');
+    expect(w2a('b1').length).toBe(0);
+  });
+});
+
 function stopWithMessages(calls: { id: string; input: unknown }[]): ProviderEvent {
   const toolUses = calls.map((c) => ({ id: c.id, name: 'message', input: c.input }));
   return {

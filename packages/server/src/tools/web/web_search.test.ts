@@ -159,13 +159,18 @@ describe('webSearchTool — soft-fail (no throw escapes the generator)', () => {
   });
 });
 
-describe('webSearchTool — registry gating', () => {
-  test('withWebSearch mounts web_search only under LUNA_WEB_SEARCH=1', () => {
-    Bun.env['LUNA_WEB_SEARCH'] = '1';
+describe('webSearchTool — registry gating + no-key degrade (v0.18.2 flip)', () => {
+  test('default ON when a key is present; LUNA_WEB_SEARCH=0 is the off switch', () => {
+    // beforeEach sets LUNA_WEB_SEARCH_API_KEY
+    delete Bun.env['LUNA_WEB_SEARCH']; // unset → default ON since v0.18.2
     expect(withWebSearch({}).web_search).toBeDefined();
     Bun.env['LUNA_WEB_SEARCH'] = '0';
     expect(withWebSearch({}).web_search).toBeUndefined();
-    delete Bun.env['LUNA_WEB_SEARCH'];
+  });
+
+  test('graceful no-key degrade: no API key → not mounted even with the flag on', () => {
+    delete Bun.env['LUNA_WEB_SEARCH_API_KEY'];
+    Bun.env['LUNA_WEB_SEARCH'] = '1';
     expect(withWebSearch({}).web_search).toBeUndefined();
   });
 });

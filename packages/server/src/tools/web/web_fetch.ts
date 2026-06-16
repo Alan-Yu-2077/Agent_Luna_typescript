@@ -6,17 +6,23 @@ import {
   type SafeFetchOptions,
   type SafeFetchResult,
 } from './safeFetch';
+import { cachedSafeFetch, webCacheEnabled } from './webCache';
 import { extractMarkdown, wrapUntrusted } from './extract';
 
 // Test seam (mirrors web_search's setWebSearchProvider): the tool calls through
 // this indirection so a unit test can inject a fake fetcher and never touch the
-// network or DNS. null restores the real SSRF-guarded safeFetch. v0.18.2's cache
-// also wraps the real fetcher here.
+// network or DNS. null restores the real path — the SSRF-guarded safeFetch, or
+// the cache wrapper around it when LUNA_WEB_CACHE=1 (v0.18.2).
 type Fetcher = (url: string, opts: SafeFetchOptions) => Promise<SafeFetchResult>;
-let fetcher: Fetcher = safeFetch;
+
+function defaultFetcher(url: string, opts: SafeFetchOptions): Promise<SafeFetchResult> {
+  return webCacheEnabled() ? cachedSafeFetch(url, opts) : safeFetch(url, opts);
+}
+
+let fetcher: Fetcher = defaultFetcher;
 
 export function setWebFetcher(fn: Fetcher | null): void {
-  fetcher = fn ?? safeFetch;
+  fetcher = fn ?? defaultFetcher;
 }
 
 // web_fetch (Initiative 11, v0.18.1) — read one web page, safely. The half Python

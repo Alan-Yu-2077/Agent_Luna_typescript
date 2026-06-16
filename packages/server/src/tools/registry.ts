@@ -155,10 +155,14 @@ export const webSearchTools: ToolRegistry = {
   web_search: webSearchTool,
 };
 
-// Default OFF (cost/abuse surface — opposite polarity to the code tools);
-// LUNA_WEB_SEARCH=1 mounts web_search this session.
+// Default ON since v0.18.2 (Initiative 11 close), BUT degrades to off when there
+// is no API key: a search with no key would only ever error, so the tool is
+// simply not mounted (graceful no-key degrade, no crash). LUNA_WEB_SEARCH=0 is
+// the explicit off switch.
 export function webSearchEnabled(): boolean {
-  return Bun.env['LUNA_WEB_SEARCH'] === '1';
+  return (
+    Bun.env['LUNA_WEB_SEARCH'] !== '0' && (Bun.env['LUNA_WEB_SEARCH_API_KEY'] ?? '').length > 0
+  );
 }
 
 // Compose a base registry with web_search iff the flag is on. Wired at boot in
@@ -181,8 +185,10 @@ export const webFetchTools: ToolRegistry = {
   web_fetch: webFetchTool,
 };
 
+// Default ON since v0.18.2; no key needed (the SSRF guard, not a key, is the
+// gate). LUNA_WEB_FETCH=0 turns the read-a-page surface off.
 export function webFetchEnabled(): boolean {
-  return Bun.env['LUNA_WEB_FETCH'] === '1';
+  return Bun.env['LUNA_WEB_FETCH'] !== '0';
 }
 
 export function withWebFetch(base: ToolRegistry): ToolRegistry {

@@ -103,6 +103,15 @@ export const FinishReason = z.enum([
 ]);
 export type FinishReason = z.infer<typeof FinishReason>;
 
+// A web source Luna used this turn (Initiative 11, v0.18.2) — gathered from
+// web_search result urls + web_fetch final_url. Rides turn.result so the
+// frontend can render source cards and L2 keeps them (she cites across turns).
+export const Citation = z.object({
+  url: z.string(),
+  title: z.string(),
+});
+export type Citation = z.infer<typeof Citation>;
+
 export const TurnResultEvent = z.object({
   type: z.literal('turn.result'),
   turn_id: z.string(),
@@ -112,6 +121,7 @@ export const TurnResultEvent = z.object({
     input_tokens: z.number().int().nonnegative(),
     output_tokens: z.number().int().nonnegative(),
   }),
+  citations: z.array(Citation).optional(),
 });
 
 export const DreamStepStatus = z.enum(['ok', 'skipped', 'failed']);
