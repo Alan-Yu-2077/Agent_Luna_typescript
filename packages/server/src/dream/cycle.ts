@@ -222,14 +222,25 @@ const dreamGraph: Graph<DreamCycleState, DreamNode> = {
       const insertDiary = db.prepare(
         'INSERT OR IGNORE INTO diaries (kind, period_key, text, generated_ms) VALUES (?, ?, ?, ?)',
       );
+      // v0.17.3 (option 2): today's day-diary is rewritten on every dream, so a
+      // dream during the day captures the whole day so far instead of freezing it
+      // at the first dream (the old INSERT OR IGNORE lost everything after a noon
+      // dream). Past days stay write-once — they are complete and immutable.
+      // "Today" is the same UTC calendar key the rows are grouped under above.
+      const upsertDiary = db.prepare(
+        `INSERT INTO diaries (kind, period_key, text, generated_ms) VALUES (?, ?, ?, ?)
+         ON CONFLICT(kind, period_key) DO UPDATE SET text = excluded.text, generated_ms = excluded.generated_ms`,
+      );
+      const todayKey = new Date(Date.now()).toISOString().slice(0, 10);
       let written = 0;
 
       for (const [day, pieces] of [...byDay.entries()].sort()) {
         if (written >= MAX_DIARIES_PER_CYCLE) break;
-        if (hasDiary.get('day', day)) continue;
+        const isToday = day === todayKey;
+        if (!isToday && hasDiary.get('day', day)) continue;
         const call = await dreamCall(s.llm, diaryPrompt('day', day, pieces.join('\n\n')), 1400);
         if (!call.ok) return ['failed', `day ${day}: ${call.failure}: ${call.detail}`];
-        insertDiary.run('day', day, call.text.trim(), Date.now());
+        (isToday ? upsertDiary : insertDiary).run('day', day, call.text.trim(), Date.now());
         written += 1;
       }
 

@@ -230,6 +230,38 @@ describe('dream cycle', () => {
     expect(monthCount).toBe(1);
   });
 
+  test("4c. today's day-diary is rewritten each dream; past days stay write-once (v0.17.3)", async () => {
+    let diaryN = 0;
+    const { llm } = scriptedLlm({ diary: () => `diary v${++diaryN}` });
+    const today = new Date(Date.now()).toISOString().slice(0, 10);
+    const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+    const readDay = (key: string) =>
+      ((db.prepare("SELECT text FROM diaries WHERE kind = 'day' AND period_key = ?").get(key) as
+        | { text: string }
+        | null) ?? null)?.text ?? null;
+
+    seedDialogue('default', [['yesterday talk', 'noted']], 1);
+    seedDialogue('default', [['this morning', 'good morning']], 0);
+    await runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
+    const yAfter1 = readDay(yesterday);
+    const todayAfter1 = readDay(today);
+    expect(yAfter1).not.toBeNull();
+    expect(todayAfter1).not.toBeNull();
+
+    // a second dream the same day (old behavior: INSERT OR IGNORE skipped today)
+    expect(wake().ok).toBe(true);
+    await runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
+
+    expect(readDay(today)).not.toBe(todayAfter1); // option 2: today refreshed
+    expect(readDay(yesterday)).toBe(yAfter1); // past day immutable
+    const todayRows = (
+      db.prepare("SELECT COUNT(*) c FROM diaries WHERE kind = 'day' AND period_key = ?").get(today) as {
+        c: number;
+      }
+    ).c;
+    expect(todayRows).toBe(1); // upsert, not a duplicate
+  });
+
   test('5. persona_update writes core memory with dream source + audit', async () => {
     seedDialogue('default', [['I trust you with this', 'that means a lot']]);
     const { llm } = scriptedLlm({
