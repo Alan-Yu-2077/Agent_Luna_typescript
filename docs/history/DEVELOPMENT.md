@@ -93,6 +93,7 @@ during the rewrite. Its version log is unrelated to this one — `v0.1` here is 
 | `v0.18.2` | 2026-06-16 | Web tools — **complete networking** (Initiative 11, 3/3) — the search→fetch→reason loop validated end-to-end; the **standing prompt-injection defense** (a `<untrusted_content>` system rule in the cached core when either web tool is mounted + an L1 search→fetch loop/boundary clause) + the read/write boundary (a `web_to_action` decision trace when a turn that read untrusted web content fires a surface-risk tool — detection only, LD #14 discipline); **citation surfacing** — `turn.result` gains optional `citations: {url,title}[]` (wire-contract change, `protocol`+`server`+`web` in lockstep) gathered from `web_search` urls + `web_fetch` `final_url`, rendered as `source` chips + persisted via L2; an **optional fetch cache** (migration `0012_web_cache`, `LUNA_WEB_CACHE`) wrapped around `safeFetch` (a hit never bypasses the SSRF guard); **default-flip** `LUNA_WEB_SEARCH` **ON** (graceful no-key degrade) — `LUNA_WEB_FETCH` reverted to **opt-in** in review (rebinding TOCTOU not fully closed; awaits the v0.18.3 DNS pin). **Initiative 11 complete (3/3), review-remediated.** Review: +7 regression tests, **632 green**. | `working tree` |
 | `v0.18.3` | 2026-06-16 | Web tools — **web_fetch DNS pin** (Init 11 follow-up) — `safeFetch` connects via a `node:http(s)` custom `lookup` **pinned to a deny-list-validated IP** (TLS SNI/cert still key off the hostname), so a DNS rebind cannot swap in a private address between check and connect — the **TOCTOU is closed**, verified by a real-HTTPS smoke + a pin unit test. `198.18.0.0/15` (RFC2544 benchmarking) **unblocked** — it's the Clash/Surge fake-IP pool, so blocking it broke `web_fetch` on every proxied host (every domain resolves into it). **`LUNA_WEB_FETCH` flipped default ON.** Citation chips now **clickable** (`<a>`, scheme-validated `safeHttpHref`, XSS-safe). **634 tests green** ×3 tsc; chip reload-persistence deferred. | `working tree` |
 | `v0.18.4` | 2026-06-17 | Fix — **top-level text leak stored as the reply** — `runTurn`'s persistence stored `state.text`, which in message mode holds a stray top-level text block (the model narrating outside the message tool) until `finalize` overwrites it; on a turn that errored before `finalize` the leak ("answer for user question") was persisted + replayed as the visible reply. Now persists the already-computed `realReply` (message-tool text / streamed text). +1 regression test; 1 historic L2 row repaired from `raw_json` (a precise detector left the 20 humanity-transform rows untouched). 635 green. | `working tree` |
+| `v0.19.0` | 2026-06-17 | Time perception — A: passive injection (Initiative 12, 1/3) — new `turn/temporalContext.ts` (pure, TS-computed): `classifyDaypart` / `formatGap` / `classifyGap` (gap + calendar-day flag) / `relativeLabel` / `buildTimeBlock`, timezone-explicit (`LUNA_TZ` → host zone). `runTurn parse_input` injects a labeled time block (now + daypart + elapsed-since-last + session) into the **uncached user message**, gap sourced from the last L2 `t_ms` (restart-safe); `Session.sessionStartMs`; an L1 "don't compute durations yourself" clause. Behind `LUNA_TIME_AWARE` (ships off) | _branch_ |
 
 ## Code-agent capability (2026-06-15) — Initiative 8 begins (v0.15.0)
 
@@ -555,6 +556,43 @@ Inference:
   and gives Alan the variety he remembered, now as a first-class setting rather than a buried constant.
 
 ## Detailed records
+
+### `v0.19.0` — 2026-06-17 — Time perception: passive injection (Initiative 12, 1/3)
+
+Status:
+
+- working tree (branch `feat/initiative-12-time-perception`)
+
+Fact:
+
+- `turn/temporalContext.ts` (new, pure/TS): `classifyDaypart`, `formatGap` (just now / 1m / 1h 12m /
+  2 days), `classifyGap(gap, crossesCalendarDay)` (continuation / same_day / new_day / long_away /
+  first — the calendar-day flag decides "this morning vs yesterday"), `relativeLabel` (for v0.19.1),
+  `buildTimeBlock`, `resolveTz` (`LUNA_TZ` → `Intl` host zone → UTC), `timeAwareEnabled`. Timezone is
+  explicit in every label (the one real correctness risk).
+- `turn/runTurn.ts parse_input`: under `LUNA_TIME_AWARE`, pushes the time block into the per-turn
+  `role:'user'` blocks (the **uncached tail**) — never `buildSystemPrompt`. `lastInteractionMs` from
+  `listRecentL2(id,1)[0].t_ms` (survives a restart), falling back to `session.lastUserMs`.
+- `turn/session.ts`: `Session.sessionStartMs` (boot/first-touch, not persisted — a restart is a new
+  session).
+- `persona/l1Contract.ts`: a `TIME_CLAUSE` ("trust the handed labels; never compute how-long-ago
+  yourself") added when `timeAware`; threaded through `renderL1Contract` (cache key extended). It
+  rides the cached core (static, stable per process) — only the per-turn time *facts* go in the
+  uncached tail.
+- `.env.example`: `LUNA_TIME_AWARE`, `LUNA_TZ`, `LUNA_TIME_GAP_{CONTINUATION,LONG_AWAY}_S`.
+- Tests: `temporalContext.test.ts` (+23: helpers, buildTimeBlock golden, L1 clause, and the
+  **cache-safety placement** — per-turn time facts are in the user message, the cached system block is
+  byte-stable across turns and carries no per-turn time). **658 pass / 0 fail**; all packages `tsc`
+  clean.
+
+Inference:
+
+- The direct fix for "called an hour-ago event 'yesterday'": she never does the subtraction (TS
+  hands her labeled facts), so she can't get it wrong. Cache-safe by construction — the per-turn
+  facts live in the uncached tail; enabling the flag changes the cached prefix once per process
+  (a stable, still-cacheable prefix), and the static guidance clause is constant.
+- The `relativeLabel`/`formatGap` helpers are the shared "when" truth v0.19.1 (recall labels) and
+  v0.19.2 (felt time) reuse — one source of humanization.
 
 ### `v0.18.4` — 2026-06-17 — Fix: top-level text leak stored as the visible reply
 

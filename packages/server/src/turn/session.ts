@@ -29,6 +29,10 @@ export type Session = {
   // anchoring, tracked via cadence). Drives the proactive idle gap. Init to
   // boot time so she never proactive-fires until a fresh idle gap elapses.
   lastUserMs: number;
+  // Wall-clock when this in-memory session was created (process boot / first
+  // touch). NOT persisted — a restart is genuinely a new session, so "this
+  // session: started Nm ago" resets per process (Initiative 12, v0.19.0).
+  sessionStartMs: number;
   mutex: Mutex;
 };
 
@@ -49,6 +53,7 @@ export function getSession(id: string): Session {
       windowLowWater: persisted?.windowLowWater ?? 0,
       wakePending: true,
       lastUserMs: Date.now(),
+      sessionStartMs: Date.now(),
       mutex: new Mutex(),
     };
     sessions.set(id, s);
