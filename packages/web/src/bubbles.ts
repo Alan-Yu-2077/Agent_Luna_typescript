@@ -6,6 +6,18 @@
 
 export type ChipKind = 'tool' | 'dream' | 'proactive' | 'expression' | 'error' | 'source';
 
+// Only http(s) urls become clickable; anything else (javascript:, data:, …) falls
+// back to plain text. Citation urls come from the UNTRUSTED web, so a source chip
+// must never put an unvalidated url into an href (v0.18.3).
+export function safeHttpHref(url: string): string | null {
+  try {
+    const u = new URL(url);
+    return u.protocol === 'http:' || u.protocol === 'https:' ? u.href : null;
+  } catch {
+    return null;
+  }
+}
+
 // One persisted turn, replayed on (re)connect. user is empty for a proactive turn.
 export type HistoryTurnView = { userText: string; assistantText: string; tMs: number };
 
@@ -22,7 +34,7 @@ export interface BubbleView {
   // remove a bubble (e.g. a streamed preview whose delivery failed validation)
   discard(id: string): void;
   // a non-bubble marker: tool/dream/proactive/expression/error
-  chip(kind: ChipKind, text: string): void;
+  chip(kind: ChipKind, text: string, href?: string): void;
 }
 
 // A DOM implementation for the browser. Renders bubbles + chips into a host
@@ -69,7 +81,19 @@ export class DomBubbleView implements BubbleView {
     this.bubbles.delete(id);
   }
 
-  chip(kind: ChipKind, text: string): void {
+  chip(kind: ChipKind, text: string, href?: string): void {
+    const safe = kind === 'source' && href ? safeHttpHref(href) : null;
+    if (safe) {
+      const a = this.host.ownerDocument.createElement('a');
+      a.className = `luna-chip ${kind}`;
+      a.textContent = text;
+      a.href = safe;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      this.host.appendChild(a);
+      this.host.scrollTop = this.host.scrollHeight;
+      return;
+    }
     this.el(`luna-chip ${kind}`, text);
   }
 }

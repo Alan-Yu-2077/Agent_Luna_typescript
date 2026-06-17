@@ -89,6 +89,9 @@ describe('isBlockedIp (pure)', () => {
       expect(isBlockedIp(ip)).toBe(false);
     }
     expect(isBlockedIp('not-an-ip')).toBe(true); // fail-closed
+    // RFC2544 benchmarking / Clash-Surge fake-IP proxy pool — intentionally allowed
+    // (not internal infra; blocking it breaks web_fetch on every proxied host).
+    expect(isBlockedIp('198.18.0.252')).toBe(false);
   });
 
   // Review fix: IPv6 transition forms that wrap an internal v4 must be decoded +
@@ -132,17 +135,31 @@ describe('safeFetch — fetch with re-validation + caps', () => {
     expect(reached169).toBe(false);
   });
 
-  test('DNS rebinding (public on guard, private at connect) is rejected', async () => {
-    let calls = 0;
-    const resolve: Resolver = async () => (++calls === 1 ? ['93.184.216.34'] : ['10.0.0.5']);
+  test('the transport is pinned to the validated IP (closes the rebinding TOCTOU)', async () => {
+    // a single resolution returns a public IP; the transport must be handed THAT
+    // exact ip as the pin target, so the socket cannot be re-resolved to a private
+    // address between the check and the connect.
+    let pinnedTo = '';
+    const resolve: Resolver = async () => ['93.184.216.34'];
+    const fetchImpl: FetchImpl = async (_url, _init, pinIp) => {
+      pinnedTo = pinIp;
+      return htmlResponse('<html><body>ok</body></html>');
+    };
+    const r = await safeFetch('http://pinme.example/', { resolve, fetchImpl });
+    expect(r.status).toBe(200);
+    expect(pinnedTo).toBe('93.184.216.34'); // connected to the validated IP, not a re-resolve
+  });
+
+  test('a host that resolves to a private IP is rejected before any connect', async () => {
     let fetched = false;
+    const resolve: Resolver = async () => ['10.0.0.5'];
     const fetchImpl: FetchImpl = async () => {
       fetched = true;
       return htmlResponse('x');
     };
-    await expect(safeFetch('http://rebind.example/', { resolve, fetchImpl })).rejects.toMatchObject(
-      { code: 'blocked_url' },
-    );
+    await expect(
+      safeFetch('http://internal.example/', { resolve, fetchImpl }),
+    ).rejects.toMatchObject({ code: 'blocked_url' });
     expect(fetched).toBe(false);
   });
 

@@ -185,13 +185,13 @@ export const webFetchTools: ToolRegistry = {
   web_fetch: webFetchTool,
 };
 
-// OPT-IN, default OFF: set LUNA_WEB_FETCH=1 to mount. Reverted from the v0.18.2
-// default-on flip during review — safeFetch's DNS-rebinding defense NARROWS but
-// does not fully close the TOCTOU (Bun fetch exposes no IP-pin hook), so the
-// read-a-URL surface stays opt-in until a verified pinned-lookup fetch lands
-// (v0.18.3 follow-up). No key needed; the SSRF guard, not a key, is the gate.
+// Default ON since v0.18.3: safeFetch now PINS the connection to a deny-list-
+// validated IP via a node:http(s) custom lookup (the DNS-rebinding TOCTOU is
+// closed, verified by a real-HTTPS smoke + unit tests), so the read-a-URL surface
+// is safe on by default. LUNA_WEB_FETCH=0 is the off switch. No key needed; the
+// SSRF guard, not a key, is the gate.
 export function webFetchEnabled(): boolean {
-  return Bun.env['LUNA_WEB_FETCH'] === '1';
+  return Bun.env['LUNA_WEB_FETCH'] !== '0';
 }
 
 export function withWebFetch(base: ToolRegistry): ToolRegistry {

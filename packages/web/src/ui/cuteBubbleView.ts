@@ -1,4 +1,5 @@
 import type { BubbleView, ChipKind, HistoryTurnView } from '../bubbles';
+import { safeHttpHref } from '../bubbles';
 import { absoluteStamp, relativeTime } from './time';
 import { toolCardLabel } from './toolLabels';
 
@@ -104,8 +105,20 @@ export class CuteBubbleView implements BubbleView {
     this.bubbles.delete(id);
   }
 
-  chip(kind: ChipKind, text: string): void {
+  chip(kind: ChipKind, text: string, href?: string): void {
     this.hideThinking();
+    const safe = kind === 'source' && href ? safeHttpHref(href) : null;
+    if (safe) {
+      const a = this.host.ownerDocument.createElement('a');
+      a.className = `card ${kind}`;
+      a.textContent = text;
+      a.href = safe;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      this.host.appendChild(a);
+      this.scroll();
+      return;
+    }
     const card = this.host.ownerDocument.createElement('div');
     card.className = `card ${kind}`;
     card.textContent = kind === 'tool' ? toolCardLabel(text) : text;

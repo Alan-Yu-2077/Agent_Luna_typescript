@@ -1,17 +1,20 @@
 import { lookup } from 'node:dns/promises';
-import { isIP } from 'node:net';
+import { isIP, type LookupFunction } from 'node:net';
+import http from 'node:http';
+import https from 'node:https';
 
-// SSRF guard + safe fetcher (Initiative 11, v0.18.1) — the security keystone.
-// The URL analogue of resolveInWorkspace (workspace.ts): canonicalize → resolve
-// → validate the RESOLVED IP against a deny-list → re-validate on every redirect.
+// SSRF guard + safe fetcher (Initiative 11; pinned in v0.18.3) — the security
+// keystone. The URL analogue of resolveInWorkspace (workspace.ts): canonicalize →
+// resolve → validate the RESOLVED IP against a deny-list → re-validate on every
+// redirect → and CONNECT TO THAT VALIDATED IP.
 //
-// DNS-rebinding caveat (be honest): Bun's fetch exposes no IP-pin hook, so
-// safeFetch cannot force the socket onto the exact IP it validated. It re-resolves
-// + re-checks immediately before connect, which NARROWS but does not fully close
-// the TOCTOU window — a sub-second TTL=0 rebind between the check and fetch's own
-// internal resolution can still slip a private IP past it. Because of this residual
-// gap, web_fetch ships OPT-IN (LUNA_WEB_FETCH, default off) until a verified
-// pinned-lookup fetch lands (v0.18.3 follow-up); web_search has no such surface.
+// The connection is PINNED: a node:http(s) custom `lookup` returns only the IP the
+// deny-list validated, so the socket cannot be re-resolved to a different (private)
+// address between the check and the connect — the DNS-rebinding TOCTOU is CLOSED,
+// not merely narrowed. TLS SNI + certificate validation still key off the URL
+// hostname, so HTTPS stays correct (we connect to the validated IP, verify the cert
+// against the name). Verified end-to-end (real HTTPS smoke + injected-transport unit
+// tests).
 //
 // Always-on inside the tool (LD #10), pure + table-driven + tested. In the
 // evaluator-firewall set (workspace.ts): a future propose_self_edit can never
@@ -21,7 +24,9 @@ const MAX_URL_LEN = 2048;
 const MAX_REDIRECTS = 5;
 const USER_AGENT = 'Luna/0.18 (+https://github.com/Alan-Yu-2077/Agent_Luna_typescript)';
 
-export type AssertResult = { ok: true; url: URL } | { ok: false; reason: string };
+export type AssertResult =
+  | { ok: true; url: URL; ips: string[] }
+  | { ok: false; reason: string };
 
 // Injectable resolver (host → IP strings) so tests drive the deny-list + the
 // rebinding check without real DNS. Default = node:dns lookup (all A/AAAA).
@@ -68,7 +73,11 @@ function isBlockedIpv4(ip: string): boolean {
     inV4Range(n, '192.0.0.0', 24) || // IETF protocol assignments
     inV4Range(n, '192.0.2.0', 24) || // TEST-NET-1
     inV4Range(n, '192.168.0.0', 16) || // RFC1918
-    inV4Range(n, '198.18.0.0', 15) || // benchmarking
+    // 198.18.0.0/15 (RFC 2544 benchmarking) is deliberately NOT blocked: it is not
+    // internal infrastructure (no real SSRF target lives there) and is the default
+    // fake-IP pool for Clash/Surge-style proxies — blocking it breaks web_fetch on
+    // every proxied host, where EVERY domain resolves into 198.18.x. Internal access
+    // stays closed by the IP-literal + RFC1918/loopback/link-local/metadata checks.
     inV4Range(n, '198.51.100.0', 24) || // TEST-NET-2
     inV4Range(n, '203.0.113.0', 24) || // TEST-NET-3
     inV4Range(n, '224.0.0.0', 4) || // multicast
@@ -152,7 +161,7 @@ export async function assertPublicUrl(
 
   if (isIP(host) !== 0) {
     if (isBlockedIp(host)) return { ok: false, reason: `blocked ip ${host}` };
-    return { ok: true, url };
+    return { ok: true, url, ips: [host] };
   }
 
   let ips: string[];
@@ -165,7 +174,7 @@ export async function assertPublicUrl(
   for (const ip of ips) {
     if (isBlockedIp(ip)) return { ok: false, reason: `${host} resolves to blocked ip ${ip}` };
   }
-  return { ok: true, url };
+  return { ok: true, url, ips };
 }
 
 export type SafeFetchErrorCode =
@@ -191,7 +200,11 @@ export type SafeFetchResult = {
   finalUrl: string;
 };
 
-export type FetchImpl = (url: string, init: RequestInit) => Promise<Response>;
+export type FetchInit = { signal?: AbortSignal; headers: Record<string, string>; redirect?: 'manual' };
+// The transport. `pinIp` is the deny-list-validated address the socket must connect
+// to (SNI/cert still keyed to the URL hostname). Injectable so unit tests drive the
+// redirect/cap/content-type logic — and assert the pin — without real sockets.
+export type FetchImpl = (url: string, init: FetchInit, pinIp: string) => Promise<Response>;
 
 export type SafeFetchOptions = {
   maxBytes?: number;
@@ -231,46 +244,96 @@ async function readCapped(res: Response, maxBytes: number): Promise<string> {
   return new TextDecoder().decode(merged);
 }
 
-// Fetch a URL safely: validate (+ rebinding re-check) before each hop, never
-// auto-follow redirects (re-validate the Location), cap bytes, gate content-type.
+// The pinned transport (v0.18.3): connect to `pinIp` — the address the deny-list
+// already validated — via a node:http(s) custom `lookup`, so the socket cannot be
+// re-resolved to a private IP. TLS SNI + cert validation still use the URL hostname
+// (we connect to the validated IP, verify the cert against the name). Returns a
+// Response so safeFetch's redirect/cap/content-type logic stays transport-agnostic.
+function pinnedFetch(rawUrl: string, init: FetchInit, pinIp: string): Promise<Response> {
+  const u = new URL(rawUrl);
+  const mod = u.protocol === 'https:' ? https : http;
+  const fam = isIP(pinIp) === 6 ? 6 : 4;
+  // Pin DNS to the validated IP. node may call lookup with all:true (array form,
+  // which Bun uses) or all:false (single) — handle both.
+  const pinnedLookup = (_host: string, options: { all?: boolean } | undefined, cb: (...a: unknown[]) => void): void => {
+    if (options && options.all) cb(null, [{ address: pinIp, family: fam }]);
+    else cb(null, pinIp, fam);
+  };
+  return new Promise<Response>((resolve, reject) => {
+    const req = mod.request(
+      rawUrl,
+      {
+        method: 'GET',
+        headers: init.headers,
+        signal: init.signal,
+        // WHY cast: @types/node's LookupFunction models only the all:false callback
+        // shape; we also serve the all:true array form (above), so widen it.
+        lookup: pinnedLookup as unknown as LookupFunction,
+      },
+      (res) => {
+        const headers = new Headers();
+        for (const [k, v] of Object.entries(res.headers)) {
+          if (typeof v === 'string') headers.set(k, v);
+          else if (Array.isArray(v)) headers.set(k, v.join(', '));
+        }
+        const code = res.statusCode ?? 0;
+        // Response forbids a body for these statuses; drain the socket instead.
+        if (code < 200 || code === 204 || code === 205 || code === 304) {
+          res.resume();
+          resolve(new Response(null, { status: code, headers }));
+          return;
+        }
+        const stream = new ReadableStream<Uint8Array>({
+          start(controller) {
+            res.on('data', (c: Buffer) =>
+              controller.enqueue(new Uint8Array(c.buffer, c.byteOffset, c.byteLength)),
+            );
+            res.on('end', () => controller.close());
+            res.on('error', (e: Error) => controller.error(e));
+          },
+          cancel() {
+            res.destroy();
+          },
+        });
+        resolve(new Response(stream, { status: code, headers }));
+      },
+    );
+    req.on('error', reject);
+    req.end();
+  });
+}
+
+// Fetch a URL safely: validate before each hop, CONNECT TO THE VALIDATED IP (the
+// pin — no TOCTOU), never auto-follow redirects (re-validate the Location), cap
+// bytes, gate content-type.
 export async function safeFetch(
   rawUrl: string,
   opts: SafeFetchOptions = {},
 ): Promise<SafeFetchResult> {
   const maxBytes = opts.maxBytes ?? Number(Bun.env['LUNA_WEB_FETCH_MAX_BYTES'] ?? 3_000_000);
   const resolve = opts.resolve ?? defaultResolve;
-  const doFetch: FetchImpl = opts.fetchImpl ?? ((u, init) => fetch(u, init));
+  const transport: FetchImpl = opts.fetchImpl ?? pinnedFetch;
 
   let current = rawUrl;
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
     const guard = await assertPublicUrl(current, resolve);
     if (!guard.ok) throw new SafeFetchError('blocked_url', guard.reason);
-
-    // DNS-rebinding re-check (window-narrowing, NOT a true pin): for a hostname,
-    // re-resolve immediately before connect and reject a now-private answer.
-    // fetch() below still performs its OWN resolution we cannot observe, so this
-    // shrinks the TOCTOU window but does not close it — see the header note and
-    // the v0.18.3 pinned-lookup follow-up.
-    const host = hostOf(guard.url);
-    if (isIP(host) === 0) {
-      let ips: string[];
-      try {
-        ips = await resolve(host);
-      } catch {
-        throw new SafeFetchError('blocked_url', `dns re-resolution failed for ${host}`);
-      }
-      for (const ip of ips) {
-        if (isBlockedIp(ip)) throw new SafeFetchError('blocked_url', `dns rebind: ${host} → ${ip}`);
-      }
-    }
+    // Pin the socket to a deny-list-validated address. Because the connection uses
+    // THIS ip (not a fresh resolution), a DNS rebind cannot swap in a private
+    // address between the check and the connect — the TOCTOU is closed.
+    const pinIp = guard.ips[0]!;
 
     let res: Response;
     try {
-      res = await doFetch(current, {
-        redirect: 'manual',
-        signal: opts.signal,
-        headers: { 'user-agent': USER_AGENT, accept: 'text/html, text/plain;q=0.9, */*;q=0.1' },
-      });
+      res = await transport(
+        current,
+        {
+          redirect: 'manual',
+          signal: opts.signal,
+          headers: { 'user-agent': USER_AGENT, accept: 'text/html, text/plain;q=0.9, */*;q=0.1' },
+        },
+        pinIp,
+      );
     } catch (e) {
       if (opts.signal?.aborted) throw new SafeFetchError('fetch_failed', 'aborted');
       throw new SafeFetchError('fetch_failed', e instanceof Error ? e.message : String(e));

@@ -104,7 +104,9 @@ export function createController(deps: ControllerDeps): { handle: (e: ServerEven
         // this turn as source cards (Initiative 11, v0.18.2) so she cites visibly.
         if (e.citations && e.citations.length > 0) {
           for (const c of e.citations) {
-            deps.view.chip('source', `🔗 ${c.title || c.url} — ${c.url}`);
+            // The url rides as a (scheme-validated) href so the chip is clickable,
+            // not baked into the label text (v0.18.3).
+            deps.view.chip('source', `🔗 ${c.title || c.url}`, c.url);
           }
         }
         textStreaming = false;

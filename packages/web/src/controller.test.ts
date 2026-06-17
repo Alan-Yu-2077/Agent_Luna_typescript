@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import type { MessageDelivery, ServerEvent } from '@luna/protocol';
 import { createController } from './controller';
 import type { BubbleView, ChipKind } from './bubbles';
+import { safeHttpHref } from './bubbles';
 import type { AudioSink, Live2DSink } from './sinks';
 
 type Call = [string, ...unknown[]];
@@ -13,7 +14,7 @@ function harness() {
     append: (id, t) => calls.push(['append', id, t]),
     finalize: (id, t) => calls.push(['finalize', id, t]),
     discard: (id) => calls.push(['discard', id]),
-    chip: (kind: ChipKind, text) => calls.push(['chip', kind, text]),
+    chip: (kind: ChipKind, text, href?: string) => calls.push(['chip', kind, text, href]),
     renderHistory: (turns) => calls.push(['history', turns]),
   };
   const states: string[] = [];
@@ -214,9 +215,17 @@ describe('frontend controller — web citations (v0.18.2)', () => {
     });
     const sources = h.calls.filter((c) => c[0] === 'chip' && c[1] === 'source');
     expect(sources.length).toBe(2);
-    expect(String(sources[0]![2])).toContain('Alpha');
-    expect(String(sources[0]![2])).toContain('https://a.example/x');
-    expect(String(sources[1]![2])).toContain('https://b.example/y');
+    expect(String(sources[0]![2])).toContain('Alpha'); // title is the visible label
+    expect(sources[0]![3]).toBe('https://a.example/x'); // url rides as the clickable href
+    expect(sources[1]![3]).toBe('https://b.example/y');
+  });
+
+  test('safeHttpHref allows http/https, rejects javascript:/data:/garbage (XSS guard)', () => {
+    expect(safeHttpHref('https://example.com/p')).toBe('https://example.com/p');
+    expect(safeHttpHref('http://x.test/')).toBe('http://x.test/');
+    expect(safeHttpHref('javascript:alert(1)')).toBeNull();
+    expect(safeHttpHref('data:text/html,<script>')).toBeNull();
+    expect(safeHttpHref('not a url')).toBeNull();
   });
 
   test('turn.result without citations renders no source chip', () => {
