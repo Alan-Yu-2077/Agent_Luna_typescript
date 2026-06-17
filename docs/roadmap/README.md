@@ -4,14 +4,12 @@ Forward development plan for the TypeScript rewrite. Each initiative is a folder
 self-contained version plans, executed one at a time. Version numbers reserve across initiatives so
 they never overlap.
 
-> **Main head: v0.17.3** (on `main`); **v0.18.0–v0.18.2 on branch `feat/initiative-11-web-search`**
-> (Initiative 11 ✅ complete, pending PR/merge). **Initiatives 8, 9, 10 all ✅ shipped + merged**:
-> code-agent capability (v0.15.0–v0.15.4), audit remediation (v0.16.0–v0.16.3), and the owner's
-> memory-depth correction (v0.17.0–v0.17.1) — plus C-side patches v0.17.2 (failed/empty turns no longer
-> poison memory) and v0.17.3 (today's day-diary is updateable). **Initiative 11 (web tools — agent-side
-> networking, v0.18.0–v0.18.2) ✅ complete**: `web_search` + SSRF-guarded `web_fetch` + the standing
-> injection defense + citations + optional cache, default-on with graceful no-key degrade. 625 tests
-> green, `tsc` clean ×3.
+> **Main head: v0.18.4** (on `main`). **Initiatives 8–11 all ✅ shipped + merged**: code-agent capability
+> (v0.15.x), audit remediation (v0.16.x), memory-depth correction (v0.17.x), and **web tools (Initiative 11,
+> v0.18.0–v0.18.3)** — `web_search` + a DNS-**pinned** SSRF-guarded `web_fetch` + the standing injection
+> defense + citations, default-on. Plus C-side patches v0.17.2/v0.17.3 (memory) and v0.18.4 (a top-level
+> text leak no longer stored as the reply). **Next: Initiative 12 — time perception** (v0.19.0–v0.19.2).
+> 635 tests green, `tsc` clean ×3.
 > **Initiatives 1, 1.5, 2, 3, 4, 5, 6 all ✅ complete.** The rewrite now has the full stack: the agent
 > brain + three-layer memory + dream consolidation + proactive agency, **and the body** — a redesigned
 > cute UI (chat left / model right, light-blue stripes + lace), the live Live2D **yumi** avatar with 14
@@ -42,6 +40,7 @@ they never overlap.
 | 9 | v0.16.0 – v0.16.3 | **Audit remediation** — fix the code-verified findings from the audits in PRs #1/#2 (all re-confirmed at HEAD v0.13.13): close the **unauthenticated network surface** (loopback bind closes S1/S2/S3; dev-tools gate; input caps — v0.16.0), kill the **recompute-every-turn** pattern (memoize the system block, trace retention, recall over-fetch + `content_hash`, recall off the TTFT path — v0.16.1), finish the **structural** items (incremental `history_json`, decide `vec0` wire-or-remove, drop the dead text-mode path — v0.16.2), and **clean durable history** (strip thinking + collapse old tool I/O so a turn ≈ 200 tokens — v0.16.3, the foundation Init 10's deeper window builds on). `read_file` sandbox (S4) is already owned by Init 8/v0.15.0, not duplicated. | [`audit-remediation-2026-06/`](audit-remediation-2026-06/) | ✅ shipped 2026-06-16 (4 versions) |
 | 10 | v0.17.0 – v0.17.1 | **Memory depth correction** — the **owner's design correction** (PR #3, all claims code-confirmed), target design settled with the owner after a SOTA review: the shipped L1 window is ~4–9 turns (a 24-message cap) and diaries are written but **never injected**. Restore depth as a **memory gradient** — a **~100 clean-turn verbatim window** (`LUNA_L1_RECENT_TURNS` 40–150; affordable because v0.16.3 makes a turn ≈ 200 tokens) + **structured bounded compression** + **importance anchors** (v0.17.0) + the **diary as the injected cross-day/week layer** (standing digest + recall candidates; monthly; recency×importance×relevance ranking — v0.17.1; amend LD #12). Ordered after Init 9 by *dependency* (clean history + efficiency fixes make the deep window cheap), not by priority. | [`memory-depth-2026-06/`](memory-depth-2026-06/) | ✅ shipped 2026-06-16 (2 versions) |
 | 11 | v0.18.0 – v0.18.2 | **Web tools (agent-side networking)** — give Luna the open web: `web_search` (client-side, provider abstraction, Tavily default; the Python `web_search` ported + the *"嘴上说手没动"* defection guard) — v0.18.0; `web_fetch` + the **SSRF/extraction safety core** (deny-list IP guard + redirect re-validation + DNS-rebinding pin + Readability/Turndown extraction + `<untrusted_content>` delimiting) — v0.18.1; then **integration** — the search→fetch loop, standing injection system-rule + read/write boundary, citation surfacing, optional fetch cache, measured + **default-flipped on** — v0.18.2. Client-side because the yunwu gateway strips Anthropic's native server tools. | [`web-tools-2026-06/`](web-tools-2026-06/) | ✅ shipped 2026-06-16 |
+| 12 | v0.19.0 – v0.19.2 | **Time perception** — give Luna a real sense of time (she has only a pull `time_now` tool today, so she drifts — calling an hour-ago event "yesterday"). Layered, from a 2023–2026 SOTA review: **(A)** cache-safe **passive time injection** in the per-turn uncached tail (local time + daypart + TS-precomputed elapsed-since-last + session bucket) — v0.19.0; **(B)** **memory temporal grounding** — relative-time labels + chronological order on recalled candidates, reusing Init 10's GA recall ranking — v0.19.1; **(C)** a bounded **subjective-time** layer (daypart-mood + felt absence) wired into the dream/proactive cycle, warmth-not-guilt — v0.19.2. Core rule: do all temporal arithmetic in TS, hand Claude labeled facts (benchmarks show LLMs can't reliably compute "how long ago"). Ports + beats Python's `temporal_reasoning` (adds B + cache-safe placement). | [`time-perception-2026-06/`](time-perception-2026-06/) | 🟡 PLANNED |
 
 ## Ordering philosophy
 
@@ -231,3 +230,21 @@ See [`web-tools-2026-06/`](web-tools-2026-06/).
 | v0.18.0 ✅ | [web_search](web-tools-2026-06/v0.18.0-web-search.md) | Medium | Client-side `web_search` on the dispatcher (provider abstraction, **Tavily** default); soft-fail + `[N]` citations; the **defection guard** (L1 commitment clause + intent-no-call audit, extending LD #14); conservative L1 "when to reach for the web". `proactiveRisk:'safe'`. Flag `LUNA_WEB_SEARCH` — **shipped 2026-06-16** |
 | v0.18.1 ✅ | [web_fetch + safety core](web-tools-2026-06/v0.18.1-web-fetch-safety.md) | High | `web_fetch` + the **SSRF guard** (`assertPublicUrl`: deny-list IPs + non-`http(s)` + redirect re-validation + DNS-rebinding pin) + `@mozilla/readability`→Turndown extraction + size/time caps + `<untrusted_content>` envelope. Guard joins the evaluator-firewall set. Flag `LUNA_WEB_FETCH` — **shipped 2026-06-16** |
 | v0.18.2 ✅ | [Integration + hardening](web-tools-2026-06/v0.18.2-integration-hardening.md) | Medium | search→fetch loop validated; standing injection system-rule + read/write boundary audit; **citation surfacing** (wire + L2 + UI source cards); optional fetch cache (migration `0012`); cost measured; **default-flip both on** — **Initiative 11 ✅ shipped 2026-06-16** |
+| v0.18.3 ✅ | [web_fetch DNS pin](web-tools-2026-06/v0.18.3-fetch-pin-followup.md) | Medium | verified IP-pinned fetch (node:http(s) custom lookup) closing the rebinding TOCTOU; unblock the 198.18/15 fake-IP proxy range; `web_fetch` default-on; clickable scheme-validated citation chips — **shipped 2026-06-16** |
+
+## Initiative 12 — Time perception (v0.19.0 – v0.19.2) — 🟡 PLANNED
+
+Luna has no real sense of time — only a pull `time_now` tool — so she drifts (calls an hour-ago event
+"yesterday"). A 2023–2026 SOTA review (TimeQA/Test-of-Time/TicToc temporal-reasoning benchmarks;
+Generative-Agents recency memory; ComPeer proactive timing; Anthropic prompt-cache docs) settled a **layered**
+design with one governing rule: **do all temporal arithmetic in TypeScript and hand Claude labeled facts** —
+the benchmarks show LLMs can't reliably compute "how long ago", so her drift is *her doing the subtraction*.
+Time content lives in the **uncached tail** (never the cached system prefix — prompt-cache invariant). Ports +
+beats Python's `temporal_reasoning` (adds the memory-grounding layer B + cache-safe placement + a
+warmth-not-guilt guardrail). See [`time-perception-2026-06/`](time-perception-2026-06/).
+
+| Version | Plan | Risk | Theme |
+|---|---|---|---|
+| v0.19.0 | [A — passive time injection](time-perception-2026-06/v0.19.0-passive-time-injection.md) | Low–Med | TS-computed time block (local time + day-of-week + daypart + **elapsed-since-last** + **session bucket**) pushed into the per-turn **uncached** user message; L1 clause (inform tone, don't announce, don't self-compute). Kills the "yesterday" drift. Flag `LUNA_TIME_AWARE` |
+| v0.19.1 | [B — memory temporal grounding](time-perception-2026-06/v0.19.1-memory-temporal-grounding.md) | Medium | `renderRecallBlock` renders a **relative-time label** (`3 days ago`/`this morning`) per recalled candidate from its `t_ms` + **chronological** order; reuses Init 10's GA recall ranking. The real fix for dating past events. Flag `LUNA_RECALL_TIME_LABELS` |
+| v0.19.2 | [C — subjective time + close](time-perception-2026-06/v0.19.2-subjective-time-close.md) | Medium | bounded **daypart-mood + felt-absence** signal (code-computed, suggestive) threaded into the dream/proactive framing; **warmth-not-guilt** L1 guardrail; measure (cache hit-rate unchanged) + **default-flip** A/B/C on — **Initiative 12 ✅**. Flag `LUNA_TIME_SUBJECTIVE`. (Option D — bi-temporal memory — deferred.) |
