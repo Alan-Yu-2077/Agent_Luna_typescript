@@ -8,10 +8,67 @@
 export type Daypart = 'late night' | 'morning' | 'afternoon' | 'evening';
 export type GapBucket = 'first' | 'continuation' | 'same_day' | 'new_day' | 'long_away';
 
-// Master switch for the passive time layer (A). Ships OFF in v0.19.0; flipped to
-// default-ON in v0.19.2 (the value flips to `!== '0'` there).
+// Master switch for the passive time layer (A). Default ON since v0.19.2.
 export function timeAwareEnabled(): boolean {
-  return Bun.env['LUNA_TIME_AWARE'] === '1';
+  return Bun.env['LUNA_TIME_AWARE'] !== '0';
+}
+
+// Felt/subjective time (C). Default ON since v0.19.2.
+export function subjectiveTimeEnabled(): boolean {
+  return Bun.env['LUNA_TIME_SUBJECTIVE'] !== '0';
+}
+
+export type AbsenceFeltness = 'none' | 'slight' | 'notable' | 'long';
+
+const DAYPART_MOOD: Record<Daypart, string> = {
+  'late night': "it's late and quiet — a softer, lower-energy register fits",
+  morning: 'a fresh morning — bright and unhurried',
+  afternoon: 'mid-afternoon — steady and present',
+  evening: 'evening — warm and winding down',
+};
+
+const FELTNESS_BY_BUCKET: Record<GapBucket, AbsenceFeltness> = {
+  first: 'none',
+  continuation: 'none',
+  same_day: 'slight',
+  new_day: 'notable',
+  long_away: 'long',
+};
+
+// A tiny, bounded, stateless subjective signal — recomputed from time each turn,
+// never stored or escalating. The model may voice it or ignore it (a suggestion,
+// not a directive); the L1 clause enforces warmth-not-guilt.
+export function subjectiveTime(
+  daypart: Daypart,
+  bucket: GapBucket,
+): { daypartMood: string; absenceFeltness: AbsenceFeltness } {
+  return { daypartMood: DAYPART_MOOD[daypart], absenceFeltness: FELTNESS_BY_BUCKET[bucket] };
+}
+
+// Felt-absence for a gap (daypart-independent) — used to color a proactive wake's
+// framing (v0.19.2 C, light proactive integration).
+export function feltAbsenceFor(
+  lastInteractionMs: number | null,
+  nowMs: number,
+  tz = resolveTz(),
+): AbsenceFeltness {
+  if (lastInteractionMs == null) return 'none';
+  const gapSec = (nowMs - lastInteractionMs) / 1000;
+  const crosses = localDayNumber(nowMs, tz) !== localDayNumber(lastInteractionMs, tz);
+  return subjectiveTime('afternoon', classifyGap(gapSec, crosses)).absenceFeltness;
+}
+
+function absencePhrase(feltness: AbsenceFeltness): string {
+  switch (feltness) {
+    case 'none':
+      return '';
+    case 'slight':
+      return " It hasn't been long.";
+    case 'notable':
+      return " It's been a bit since you talked — you can let that show as warmth if it feels right.";
+    case 'long':
+      return " It's been a while since you talked — you can let that land as warmth, never as guilt.";
+  }
 }
 
 // LUNA_TZ (an IANA zone, e.g. Asia/Shanghai) → host-resolved zone → UTC. Read
@@ -142,21 +199,32 @@ export function buildTimeBlock(opts: TimeBlockOpts): string {
   const nowLine = `- Now: ${weekday(nowMs, tz)}, ${localDateISO(nowMs, tz)} ${pad(p.hour)}:${pad(p.minute)} (${tz}, ${tzOffsetLabel(nowMs, tz)}) — ${daypart}`;
 
   let gapLine: string;
+  let bucket: GapBucket;
   if (lastInteractionMs == null) {
+    bucket = 'first';
     gapLine = '- Since the last message: first contact';
   } else {
     const gapSec = (nowMs - lastInteractionMs) / 1000;
     const crosses = localDayNumber(nowMs, tz) !== localDayNumber(lastInteractionMs, tz);
-    const bucket = classifyGap(gapSec, crosses);
+    bucket = classifyGap(gapSec, crosses);
     gapLine = `- Since the last message: ${formatGap(gapSec)} (${bucketPhrase(bucket, daypart)})`;
   }
 
   const sessionLine = `- This session: started ${formatGap((nowMs - sessionStartMs) / 1000)} ago`;
 
-  return [
+  const lines = [
     'Current time (you are handed this — do not compute durations yourself):',
     nowLine,
     gapLine,
     sessionLine,
-  ].join('\n');
+  ];
+
+  // C (v0.19.2): one bounded, suggestive felt-time line — the model may voice it
+  // or ignore it; the L1 clause keeps it warmth-not-guilt.
+  if (subjectiveTimeEnabled()) {
+    const s = subjectiveTime(daypart, bucket);
+    lines.push(`- Mood of the hour: ${s.daypartMood}.${absencePhrase(s.absenceFeltness)}`);
+  }
+
+  return lines.join('\n');
 }

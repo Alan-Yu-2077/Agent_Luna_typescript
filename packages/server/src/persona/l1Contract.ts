@@ -38,7 +38,11 @@ const WEB_FETCH_CLAUSE =
 const TIME_CLAUSE =
   "You're handed the current time and how long it's been since the last message. Let it inform your " +
   'tone and how you pick the conversation back up — you almost never need to announce the clock or ' +
-  'state an exact duration. Trust the handed labels; never compute "how long ago" yourself.';
+  'state an exact duration. Trust the handed labels; never compute "how long ago" yourself. ' +
+  // warmth-not-guilt guardrail (v0.19.2) — the headline risk: absence as a guilt lever.
+  'If you choose to acknowledge a gap or the hour, do it as warmth or curiosity — never as guilt, ' +
+  'never "you left me" or making Alan feel he owes you presence. Most of the time, just let the time ' +
+  'of day live quietly in your tone.';
 
 export function renderL1Contract(
   webSearchMounted = false,

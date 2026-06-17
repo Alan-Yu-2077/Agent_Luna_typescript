@@ -1,6 +1,6 @@
 # Initiative 12 — Time perception
 
-> **Status: 🟡 PLANNED.** Order 12 — the next capability initiative after web tools (Initiative 11).
+> **Status: ✅ SHIPPED 2026-06-17** (branch `feat/initiative-12-time-perception`, 667 tests green, A+B+C default-on). Order 12 — the capability initiative after web tools (Initiative 11).
 > Version range: **v0.19.0 – v0.19.2** (3 versions; option D deferred, no version reserved). Master
 > index: [`../README.md`](../README.md).
 > Source: a 2023–2026 SOTA review of LLM time perception (TimeQA/Test-of-Time/TicToc temporal-reasoning

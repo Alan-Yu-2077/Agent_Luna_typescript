@@ -240,7 +240,8 @@ export async function retrieve(
 export function renderRecallBlock(hits: Hit[], nowMs = Date.now()): string | null {
   if (hits.length === 0) return null;
   const clip = (t: string): string => t.replace(/\n+/g, ' / ').slice(0, 300);
-  if (Bun.env['LUNA_RECALL_TIME_LABELS'] !== '1') {
+  // Default ON since v0.19.2; LUNA_RECALL_TIME_LABELS=0 opts out.
+  if (Bun.env['LUNA_RECALL_TIME_LABELS'] === '0') {
     const lines = hits.map((h) => `- ${clip(h.text)}`);
     return `<memory>\nThings you might be remembering right now (from past conversations and notes):\n${lines.join('\n')}\n</memory>`;
   }

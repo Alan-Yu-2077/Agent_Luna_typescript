@@ -175,6 +175,7 @@ describe('retrieve (hybrid)', () => {
       },
     ];
     // flag off → unchanged (no labels, original order)
+    Bun.env['LUNA_RECALL_TIME_LABELS'] = '0';
     expect(renderRecallBlock(hits, now)).not.toContain('[');
 
     Bun.env['LUNA_RECALL_TIME_LABELS'] = '1';

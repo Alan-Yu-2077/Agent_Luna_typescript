@@ -10,12 +10,15 @@ import { runTurn } from './runTurn';
 import { migrate } from '../sql';
 import { setMemoryDb } from '../memory/sessionStore';
 import { renderL1Contract } from '../persona/l1Contract';
+import { runProactiveTurn } from '../proactive/proactiveTurn';
 import {
   buildTimeBlock,
   classifyDaypart,
   classifyGap,
+  feltAbsenceFor,
   formatGap,
   relativeLabel,
+  subjectiveTime,
   type Daypart,
 } from './temporalContext';
 
@@ -101,6 +104,55 @@ describe('L1 time clause', () => {
     expect(renderL1Contract(false, false, true)).toContain('never compute');
     expect(renderL1Contract(false, false, false)).not.toContain('how long ago');
   });
+  test('warmth-not-guilt guardrail (v0.19.2) is in the time clause', () => {
+    expect(renderL1Contract(false, false, true)).toContain('never as guilt');
+  });
+});
+
+describe('subjectiveTime (C, v0.19.2)', () => {
+  test('each daypart → a bounded mood string', () => {
+    for (const dp of ['late night', 'morning', 'afternoon', 'evening'] as const) {
+      expect(subjectiveTime(dp, 'continuation').daypartMood.length).toBeGreaterThan(0);
+    }
+  });
+  test('gap buckets → feltness levels', () => {
+    expect(subjectiveTime('morning', 'continuation').absenceFeltness).toBe('none');
+    expect(subjectiveTime('morning', 'same_day').absenceFeltness).toBe('slight');
+    expect(subjectiveTime('morning', 'new_day').absenceFeltness).toBe('notable');
+    expect(subjectiveTime('morning', 'long_away').absenceFeltness).toBe('long');
+  });
+  test('feltAbsenceFor: long gap → long, recent → none, null → none', () => {
+    const now = Date.now();
+    expect(feltAbsenceFor(now - 3 * 86_400_000, now)).toBe('long');
+    expect(feltAbsenceFor(now - 60_000, now)).toBe('none');
+    expect(feltAbsenceFor(null, now)).toBe('none');
+  });
+});
+
+describe('buildTimeBlock subjective line (C)', () => {
+  const now = Date.UTC(2026, 5, 17, 18, 0); // 02:00 next day Asia/Shanghai → late night
+  afterEach(() => delete Bun.env['LUNA_TIME_SUBJECTIVE']);
+  test('on → exactly one "Mood of the hour" line', () => {
+    Bun.env['LUNA_TIME_SUBJECTIVE'] = '1';
+    const block = buildTimeBlock({
+      nowMs: now,
+      lastInteractionMs: now - 200_000_000,
+      sessionStartMs: now,
+      tz: 'Asia/Shanghai',
+    });
+    expect((block.match(/Mood of the hour:/g) ?? []).length).toBe(1);
+    expect(block).toContain('warmth'); // long absence → warmth phrasing
+  });
+  test('off → no subjective line', () => {
+    Bun.env['LUNA_TIME_SUBJECTIVE'] = '0';
+    const block = buildTimeBlock({
+      nowMs: now,
+      lastInteractionMs: now - 200_000_000,
+      sessionStartMs: now,
+      tz: 'Asia/Shanghai',
+    });
+    expect(block).not.toContain('Mood of the hour');
+  });
 });
 
 describe('placement (cache safety)', () => {
@@ -163,7 +215,7 @@ describe('placement (cache safety)', () => {
   });
 
   test('flag off → no time block anywhere', async () => {
-    delete Bun.env['LUNA_TIME_AWARE'];
+    Bun.env['LUNA_TIME_AWARE'] = '0';
     const session = getSession('t');
     const provider = new MockProvider([endRound('a')]);
     await runTurn({
@@ -178,5 +230,39 @@ describe('placement (cache safety)', () => {
     const blocks = userMsg?.content as Anthropic.TextBlockParam[];
     expect(blocks.some((b) => b.text.includes('Current time'))).toBe(false);
     expect(JSON.stringify(provider.requests[0]?.system)).not.toContain('never compute');
+  });
+
+  function userText(provider: MockProvider): string {
+    const blocks = provider.requests[0]?.messages.at(-1)?.content as Anthropic.TextBlockParam[];
+    return blocks.map((b) => b.text).join('\n');
+  }
+
+  test('C: a long-away proactive wake carries a felt-absence framing note', async () => {
+    const session = getSession('p');
+    session.lastUserMs = Date.now() - 3 * 86_400_000; // 3 days ago
+    const provider = new MockProvider([endRound('a thought')]);
+    await runProactiveTurn({
+      session,
+      cycleId: 'c1',
+      provider,
+      registry: builtinRegistry,
+      emit: () => {},
+    });
+    expect(userText(provider)).toContain('let it carry quiet warmth');
+  });
+
+  test('C: a recent (continuation) proactive wake carries no absence note', async () => {
+    const session = getSession('p2');
+    session.lastUserMs = Date.now() - 30_000; // 30s ago
+    const provider = new MockProvider([endRound('one more thing')]);
+    await runProactiveTurn({
+      session,
+      cycleId: 'c2',
+      provider,
+      registry: builtinRegistry,
+      intent: 'continuation',
+      emit: () => {},
+    });
+    expect(userText(provider)).not.toContain('let it carry quiet warmth');
   });
 });
