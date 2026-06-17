@@ -6,7 +6,7 @@ import type { ServerEvent } from '@luna/protocol';
 import { migrate } from '../sql';
 import { listL2, setMemoryDb } from '../memory/sessionStore';
 import { MockProvider } from '../provider/mock';
-import { builtinRegistry } from '../tools/registry';
+import { builtinRegistry, messageRegistry } from '../tools/registry';
 import { getSession, resetSessions } from './session';
 import { runTurn } from './runTurn';
 import { TraceStore } from '../trace/store';
@@ -91,5 +91,49 @@ describe('runTurn persistence resilience', () => {
     expect(events.some((e) => e.type === 'error' && e.code === 'turn_failure')).toBe(true);
     expect(listL2('r2')).toEqual([]); // no empty-assistant row persisted
     expect(session.history.length).toBe(historyBefore); // dangling user message rolled back
+  });
+
+  // Regression for the "answer for user question" bug: a stray top-level text leak
+  // alongside a real message-tool reply, with a later error so finalize never
+  // overwrites state.text — the persisted reply must be the MESSAGE, not the leak.
+  test('message-mode: a top-level leak + a later error persists the message reply, not the leak', async () => {
+    const session = getSession('r3');
+    const provider = new MockProvider([
+      [
+        { kind: 'text_delta', text: 'answer for user question' }, // top-level LEAK → state.text
+        {
+          kind: 'message_stop',
+          stopReason: 'tool_use',
+          toolUses: [
+            { id: 'm1', name: 'message', input: { text: 'Good catch — that was today.', is_final: true } },
+          ],
+          assistantContent: [
+            { type: 'text', text: 'answer for user question' },
+            {
+              type: 'tool_use',
+              id: 'm1',
+              name: 'message',
+              input: { text: 'Good catch — that was today.', is_final: true },
+            },
+          ] as unknown as Anthropic.ContentBlock[],
+          usage: { input_tokens: 1, output_tokens: 1 },
+        },
+      ],
+      [{ kind: 'thinking_delta', text: '__THROW__' }], // round 2 errors → finalize skipped
+    ]);
+
+    await runTurn({
+      session,
+      turnId: 'rt3',
+      userText: 'Why is yesterday?',
+      provider,
+      registry: messageRegistry,
+      emit: () => {},
+    });
+
+    const rows = listL2('r3');
+    expect(rows.length).toBe(1);
+    expect(rows[0]!.assistant_text).toBe('Good catch — that was today.'); // the message reply
+    expect(rows[0]!.assistant_text).not.toContain('answer for user question'); // NOT the leak
   });
 });

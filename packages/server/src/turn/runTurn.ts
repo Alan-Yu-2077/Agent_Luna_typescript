@@ -769,7 +769,13 @@ export async function runTurn(opts: RunTurnOptions): Promise<TurnState> {
           sessionId: opts.session.id,
           turnId: opts.turnId,
           userText: opts.userText,
-          assistantText: state.text,
+          // The canonical reply, NOT state.text. In message mode state.text holds a
+          // stray top-level text leak (the model narrating OUTSIDE the message tool)
+          // until finalize overwrites it with the message-tool text — but on an
+          // errored / short-circuited turn finalize never ran, so storing state.text
+          // persisted the leak (e.g. "answer for user question") as the visible reply.
+          // realReply is always the message-tool text (message mode) / streamed text.
+          assistantText: realReply,
           rawContent: opts.session.history.slice(historyStart),
         });
       } else {
