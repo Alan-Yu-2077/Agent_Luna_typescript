@@ -4,8 +4,7 @@ bun.lockb
 .env
 .env.local
 .env.*.local
+.env.bak*
 .DS_Store
 *.tsbuildinfo
-*.sqlite
-*.sqlite-shm
-*.sqlite-wal
+*.sqlite*
