@@ -1,6 +1,7 @@
 import { getMemoryDb, listRecentL2 } from '../sessionStore';
 import { listFacts } from '../l3Store';
 import { listRecentDiaries } from '../diaries';
+import { relativeLabel } from '../../turn/temporalContext';
 import {
   contentHash,
   cosine,
@@ -231,8 +232,19 @@ export async function retrieve(
     .slice(0, k);
 }
 
-export function renderRecallBlock(hits: Hit[]): string | null {
+// v0.19.1 (Initiative 12, B): under LUNA_RECALL_TIME_LABELS, tag each recalled
+// candidate with a TS-computed relative-time label and present the selected set
+// in chronological order (oldest→newest) — the true fix for the "yesterday" drift
+// (a dating-a-past-event error). Selection stays by the GA score (untouched); this
+// is presentation only. Flag off → byte-identical to before.
+export function renderRecallBlock(hits: Hit[], nowMs = Date.now()): string | null {
   if (hits.length === 0) return null;
-  const lines = hits.map((h) => `- ${h.text.replace(/\n+/g, ' / ').slice(0, 300)}`);
-  return `<memory>\nThings you might be remembering right now (from past conversations and notes):\n${lines.join('\n')}\n</memory>`;
+  const clip = (t: string): string => t.replace(/\n+/g, ' / ').slice(0, 300);
+  if (Bun.env['LUNA_RECALL_TIME_LABELS'] !== '1') {
+    const lines = hits.map((h) => `- ${clip(h.text)}`);
+    return `<memory>\nThings you might be remembering right now (from past conversations and notes):\n${lines.join('\n')}\n</memory>`;
+  }
+  const ordered = [...hits].sort((a, b) => a.t_ms - b.t_ms); // oldest → newest for display
+  const lines = ordered.map((h) => `- [${relativeLabel(h.t_ms, nowMs)}] ${clip(h.text)}`);
+  return `<memory>\nThings you might be recalling (each tagged with when it happened — trust these, don't recompute):\n${lines.join('\n')}\n</memory>`;
 }
