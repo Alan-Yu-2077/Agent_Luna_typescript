@@ -1,6 +1,6 @@
 # Agent_Luna (TypeScript) — Development History
 
-Last updated: 2026-06-17 (Asia/Shanghai) — v0.18.4 (fix: a stray **top-level text leak** — the model narrating outside the message tool — got stored as the visible reply ("answer for user question") on a turn that errored before `finalize`; now the message-tool reply is always persisted as `assistant_text`. 1 historic L2 row repaired, 20 humanity-transform rows correctly left alone) · v0.18.3 (web tools — **web_fetch DNS pin**: `safeFetch` connects through a `node:http(s)` custom lookup **pinned to a deny-list-validated IP** — the rebinding TOCTOU is *closed*, not narrowed (verified by a real-HTTPS smoke); the `198.18.0.0/15` benchmarking range is unblocked so it works behind Clash/Surge fake-IP proxies; **`web_fetch` flipped default ON**; citation chips now clickable + scheme-validated (XSS-safe); reload-persistence deferred. 634 tests green) · v0.18.2 (web tools — **complete networking**: the search→fetch→reason loop validated end-to-end; the standing `<untrusted_content>` **prompt-injection rule** + the read/write boundary (`web_to_action` decision trace) extending LD #14; **citations** `{url,title}` on `turn.result` (wire-contract change, both packages) → source cards in the web UI + L2 persistence; an optional SSRF-safe fetch **cache** (migration `0012`, `LUNA_WEB_CACHE`); **default-flip** `web_search` **ON** (graceful no-key degrade), `web_fetch` reverted to **opt-in** in review (DNS-rebinding TOCTOU not fully closed → v0.18.3 pin); **Initiative 11 complete 3/3, review-remediated**, branch) · v0.18.1 (web tools — **web_fetch + SSRF/extraction safety core**: read one URL safely — `assertPublicUrl` deny-lists private/loopback/link-local/metadata/ULA/IPv4-mapped/encoded IPs + non-http(s) + credentials + over-long, `safeFetch` does manual redirect re-validation + DNS-rebinding re-check + byte/time caps + content-type gate, Readability→Turndown extraction wrapped in `<untrusted_content>`; the guard joins the evaluator-firewall set; default **OFF** behind `LUNA_WEB_FETCH`; **Initiative 11 2/3**, branch) · v0.18.0 (web tools — **web_search**: Luna's "look it up" capability, a client-side live-web search on the existing dispatcher behind a `WebSearchProvider` abstraction (Tavily default, gateway-safe since yunwu strips Anthropic's native web_search), soft-fail + `[N]` citation summary, `proactiveRisk:'safe'`; ships with the **defection guard** — an L1 commitment/when-to-reach clause + an off-hot-path `web_search_intent_no_call` audit extending LD #14; default **OFF** behind `LUNA_WEB_SEARCH`; **Initiative 11 begins 1/3**, branch) · v0.17.3 (dream: today's day-diary is **rewritten on every dream** so a daytime dream captures the whole day instead of freezing it at the first dream — owner's "option 2"; past days stay write-once) · v0.17.2 (fix: a failed/empty turn — e.g. a 401 gateway outage — no longer persists an empty-assistant L2 row and rolls its dangling user message out of history, killing the "短暂失忆" pollution that survived restarts post-A3) · v0.17.1 (memory depth — **diary injection**: a standing day/week/month digest in the cached system block + diaries as recall candidates (the long-range narrative memory finally reaches the model; rag_refresh's diary embeddings now retrievable), Generative-Agents recency×importance×relevance recall ranking, monthly diaries; amends LD #12 diary-part; **Initiative 10 complete 2/2**, branch)
+Last updated: 2026-06-17 (Asia/Shanghai) — v0.19.2 (time perception C — bounded felt time: daypart-mood + felt-absence suggestion line (`subjectiveTime`), an L1 **warmth-not-guilt** guardrail, light proactive framing on a long-away wake; **A+B+C default-flipped ON**; cache invariant preserved (per-turn time stays in the uncached tail); **Initiative 12 complete 3/3**, branch) · v0.19.1 (time perception B — relative-time labels on recalled memories + chronological oldest→newest display, reusing v0.19.0's `relativeLabel`; the cached diary digest keeps stable absolute period labels to preserve the cache invariant; Initiative 12 2/3, branch) · v0.19.0 (time perception A — passive TS-computed time in the uncached user tail: now + daypart + elapsed + session, timezone-explicit; L1 "don't compute durations" clause; Initiative 12 1/3) · v0.18.4 (fix: a stray **top-level text leak** — the model narrating outside the message tool — got stored as the visible reply ("answer for user question") on a turn that errored before `finalize`; now the message-tool reply is always persisted as `assistant_text`. 1 historic L2 row repaired, 20 humanity-transform rows correctly left alone) · v0.18.3 (web tools — **web_fetch DNS pin**: `safeFetch` connects through a `node:http(s)` custom lookup **pinned to a deny-list-validated IP** — the rebinding TOCTOU is *closed*, not narrowed (verified by a real-HTTPS smoke); the `198.18.0.0/15` benchmarking range is unblocked so it works behind Clash/Surge fake-IP proxies; **`web_fetch` flipped default ON**; citation chips now clickable + scheme-validated (XSS-safe); reload-persistence deferred. 634 tests green) · v0.18.2 (web tools — **complete networking**: the search→fetch→reason loop validated end-to-end; the standing `<untrusted_content>` **prompt-injection rule** + the read/write boundary (`web_to_action` decision trace) extending LD #14; **citations** `{url,title}` on `turn.result` (wire-contract change, both packages) → source cards in the web UI + L2 persistence; an optional SSRF-safe fetch **cache** (migration `0012`, `LUNA_WEB_CACHE`); **default-flip** `web_search` **ON** (graceful no-key degrade), `web_fetch` reverted to **opt-in** in review (DNS-rebinding TOCTOU not fully closed → v0.18.3 pin); **Initiative 11 complete 3/3, review-remediated**, branch) · v0.18.1 (web tools — **web_fetch + SSRF/extraction safety core**: read one URL safely — `assertPublicUrl` deny-lists private/loopback/link-local/metadata/ULA/IPv4-mapped/encoded IPs + non-http(s) + credentials + over-long, `safeFetch` does manual redirect re-validation + DNS-rebinding re-check + byte/time caps + content-type gate, Readability→Turndown extraction wrapped in `<untrusted_content>`; the guard joins the evaluator-firewall set; default **OFF** behind `LUNA_WEB_FETCH`; **Initiative 11 2/3**, branch) · v0.18.0 (web tools — **web_search**: Luna's "look it up" capability, a client-side live-web search on the existing dispatcher behind a `WebSearchProvider` abstraction (Tavily default, gateway-safe since yunwu strips Anthropic's native web_search), soft-fail + `[N]` citation summary, `proactiveRisk:'safe'`; ships with the **defection guard** — an L1 commitment/when-to-reach clause + an off-hot-path `web_search_intent_no_call` audit extending LD #14; default **OFF** behind `LUNA_WEB_SEARCH`; **Initiative 11 begins 1/3**, branch) · v0.17.3 (dream: today's day-diary is **rewritten on every dream** so a daytime dream captures the whole day instead of freezing it at the first dream — owner's "option 2"; past days stay write-once) · v0.17.2 (fix: a failed/empty turn — e.g. a 401 gateway outage — no longer persists an empty-assistant L2 row and rolls its dangling user message out of history, killing the "短暂失忆" pollution that survived restarts post-A3) · v0.17.1 (memory depth — **diary injection**: a standing day/week/month digest in the cached system block + diaries as recall candidates (the long-range narrative memory finally reaches the model; rag_refresh's diary embeddings now retrievable), Generative-Agents recency×importance×relevance recall ranking, monthly diaries; amends LD #12 diary-part; **Initiative 10 complete 2/2**, branch)
 
 ## Scope
 
@@ -93,6 +93,9 @@ during the rewrite. Its version log is unrelated to this one — `v0.1` here is 
 | `v0.18.2` | 2026-06-16 | Web tools — **complete networking** (Initiative 11, 3/3) — the search→fetch→reason loop validated end-to-end; the **standing prompt-injection defense** (a `<untrusted_content>` system rule in the cached core when either web tool is mounted + an L1 search→fetch loop/boundary clause) + the read/write boundary (a `web_to_action` decision trace when a turn that read untrusted web content fires a surface-risk tool — detection only, LD #14 discipline); **citation surfacing** — `turn.result` gains optional `citations: {url,title}[]` (wire-contract change, `protocol`+`server`+`web` in lockstep) gathered from `web_search` urls + `web_fetch` `final_url`, rendered as `source` chips + persisted via L2; an **optional fetch cache** (migration `0012_web_cache`, `LUNA_WEB_CACHE`) wrapped around `safeFetch` (a hit never bypasses the SSRF guard); **default-flip** `LUNA_WEB_SEARCH` **ON** (graceful no-key degrade) — `LUNA_WEB_FETCH` reverted to **opt-in** in review (rebinding TOCTOU not fully closed; awaits the v0.18.3 DNS pin). **Initiative 11 complete (3/3), review-remediated.** Review: +7 regression tests, **632 green**. | `working tree` |
 | `v0.18.3` | 2026-06-16 | Web tools — **web_fetch DNS pin** (Init 11 follow-up) — `safeFetch` connects via a `node:http(s)` custom `lookup` **pinned to a deny-list-validated IP** (TLS SNI/cert still key off the hostname), so a DNS rebind cannot swap in a private address between check and connect — the **TOCTOU is closed**, verified by a real-HTTPS smoke + a pin unit test. `198.18.0.0/15` (RFC2544 benchmarking) **unblocked** — it's the Clash/Surge fake-IP pool, so blocking it broke `web_fetch` on every proxied host (every domain resolves into it). **`LUNA_WEB_FETCH` flipped default ON.** Citation chips now **clickable** (`<a>`, scheme-validated `safeHttpHref`, XSS-safe). **634 tests green** ×3 tsc; chip reload-persistence deferred. | `working tree` |
 | `v0.18.4` | 2026-06-17 | Fix — **top-level text leak stored as the reply** — `runTurn`'s persistence stored `state.text`, which in message mode holds a stray top-level text block (the model narrating outside the message tool) until `finalize` overwrites it; on a turn that errored before `finalize` the leak ("answer for user question") was persisted + replayed as the visible reply. Now persists the already-computed `realReply` (message-tool text / streamed text). +1 regression test; 1 historic L2 row repaired from `raw_json` (a precise detector left the 20 humanity-transform rows untouched). 635 green. | `working tree` |
+| `v0.19.0` | 2026-06-17 | Time perception — A: passive injection (Initiative 12, 1/3) — new `turn/temporalContext.ts` (pure, TS-computed): `classifyDaypart` / `formatGap` / `classifyGap` (gap + calendar-day flag) / `relativeLabel` / `buildTimeBlock`, timezone-explicit (`LUNA_TZ` → host zone). `runTurn parse_input` injects a labeled time block (now + daypart + elapsed-since-last + session) into the **uncached user message**, gap sourced from the last L2 `t_ms` (restart-safe); `Session.sessionStartMs`; an L1 "don't compute durations yourself" clause. Behind `LUNA_TIME_AWARE` (ships off) | _branch_ |
+| `v0.19.1` | 2026-06-17 | Time perception — B: memory temporal grounding (Initiative 12, 2/3) — `renderRecallBlock` tags each recalled candidate (l2/l3/diary) with a TS-computed relative-time label (`relativeLabel`, reused from A) and presents the selected set **chronologically (oldest→newest)** — the true fix for the *dating-a-past-event* "yesterday" drift; selection/GA-scoring untouched (presentation only). The cached diary digest keeps stable absolute `period_key` labels (a `now`-dependent label there would churn the prefix cache). Behind `LUNA_RECALL_TIME_LABELS` (ships off) | _branch_ |
+| `v0.19.2` | 2026-06-17 | Time perception — C: subjective time + close (Initiative 12, 3/3) — `subjectiveTime(daypart, bucket)` → a bounded daypart-mood + felt-absence; `buildTimeBlock` appends one suggestion "Mood of the hour" line under `LUNA_TIME_SUBJECTIVE`; an L1 **warmth-not-guilt** guardrail (absence as warmth, never guilt); light proactive framing — a `notable`/`long` wake's directive gains a quiet-warmth note (`feltAbsenceFor`), wake *decision* unchanged. **Default-flipped A+B+C ON** (`LUNA_TIME_AWARE` / `LUNA_RECALL_TIME_LABELS` / `LUNA_TIME_SUBJECTIVE` all `!= '0'`). Cache invariant held (per-turn facts in the uncached tail; system block byte-stable across turns). **Initiative 12 complete (3/3).** | _branch_ |
 
 ## Code-agent capability (2026-06-15) — Initiative 8 begins (v0.15.0)
 
@@ -555,6 +558,110 @@ Inference:
   and gives Alan the variety he remembered, now as a first-class setting rather than a buried constant.
 
 ## Detailed records
+
+### `v0.19.2` — 2026-06-17 — Time perception: subjective time + close (Initiative 12, 3/3)
+
+Status:
+
+- working tree (branch `feat/initiative-12-time-perception`)
+
+Fact:
+
+- `turn/temporalContext.ts`: `subjectiveTime(daypart, bucket)` → `{ daypartMood, absenceFeltness }`
+  (bounded maps, stateless — recomputed per turn, never stored/escalating); `feltAbsenceFor`;
+  `subjectiveTimeEnabled`. `buildTimeBlock` appends exactly one "Mood of the hour" suggestion line
+  when `LUNA_TIME_SUBJECTIVE`.
+- `persona/l1Contract.ts`: the `TIME_CLAUSE` gains the **warmth-not-guilt** guardrail ("acknowledge a
+  gap as warmth or curiosity — never as guilt, never 'you left me'").
+- `proactive/proactiveTurn.ts`: a `framing(intent, session)` wrapper adds a quiet-warmth note to the
+  directive on a `notable`/`long` wake (`feltAbsenceFor`); the wake *decision* (cadence/wake-gate) is
+  untouched — only the texture.
+- **Default-flip**: `timeAwareEnabled` / `subjectiveTimeEnabled` → `!== '0'`, and
+  `LUNA_RECALL_TIME_LABELS` → default on. A + B + C now ship ON; `=0` opts each out.
+- Tests: `temporalContext.test.ts` (+8: `subjectiveTime`/`feltAbsenceFor`, the subjective line
+  on/off, the warmth-not-guilt clause, two proactive felt-absence integration tests); the two
+  flag-toggle tests updated to set `'0'` explicitly post-flip. **667 pass / 0 fail**; all three
+  packages `tsc` clean.
+
+Inference:
+
+- Luna now has the full layered time perception: **A** handed facts (now/gap/daypart) + **B** grounded
+  memory (relative labels + chronology) + **C** felt time (mood + absence). A return after a long gap
+  lands differently from a continuation; late night reads differently from morning.
+- **Cache invariant (the flip gate):** the per-turn time *facts* live in the uncached user tail, so
+  the cached system block stays byte-stable across turns within a process (pinned by the placement
+  test) — enabling time-awareness changes the cached prefix once per process (a new, still-cacheable
+  prefix), not per turn, so the prompt-cache hit-rate is unaffected. The static guidance clause
+  legitimately differs between on/off but never churns within a session. (Analytical — a live
+  hit-rate measurement should confirm before relying on it in production.)
+- **Initiative 12 (Time perception) complete — v0.19.0–v0.19.2**, all default-on.
+
+### `v0.19.1` — 2026-06-17 — Time perception: memory temporal grounding (Initiative 12, 2/3)
+
+Status:
+
+- working tree (branch `feat/initiative-12-time-perception`)
+
+Fact:
+
+- `memory/recall/recall.ts`: `renderRecallBlock(hits, nowMs?)` — under `LUNA_RECALL_TIME_LABELS`,
+  each recalled candidate (l2/l3/diary) is tagged with `relativeLabel(t_ms, now)` (reused from
+  v0.19.0's `temporalContext.ts`) and the selected set is presented **oldest→newest**. Recall
+  *selection* / GA scoring is untouched — this is presentation only. Flag off → byte-identical output.
+- The cached diary digest (`renderDiaryDigest`) deliberately keeps its stable absolute `period_key`
+  labels: a `now`-dependent relative label in the cached system block would churn the prompt cache
+  daily, violating the v0.19.0 cache invariant. (The recall block is the uncached message, so its
+  per-turn labels are cache-safe.)
+- `.env.example`: `LUNA_RECALL_TIME_LABELS`, `LUNA_RECALL_ABS_DATE_DAYS`.
+- Tests: recall (+1: labeled + chronological under the flag; flag-off unchanged). **659 pass / 0
+  fail**; all packages `tsc` clean.
+
+Inference:
+
+- A handled "now + how long since the last message"; B handles "when did *that* happen" — the recall
+  block used to hand her past turns/facts/diaries with no timestamp, the real root of dating a past
+  event wrong. Now she reads "[this morning] you fetched the lyrics" instead of guessing, and the
+  stable chronological order is itself a mitigation (Test of Time: shuffled-time facts measurably
+  degrade temporal reasoning).
+- Selecting by GA score but displaying chronologically keeps the most-relevant items while giving the
+  model a coherent timeline.
+
+### `v0.19.0` — 2026-06-17 — Time perception: passive injection (Initiative 12, 1/3)
+
+Status:
+
+- working tree (branch `feat/initiative-12-time-perception`)
+
+Fact:
+
+- `turn/temporalContext.ts` (new, pure/TS): `classifyDaypart`, `formatGap` (just now / 1m / 1h 12m /
+  2 days), `classifyGap(gap, crossesCalendarDay)` (continuation / same_day / new_day / long_away /
+  first — the calendar-day flag decides "this morning vs yesterday"), `relativeLabel` (for v0.19.1),
+  `buildTimeBlock`, `resolveTz` (`LUNA_TZ` → `Intl` host zone → UTC), `timeAwareEnabled`. Timezone is
+  explicit in every label (the one real correctness risk).
+- `turn/runTurn.ts parse_input`: under `LUNA_TIME_AWARE`, pushes the time block into the per-turn
+  `role:'user'` blocks (the **uncached tail**) — never `buildSystemPrompt`. `lastInteractionMs` from
+  `listRecentL2(id,1)[0].t_ms` (survives a restart), falling back to `session.lastUserMs`.
+- `turn/session.ts`: `Session.sessionStartMs` (boot/first-touch, not persisted — a restart is a new
+  session).
+- `persona/l1Contract.ts`: a `TIME_CLAUSE` ("trust the handed labels; never compute how-long-ago
+  yourself") added when `timeAware`; threaded through `renderL1Contract` (cache key extended). It
+  rides the cached core (static, stable per process) — only the per-turn time *facts* go in the
+  uncached tail.
+- `.env.example`: `LUNA_TIME_AWARE`, `LUNA_TZ`, `LUNA_TIME_GAP_{CONTINUATION,LONG_AWAY}_S`.
+- Tests: `temporalContext.test.ts` (+23: helpers, buildTimeBlock golden, L1 clause, and the
+  **cache-safety placement** — per-turn time facts are in the user message, the cached system block is
+  byte-stable across turns and carries no per-turn time). **658 pass / 0 fail**; all packages `tsc`
+  clean.
+
+Inference:
+
+- The direct fix for "called an hour-ago event 'yesterday'": she never does the subtraction (TS
+  hands her labeled facts), so she can't get it wrong. Cache-safe by construction — the per-turn
+  facts live in the uncached tail; enabling the flag changes the cached prefix once per process
+  (a stable, still-cacheable prefix), and the static guidance clause is constant.
+- The `relativeLabel`/`formatGap` helpers are the shared "when" truth v0.19.1 (recall labels) and
+  v0.19.2 (felt time) reuse — one source of humanization.
 
 ### `v0.18.4` — 2026-06-17 — Fix: top-level text leak stored as the visible reply
 

@@ -161,6 +161,33 @@ describe('retrieve (hybrid)', () => {
     expect(block).toContain('<memory>');
     expect(block).toContain('likes tea');
   });
+
+  test('B (v0.19.1): time labels + chronological order under LUNA_RECALL_TIME_LABELS', () => {
+    const now = Date.UTC(2026, 5, 17, 14, 0);
+    const hits = [
+      { source: 'l2' as const, id: 'a', text: 'newer thing', score: 0.9, t_ms: now - 120_000 },
+      {
+        source: 'l2' as const,
+        id: 'b',
+        text: 'older thing',
+        score: 0.95,
+        t_ms: now - 2 * 86_400_000,
+      },
+    ];
+    // flag off → unchanged (no labels, original order)
+    Bun.env['LUNA_RECALL_TIME_LABELS'] = '0';
+    expect(renderRecallBlock(hits, now)).not.toContain('[');
+
+    Bun.env['LUNA_RECALL_TIME_LABELS'] = '1';
+    Bun.env['LUNA_TZ'] = 'UTC';
+    const block = renderRecallBlock(hits, now)!;
+    expect(block).toContain('[2 days ago] older thing');
+    expect(block).toContain('[just now] newer thing');
+    // chronological: older line precedes newer (oldest→newest)
+    expect(block.indexOf('older thing')).toBeLessThan(block.indexOf('newer thing'));
+    delete Bun.env['LUNA_RECALL_TIME_LABELS'];
+    delete Bun.env['LUNA_TZ'];
+  });
 });
 
 describe('system prompt cache invariant with recall', () => {

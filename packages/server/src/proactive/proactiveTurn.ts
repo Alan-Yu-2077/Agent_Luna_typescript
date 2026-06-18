@@ -3,6 +3,7 @@ import type { Provider } from '../provider/types';
 import type { ToolRegistry } from '../tools/registry';
 import type { Session } from '../turn/session';
 import { runTurn } from '../turn/runTurn';
+import { feltAbsenceFor, subjectiveTimeEnabled } from '../turn/temporalContext';
 
 // The proactive framing — a USER-role stage direction (never system: the
 // v0.27.1 hoisting lesson). She woke on her own; acting via tools is the point,
@@ -26,7 +27,7 @@ const DIRECTIVES: Record<ProactiveIntent, string> = {
     'if you have a SINGLE genuinely new thought to add — not a rephrase, not a summary, not "anyway" ' +
     'filler — say it now in one short message. If you have nothing truly new to add, do nothing.)',
   consolidate:
-    "(It has been a long quiet stretch. This may be a good moment to fold the day inward: if it " +
+    '(It has been a long quiet stretch. This may be a good moment to fold the day inward: if it ' +
     'feels right, enter a dream to consolidate your memories. Otherwise reflect quietly or do ' +
     'nothing — you do not have to speak.)',
 };
@@ -40,16 +41,31 @@ export type RunProactiveOptions = {
   intent?: ProactiveIntent;
 };
 
+// C (v0.19.2): on a long-away wake, color the framing so it reads as "she noticed
+// the absence" — warmth, never guilt. Only the *texture* changes; the wake
+// decision (cadence/wake-gate) is untouched.
+function framing(intent: ProactiveIntent, session: Session): string {
+  const directive = DIRECTIVES[intent];
+  if (!subjectiveTimeEnabled()) return directive;
+  const felt = feltAbsenceFor(session.lastUserMs, Date.now());
+  if (felt === 'notable' || felt === 'long') {
+    return (
+      directive +
+      ' (It has been a while since the user spoke — if you do reach out, let it carry quiet warmth, ' +
+      'never guilt or pressure.)'
+    );
+  }
+  return directive;
+}
+
 // A proactive turn is a normal runTurn with the proactive framing + the full
 // registry + `proactiveTurn: true` (silence allowed). Returns whether she spoke.
-export async function runProactiveTurn(
-  opts: RunProactiveOptions,
-): Promise<{ spoke: boolean }> {
+export async function runProactiveTurn(opts: RunProactiveOptions): Promise<{ spoke: boolean }> {
   opts.emit({ type: 'proactive.started', cycle_id: opts.cycleId });
   const state = await runTurn({
     session: opts.session,
     turnId: `proactive:${opts.cycleId}`,
-    userText: DIRECTIVES[opts.intent ?? 'spontaneous'],
+    userText: framing(opts.intent ?? 'spontaneous', opts.session),
     provider: opts.provider,
     registry: opts.registry,
     emit: opts.emit,

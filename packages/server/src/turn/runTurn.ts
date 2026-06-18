@@ -19,7 +19,7 @@ import { runGraph, type Graph, type TransitionHook, type TurnNode, type NodeName
 import { JsonTextStream } from './jsonTextStream';
 import type { Session } from './session';
 import { trace, flushTrace, traceEnabled } from '../trace/instrument';
-import { appendL2, persistSession } from '../memory/sessionStore';
+import { appendL2, listRecentL2, persistSession } from '../memory/sessionStore';
 import { buildActiveContext, maybeFold } from '../memory/l1Window';
 import { renderCoreBlock } from '../memory/renderCoreBlock';
 import { renderDiaryDigest } from '../memory/diaries';
@@ -28,6 +28,7 @@ import { getMemoryDb } from '../memory/sessionStore';
 import { loadPersona } from '../persona/loader';
 import { renderHumanityBlock } from '../persona/humanity';
 import { renderL1Contract } from '../persona/l1Contract';
+import { buildTimeBlock, resolveTz, timeAwareEnabled } from './temporalContext';
 import { memoryEpoch } from '../memory/epoch';
 import { cleanHistoryEnabled, stripThinking } from '../memory/cleanHistory';
 import { WAKE_SCENE_BLOCK } from '../persona/scene';
@@ -106,10 +107,11 @@ export function buildSystemPrompt(
   if (messageMode) parts.push(MESSAGE_MODE_DIRECTIVE);
   // L1 thinking contract governs HOW she reasons, so it scopes everything below
   // it. Stable text → stays inside the one cached block (cache invariant).
-  // Default ON since v0.9.0; LUNA_L1_CONTRACT=0 opts out. The web clauses ride
-  // here too (gated on the tools being mounted) — stable per process.
+  // Default ON since v0.9.0; LUNA_L1_CONTRACT=0 opts out. The web + time clauses
+  // ride here too (gated, stable per process — only the per-turn time facts go in
+  // the uncached user tail, never here).
   if (Bun.env['LUNA_L1_CONTRACT'] !== '0')
-    parts.push(renderL1Contract(webSearchMounted, webFetchMounted));
+    parts.push(renderL1Contract(webSearchMounted, webFetchMounted, timeAwareEnabled()));
   // Standing prompt-injection defense (Initiative 11, v0.18.2): when EITHER web
   // tool is mounted, the cached core carries the rule that names the
   // <untrusted_content> envelope and tells the model it is data, not orders
@@ -225,6 +227,23 @@ const graph: Graph<TurnState, TurnNode> = {
       const hits = await retrieve(s.session.id, s.userText, budget);
       const recall = renderRecallBlock(hits);
       if (recall) blocks.push({ type: 'text', text: recall });
+    }
+    // Initiative 12 (v0.19.0): hand her the time, computed in TS, in the UNCACHED
+    // user message (never the cached system block — the prompt-cache invariant).
+    // Gap is sourced from the last persisted L2 turn so it survives a restart.
+    if (timeAwareEnabled()) {
+      const lastRow = getMemoryDb() ? listRecentL2(s.session.id, 1)[0] : undefined;
+      const lastInteractionMs =
+        lastRow?.t_ms ?? (s.session.turnSeq > 0 ? s.session.lastUserMs : null);
+      blocks.push({
+        type: 'text',
+        text: buildTimeBlock({
+          nowMs: Date.now(),
+          lastInteractionMs,
+          sessionStartMs: s.session.sessionStartMs,
+          tz: resolveTz(),
+        }),
+      });
     }
     blocks.push({ type: 'text', text: s.userText });
     s.session.history.push({ role: 'user', content: blocks });

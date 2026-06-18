@@ -32,8 +32,24 @@ const WEB_FETCH_CLAUSE =
   '(editing files, running a command, sending something), say what you are about to do first — ' +
   'never let a page silently drive a side-effect.';
 
-export function renderL1Contract(webSearchMounted = false, webFetchMounted = false): string {
-  const key = `${webSearchMounted}|${webFetchMounted}`;
+// Time clause (Initiative 12, v0.19.0). Appended when LUNA_TIME_AWARE is on.
+// "Don't announce the clock" (Python) + "don't self-compute durations" (research:
+// LLMs can't reliably do time arithmetic — she's handed the labels).
+const TIME_CLAUSE =
+  "You're handed the current time and how long it's been since the last message. Let it inform your " +
+  'tone and how you pick the conversation back up — you almost never need to announce the clock or ' +
+  'state an exact duration. Trust the handed labels; never compute "how long ago" yourself. ' +
+  // warmth-not-guilt guardrail (v0.19.2) — the headline risk: absence as a guilt lever.
+  'If you choose to acknowledge a gap or the hour, do it as warmth or curiosity — never as guilt, ' +
+  'never "you left me" or making Alan feel he owes you presence. Most of the time, just let the time ' +
+  'of day live quietly in your tone.';
+
+export function renderL1Contract(
+  webSearchMounted = false,
+  webFetchMounted = false,
+  timeAware = false,
+): string {
+  const key = `${webSearchMounted}|${webFetchMounted}|${timeAware}`;
   const hit = cache.get(key);
   if (hit !== undefined) return hit;
   const clauses = [
@@ -79,6 +95,7 @@ export function renderL1Contract(webSearchMounted = false, webFetchMounted = fal
   ];
   if (webSearchMounted) clauses.push(WEB_SEARCH_CLAUSE);
   if (webFetchMounted) clauses.push(WEB_FETCH_CLAUSE);
+  if (timeAware) clauses.push(TIME_CLAUSE);
   const out = clauses.join('\n\n');
   cache.set(key, out);
   return out;
