@@ -26,6 +26,28 @@ describe('propose_self_edit (buildSelfEditProposal)', () => {
     expect(readFileSync(f, 'utf8')).toBe(original);
   });
 
+  // v0.20.7 — an ambiguous fuzzy match (the stripped pattern hits two regions with
+  // different indentation) must be rejected, not silently applied to the first.
+  test('an ambiguous fuzzy match is rejected as non-unique', () => {
+    const f = join(dir, 'ambiguous.ts');
+    writeFileSync(
+      f,
+      [
+        'function a() {',
+        '    foo();',
+        '    bar();',
+        '}',
+        'function b() {',
+        '        foo();',
+        '        bar();',
+        '}',
+      ].join('\n'),
+    );
+    const p = buildSelfEditProposal({ targetPath: f, oldString: '  foo();\n  bar();', newString: '  baz();' });
+    expect(p.ok).toBe(false);
+    if (!p.ok) expect(p.reason).toContain('not unique');
+  });
+
   test('KEYSTONE — the evaluator firewall hard-rejects a proposed edit (by basename)', () => {
     // *.test.ts and tsconfig*.json are blocked by basename, existence-independent.
     for (const name of ['something.test.ts', 'tsconfig.json', 'tsconfig.base.json']) {

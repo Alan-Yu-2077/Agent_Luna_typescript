@@ -4,6 +4,7 @@ import { contentHash, resolveInWorkspace } from '../workspace';
 import { wasRead } from '../readTracking';
 import {
   applyReplacement,
+  atomicWrite,
   closestMatchHint,
   findEditMatch,
   restoreEol,
@@ -128,11 +129,11 @@ export const multiEditTool = defineTool({
         };
         return;
       }
-      if (match.count > 1 && !hunk.replace_all) {
+      if (match.occurrences > 1 && !hunk.replace_all) {
         yield {
           kind: 'err',
           code: 'execution_exception',
-          message: `multi_edit: edit[${i}] old_string found ${match.count} times — add context or set replace_all:true. No changes written (atomic).`,
+          message: `multi_edit: edit[${i}] old_string found ${match.occurrences} times — add context or set replace_all:true. No changes written (atomic).`,
           recoverable: true,
         };
         return;
@@ -154,7 +155,7 @@ export const multiEditTool = defineTool({
 
     const toWrite = restoreEol(working, crlf);
     try {
-      await Bun.write(resolved, toWrite);
+      await atomicWrite(resolved, toWrite);
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       yield { kind: 'err', code: 'execution_exception', message: `multi_edit: write failed — ${message}`, recoverable: false };

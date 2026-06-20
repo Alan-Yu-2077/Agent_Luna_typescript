@@ -50,10 +50,10 @@ export function buildSelfEditProposal(opts: {
   if (!match.found) {
     return { ok: false, reason: `old_string not found in ${opts.targetPath}` };
   }
-  if (match.count > 1) {
+  if (match.occurrences > 1) {
     return {
       ok: false,
-      reason: `old_string not unique in ${opts.targetPath} (${match.count} matches) — add surrounding context`,
+      reason: `old_string not unique in ${opts.targetPath} (${match.occurrences} matches) — add surrounding context`,
     };
   }
 

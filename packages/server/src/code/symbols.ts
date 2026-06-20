@@ -65,8 +65,19 @@ function isExported(node: Node): boolean {
   // export_statement → declaration, or export_statement → (default) declaration
   while (p) {
     if (p.type === 'export_statement') return true;
-    // stop climbing once we leave the immediate declaration wrapper region
-    if (p.type === 'program' || p.type === 'statement_block') break;
+    // Stop at any enclosing scope/container whose own export status is NOT the
+    // node's: a method/field of an exported CLASS (class_body/class_declaration) or
+    // an exported OBJECT literal is not itself "exported" — climbing past these to
+    // the class/object's export_statement wrongly marks every member exported.
+    if (
+      p.type === 'program' ||
+      p.type === 'statement_block' ||
+      p.type === 'class_body' ||
+      p.type === 'class_declaration' ||
+      p.type === 'object'
+    ) {
+      break;
+    }
     p = p.parent;
   }
   return false;

@@ -51,6 +51,17 @@ describe('buildRepoMap — symbol extraction', () => {
     expect(dispatch?.line).toBe(1);
   });
 
+  // v0.20.7 — a method of an exported class is NOT itself "exported" (isExported
+  // used to climb past the class body to the class's export_statement).
+  test('a method of an exported class is not marked exported', async () => {
+    writeFileSync(join(tmp, 'k.ts'), 'export class Engine {\n  run() { return 1; }\n}\n');
+    const map = await buildRepoMap({ root: tmp });
+    expect(map.entries.find((e) => e.symbol === 'Engine')?.exported).toBe(true);
+    const run = map.entries.find((e) => e.symbol === 'run');
+    expect(run).toBeDefined();
+    expect(run?.exported).toBe(false);
+  });
+
   test('ranks the most-referenced symbol first', async () => {
     // `central` is defined in central.ts and referenced from two other files;
     // `lonely` is defined and never referenced. central must outrank lonely.

@@ -5,7 +5,7 @@ import { dirname } from 'node:path';
 import { defineTool } from '../defineTool';
 import { contentHash, resolveInWorkspace } from '../workspace';
 import { markRead } from '../readTracking';
-import { unifiedDiff } from '../editCore';
+import { atomicWrite, unifiedDiff } from '../editCore';
 import { isLintable, lintContent, lintSummary, type LintDiagnostic } from '../lintOnWrite';
 
 // write_file (Initiative 8, v0.15.1) — full-file create/overwrite (Python
@@ -135,7 +135,7 @@ export const writeFileTool = defineTool({
     }
 
     try {
-      await Bun.write(resolved, input.content);
+      await atomicWrite(resolved, input.content);
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       yield { kind: 'err', code: 'execution_exception', message: `write_file: write failed — ${message}`, recoverable: false };

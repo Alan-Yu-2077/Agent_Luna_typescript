@@ -4,6 +4,7 @@ import { contentHash, resolveInWorkspace } from '../workspace';
 import { wasRead } from '../readTracking';
 import {
   applyReplacement,
+  atomicWrite,
   closestMatchHint,
   findEditMatch,
   restoreEol,
@@ -122,11 +123,11 @@ export const editTool = defineTool({
       return;
     }
 
-    if (match.count > 1 && !input.replace_all) {
+    if (match.occurrences > 1 && !input.replace_all) {
       yield {
         kind: 'err',
         code: 'execution_exception',
-        message: `edit: old_string found ${match.count} times in ${input.path} — add surrounding context to make it unique, or set replace_all:true.`,
+        message: `edit: old_string found ${match.occurrences} times in ${input.path} — add surrounding context to make it unique, or set replace_all:true.`,
         recoverable: true,
       };
       return;
@@ -136,7 +137,7 @@ export const editTool = defineTool({
     const toWrite = restoreEol(updatedLf, crlf);
 
     try {
-      await Bun.write(resolved, toWrite);
+      await atomicWrite(resolved, toWrite);
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       yield { kind: 'err', code: 'execution_exception', message: `edit: write failed — ${message}`, recoverable: false };

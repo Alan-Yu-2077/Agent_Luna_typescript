@@ -3,7 +3,26 @@
 //
 // Ported from Python Luna `edit_file` (`filesystem.py:_find_edit_match`,
 // `unified_diff_for_text`). Kept LLM-free and pure so the edit tools stay a thin
-// I/O shell around tested string logic.
+// I/O shell around tested string logic (the lone exception is atomicWrite below).
+
+import { rename, rm } from 'node:fs/promises';
+
+let tmpCounter = 0;
+
+// Crash-atomic write (v0.20.7): stream to a sibling temp file in the SAME
+// directory, then rename over the target — rename is atomic within one filesystem,
+// so a kill / host crash / ENOSPC mid-write leaves the ORIGINAL intact instead of a
+// truncated/half-written file. The same-directory temp keeps the rename intra-fs.
+export async function atomicWrite(path: string, data: string): Promise<void> {
+  const tmp = `${path}.luna-tmp-${process.pid}-${tmpCounter++}`;
+  try {
+    await Bun.write(tmp, data);
+    await rename(tmp, path);
+  } catch (e) {
+    await rm(tmp, { force: true }).catch(() => {});
+    throw e;
+  }
+}
 
 // --- CRLF handling -----------------------------------------------------------
 //
@@ -25,8 +44,12 @@ export function restoreEol(text: string, crlf: boolean): string {
 
 // --- match (exact → whitespace-tolerant fuzzy) -------------------------------
 
+// `count` = verbatim copies of `matched` in `content` (what replace_all splices).
+// `occurrences` = how many places the old_string MATCHES — distinct whitespace
+// variants of a fuzzy match count separately, so it is the AMBIGUITY a uniqueness
+// guard must check (count alone undercounts to 1 across different-indent windows).
 export type MatchResult =
-  | { found: true; matched: string; count: number; fuzzed: boolean }
+  | { found: true; matched: string; count: number; occurrences: number; fuzzed: boolean }
   | { found: false };
 
 // Find `oldText` in `content` (both LF-normalized). Exact substring first; on
@@ -37,7 +60,8 @@ export type MatchResult =
 // case). `matched` is always a verbatim slice of `content`, safe to `replace`.
 export function findEditMatch(content: string, oldText: string): MatchResult {
   if (oldText.length > 0 && content.includes(oldText)) {
-    return { found: true, matched: oldText, count: countOccurrences(content, oldText), fuzzed: false };
+    const n = countOccurrences(content, oldText);
+    return { found: true, matched: oldText, count: n, occurrences: n, fuzzed: false };
   }
 
   const oldLines = oldText.split('\n');
@@ -53,9 +77,19 @@ export function findEditMatch(content: string, oldText: string): MatchResult {
     }
   }
   if (candidates.length > 0) {
-    // Dedup identical windows so the occurrence count matches what `replace` sees.
     const first = candidates[0]!;
-    return { found: true, matched: first, count: countOccurrences(content, first), fuzzed: true };
+    // `count` counts verbatim copies of the CHOSEN window (what replace_all will
+    // splice). `occurrences` is the number of matching windows — so two regions
+    // matching the same stripped pattern with DIFFERENT whitespace are seen as
+    // ambiguous (occurrences > 1) even though only the first is verbatim-counted,
+    // which makes the uniqueness guard fire instead of silently editing the first.
+    return {
+      found: true,
+      matched: first,
+      count: countOccurrences(content, first),
+      occurrences: candidates.length,
+      fuzzed: true,
+    };
   }
   return { found: false };
 }
