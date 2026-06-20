@@ -25,14 +25,17 @@ function harness() {
     clear: () => calls.push(['clear']),
   };
   const spoken: string[] = [];
+  const audioStops: number[] = []; // kept OUT of `calls` so exact-equality tests stay stable
   const audio: AudioSink = {
     speak: async (t) => {
       spoken.push(t);
     },
-    stop: () => {},
+    stop: () => {
+      audioStops.push(1);
+    },
   };
   const { handle } = createController({ view, live2d, audio });
-  return { handle, calls, spoken, states };
+  return { handle, calls, spoken, states, audioStops };
 }
 
 function delivery(over: Partial<MessageDelivery> = {}): MessageDelivery {
@@ -145,6 +148,33 @@ describe('frontend controller — other events', () => {
       ['append', 'reply', 'Hi '],
       ['append', 'reply', 'there'],
     ]);
+  });
+
+  // v0.20.3 — barge-in: a new reactive turn stops the prior turn's draining speech.
+  test('turn.started cuts off prior speech via audio.stop (barge-in)', () => {
+    const h = harness();
+    h.handle({ type: 'turn.started', turn_id: 't1' });
+    expect(h.audioStops.length).toBe(1);
+  });
+
+  // v0.20.3 — text-mode reply bubble is finalized on turn.result, so consecutive
+  // replies do NOT merge into one ever-growing bubble.
+  test('each text-mode turn opens a FRESH reply bubble (prior one finalized)', () => {
+    const h = harness();
+    const result = (turn: string, text: string): ServerEvent => ({
+      type: 'turn.result',
+      turn_id: turn,
+      text,
+      finish_reason: 'end_turn',
+      usage: { input_tokens: 1, output_tokens: 1 },
+    });
+    h.handle({ type: 'turn.started', turn_id: 't1' });
+    h.handle({ type: 'reply.token', turn_id: 't1', text: 'first' });
+    h.handle(result('t1', 'first'));
+    h.handle({ type: 'turn.started', turn_id: 't2' });
+    h.handle({ type: 'reply.token', turn_id: 't2', text: 'second' });
+    expect(h.calls.filter((c) => c[0] === 'open' && c[1] === 'reply').length).toBe(2);
+    expect(h.calls.filter((c) => c[0] === 'finalize' && c[1] === 'reply').length).toBe(1);
   });
 
   test('non-message tool → tool chips (started + finished summary)', () => {

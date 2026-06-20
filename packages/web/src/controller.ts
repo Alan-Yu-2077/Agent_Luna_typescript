@@ -36,6 +36,11 @@ export function createController(deps: ControllerDeps): { handle: (e: ServerEven
         return;
 
       case 'turn.started':
+        // Barge-in: a new reactive turn (user just sent) cuts off any still-draining
+        // speech from the previous turn so replies don't stack up behind a backlog.
+        // (proactive turns emit proactive.started, not turn.started — they don't
+        // interrupt themselves.)
+        deps.audio.stop();
         textStreaming = false;
         deps.live2d.setState('thinking');
         return;
@@ -109,6 +114,10 @@ export function createController(deps: ControllerDeps): { handle: (e: ServerEven
             deps.view.chip('source', `🔗 ${c.title || c.url}`, c.url);
           }
         }
+        // Text-mode (LUNA_MESSAGE_TOOL=0): finalize + stamp the synthetic reply
+        // bubble so the NEXT turn opens a fresh one. Without this, open() no-ops on
+        // the existing id and consecutive replies merge into one growing bubble.
+        if (textStreaming) deps.view.finalize(TEXT_BUBBLE, e.text);
         textStreaming = false;
         deps.live2d.setState('neutral');
         return;

@@ -25,10 +25,16 @@ export class WebAudioPlayer {
     if (this.nodes && this.nodes.ctx.state === 'suspended') await this.nodes.ctx.resume();
   }
 
-  async play(data: ArrayBuffer, onStart?: () => void, onEnd?: () => void): Promise<void> {
+  async play(data: ArrayBuffer, onStart?: () => void, onEnd?: () => void, signal?: AbortSignal): Promise<void> {
     const { ctx, gain } = this.ensure();
     await this.resume();
     const audioBuf = await ctx.decodeAudioData(data);
+    // Barge-in during decode: a stop() that fired while decodeAudioData was in
+    // flight must not then play the now-unwanted utterance. Resolve via onEnd.
+    if (signal?.aborted) {
+      onEnd?.();
+      return;
+    }
     this.stopSource();
     const src = ctx.createBufferSource();
     src.buffer = audioBuf;

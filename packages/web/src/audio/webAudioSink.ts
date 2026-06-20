@@ -21,6 +21,9 @@ export class WebAudioSink implements AudioSink {
   private lastFrameMs = 0;
   private disabled = false;
   private fails = 0;
+  // One controller per "speech session" — stop() aborts every queued/in-flight
+  // utterance (barge-in) and a fresh one is installed for what comes next.
+  private aborter = new AbortController();
 
   constructor(private readonly opts: WebAudioSinkOpts) {
     const unlock = (): void => {
@@ -32,16 +35,20 @@ export class WebAudioSink implements AudioSink {
 
   speak(text: string, voice?: VoiceParams, onStart?: () => void): Promise<void> {
     if (this.disabled || !text.trim()) return Promise.resolve();
+    const signal = this.aborter.signal;
     // Prefetch the audio now (concurrent), but gate PLAYBACK on the serial queue so
     // the next utterance only starts after the previous one has fully ended.
-    const audio = this.fetch(text, voice);
+    const audio = this.fetch(text, voice, signal);
     return this.queue.run(async () => {
+      if (signal.aborted) return; // barged-in while waiting in the queue
       const data = await audio;
-      if (data) await this.playToEnd(data, onStart);
+      if (data && !signal.aborted) await this.playToEnd(data, signal, onStart);
     });
   }
 
   stop(): void {
+    this.aborter.abort(); // cancel in-flight synthesis/decode for queued utterances
+    this.aborter = new AbortController();
     this.queue.clear(); // drop anything queued (barge-in)
     this.player.stop();
     this.stopMouth();
@@ -56,12 +63,15 @@ export class WebAudioSink implements AudioSink {
     );
   }
 
-  private async fetch(text: string, voice?: VoiceParams): Promise<ArrayBuffer | null> {
+  private async fetch(text: string, voice?: VoiceParams, signal?: AbortSignal): Promise<ArrayBuffer | null> {
     try {
-      const data = await fetchSpeech(text, { voice, apiBase: this.opts.apiBase });
+      const data = await fetchSpeech(text, { voice, apiBase: this.opts.apiBase, signal });
       this.fails = 0; // recovered
       return data;
     } catch (e) {
+      // An intentional barge-in abort is NOT a TTS failure — never count it toward
+      // the disable latch, or repeated interruptions would mute the session.
+      if (signal?.aborted || (e as { name?: string }).name === 'AbortError') return null;
       // Don't latch off on the first failure: GPT-SoVITS loads a ~5GB model on the
       // first /speak and returns 503 while warming — retryable. Give up only after
       // several consecutive hard failures (sidecar genuinely down).
@@ -74,7 +84,7 @@ export class WebAudioSink implements AudioSink {
 
   // Resolves only when playback ENDS (not when it starts) — that's the gate the
   // serial queue waits on, so utterances never overlap.
-  private playToEnd(data: ArrayBuffer, onStart?: () => void): Promise<void> {
+  private playToEnd(data: ArrayBuffer, signal: AbortSignal, onStart?: () => void): Promise<void> {
     return new Promise<void>((resolve) => {
       let done = false;
       const finish = (): void => {
@@ -91,6 +101,7 @@ export class WebAudioSink implements AudioSink {
             this.startMouth();
           },
           finish,
+          signal,
         )
         .catch(finish);
     });

@@ -4,7 +4,7 @@ import type { VoiceParams } from '@luna/protocol';
 // The proxy + the Python sidecar are NOT rebuilt here (REWRITE_CONTEXT locked
 // decision); the dev server forwards /api/gpt-sovits/* to the configured upstream.
 
-export type FetchSpeechOpts = { voice?: VoiceParams; apiBase?: string };
+export type FetchSpeechOpts = { voice?: VoiceParams; apiBase?: string; signal?: AbortSignal };
 
 export async function fetchSpeech(text: string, opts: FetchSpeechOpts = {}): Promise<ArrayBuffer> {
   const base = opts.apiBase ?? '/api/gpt-sovits';
@@ -12,6 +12,7 @@ export async function fetchSpeech(text: string, opts: FetchSpeechOpts = {}): Pro
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ text, voice: opts.voice?.voice, provider: opts.voice?.provider }),
+    signal: opts.signal, // barge-in: stop() aborts an in-flight synthesis request
   });
   if (!res.ok) {
     const err = new Error(`tts request failed: ${res.status}`) as Error & { status?: number };

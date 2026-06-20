@@ -130,7 +130,10 @@ async function boot(): Promise<void> {
   }
   refs.sendBtn.addEventListener('click', send);
   refs.input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') send();
+    // Don't send mid-IME-composition: the Enter that commits a Chinese pinyin
+    // candidate must select the candidate, not dispatch a half-composed message.
+    // isComposing covers modern browsers; keyCode 229 is the legacy WebView signal.
+    if (e.key === 'Enter' && !e.isComposing && e.keyCode !== 229) send();
   });
   refs.dreamBtn.addEventListener('click', () => client.send({ type: 'dream.enter' }));
   refs.dreamWakeBtn.addEventListener('click', () => client.send({ type: 'dream.wake' }));
