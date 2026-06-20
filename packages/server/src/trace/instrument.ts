@@ -24,5 +24,13 @@ export function trace(event: TraceEvent): void {
 
 export function flushTrace(turnId: string): void {
   if (!store) return;
-  store.flush(turnId);
+  // Never throw into the caller: a transient SQLite write failure (SQLITE_BUSY /
+  // disk-full) must not abort the work being instrumented — a dream consolidation
+  // pass, a decided proactive turn, or a chat turn. All flushTrace callers inherit
+  // this guard (the hot path's own try/catch is now belt-and-suspenders).
+  try {
+    store.flush(turnId);
+  } catch (e) {
+    console.error('[trace] flush failed:', e);
+  }
 }

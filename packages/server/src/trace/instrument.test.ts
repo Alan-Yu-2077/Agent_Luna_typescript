@@ -9,7 +9,7 @@ import { builtinRegistry } from '../tools/registry';
 import { getSession, resetSessions } from '../turn/session';
 import { runTurn } from '../turn/runTurn';
 import { TraceStore } from './store';
-import { setTraceStore } from './instrument';
+import { flushTrace, setTraceStore } from './instrument';
 
 let db: Database;
 let store: TraceStore;
@@ -111,5 +111,24 @@ describe('trace instrumentation through runTurn', () => {
       emit: () => {},
     });
     expect(store.getEventsByTurn('t2').length).toBe(0);
+  });
+
+  // v0.20.8 — tracing must never abort the work it instruments: a flush that throws
+  // (e.g. a closed/locked DB) is swallowed, so a dream/proactive pass survives.
+  test('flushTrace never throws even when the underlying flush fails', () => {
+    store.record({
+      schema_v: 1,
+      kind: 'decision',
+      trace_id: 'x',
+      turn_id: 'x',
+      session_id: 's',
+      t_ms: 1,
+      surface: 'proactive_wake',
+      decision: 'hold',
+      reason: 'test',
+      evidence: {},
+    });
+    db.close(false); // make the next flush() throw
+    expect(() => flushTrace('x')).not.toThrow();
   });
 });

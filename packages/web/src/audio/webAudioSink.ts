@@ -19,7 +19,10 @@ export class WebAudioSink implements AudioSink {
   private readonly queue = new SerialQueue();
   private raf = 0;
   private lastFrameMs = 0;
-  private disabled = false;
+  // Self-healing failure latch: after a run of hard failures, mute for a window and
+  // re-attempt — a brief sidecar restart no longer mutes the whole session (the old
+  // permanent `disabled` boolean did, until a full page reload).
+  private mutedUntil = 0;
   private fails = 0;
   // One controller per "speech session" — stop() aborts every queued/in-flight
   // utterance (barge-in) and a fresh one is installed for what comes next.
@@ -34,7 +37,7 @@ export class WebAudioSink implements AudioSink {
   }
 
   speak(text: string, voice?: VoiceParams, onStart?: () => void): Promise<void> {
-    if (this.disabled || !text.trim()) return Promise.resolve();
+    if (Date.now() < this.mutedUntil || !text.trim()) return Promise.resolve();
     const signal = this.aborter.signal;
     // Prefetch the audio now (concurrent), but gate PLAYBACK on the serial queue so
     // the next utterance only starts after the previous one has fully ended.
@@ -70,14 +73,17 @@ export class WebAudioSink implements AudioSink {
       return data;
     } catch (e) {
       // An intentional barge-in abort is NOT a TTS failure — never count it toward
-      // the disable latch, or repeated interruptions would mute the session.
+      // the latch, or repeated interruptions would mute the session.
       if (signal?.aborted || (e as { name?: string }).name === 'AbortError') return null;
-      // Don't latch off on the first failure: GPT-SoVITS loads a ~5GB model on the
-      // first /speak and returns 503 while warming — retryable. Give up only after
-      // several consecutive hard failures (sidecar genuinely down).
+      // Retryable statuses don't count: 503 = GPT-SoVITS warming its ~5GB model on
+      // the first /speak; 502/504 = the proxy during a sidecar restart. Only true
+      // hard failures (network / 4xx) accrue toward the latch.
       const status = (e as { status?: number }).status;
-      if (status !== 503) this.fails += 1;
-      if (this.fails >= 5) this.disabled = true;
+      if (status !== 503 && status !== 502 && status !== 504) this.fails += 1;
+      if (this.fails >= 5) {
+        this.mutedUntil = Date.now() + 60_000; // mute 60s, then re-attempt
+        this.fails = 0; // fresh window after the mute
+      }
       return null;
     }
   }

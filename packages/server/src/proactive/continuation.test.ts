@@ -76,4 +76,19 @@ describe('fireContinuation', () => {
     expect(events.length).toBe(0);
     session.activeTurn = null;
   });
+
+  // v0.20.8 — a disconnected client (hasListener false) must not burn an LLM call.
+  test('skips when no client is listening (hasListener false)', async () => {
+    const provider = new MockProvider([[endRound]]);
+    const events: ServerEvent[] = [];
+    await fireContinuation({
+      session: getSession('default'),
+      provider,
+      registry: messageRegistry,
+      emit: (e) => events.push(e),
+      hasListener: () => false,
+    });
+    expect(provider.requests.length).toBe(0);
+    expect(events.length).toBe(0);
+  });
 });

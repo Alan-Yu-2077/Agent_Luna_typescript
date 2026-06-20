@@ -85,9 +85,14 @@ export async function warmUpTts(
   // the earlier signal (the warmup phrase may still be synthesizing after load).
   return await new Promise<'ready' | 'failed'>((resolve) => {
     let settled = false;
+    // Overall deadline so the gate ALWAYS lifts (the doc promised "failed on
+    // timeout"): if a wedged sidecar accepts /speak but never responds while
+    // /health keeps reporting non-ready, neither racer below would settle.
+    const deadline = setTimeout(() => finish('failed'), 120_000);
     const finish = (r: 'ready' | 'failed'): void => {
       if (!settled) {
         settled = true;
+        clearTimeout(deadline);
         resolve(r);
       }
     };
@@ -105,16 +110,23 @@ export async function warmUpTts(
       }
     })();
     void (async () => {
+      // Per-request timeout: fetch() never times out on a stalled-but-open
+      // connection on its own, so a wedged /speak would hang this racer forever.
+      const ctl = new AbortController();
+      const t = setTimeout(() => ctl.abort(), 90_000);
       try {
         const r = await fetch(`${base}/speak`, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ text: 'Ready when you are' }),
+          signal: ctl.signal,
         });
         if (r.ok) await r.arrayBuffer().catch(() => undefined); // drain + discard the warmup audio
         finish(r.ok ? 'ready' : 'failed');
       } catch {
         finish('failed');
+      } finally {
+        clearTimeout(t);
       }
     })();
   });

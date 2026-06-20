@@ -16,6 +16,10 @@ export type Session = {
   history: Anthropic.MessageParam[];
   turnSeq: number;
   activeTurn: string | null;
+  // AbortController for the in-flight REACTIVE turn — aborted on client disconnect
+  // (ws.handleClose) so an orphaned turn stops instead of running to completion.
+  // null when no reactive turn is in flight; proactive/continuation never set it.
+  activeTurnAbort: AbortController | null;
   pendingDream: string | null;
   // The current plan (session-scoped, NOT persisted — a fresh process starts
   // with no plan, like wakePending).
@@ -47,6 +51,7 @@ export function getSession(id: string): Session {
       history: persisted?.history ?? [],
       turnSeq: persisted?.turnSeq ?? 0,
       activeTurn: null,
+      activeTurnAbort: null,
       pendingDream: null,
       plan: [],
       rollingSummary: persisted?.rollingSummary ?? '',

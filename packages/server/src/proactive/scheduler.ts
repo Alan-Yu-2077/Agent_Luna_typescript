@@ -3,6 +3,7 @@ import type { Provider } from '../provider/types';
 import type { ToolRegistry } from '../tools/registry';
 import type { DreamLLM } from '../dream/llm';
 import { activeSessionIds, getSession, type Session } from '../turn/session';
+import { listRecentProactiveTexts } from '../memory/sessionStore';
 import { isDreaming } from '../dream/dreamState';
 import { runDreamCycle } from '../dream/cycle';
 import { trace, flushTrace, traceEnabled } from '../trace/instrument';
@@ -118,7 +119,7 @@ async function tickOnce(deps: SchedulerDeps): Promise<void> {
       buildWakeContext({
         gapLabel: gapLabel(now - session.lastUserMs),
         daypart: daypartOf(nowHour),
-        recentProactive: [],
+        recentProactive: listRecentProactiveTexts(sessionId, 3),
       }),
     );
     emitWakeDecision(session, now, verdict);

@@ -24,6 +24,9 @@ export class LunaWsClient {
   // rendered, so a dropped frame meant a message the server never received).
   private outbox: ClientEvent[] = [];
   private attempt = 0;
+  private pingTimer: ReturnType<typeof setInterval> | null = null;
+  private stabilityTimer: ReturnType<typeof setTimeout> | null = null;
+  private pingSeq = 0;
 
   constructor(private readonly opts: WsClientOptions) {}
 
@@ -33,9 +36,16 @@ export class LunaWsClient {
     const ws = new WebSocket(this.opts.url);
     this.ws = ws;
     ws.addEventListener('open', () => {
-      this.attempt = 0;
+      // Only reset the backoff counter after the socket has STAYED open for a
+      // stability window — so a flapping server (accept-then-immediately-close)
+      // still escalates instead of hammering reconnects at the base interval.
+      this.stabilityTimer = setTimeout(() => {
+        this.attempt = 0;
+      }, 5000);
+      (this.stabilityTimer as { unref?: () => void }).unref?.();
       this.opts.onStatus?.('open');
       this.flush();
+      this.startHeartbeat();
     });
     ws.addEventListener('message', (ev: MessageEvent) => {
       if (typeof ev.data !== 'string') return;
@@ -49,6 +59,7 @@ export class LunaWsClient {
       if (parsed.success) this.opts.onEvent(parsed.data);
     });
     ws.addEventListener('close', () => {
+      this.stopHeartbeat();
       this.opts.onStatus?.('closed');
       if (this.closed) return;
       // Exponential backoff with jitter, capped — no tight reconnect storm if the
@@ -58,6 +69,30 @@ export class LunaWsClient {
       this.attempt += 1;
       setTimeout(() => this.connect(), delay + Math.random() * 250);
     });
+  }
+
+  // Heartbeat: ping every 30s while OPEN so the server's idle timeout doesn't drop
+  // an otherwise-healthy quiet connection (the server replies pong). Pings are not
+  // buffered — they only matter live.
+  private startHeartbeat(): void {
+    this.stopHeartbeat();
+    this.pingTimer = setInterval(() => {
+      if (this.ws?.readyState === WebSocket.OPEN) {
+        this.ws.send(JSON.stringify({ type: 'ping', seq: this.pingSeq++ }));
+      }
+    }, 30_000);
+    (this.pingTimer as { unref?: () => void }).unref?.();
+  }
+
+  private stopHeartbeat(): void {
+    if (this.pingTimer !== null) {
+      clearInterval(this.pingTimer);
+      this.pingTimer = null;
+    }
+    if (this.stabilityTimer !== null) {
+      clearTimeout(this.stabilityTimer);
+      this.stabilityTimer = null;
+    }
   }
 
   private flush(): void {
@@ -79,6 +114,7 @@ export class LunaWsClient {
 
   close(): void {
     this.closed = true;
+    this.stopHeartbeat();
     this.ws?.close();
   }
 }

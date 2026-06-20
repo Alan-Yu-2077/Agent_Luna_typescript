@@ -101,6 +101,12 @@ export function handleClose(
   reason: string,
 ): void {
   activeSockets.delete(ws);
+  // Abort an in-flight reactive turn only when the LAST listener is gone (a browser
+  // refresh opens its new socket before closing the old, so this won't fire then),
+  // so a disconnected client's turn stops instead of streaming to completion.
+  if (activeSockets.size === 0) {
+    getSession(ws.data.sessionId).activeTurnAbort?.abort('client disconnected');
+  }
   console.log(`[ws] close ${ws.remoteAddress} code=${code} reason=${reason}`);
 }
 
@@ -182,6 +188,10 @@ export function handleMessage(
       const { provider, registry } = runtime; // narrowed by the guard above
       const turnId = event.turn_id ?? `${session.id}:turn:${session.turnSeq}`;
       const emit = safeEmit(ws);
+      // Per-reactive-turn abort: handleClose aborts this if the client disconnects,
+      // so an orphaned turn stops instead of running to completion against upstream.
+      const ac = new AbortController();
+      session.activeTurnAbort = ac;
       void runTurn({
         session,
         turnId,
@@ -189,6 +199,7 @@ export function handleMessage(
         provider,
         registry,
         emit,
+        signal: ac.signal,
       })
         .then(() => {
           // enter_dream is a pending intent: the cycle starts only after the
@@ -198,13 +209,24 @@ export function handleMessage(
             startDream(ws, session);
             return;
           }
-          // Self-continuation (v0.11.0): maybe add one more thought after a pause.
-          maybeScheduleContinuation({ session, provider, registry, emit: broadcast });
+          // Self-continuation (v0.11.0): maybe add one more thought after a pause —
+          // skipped if no client is connected when it fires (don't burn a turn no
+          // one sees).
+          maybeScheduleContinuation({
+            session,
+            provider,
+            registry,
+            emit: broadcast,
+            hasListener: () => activeSockets.size > 0,
+          });
         })
         .catch((e) => {
           // a turn-finalize or continuation-scheduling failure must never crash
           // the connection / surface as an unhandled rejection
           console.error('[ws] chat.send post-turn failed:', e);
+        })
+        .finally(() => {
+          if (session.activeTurnAbort === ac) session.activeTurnAbort = null;
         });
       return;
     }

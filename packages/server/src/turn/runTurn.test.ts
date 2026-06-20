@@ -212,6 +212,23 @@ describe('runTurn', () => {
     expect(session.activeTurn).toBe(null);
     expect(events.find((e) => e.type === 'turn.result')).toBeUndefined();
   });
+
+  // v0.20.8 — a reactive turn's abort signal is forwarded to the provider stream,
+  // so ws.handleClose can abort an orphaned turn on disconnect.
+  test('forwards the abort signal into the provider request', async () => {
+    const provider = new MockProvider([[stopEnd('hi')]]);
+    const ac = new AbortController();
+    await runTurn({
+      session: getSession('test'),
+      turnId: 't1',
+      userText: 'hi',
+      provider,
+      registry: builtinRegistry,
+      emit: () => {},
+      signal: ac.signal,
+    });
+    expect(provider.requests[0]?.signal).toBe(ac.signal);
+  });
 });
 
 describe('tool wire schemas (gateway compatibility)', () => {

@@ -70,14 +70,17 @@ export class AnthropicProvider implements Provider {
   }
 
   async *chatStream(req: ProviderRequest): AsyncIterable<ProviderEvent> {
-    const stream = this.client.messages.stream({
-      model: MODEL,
-      max_tokens: MAX_TOKENS,
-      system: req.system,
-      messages: req.messages,
-      tools: req.tools.length > 0 ? req.tools : undefined,
-      thinking: { type: 'adaptive', display: 'summarized' },
-    });
+    const stream = this.client.messages.stream(
+      {
+        model: MODEL,
+        max_tokens: MAX_TOKENS,
+        system: req.system,
+        messages: req.messages,
+        tools: req.tools.length > 0 ? req.tools : undefined,
+        thinking: { type: 'adaptive', display: 'summarized' },
+      },
+      req.signal ? { signal: req.signal } : undefined,
+    );
 
     // open tool_use blocks by stream index, so input_json_delta chunks can be
     // attributed to the right call (v0.6.2 message streaming)

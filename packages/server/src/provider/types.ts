@@ -30,6 +30,10 @@ export type ProviderRequest = {
   system: string | Anthropic.TextBlockParam[];
   messages: Anthropic.MessageParam[];
   tools: Anthropic.Tool[];
+  // Reactive (chat) turns pass a signal so a client disconnect aborts the upstream
+  // stream instead of running to completion. Proactive/continuation turns are
+  // socket-less and leave this unset (they run to completion by design, LD #15).
+  signal?: AbortSignal;
 };
 
 export type CompleteRequest = {

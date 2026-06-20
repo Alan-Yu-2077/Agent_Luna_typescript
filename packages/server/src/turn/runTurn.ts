@@ -188,6 +188,9 @@ export type TurnState = {
   // web sources used this turn (v0.18.2): web_search result urls + web_fetch
   // final_url, surfaced on turn.result + persisted via L2 so she cites across turns.
   citations: Citation[];
+  // reactive-turn abort (v0.20.8): forwarded to the provider stream so a client
+  // disconnect aborts the upstream call; undefined for proactive/continuation.
+  signal?: AbortSignal;
 };
 
 export function toolsToAnthropicFormat(registry: ToolRegistry): Anthropic.Tool[] {
@@ -286,6 +289,7 @@ const graph: Graph<TurnState, TurnNode> = {
       system: s.systemBlock,
       messages: buildActiveContext(s.session),
       tools: s.anthropicTools,
+      signal: s.signal,
     })) {
       switch (ev.kind) {
         case 'text_delta':
@@ -685,6 +689,8 @@ export type RunTurnOptions = {
   // Initiative 5: she woke on her own; `userText` is an internal stage
   // direction and a silent (no-message) outcome is legitimate.
   proactiveTurn?: boolean;
+  // v0.20.8: reactive turns pass a signal so a client disconnect aborts the stream.
+  signal?: AbortSignal;
 };
 
 export async function runTurn(opts: RunTurnOptions): Promise<TurnState> {
@@ -731,6 +737,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<TurnState> {
     correctionWatermark: 0,
     proactiveTurn: opts.proactiveTurn ?? false,
     citations: [],
+    signal: opts.signal,
   };
 
   const onTransition: TransitionHook<TurnState, TurnNode> = (from, to, s) => {

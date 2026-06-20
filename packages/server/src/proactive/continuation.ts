@@ -17,6 +17,11 @@ export type ContinuationDeps = {
   provider: Provider;
   registry: ToolRegistry;
   emit: (e: ServerEvent) => void;
+  // Optional connectivity probe: if it returns false (the client disconnected
+  // during the pause), skip the continuation entirely so a micro-wake doesn't burn
+  // an LLM call no one will see (the heartbeat is different — it intentionally runs
+  // unattended; a continuation is a reply-to-a-conversation that just ended).
+  hasListener?: () => boolean;
 };
 
 // Decides whether to schedule a continuation. Pure-ish (reads env); a
@@ -34,6 +39,7 @@ export function shouldContinue(): boolean {
 export async function fireContinuation(deps: ContinuationDeps): Promise<void> {
   const { session } = deps;
   if (session.activeTurn !== null || isDreaming() || !proactiveEnabled()) return;
+  if (deps.hasListener && !deps.hasListener()) return; // client gone — don't waste a turn
   await runProactiveTurn({
     session,
     cycleId: `${session.id}:cont:${Date.now()}`,
@@ -49,9 +55,11 @@ export async function fireContinuation(deps: ContinuationDeps): Promise<void> {
 export function maybeScheduleContinuation(deps: ContinuationDeps): void {
   if (!shouldContinue()) return;
   const pauseMs = Number(Bun.env['LUNA_SELFCONT_PAUSE_MS'] ?? 4000);
-  setTimeout(() => {
+  const timer = setTimeout(() => {
     void fireContinuation(deps).catch(() => {
       /* continuation is best-effort */
     });
   }, pauseMs);
+  // Never let a pending continuation hold the process open at shutdown.
+  (timer as { unref?: () => void }).unref?.();
 }
