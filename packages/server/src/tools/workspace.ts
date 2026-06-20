@@ -110,6 +110,9 @@ function evaluatorFiles(): string[] {
     join(serverSrc, 'persona', 'humanity.ts'),
     join(serverSrc, 'persona', 'l1Contract.ts'),
     join(serverSrc, 'tools', 'shellDeny.ts'), // shell deny-regex source (v0.15.2)
+    join(serverSrc, 'tools', 'builtin', 'shell.ts'), // calls the deny-regex + secret-path scan (v0.20.0)
+    join(serverSrc, 'tools', 'shellCore.ts'), // the real spawner/executor (v0.20.0)
+    join(serverSrc, 'tools', 'builtin', 'run_tests.ts'), // parseBunTestOutput — save_skill's green/red oracle (v0.20.0)
     join(serverSrc, 'tools', 'web', 'safeFetch.ts'), // SSRF guard source (v0.18.1)
     // safetyGate* — both the module and any sibling variants live here:
     join(serverSrc, 'proactive', 'safetyGate.ts'),

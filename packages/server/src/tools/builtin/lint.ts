@@ -72,13 +72,22 @@ export const lintTool = defineTool({
       return;
     }
 
-    const scope = input.path ? JSON.stringify(input.path) : '.';
-    const command = `bun x prettier --check ${scope}`;
+    if (input.path) {
+      const pathGate = resolveInWorkspace(input.path, 'execute');
+      if (!pathGate.ok) {
+        yield { kind: 'err', code: 'execution_exception', message: `lint: ${pathGate.reason}`, recoverable: false };
+        return;
+      }
+    }
+
+    // argv (no shell string) — input.path is a literal arg, never interpreted.
+    const argv = ['bun', 'x', 'prettier', '--check', input.path ?? '.'];
 
     let result: { stdout: string; stderr: string; exitCode: number; timedOut: boolean };
     try {
       result = await activeSpawner()({
-        command,
+        command: argv.join(' '),
+        argv,
         cwd: gate.resolved,
         timeoutMs: clampTimeout(input.timeout_ms),
         abortSignal: ctx.abortSignal,

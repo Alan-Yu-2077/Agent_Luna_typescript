@@ -82,4 +82,17 @@ describe('run_tests tool', () => {
     expect(runTestsTool.concurrency).toBe('session-serial');
     expect(runTestsTool.proactiveRisk).toBe('surface');
   });
+
+  // v0.20.0 — input.path is passed as a LITERAL argv element, never a shell string,
+  // so a $()/backtick payload cannot be interpreted. (realSpawner's argv-vs-shell
+  // behavior is proven in shellCore.test.ts; here we assert the tool builds argv.)
+  test('builds argv with the raw path as a literal element (no shell interpolation)', async () => {
+    let captured: { command: string; argv?: string[] } | null = null;
+    setSpawnerForTests(async (r) => {
+      captured = { command: r.command, argv: r.argv };
+      return { stdout: '', stderr: PASS_OUTPUT, exitCode: 0, timedOut: false };
+    });
+    await run({ path: '$(touch /tmp/luna_pwn)' });
+    expect(captured!.argv).toEqual(['bun', 'test', '$(touch /tmp/luna_pwn)']);
+  });
 });

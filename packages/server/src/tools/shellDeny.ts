@@ -6,11 +6,14 @@
 // Luna may READ it but never WRITE it — she must not be able to edit the regex
 // that gates her own shell.
 //
-// OWNER DECISION (shell safety = Claude "auto mode"): the deny-regex ALWAYS hard-
-// blocks the dangerous patterns below — no flag, no approval, no override. For
-// every OTHER command, the v0.15.2 surface is deny-regex + the proactive surface-
-// gate only; the per-session WS approval prompt (OWNER DECISION #2 / plan Open
-// Q #2) is deferred to a later hardening pass — explicitly NOT built here.
+// OWNER DECISION (shell safety = Claude "auto mode"): the deny-regex is a best-
+// effort hard block over the known destructive forms below — no flag, no approval,
+// no override. It is regex over command TEXT, so it cannot see through arbitrary
+// runtime expansion (fetch-to-file-then-run, full shell metaprogramming); it
+// covers the common destructive shapes, not every conceivable one. For every OTHER
+// command, the v0.15.2 surface is deny-regex + the proactive surface-gate only; the
+// per-session WS approval prompt (OWNER DECISION #2 / plan Open Q #2) is deferred to
+// a later hardening pass — explicitly NOT built here.
 
 // Dangerous patterns matched against the LOWERCASED command text. A hit is a hard
 // refusal naming the matched pattern (recoverable: the model can choose a safer
@@ -19,6 +22,7 @@ export type DenyRule = { name: string; re: RegExp };
 
 export const DENY_RULES: DenyRule[] = [
   { name: 'rm -rf / recursive-force delete', re: /\brm\s+-[a-z]*[rf][a-z]*\b/ },
+  { name: 'find -delete / -exec rm (recursive delete)', re: /\bfind\b.*(?:-delete\b|-exec\s+rm\b)/ },
   { name: 'del /f|/q force delete', re: /\bdel\s+\/[fq]\b/ },
   { name: 'rmdir /s recursive delete', re: /\brmdir\s+\/s\b/ },
   { name: 'shutdown/reboot/poweroff/halt', re: /\b(?:shutdown|reboot|poweroff|halt)\b/ },
@@ -30,8 +34,11 @@ export const DENY_RULES: DenyRule[] = [
   { name: 'disown (detached process)', re: /(?:^|[^\w])disown(?:$|[^\w])/ },
   { name: 'setsid (detached session)', re: /(?:^|[^\w])setsid(?:$|[^\w])/ },
   { name: 'fork bomb', re: /:\s*\(\s*\)\s*\{.*\}\s*;?\s*:/ },
-  // remote-code-execution: a download piped straight into a shell interpreter.
-  { name: 'curl/wget piped to a shell', re: /\b(?:curl|wget)\b[^|]*\|\s*(?:sudo\s+)?(?:ba|z|da)?sh\b/ },
+  // remote-code-execution: a download piped into a shell/interpreter. `.*` (not
+  // [^|]*) so an intermediate pipe (curl … | tee x | sh) still matches; interpreter
+  // alternation covers sh/bash/zsh/dash + python/perl/ruby/node/php. (Cannot catch
+  // fetch-to-file-then-run — a fundamental limit of static regex gating.)
+  { name: 'curl/wget piped to a shell', re: /\b(?:curl|wget)\b.*\|\s*(?:sudo\s+)?(?:sh|bash|zsh|dash|python3?|perl|ruby|node|php)\b/ },
   // writes into credential / key material (defense-in-depth atop the path block):
   { name: 'write into ~/.ssh', re: /(?:>|>>|\btee\b)[^\n]*(?:~\/\.ssh|\/\.ssh\/)/ },
   { name: 'write into a dotfile rc', re: /(?:>|>>|\btee\b)[^\n]*\/\.(?:bashrc|zshrc|profile|bash_profile|zprofile)\b/ },
@@ -85,14 +92,18 @@ export function classifyShellCommand(command: string): ShellClassification {
     return { allowed: false, reason: 'empty command' };
   }
   const lowered = trimmed.toLowerCase();
+  // Collapse empty-quote splices (r""m / r''m → rm) so quote-splitting can't hide a
+  // denied token from the regex. ($IFS word-splitting is inert under zsh — the spawn
+  // shell — so it needs no normalization; bash would, but the spawner is zsh.)
+  const normalized = lowered.replace(/(['"])\1/g, '');
 
   for (const rule of DENY_RULES) {
-    if (rule.re.test(lowered)) {
+    if (rule.re.test(normalized)) {
       return { allowed: false, reason: `blocked dangerous pattern: ${rule.name}` };
     }
   }
 
-  const first = firstCommandToken(lowered);
+  const first = firstCommandToken(normalized);
   if (INTERACTIVE_COMMANDS.has(first)) {
     return {
       allowed: false,

@@ -127,6 +127,20 @@ describe('resolveInWorkspace — EVALUATOR FIREWALL (write/execute blocked, read
     }
   });
 
+  // v0.20.0 — the deny-regex enforcers, not just the deny-regex data, are firewalled.
+  test('shell enforcer files (shell.ts/shellCore.ts/run_tests.ts): write blocked, read allowed', () => {
+    for (const rel of [
+      join('tools', 'builtin', 'shell.ts'),
+      join('tools', 'shellCore.ts'),
+      join('tools', 'builtin', 'run_tests.ts'),
+    ]) {
+      const f = join(serverSrc, rel);
+      expect(resolveInWorkspace(f, 'read').ok).toBe(true);
+      expect(resolveInWorkspace(f, 'write').ok).toBe(false);
+      expect(resolveInWorkspace(f, 'execute').ok).toBe(false);
+    }
+  });
+
   test('any *.test.ts: write blocked, read allowed', () => {
     const f = join(root, 'foo.test.ts');
     writeFileSync(f, 'x');

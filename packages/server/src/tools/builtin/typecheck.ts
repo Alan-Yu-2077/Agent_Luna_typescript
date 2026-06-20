@@ -84,14 +84,24 @@ export const typecheckTool = defineTool({
       return;
     }
 
-    const command = input.path
-      ? `bun x tsc --noEmit -p ${JSON.stringify(input.path)}`
-      : 'bun x tsc --noEmit';
+    if (input.path) {
+      const pathGate = resolveInWorkspace(input.path, 'execute');
+      if (!pathGate.ok) {
+        yield { kind: 'err', code: 'execution_exception', message: `typecheck: ${pathGate.reason}`, recoverable: false };
+        return;
+      }
+    }
+
+    // argv (no shell string) — input.path is a literal arg, never interpreted.
+    const argv = input.path
+      ? ['bun', 'x', 'tsc', '--noEmit', '-p', input.path]
+      : ['bun', 'x', 'tsc', '--noEmit'];
 
     let result: { stdout: string; stderr: string; exitCode: number; timedOut: boolean };
     try {
       result = await activeSpawner()({
-        command,
+        command: argv.join(' '),
+        argv,
         cwd: gate.resolved,
         timeoutMs: clampTimeout(input.timeout_ms),
         abortSignal: ctx.abortSignal,

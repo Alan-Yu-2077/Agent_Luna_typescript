@@ -13,6 +13,11 @@ export type SpawnRequest = {
   cwd: string;
   timeoutMs: number;
   abortSignal: AbortSignal;
+  // When set, the process is spawned from this argv directly (no shell), so a
+  // model-supplied path can never be re-interpreted as shell syntax ($()/`…`).
+  // `command` stays a human-readable echo for logging/tests. The verify tools
+  // (typecheck/run_tests/lint) use this; the `shell` tool does not (it needs zsh).
+  argv?: string[];
 };
 
 export type SpawnResult = {
@@ -46,7 +51,9 @@ export function capOutput(text: string, max = SHELL_MAX_OUTPUT_CHARS): string {
 // genuine spawn failure rejects.
 export const realSpawner: Spawner = async (req) => {
   let timedOut = false;
-  const proc = Bun.spawn(['/bin/zsh', '-lc', req.command], {
+  // argv path (verify tools): exec directly, so input.path is a literal arg and
+  // never reaches a shell. Otherwise the `shell` tool's zsh path.
+  const proc = Bun.spawn(req.argv ?? ['/bin/zsh', '-lc', req.command], {
     cwd: req.cwd,
     stdout: 'pipe',
     stderr: 'pipe',
