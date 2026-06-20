@@ -18,7 +18,7 @@ import {
   renderRecallBlock,
   setEmbedClientForTests,
 } from './recall';
-import type { EmbedClient } from './embed';
+import { cosine, type EmbedClient } from './embed';
 
 let db: Database;
 
@@ -126,6 +126,28 @@ describe('retrieve (hybrid)', () => {
     const callsAfterFirst = embedCalls.length;
     await retrieve('s', 'coffee');
     expect(embedCalls.length).toBe(callsAfterFirst);
+  });
+
+  // v0.20.5 — a dimension mismatch (stale-dim vector after a model swap) must be a
+  // non-match, never NaN (which would silently drop the hit and degrade recall).
+  test('cosine returns 0 (not NaN) on a length mismatch', () => {
+    expect(cosine(new Float32Array([1, 0, 0, 0]), new Float32Array([1, 0]))).toBe(0);
+    expect(Number.isNaN(cosine(new Float32Array([1, 0]), new Float32Array([1, 0, 0, 0])))).toBe(
+      false,
+    );
+  });
+
+  // v0.20.5 — the embedding cache key is model-namespaced, so swapping the model
+  // re-embeds instead of reusing a stale-dim vector keyed by content alone.
+  test('a model swap re-embeds (namespaced embedding cache key)', async () => {
+    seedL2('s', [['coffee talk', 'espresso reply']]);
+    Bun.env['LUNA_EMBEDDING_MODEL'] = 'model-a';
+    await retrieve('s', 'coffee');
+    const afterA = embedCalls.length;
+    Bun.env['LUNA_EMBEDDING_MODEL'] = 'model-b';
+    await retrieve('s', 'coffee');
+    expect(embedCalls.length).toBeGreaterThan(afterA);
+    delete Bun.env['LUNA_EMBEDDING_MODEL'];
   });
 
   test('recency boost breaks ties toward newer', async () => {

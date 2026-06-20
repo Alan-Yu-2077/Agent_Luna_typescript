@@ -12,7 +12,9 @@ const Input = z.object({
   scope: z
     .enum(['facts', 'timeline', 'both'])
     .optional()
-    .describe('facts = durable things you know; timeline = past conversation; default both'),
+    .describe(
+      'facts = durable things you know; timeline = past conversation + diaries; default both',
+    ),
   limit: z.number().int().min(1).max(10).optional().describe('how many hits to return (default 5)'),
 });
 
@@ -54,12 +56,18 @@ export const recallTool = defineTool({
     }
     const limit = input.limit ?? DEFAULT_LIMIT;
     const scope: 'facts' | 'timeline' | 'both' = input.scope ?? 'both';
-    // over-fetch a little so scope filtering still fills the limit
-    const raw = await retrieve(ctx.sessionId, input.query, { k: limit * 2 });
-    const filtered = raw.filter((h) =>
-      scope === 'both' ? true : scope === 'facts' ? h.source === 'l3' : h.source === 'l2',
-    );
-    const hits = filtered.slice(0, limit).map((h) => ({
+    // Push scope into retrieve() so the k limit applies PER-SCOPE — facts = l3,
+    // timeline = l2 + diary (diaries are distilled past conversation). This stops
+    // a burst of recent off-scope rows from starving the wanted source out of the
+    // top-k (the old over-fetch×2-then-filter could come back short or empty).
+    const sources =
+      scope === 'facts'
+        ? (['l3'] as const)
+        : scope === 'timeline'
+          ? (['l2', 'diary'] as const)
+          : undefined;
+    const raw = await retrieve(ctx.sessionId, input.query, { k: limit, sources });
+    const hits = raw.map((h) => ({
       id: h.id,
       source: h.source,
       text: h.text,

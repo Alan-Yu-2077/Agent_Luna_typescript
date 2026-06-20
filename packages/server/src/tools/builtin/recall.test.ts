@@ -92,7 +92,7 @@ describe('recall tool execute', () => {
     expect(e.data!.hits.length).toBeLessThanOrEqual(2);
   });
 
-  test('scope=facts returns only l3, scope=timeline only l2', async () => {
+  test('scope=facts returns only l3, scope=timeline excludes l3 (l2 + diary)', async () => {
     addFact('preferences', '用户喜欢猫');
     appendL2({
       sessionId: 'test',
@@ -104,7 +104,39 @@ describe('recall tool execute', () => {
     const facts = await run({ query: '猫', scope: 'facts' });
     expect(facts.data!.hits.every((h) => h.source === 'l3')).toBe(true);
     const timeline = await run({ query: '猫', scope: 'timeline' });
-    expect(timeline.data!.hits.every((h) => h.source === 'l2')).toBe(true);
+    expect(timeline.data!.hits.every((h) => h.source !== 'l3')).toBe(true);
+  });
+
+  // v0.20.5 — diaries are distilled past conversation; scope='timeline' must surface
+  // them (the old filter hard-coded === 'l2' and dropped every diary hit).
+  test('scope=timeline surfaces a diary hit (was silently dropped)', async () => {
+    db.prepare('INSERT INTO diaries (kind, period_key, text, generated_ms) VALUES (?, ?, ?, ?)').run(
+      'day',
+      '2026-06-15',
+      '今天聊了很多关于猫的事，猫咪很可爱',
+      Date.now(),
+    );
+    const timeline = await run({ query: '猫', scope: 'timeline' });
+    expect(timeline.data!.hits.some((h) => h.source === 'diary')).toBe(true);
+  });
+
+  // v0.20.5 — scope is pushed into retrieve(), so a burst of recent off-scope l2
+  // rows can no longer starve the wanted source out of the top-k.
+  test('scope=facts still returns facts under heavy recent-l2 skew (no starvation)', async () => {
+    addFact('preferences', '用户很喜欢猫，养了一只叫 Mochi 的猫');
+    addFact('key_moments', '第一次见到猫是在咖啡馆，那只猫很亲人');
+    for (let i = 0; i < 12; i++) {
+      appendL2({
+        sessionId: 'test',
+        turnId: `t${i}`,
+        userText: `刚才又看到一只猫 ${i}`,
+        assistantText: '猫真好',
+        rawContent: [],
+      });
+    }
+    const facts = await run({ query: '猫', scope: 'facts', limit: 5 });
+    expect(facts.data!.hits.length).toBeGreaterThanOrEqual(1);
+    expect(facts.data!.hits.every((h) => h.source === 'l3')).toBe(true);
   });
 
   test('no memory db configured → structured err, not a throw', async () => {

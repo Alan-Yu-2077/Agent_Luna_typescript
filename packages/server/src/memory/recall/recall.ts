@@ -3,8 +3,8 @@ import { listFacts } from '../l3Store';
 import { listRecentDiaries } from '../diaries';
 import { relativeLabel } from '../../turn/temporalContext';
 import {
-  contentHash,
   cosine,
+  embedCacheKey,
   embeddingEnabled,
   fetchEmbedClient,
   fromBlob,
@@ -74,18 +74,13 @@ export function resetRecallStateForTests(): void {}
 
 // ── retrieval ─────────────────────────────────────────────────────────────────
 
-// `hash` carries the stored content_hash for L2 rows (A2, v0.16.1) so retrieve()
-// reuses it instead of re-hashing; undefined → hashed on the fly (L3 facts, and
-// pre-v0.16.1 L2 rows whose column is null).
-// `importance` is the 0–1 normalized salience used by the GA recall score
-// (v0.17.1); `hash` reuses a stored content_hash where present (A2).
+// `importance` is the 0–1 normalized salience used by the GA recall score (v0.17.1).
 type Candidate = {
   source: 'l2' | 'l3' | 'diary';
   id: string;
   text: string;
   t_ms: number;
   importance: number;
-  hash?: string;
 };
 
 // Normalize a 1–5 turn salience score to 0–1; unrated → DEFAULT_IMPORTANCE.
@@ -104,7 +99,6 @@ function collectCandidates(sessionId: string): Candidate[] {
       text: `${row.user_text}\n${row.assistant_text}`,
       t_ms: row.t_ms,
       importance: imp01(row.importance),
-      ...(row.content_hash ? { hash: row.content_hash } : {}),
     });
   }
   for (const fact of listFacts()) {
@@ -144,10 +138,15 @@ export async function retrieve(
   // cache can't block the caller (the hot-path auto-recall) past the budget —
   // on timeout the turn scores lexical-only. Set by parse_input under
   // LUNA_RECALL_ASYNC; the agentic recall tool leaves it unset (full embed).
-  opts?: { k?: number; embedBudgetMs?: number },
+  // `sources` (v0.20.5) filters candidates BEFORE ranking so the k limit applies
+  // per-scope — the agentic recall tool passes it for scoped queries so a burst of
+  // recent off-scope rows can't starve the wanted source out of the top-k. Default
+  // (undefined) = all sources → the hot-path auto-injection is byte-identical.
+  opts?: { k?: number; embedBudgetMs?: number; sources?: ReadonlyArray<'l2' | 'l3' | 'diary'> },
 ): Promise<Hit[]> {
   const k = opts?.k ?? RETRIEVAL_K;
-  const candidates = collectCandidates(sessionId);
+  const all = collectCandidates(sessionId);
+  const candidates = opts?.sources ? all.filter((c) => opts.sources!.includes(c.source)) : all;
   if (candidates.length === 0) return [];
   const now = Date.now();
 
@@ -159,7 +158,7 @@ export async function retrieve(
   // cold cache). Returns all-null on any failure → lexical-only fallback.
   const scoreCosine = async (): Promise<(number | null)[]> => {
     try {
-      const queryHash = contentHash(query);
+      const queryHash = embedCacheKey(query);
       let queryVec = cachedEmbedding(queryHash);
       if (!queryVec) {
         const [v] = await embedClient([query]);
@@ -169,9 +168,10 @@ export async function retrieve(
         }
       }
       if (!queryVec) return nullScores();
-      // A2: reuse the stored content_hash where present (L2); hash on the fly
-      // only for L3 facts and pre-v0.16.1 rows.
-      const hashes = candidates.map((c) => c.hash ?? contentHash(c.text));
+      // Embedding-cache keys are model-namespaced (v0.20.5), so a model swap
+      // re-embeds rather than reusing a stale-dim vector. (The stored L2
+      // content_hash is content-only and no longer doubles as the embed key.)
+      const hashes = candidates.map((c) => embedCacheKey(c.text));
       const vecs: (Float32Array | null)[] = hashes.map((h) => cachedEmbedding(h));
 
       const missingIdx = vecs
@@ -186,7 +186,8 @@ export async function retrieve(
           vecs[idx] = v;
         });
       }
-      return vecs.map((v) => (v ? cosine(queryVec!, v) : null));
+      // Length guard: a stale-dim cached vec scores as a non-match, not NaN.
+      return vecs.map((v) => (v && v.length === queryVec!.length ? cosine(queryVec!, v) : null));
     } catch {
       return nullScores();
     }

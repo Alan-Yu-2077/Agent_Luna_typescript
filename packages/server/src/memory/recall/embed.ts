@@ -54,7 +54,24 @@ export function contentHash(text: string): string {
   return new Bun.CryptoHasher('sha256').update(text).digest('hex');
 }
 
+function embeddingModel(): string {
+  return Bun.env['LUNA_EMBEDDING_MODEL'] ?? 'text-embedding-3-large';
+}
+
+// Embedding-cache key: the content hash NAMESPACED by the embedding model, so a
+// LUNA_EMBEDDING_MODEL swap (and thus a possible dimension change) re-embeds
+// instead of reusing a stale-dim vector. Deliberately distinct from contentHash,
+// which also keys L2/L3 row content_hash columns — mutating that would force a
+// cache miss on every row, not just embeddings.
+export function embedCacheKey(text: string): string {
+  return contentHash(`${embeddingModel()}\n${text}`);
+}
+
 export function cosine(a: Float32Array, b: Float32Array): number {
+  // Length guard: a dimension mismatch (e.g. a model swap left stale-dim vectors)
+  // would otherwise read past the shorter array → NaN (dim increase) or a
+  // finite-but-wrong partial cosine (dim decrease). Treat it as a non-match.
+  if (a.length !== b.length) return 0;
   let dot = 0;
   let na = 0;
   let nb = 0;
