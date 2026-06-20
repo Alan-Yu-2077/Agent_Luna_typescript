@@ -46,12 +46,15 @@ export class AnthropicProvider implements Provider {
   }
 
   async complete(req: CompleteRequest): Promise<CompleteResult> {
+    // No extended thinking here: complete() backs summarization/dream-patch calls
+    // (not chat), where adaptive thinking is pure overhead and — counting toward
+    // max_tokens — can starve the actual output, returning empty text. The chat
+    // path (chatStream) keeps thinking; these utility calls do not need it.
     const response = await this.client.messages.create({
       model: MODEL,
       max_tokens: req.maxTokens ?? 2048,
       system: req.system,
       messages: req.messages,
-      thinking: { type: 'adaptive' },
     });
     const text = response.content
       .filter((b): b is Anthropic.TextBlock => b.type === 'text')

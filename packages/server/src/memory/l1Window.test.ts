@@ -81,6 +81,25 @@ describe('l1Window — turns unit (v0.17.0)', () => {
     expect(session.rollingSummary).toBe('DIGEST_TWO'); // replaced, not appended
   });
 
+  // v0.20.6 — an empty/truncated complete() digest must not overwrite a real
+  // rolling summary with '' nor advance the low-water mark.
+  test('an empty digest does NOT overwrite the rolling summary or advance low-water', async () => {
+    seedTurns('s', 20);
+    const session = getSession('s');
+    const provider = new MockProvider([]);
+    provider.completeResponder = () => 'REAL_DIGEST';
+    await maybeFold(session, provider);
+    expect(session.rollingSummary).toBe('REAL_DIGEST');
+    const lowWater = session.windowLowWater;
+
+    seedTurns('s', 12, 20);
+    provider.completeResponder = () => '   '; // trims to '' (truncated / all-thinking)
+    const landed = await maybeFold(session, provider);
+    expect(landed).toBe(false);
+    expect(session.rollingSummary).toBe('REAL_DIGEST'); // preserved
+    expect(session.windowLowWater).toBe(lowWater); // not advanced
+  });
+
   test('3. structured digest is hard-capped (no unbounded growth)', async () => {
     Bun.env['LUNA_L1_SUMMARY_MAX_CHARS'] = '50';
     seedTurns('s', 20);

@@ -127,6 +127,18 @@ describe('sessionStore', () => {
     expect(raw[1]?.role).toBe('assistant');
   });
 
+  // v0.20.6 — listL2 without a limit loads the WHOLE timeline (the old 10000 magic
+  // cap dropped the NEWEST rows on reload past it). An explicit limit still works.
+  test('listL2 loads all rows uncapped (newest preserved); explicit limit honored', () => {
+    for (let i = 0; i < 25; i++) {
+      appendL2({ sessionId: 'big', turnId: `t${i}`, userText: `u${i}`, assistantText: `a${i}`, rawContent: [] });
+    }
+    const all = listL2('big');
+    expect(all.length).toBe(25);
+    expect(all.at(-1)?.user_text).toBe('u24'); // newest is present + last (ASC)
+    expect(listL2('big', { limit: 5 }).length).toBe(5);
+  });
+
   test('unset seam = fully ephemeral (no throws, no persistence)', async () => {
     setMemoryDb(null);
     const session = getSession('eph');

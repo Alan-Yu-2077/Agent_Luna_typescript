@@ -119,11 +119,21 @@ export type L2Row = {
   importance: number | null;
 };
 
+// Ascending (oldest→newest) — the frame loadSession/planFold index against, where
+// window_low_water is an ABSOLUTE cumulative offset from the front. An explicit
+// limit (with this ASC order) would drop the NEWEST rows and shift that offset, so
+// the once-per-boot/fold load takes NO limit (loads the whole timeline). A caller
+// that genuinely wants a bounded NEWEST window uses listRecentL2 instead.
 export function listL2(sessionId: string, opts?: { limit?: number }): L2Row[] {
   if (!db) return [];
+  if (opts?.limit != null) {
+    return db
+      .prepare('SELECT * FROM l2_turns WHERE session_id = ? ORDER BY t_ms ASC, id ASC LIMIT ?')
+      .all(sessionId, opts.limit) as L2Row[];
+  }
   return db
-    .prepare('SELECT * FROM l2_turns WHERE session_id = ? ORDER BY t_ms ASC, id ASC LIMIT ?')
-    .all(sessionId, opts?.limit ?? 10000) as L2Row[];
+    .prepare('SELECT * FROM l2_turns WHERE session_id = ? ORDER BY t_ms ASC, id ASC')
+    .all(sessionId) as L2Row[];
 }
 
 // A2 (v0.16.1): the most-recent `limit` turns in ascending order, read with a

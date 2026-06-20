@@ -136,6 +136,12 @@ const dreamGraph: Graph<DreamCycleState, DreamNode> = {
       if (!call.ok) return ['failed', `${call.failure}: ${call.detail}`];
       const patch = parseJsonBlock(SaliencePatch, call.text);
       if (!patch) return ['failed', 'unparseable scores'];
+      // The score→turn map is positional, so a length mismatch (the model dropped
+      // or inserted a score) would mis-rate every turn after the shift and write
+      // those wrong scores permanently. Reject the whole patch → retried next cycle.
+      if (patch.scores.length !== unrated.length) {
+        return ['failed', `score/turn count mismatch (${patch.scores.length} vs ${unrated.length})`];
+      }
       let rated = 0;
       // listUnratedL2 returns most-recent-first; the prompt numbered them in that
       // same order, so scores[i] maps to unrated[i].

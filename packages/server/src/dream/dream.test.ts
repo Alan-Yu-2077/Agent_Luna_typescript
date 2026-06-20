@@ -159,6 +159,19 @@ describe('dream cycle', () => {
     expect(byText['I adopted a dog named Mochi']).toBe(1);
   });
 
+  // v0.20.6 — a score/turn count mismatch is rejected wholesale (positional map
+  // would otherwise shift every later turn onto the wrong neighbour's score).
+  test('2c. salience: a score/turn count mismatch is rejected, nothing written', async () => {
+    seedDialogue('default', [
+      ['I adopted a dog named Mochi', 'Mochi! what a name'],
+      ['nice weather', 'mm'],
+    ]);
+    const { llm } = scriptedLlm({ salience: JSON.stringify({ scores: [4] }) }); // 1 score, 2 turns
+    await runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
+    const rows = db.prepare('SELECT importance FROM l2_turns').all() as { importance: number | null }[];
+    expect(rows.every((r) => r.importance === null)).toBe(true);
+  });
+
   test('3. reconciliation: planted contradiction → exactly one active fact survives', async () => {
     const cat = addFact('preferences', 'User loves cats and wants one');
     seedDialogue('default', [

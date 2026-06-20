@@ -142,6 +142,10 @@ export async function maybeFold(session: Session, provider: Provider): Promise<b
   // Bounded: the digest is re-derived whole and hard-capped, so repeated folds
   // never grow it unboundedly (the regression vs the old append-only summary).
   let digest = result.text.trim();
+  // An empty digest (complete() returned only thinking / hit max_tokens / a
+  // transient blip) must NOT overwrite rolling_summary with '' and advance the
+  // low-water mark — that silently shrinks active context. Skip; retry next fold.
+  if (!digest) return false;
   const cap = summaryMaxChars();
   if (digest.length > cap) digest = digest.slice(0, cap);
 
