@@ -44,54 +44,81 @@ export function capOutput(text: string, max = SHELL_MAX_OUTPUT_CHARS): string {
   return text.slice(0, head) + marker(elided) + text.slice(text.length - tail);
 }
 
-// Real spawner — `/bin/zsh -lc <command>` via Bun.spawn, wired to the abort
-// signal (dispatcher timeout). On timeout/abort the process TREE is killed
-// (negative pid → process group) so a child spawned by the command can't outlive
-// it. Output is capped after collection. Never throws on a non-zero exit; only a
-// genuine spawn failure rejects.
+// Collect a process and ALL its descendants (post-order: children before
+// parents), by reading one `ps` snapshot and walking the ppid map. Bun.spawn does
+// not start a child in its own process group (no `detached` option), so
+// `process.kill(-pid)` is unreliable — we enumerate the tree explicitly instead.
+// Portable across macOS/Linux (`ps -A -o pid=,ppid=`). Falls back to [rootPid]
+// alone if ps is unavailable.
+function collectProcessTree(rootPid: number): number[] {
+  let childrenOf: Map<number, number[]>;
+  try {
+    const res = Bun.spawnSync(['ps', '-A', '-o', 'pid=,ppid=']);
+    const out = res.stdout ? res.stdout.toString() : '';
+    childrenOf = new Map();
+    for (const line of out.split('\n')) {
+      const m = line.trim().match(/^(\d+)\s+(\d+)$/);
+      if (!m) continue;
+      const pid = Number(m[1]);
+      const ppid = Number(m[2]);
+      const arr = childrenOf.get(ppid);
+      if (arr) arr.push(pid);
+      else childrenOf.set(ppid, [pid]);
+    }
+  } catch {
+    return [rootPid];
+  }
+  const ordered: number[] = [];
+  const seen = new Set<number>();
+  const visit = (pid: number) => {
+    if (seen.has(pid)) return; // guard against a pathological cycle
+    seen.add(pid);
+    for (const c of childrenOf.get(pid) ?? []) visit(c);
+    ordered.push(pid); // post-order — grandchildren die before the parent
+  };
+  visit(rootPid);
+  return ordered;
+}
+
+// Real spawner — exec via Bun.spawn (argv for verify tools, else `/bin/zsh -lc`),
+// wired to the abort signal (dispatcher timeout). On timeout/abort the process
+// TREE is killed by enumerating descendants and signalling each, so a child
+// spawned by the command can't outlive it. Output is capped after collection.
+// Never throws on a non-zero exit; only a genuine spawn failure rejects.
 export const realSpawner: Spawner = async (req) => {
   let timedOut = false;
-  // argv path (verify tools): exec directly, so input.path is a literal arg and
-  // never reaches a shell. Otherwise the `shell` tool's zsh path.
   const proc = Bun.spawn(req.argv ?? ['/bin/zsh', '-lc', req.command], {
     cwd: req.cwd,
     stdout: 'pipe',
     stderr: 'pipe',
-    // detached so we own a process group we can signal as a unit.
-    // Bun spawns in a new group; killing the group reaps children.
   });
 
   const killTree = (signal: NodeJS.Signals) => {
-    try {
-      // negative pid signals the whole process group (the tree).
-      process.kill(-proc.pid, signal);
-    } catch {
+    for (const pid of collectProcessTree(proc.pid)) {
       try {
-        proc.kill(signal === 'SIGKILL' ? 9 : 15);
+        process.kill(pid, signal);
       } catch {
         /* already gone */
       }
     }
   };
 
-  const onAbort = () => {
+  let escalation: ReturnType<typeof setTimeout> | null = null;
+  const escalateKill = () => {
     timedOut = true;
     killTree('SIGTERM');
-    // escalate if it ignores SIGTERM
-    setTimeout(() => killTree('SIGKILL'), 2000).unref?.();
+    if (escalation) clearTimeout(escalation);
+    escalation = setTimeout(() => killTree('SIGKILL'), 2000);
+    escalation.unref?.();
   };
 
   if (req.abortSignal.aborted) {
-    onAbort();
+    escalateKill();
   } else {
-    req.abortSignal.addEventListener('abort', onAbort, { once: true });
+    req.abortSignal.addEventListener('abort', escalateKill, { once: true });
   }
 
-  const timer = setTimeout(() => {
-    timedOut = true;
-    killTree('SIGTERM');
-    setTimeout(() => killTree('SIGKILL'), 2000).unref?.();
-  }, req.timeoutMs);
+  const timer = setTimeout(escalateKill, req.timeoutMs);
 
   try {
     const [stdout, stderr] = await Promise.all([
@@ -107,7 +134,8 @@ export const realSpawner: Spawner = async (req) => {
     };
   } finally {
     clearTimeout(timer);
-    req.abortSignal.removeEventListener('abort', onAbort);
+    if (escalation) clearTimeout(escalation); // never leave a dangling SIGKILL timer
+    req.abortSignal.removeEventListener('abort', escalateKill);
   }
 };
 

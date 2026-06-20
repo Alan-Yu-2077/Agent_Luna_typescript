@@ -54,7 +54,7 @@ export const repoMapTool = defineTool({
   timeoutMs: 30000,
   summarize: (out) =>
     `${out.entries.length} symbol${out.entries.length === 1 ? '' : 's'} across ${out.files_scanned} file${out.files_scanned === 1 ? '' : 's'}${out.truncated ? ' (truncated)' : ''}${out.verified ? '' : ' (some unverified)'}`,
-  execute: async function* (input) {
+  execute: async function* (input, ctx) {
     const target = input.path ?? workspaceRoot();
     const gate = resolveInWorkspace(target, 'read');
     if (!gate.ok) {
@@ -68,6 +68,7 @@ export const repoMapTool = defineTool({
         root: gate.resolved,
         focus: input.focus,
         maxTokens: input.max_tokens,
+        abortSignal: ctx.abortSignal,
       });
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);

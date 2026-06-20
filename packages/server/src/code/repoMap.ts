@@ -48,6 +48,7 @@ export type BuildOptions = {
   focus?: string; // a path fragment or symbol name to bias ranking toward
   statFn?: StatFn;
   nowMs?: number;
+  abortSignal?: AbortSignal; // dispatcher timeout/abort → stop the parse loop
 };
 
 type ParsedFile = {
@@ -171,6 +172,7 @@ export async function buildRepoMap(opts: BuildOptions): Promise<RepoMapResult> {
   const parsed: ParsedFile[] = [];
   let filesParsed = 0;
   for (const e of sourceFiles) {
+    if (opts.abortSignal?.aborted) break; // timeout/abort — stop parsing the tree
     const pf = await parseFile(e.abs, relative(opts.root, e.abs), statFn, nowMs);
     if (pf) {
       parsed.push(pf);

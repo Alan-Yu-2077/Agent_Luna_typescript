@@ -144,4 +144,19 @@ describe('grep schema + safety', () => {
       '5 of 20',
     );
   });
+
+  // v0.20.2 — the JS walk honors the abort signal (dispatcher timeout) instead of
+  // scanning the whole tree after the turn is gone.
+  test('jsRunner stops immediately on an already-aborted signal', async () => {
+    const r = await jsRunner({
+      query: 'Foo',
+      root: tmp,
+      regex: false,
+      caseSensitive: false,
+      cap: 100,
+      abortSignal: AbortSignal.abort(),
+    });
+    expect(r.total).toBe(0);
+    expect(r.hits.length).toBe(0);
+  });
 });

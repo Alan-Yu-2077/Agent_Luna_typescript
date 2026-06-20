@@ -71,3 +71,36 @@ describe('realSpawner argv path (no shell interpretation — v0.20.0)', () => {
     expect(r.stdout.trim()).toBe('INJECTED');
   });
 });
+
+describe('realSpawner process-tree kill (v0.20.2 — no leaked grandchildren)', () => {
+  const isAlive = (pid: number): boolean => {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  test('a timed-out command kills its backgrounded grandchild', async () => {
+    const ctl = new AbortController();
+    // background a long sleep, print its pid, then block the parent on wait —
+    // so the parent is alive when the 400ms timeout fires.
+    const r = await realSpawner({
+      command: 'sleep 30 & echo $!; wait',
+      cwd: process.cwd(),
+      timeoutMs: 400,
+      abortSignal: ctl.signal,
+    });
+    expect(r.timedOut).toBe(true);
+    const childPid = Number(r.stdout.trim().split('\n')[0]);
+    expect(Number.isInteger(childPid)).toBe(true);
+    // poll: the grandchild must die (SIGTERM→SIGKILL), not outlive the parent.
+    let alive = true;
+    for (let i = 0; i < 40 && alive; i++) {
+      alive = isAlive(childPid);
+      if (alive) await new Promise((res) => setTimeout(res, 50));
+    }
+    expect(alive).toBe(false);
+  }, 10_000);
+});

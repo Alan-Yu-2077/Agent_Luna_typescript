@@ -43,6 +43,7 @@ export type GrepRequest = {
   caseSensitive: boolean;
   glob?: string;
   cap: number;
+  abortSignal?: AbortSignal; // dispatcher timeout/abort — kill rg, stop the JS walk
 };
 export type GrepRunResult = { hits: GrepHit[]; total: number };
 export type GrepRunner = (req: GrepRequest) => Promise<GrepRunResult>;
@@ -57,7 +58,7 @@ export const ripgrepRunner: GrepRunner = async (req) => {
   args.push('--max-count', String(Math.max(req.cap * 4, req.cap)));
   args.push('--', req.query, req.root);
 
-  const proc = Bun.spawn(['rg', ...args], { stdout: 'pipe', stderr: 'pipe' });
+  const proc = Bun.spawn(['rg', ...args], { stdout: 'pipe', stderr: 'pipe', signal: req.abortSignal });
   const [stdout] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
   // rg exit 2 = actual error (bad regex, missing binary surfaced by Bun throw);
   // exit 1 = no matches (not an error). Treat >1 as a failure → caller falls back.
@@ -118,6 +119,7 @@ export const jsRunner: GrepRunner = async (req) => {
   const hits: GrepHit[] = [];
   let total = 0;
   for (const ent of entries) {
+    if (req.abortSignal?.aborted) break; // timeout/abort — stop the walk
     if (ent.type !== 'file') continue;
     if (BINARY_EXTENSIONS.has(extname(ent.abs).toLowerCase())) continue;
     if (glob && !glob.match(ent.rel)) continue;
@@ -181,7 +183,7 @@ export const grepTool = defineTool({
   timeoutMs: 15000,
   summarize: (out) =>
     `${out.shown} of ${out.total} match${out.total === 1 ? '' : 'es'}${out.truncated ? ' (truncated)' : ''}`,
-  execute: async function* (input) {
+  execute: async function* (input, ctx) {
     const target = input.path ?? workspaceRoot();
     const gate = resolveInWorkspace(target, 'read');
     if (!gate.ok) {
@@ -197,6 +199,7 @@ export const grepTool = defineTool({
       caseSensitive: input.case_sensitive ?? false,
       glob: input.glob,
       cap,
+      abortSignal: ctx.abortSignal,
     };
 
     let result: GrepRunResult;

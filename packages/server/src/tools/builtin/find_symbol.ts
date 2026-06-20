@@ -51,7 +51,7 @@ export const findSymbolTool = defineTool({
   timeoutMs: 20000,
   summarize: (out) =>
     `${out.definitions.length} def${out.definitions.length === 1 ? '' : 's'}, ${out.references.length} ref${out.references.length === 1 ? '' : 's'}${out.verified ? '' : ' (some unverified)'}`,
-  execute: async function* (input) {
+  execute: async function* (input, ctx) {
     const target = input.path ?? workspaceRoot();
     const gate = resolveInWorkspace(target, 'read');
     if (!gate.ok) {
@@ -61,7 +61,7 @@ export const findSymbolTool = defineTool({
 
     let result;
     try {
-      result = await locateSymbol({ name: input.name, root: gate.resolved, kind: input.kind });
+      result = await locateSymbol({ name: input.name, root: gate.resolved, kind: input.kind, abortSignal: ctx.abortSignal });
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       yield { kind: 'err', code: 'execution_exception', message: `find_symbol: ${message}`, recoverable: true };

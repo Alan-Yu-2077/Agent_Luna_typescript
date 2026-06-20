@@ -46,6 +46,7 @@ export type LocateOptions = {
   kind?: LocateKind;
   grepRunner?: GrepRunner; // injected in tests (rg-absent / deterministic)
   readFile?: (abs: string) => Promise<string>;
+  abortSignal?: AbortSignal; // dispatcher timeout/abort → cancel the rg candidate scan
 };
 
 async function defaultRead(abs: string): Promise<string> {
@@ -63,6 +64,7 @@ export async function locateSymbol(opts: LocateOptions): Promise<LocateResult> {
       regex: true,
       caseSensitive: true,
       cap: CAND_CAP,
+      abortSignal: opts.abortSignal,
     },
     opts.grepRunner,
   );

@@ -68,6 +68,12 @@ async function ensureRuntime(): Promise<typeof ParserType | null> {
 const langCache = new Map<GrammarKey, Language>();
 const langFailed = new Set<GrammarKey>();
 
+// Per-grammar Parser pool. A Parser is a WASM-heap allocation; constructing one
+// per parsed file (and never delete()-ing it) leaks the emscripten heap across a
+// long-lived server. Parsing is sequential, so a single reused parser per grammar
+// is safe (and skips the per-file constructor cost). delete()-d on reset only.
+const parserCache = new Map<GrammarKey, ParserType>();
+
 async function loadLanguage(key: GrammarKey): Promise<Language | null> {
   const cached = langCache.get(key);
   if (cached) return cached;
@@ -98,6 +104,9 @@ export async function loadParserFor(path: string): Promise<LoadedParser | null> 
   const grammar = grammarForPath(path);
   if (!grammar) return null;
 
+  const pooled = parserCache.get(grammar);
+  if (pooled) return { parser: pooled, grammar };
+
   const ParserCtor = await ensureRuntime();
   if (!ParserCtor) return null;
 
@@ -107,6 +116,7 @@ export async function loadParserFor(path: string): Promise<LoadedParser | null> 
   try {
     const parser = new ParserCtor();
     parser.setLanguage(lang);
+    parserCache.set(grammar, parser);
     return { parser, grammar };
   } catch {
     return null;
@@ -119,4 +129,12 @@ export function resetTreeSitterForTests(): void {
   initPromise = null;
   langCache.clear();
   langFailed.clear();
+  for (const parser of parserCache.values()) {
+    try {
+      parser.delete();
+    } catch {
+      /* runtime already torn down */
+    }
+  }
+  parserCache.clear();
 }
