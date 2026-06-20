@@ -235,15 +235,22 @@ const graph: Graph<TurnState, TurnNode> = {
       const lastRow = getMemoryDb() ? listRecentL2(s.session.id, 1)[0] : undefined;
       const lastInteractionMs =
         lastRow?.t_ms ?? (s.session.turnSeq > 0 ? s.session.lastUserMs : null);
-      blocks.push({
-        type: 'text',
-        text: buildTimeBlock({
-          nowMs: Date.now(),
-          lastInteractionMs,
-          sessionStartMs: s.session.sessionStartMs,
-          tz: resolveTz(),
-        }),
-      });
+      // The time layer is non-essential — degrade (omit the block), never fail the
+      // turn, if temporal computation throws (e.g. a misconfigured zone slipping
+      // past resolveTz's guard).
+      try {
+        blocks.push({
+          type: 'text',
+          text: buildTimeBlock({
+            nowMs: Date.now(),
+            lastInteractionMs,
+            sessionStartMs: s.session.sessionStartMs,
+            tz: resolveTz(),
+          }),
+        });
+      } catch (e) {
+        console.warn('[time] buildTimeBlock failed — omitting the time block:', e);
+      }
     }
     blocks.push({ type: 'text', text: s.userText });
     s.session.history.push({ role: 'user', content: blocks });

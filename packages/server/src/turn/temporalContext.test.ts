@@ -18,6 +18,7 @@ import {
   feltAbsenceFor,
   formatGap,
   relativeLabel,
+  resolveTz,
   subjectiveTime,
   type Daypart,
 } from './temporalContext';
@@ -30,6 +31,38 @@ describe('formatGap', () => {
     [180000, '2 days'],
   ])('%d s → %s', (sec, expected) => {
     expect(formatGap(sec)).toBe(expected);
+  });
+
+  // v0.20.4 — the within-hour minute round-up must carry, never render a 60m label.
+  test.each([
+    [7170, '2h'], // 1h59m30s → minutes round to 60 → carry to 2h (was "1h 60m")
+    [86399, '1 day'], // 23h59m59s → carries past 24h → days branch (was "23h 60m")
+    [3600, '1h'], // clean hour boundary (never broken)
+    [3599, '59m'], // sub-hour uses floor — stays 59m, never 60m
+  ])('%d s → %s (carry)', (sec, expected) => {
+    expect(formatGap(sec)).toBe(expected);
+  });
+
+  test('no second value in [0, 86400) ever renders a 60-minute label', () => {
+    for (let s = 0; s < 86_400; s++) {
+      const out = formatGap(s);
+      if (out.includes('60m')) throw new Error(`formatGap(${s}) = "${out}"`);
+    }
+  });
+});
+
+describe('resolveTz validation (v0.20.4)', () => {
+  afterEach(() => delete Bun.env['LUNA_TZ']);
+  test('a valid LUNA_TZ is returned as-is', () => {
+    Bun.env['LUNA_TZ'] = 'Asia/Shanghai';
+    expect(resolveTz()).toBe('Asia/Shanghai');
+  });
+  test('an invalid LUNA_TZ degrades to a usable zone (no throw)', () => {
+    Bun.env['LUNA_TZ'] = 'Asia/Shanghi'; // typo
+    const tz = resolveTz();
+    // the fallback must itself be a valid IANA zone (does not throw downstream)
+    expect(() => new Intl.DateTimeFormat('en-US', { timeZone: tz })).not.toThrow();
+    expect(tz).not.toBe('Asia/Shanghi');
   });
 });
 
@@ -168,6 +201,7 @@ describe('placement (cache safety)', () => {
     db.close(false);
     resetSessions();
     delete Bun.env['LUNA_TIME_AWARE'];
+    delete Bun.env['LUNA_TZ'];
   });
 
   function endRound(text: string): ProviderEvent[] {
@@ -212,6 +246,23 @@ describe('placement (cache safety)', () => {
     const userMsg = provider.requests[0]?.messages.at(-1);
     const blocks = userMsg?.content as Anthropic.TextBlockParam[];
     expect(blocks.some((b) => b.text.includes('Current time (you are handed this'))).toBe(true);
+  });
+
+  test('v0.20.4: a bad LUNA_TZ no longer bricks the turn — the LLM is still reached', async () => {
+    Bun.env['LUNA_TIME_AWARE'] = '1';
+    Bun.env['LUNA_TZ'] = 'Asia/Shanghi'; // typo that used to throw before the LLM call
+    const session = getSession('t');
+    const provider = new MockProvider([endRound('a')]);
+    const result = await runTurn({
+      session,
+      turnId: 't1',
+      userText: 'hi',
+      provider,
+      registry: builtinRegistry,
+      emit: () => {},
+    });
+    expect(provider.requests.length).toBe(1); // reached the provider (was 0 — bricked)
+    expect(result.finishReason).not.toBe('error');
   });
 
   test('flag off → no time block anywhere', async () => {

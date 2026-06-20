@@ -72,9 +72,22 @@ function absencePhrase(feltness: AbsenceFeltness): string {
 }
 
 // LUNA_TZ (an IANA zone, e.g. Asia/Shanghai) → host-resolved zone → UTC. Read
-// per-call so the knob is live; the block always states the zone it used.
+// per-call so the knob is live; the block always states the zone it used. The
+// value is VALIDATED — a typo (`Asia/Shanghi`, `PST`) would otherwise throw
+// RangeError the first time it reached Intl, bricking every turn before the LLM
+// (the time layer is non-essential, so a bad zone degrades, never fails).
+function hostZone(): string {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC';
+}
 export function resolveTz(): string {
-  return Bun.env['LUNA_TZ'] ?? Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC';
+  const tz = Bun.env['LUNA_TZ'] ?? hostZone();
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: tz });
+    return tz;
+  } catch {
+    console.warn(`[time] invalid LUNA_TZ "${tz}" — falling back to host zone/UTC`);
+    return hostZone();
+  }
 }
 
 type LocalParts = { year: number; month: number; day: number; hour: number; minute: number };
@@ -132,11 +145,18 @@ export function classifyDaypart(hour: number): Daypart {
 // Humanized elapsed: just now / 1m / 1h 12m / 3h / 2 days.
 export function formatGap(seconds: number): string {
   if (seconds < 45) return 'just now';
+  // sub-hour uses floor (90s → "1m"), so it never reaches 60m.
   if (seconds < 3600) return `${Math.max(1, Math.floor(seconds / 60))}m`;
   if (seconds < 86_400) {
-    const h = Math.floor(seconds / 3600);
-    const m = Math.round((seconds % 3600) / 60);
-    return m > 0 ? `${h}h ${m}m` : `${h}h`;
+    let h = Math.floor(seconds / 3600);
+    let m = Math.round((seconds % 3600) / 60);
+    // carry the minute overflow so the within-hour round-up never renders
+    // "1h 60m" / "23h 60m"; a value that carries past 24h falls through to days.
+    if (m === 60) {
+      h += 1;
+      m = 0;
+    }
+    if (h < 24) return m > 0 ? `${h}h ${m}m` : `${h}h`;
   }
   const days = Math.round(seconds / 86_400);
   return `${days} day${days === 1 ? '' : 's'}`;
