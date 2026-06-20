@@ -19,6 +19,15 @@ const CUTE: Partial<Record<ToolName, string>> = {
   propose_self_edit: 'proposed a self-edit ✍️',
   web_search: 'searched the web 🔍',
   web_fetch: 'read a web page 🌐',
+  list_files: 'looked through files 📂',
+  grep: 'searched the code 🔍',
+  edit: 'edited a file ✏️',
+  multi_edit: 'edited a file ✏️',
+  write_file: 'wrote a file 📝',
+  shell: 'ran a command 💻',
+  typecheck: 'type-checked ✅',
+  run_tests: 'ran the tests 🧪',
+  lint: 'checked formatting 🎨',
 };
 
 function strip(s: string): string {
@@ -26,8 +35,12 @@ function strip(s: string): string {
 }
 
 export function toolCardLabel(chipText: string): string {
-  for (const name of ToolName.options) {
-    if (chipText.includes(name)) return CUTE[name] ?? name;
-  }
-  return strip(chipText);
+  const stripped = strip(chipText);
+  // Exact match only: a START chip is `🔧 <tool_name>…`, so the stripped text IS
+  // the tool name. A substring `includes` (the old code) mislabeled `recall_skill`
+  // as `recall` and rewrote any FINISH summary that merely contained a tool-name
+  // substring. A finish summary is free text → not a ToolName → its stripped form.
+  const parsed = ToolName.safeParse(stripped);
+  if (parsed.success) return CUTE[parsed.data] ?? stripped;
+  return stripped;
 }

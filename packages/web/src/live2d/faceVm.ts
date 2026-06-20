@@ -203,6 +203,10 @@ export class FaceVm {
       if (Math.abs(target[key] - next) < 0.001) next = target[key];
       this.cur[key] = next;
       if (POSE_SET.has(key)) continue; // smoothed here, but written pre-physics in flushPose()
+      // When mouse gaze-follow owns the eyes, the focusController is authoritative —
+      // emotion/action gaze must not overwrite it (mirrors the applyIdle gate, so
+      // the eyeballs stay owned regardless of which layer set the gaze target).
+      if (this.gazeActive && GAZE_KEYS.has(key)) continue;
       if (Math.abs(next - def) > 1e-3) {
         const gain = FACE_PARAM_GAIN[key] ?? 1;
         this.writer.setParam(FACE_VM_PARAM_MAP[key], clampStateValue(key, next * gain));

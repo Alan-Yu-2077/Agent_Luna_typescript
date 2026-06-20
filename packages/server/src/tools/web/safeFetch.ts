@@ -13,8 +13,9 @@ import https from 'node:https';
 // address between the check and the connect — the DNS-rebinding TOCTOU is CLOSED,
 // not merely narrowed. TLS SNI + certificate validation still key off the URL
 // hostname, so HTTPS stays correct (we connect to the validated IP, verify the cert
-// against the name). Verified end-to-end (real HTTPS smoke + injected-transport unit
-// tests).
+// against the name). Coverage: a one-off manual real-HTTPS smoke (not repeatable in
+// CI), injected-transport unit tests for the redirect/cap/validation logic, and a
+// makePinnedLookup unit test pinning the rebinding-defense callback shapes (v0.20.9).
 //
 // Always-on inside the tool (LD #10), pure + table-driven + tested. In the
 // evaluator-firewall set (workspace.ts): a future propose_self_edit can never
@@ -249,16 +250,25 @@ async function readCapped(res: Response, maxBytes: number): Promise<string> {
 // re-resolved to a private IP. TLS SNI + cert validation still use the URL hostname
 // (we connect to the validated IP, verify the cert against the name). Returns a
 // Response so safeFetch's redirect/cap/content-type logic stays transport-agnostic.
-function pinnedFetch(rawUrl: string, init: FetchInit, pinIp: string): Promise<Response> {
-  const u = new URL(rawUrl);
-  const mod = u.protocol === 'https:' ? https : http;
+// The DNS pin: a node lookup that IGNORES the hostname and always resolves to the
+// already-validated `pinIp`, closing the rebinding TOCTOU (a resolver swapping in a
+// private address between check and connect can't take effect). node may call it
+// with all:true (array form, Bun's) or all:false (single) — BOTH must return only
+// the pin. Exported so this security-critical shape is unit-tested (a "simplifying"
+// refactor that broke either branch would silently reopen SSRF). WHY cast:
+// @types/node's LookupFunction models only the all:false callback shape.
+export function makePinnedLookup(pinIp: string): LookupFunction {
   const fam = isIP(pinIp) === 6 ? 6 : 4;
-  // Pin DNS to the validated IP. node may call lookup with all:true (array form,
-  // which Bun uses) or all:false (single) — handle both.
-  const pinnedLookup = (_host: string, options: { all?: boolean } | undefined, cb: (...a: unknown[]) => void): void => {
+  const lookup = (_host: string, options: { all?: boolean } | undefined, cb: (...a: unknown[]) => void): void => {
     if (options && options.all) cb(null, [{ address: pinIp, family: fam }]);
     else cb(null, pinIp, fam);
   };
+  return lookup as unknown as LookupFunction;
+}
+
+function pinnedFetch(rawUrl: string, init: FetchInit, pinIp: string): Promise<Response> {
+  const u = new URL(rawUrl);
+  const mod = u.protocol === 'https:' ? https : http;
   return new Promise<Response>((resolve, reject) => {
     const req = mod.request(
       rawUrl,
@@ -266,9 +276,7 @@ function pinnedFetch(rawUrl: string, init: FetchInit, pinIp: string): Promise<Re
         method: 'GET',
         headers: init.headers,
         signal: init.signal,
-        // WHY cast: @types/node's LookupFunction models only the all:false callback
-        // shape; we also serve the all:true array form (above), so widen it.
-        lookup: pinnedLookup as unknown as LookupFunction,
+        lookup: makePinnedLookup(pinIp),
       },
       (res) => {
         const headers = new Headers();

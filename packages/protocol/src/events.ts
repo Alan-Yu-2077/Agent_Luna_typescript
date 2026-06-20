@@ -107,7 +107,13 @@ export type FinishReason = z.infer<typeof FinishReason>;
 // web_search result urls + web_fetch final_url. Rides turn.result so the
 // frontend can render source cards and L2 keeps them (she cites across turns).
 export const Citation = z.object({
-  url: z.string(),
+  // http(s) only — these urls are untrusted web-tool output that rides to the
+  // frontend as a clickable href. A scheme refine (NOT z.string().url(), which is
+  // STRICTER than the WHATWG URL the renderer's safeHttpHref uses — a url the
+  // renderer accepts but .url() rejects would throw in outbound and drop the whole
+  // turn.result). Citation urls always originate http(s) (web_fetch's resolved
+  // final_url / web_search results), so this never rejects a real one.
+  url: z.string().refine((u) => /^https?:\/\//i.test(u), 'citation url must be http(s)'),
   title: z.string(),
 });
 export type Citation = z.infer<typeof Citation>;

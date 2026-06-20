@@ -2,3 +2,6 @@ node_modules/
 dist/
 bun.lock
 *.tsbuildinfo
+# vendored third-party assets — the 206KB minified Cubism core + Live2D model JSON
+# must stay byte-stable (prettier --write . would un-minify / reflow them).
+packages/web/public/

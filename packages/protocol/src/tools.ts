@@ -58,23 +58,27 @@ export const ToolResultErr = z.object({
 export const ToolResult = z.discriminatedUnion('kind', [ToolResultOk, ToolResultErr]);
 export type ToolResult = z.infer<typeof ToolResult>;
 
+// tool_name is the ToolName enum (matching ToolCall + the real invariant: a
+// ToolEvent always originates from a registered tool's ToolCall). v0.20.9 tightened
+// these from z.string(), so a dynamically-named tool can't construct one and the
+// consumers' ToolName.parse narrowing is now compile-time-guaranteed, not hopeful.
 export const ToolEventStarted = z.object({
   kind: z.literal('started'),
-  tool_name: z.string(),
+  tool_name: ToolName,
   call_id: z.string(),
   input: z.unknown(),
 });
 
 export const ToolEventProgress = z.object({
   kind: z.literal('progress'),
-  tool_name: z.string(),
+  tool_name: ToolName,
   call_id: z.string(),
   payload: z.unknown(),
 });
 
 export const ToolEventFinal = z.object({
   kind: z.literal('final'),
-  tool_name: z.string(),
+  tool_name: ToolName,
   call_id: z.string(),
   result: ToolResult,
 });

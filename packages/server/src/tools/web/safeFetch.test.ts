@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   assertPublicUrl,
   isBlockedIp,
+  makePinnedLookup,
   safeFetch,
   type FetchImpl,
   type Resolver,
@@ -194,5 +195,43 @@ describe('safeFetch — fetch with re-validation + caps', () => {
     await expect(
       safeFetch('http://example.com/', { resolve: publicResolve, fetchImpl }),
     ).rejects.toMatchObject({ code: 'too_many_redirects' });
+  });
+});
+
+// v0.20.9 — the DNS pin is the single most security-critical line (the rebinding
+// defense). Unit-test that BOTH node lookup callback shapes return ONLY the pinned
+// IP, ignoring the hostname — a broken branch would silently reopen SSRF.
+describe('makePinnedLookup (DNS pin)', () => {
+  type Cb = (...a: unknown[]) => void;
+  type Lookup = (host: string, opts: { all?: boolean } | undefined, cb: Cb) => void;
+
+  test('all:true (array form, Bun) returns only the pinned IPv4', () => {
+    const lookup = makePinnedLookup('93.184.216.34') as unknown as Lookup;
+    let got: unknown;
+    lookup('attacker-controlled.example.com', { all: true }, (_e, addrs) => {
+      got = addrs;
+    });
+    expect(got).toEqual([{ address: '93.184.216.34', family: 4 }]);
+  });
+
+  test('all:false (single form) returns only the pinned IPv4', () => {
+    const lookup = makePinnedLookup('93.184.216.34') as unknown as Lookup;
+    let addr: unknown;
+    let fam: unknown;
+    lookup('attacker-controlled.example.com', undefined, (_e, a, f) => {
+      addr = a;
+      fam = f;
+    });
+    expect(addr).toBe('93.184.216.34');
+    expect(fam).toBe(4);
+  });
+
+  test('an IPv6 pin reports family 6', () => {
+    const lookup = makePinnedLookup('2606:2800:220:1:248:1893:25c8:1946') as unknown as Lookup;
+    let got: unknown;
+    lookup('x', { all: true }, (_e, addrs) => {
+      got = addrs;
+    });
+    expect((got as { family: number }[])[0]?.family).toBe(6);
   });
 });
