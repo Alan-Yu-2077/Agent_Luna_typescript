@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { grepTool, jsRunner, runGrep, setGrepRunnerForTests, type GrepRunner } from './grep';
@@ -122,6 +122,21 @@ describe('grep schema + safety', () => {
   test('searching a secret path is rejected', async () => {
     const e = await run({ query: 'anything', path: '.env' });
     expect(e.kind).toBe('err');
+  });
+
+  // v0.20.1 — the JS fallback must not surface secret bytes: a direct secret-pattern
+  // file (caught by the per-file resolveInWorkspace gate) nor a symlink-to-secret
+  // outside the tree (caught by excludeSymlinks).
+  test('JS scan surfaces neither a secret-pattern file nor a symlink-to-secret', async () => {
+    forceJsFallback();
+    writeFileSync(join(tmp, 'src', 'leaked.pem'), 'SUPERSECRET_TOKEN\n'); // per-file gate
+    const outside = mkdtempSync(join(tmpdir(), 'luna-grep-secret-'));
+    writeFileSync(join(outside, 'key.pem'), 'SUPERSECRET_TOKEN\n');
+    symlinkSync(join(outside, 'key.pem'), join(tmp, 'src', 'innocent.txt')); // excludeSymlinks
+    const e = await run({ query: 'SUPERSECRET_TOKEN' });
+    rmSync(outside, { recursive: true, force: true });
+    expect(e.kind).toBe('ok');
+    expect(e.data!.total).toBe(0);
   });
 
   test('summarize reports shown of total', () => {

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { statSync } from 'node:fs';
 import { defineTool } from '../defineTool';
-import { resolveInWorkspace, workspaceRoot } from '../workspace';
+import { isSecretTailPath, resolveInWorkspace, workspaceRoot } from '../workspace';
 import { classifyShellCommand } from '../shellDeny';
 import {
   activeSpawner,
@@ -60,6 +60,12 @@ export type ShellOutput = z.infer<typeof Output>;
 function blockedPathInCommand(command: string): string | null {
   const tokens = command.match(/(?:~\/|\/)[^\s'"|;&<>]+/g) ?? [];
   for (const tok of tokens) {
+    // Tail check first: catches `$HOME/.aws/...` / `${HOME}/.ssh/...` env-var
+    // indirection, where the captured token is `/.aws/...` and resolves OUTSIDE
+    // the real $HOME — so the absolute blocklist below would let it through.
+    if (isSecretTailPath(tok)) {
+      return `blocked: secret path (${tok}) — a secret location cannot be laundered through env-var indirection`;
+    }
     const gate = resolveInWorkspace(tok, 'execute');
     if (!gate.ok) return gate.reason;
   }

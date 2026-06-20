@@ -112,6 +112,7 @@ export const jsRunner: GrepRunner = async (req) => {
     includeHidden: false,
     maxEntries: 50000,
     ignore,
+    excludeSymlinks: true, // a symlink-to-secret must not be read via the content scan
   });
 
   const hits: GrepHit[] = [];
@@ -120,6 +121,9 @@ export const jsRunner: GrepRunner = async (req) => {
     if (ent.type !== 'file') continue;
     if (BINARY_EXTENSIONS.has(extname(ent.abs).toLowerCase())) continue;
     if (glob && !glob.match(ent.rel)) continue;
+    // Per-file secret gate (mirrors read_file): canonicalize realpaths the entry,
+    // so even a symlink that slipped through is rejected if it lands on a secret.
+    if (!resolveInWorkspace(ent.abs, 'read').ok) continue;
 
     let text: string;
     try {

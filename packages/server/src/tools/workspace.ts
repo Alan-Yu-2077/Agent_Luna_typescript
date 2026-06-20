@@ -54,32 +54,72 @@ function home(): string {
   return Bun.env['HOME'] ?? homedir();
 }
 
+// Home-relative secret locations as path-segment arrays — the single source for
+// BOTH the absolute blocklist (secretDirs/secretFiles, resolved under $HOME) AND
+// the env-indirection tail check (isSecretTailPath), which matches the same
+// segments regardless of how the absolute prefix was produced.
+const SECRET_DIR_SEGMENTS: string[][] = [
+  ['.ssh'],
+  ['.aws'],
+  ['.gnupg'],
+  ['.config', 'gcloud'],
+  ['.password-store'],
+  ['Library', 'Keychains'],
+  // browser profile dirs (cookies, saved passwords, session tokens)
+  ['Library', 'Application Support', 'Google', 'Chrome'],
+  ['Library', 'Application Support', 'Firefox'],
+  ['.config', 'google-chrome'],
+  ['.mozilla', 'firefox'],
+];
+const SECRET_FILE_SEGMENTS: string[][] = [['.docker', 'config.json'], ['.npmrc'], ['.netrc']];
+
 // Secret directories: any path *inside* these is rejected for every access.
 function secretDirs(): string[] {
   const h = home();
-  return [
-    join(h, '.ssh'),
-    join(h, '.aws'),
-    join(h, '.gnupg'),
-    join(h, '.config', 'gcloud'),
-    join(h, '.password-store'),
-    join(h, 'Library', 'Keychains'),
-    // browser profile dirs (cookies, saved passwords, session tokens)
-    join(h, 'Library', 'Application Support', 'Google', 'Chrome'),
-    join(h, 'Library', 'Application Support', 'Firefox'),
-    join(h, '.config', 'google-chrome'),
-    join(h, '.mozilla', 'firefox'),
-  ];
+  return SECRET_DIR_SEGMENTS.map((seg) => join(h, ...seg));
 }
 
 // Secret single files: exact-path rejects for every access.
 function secretFiles(): string[] {
   const h = home();
-  return [
-    join(h, '.docker', 'config.json'),
-    join(h, '.npmrc'),
-    join(h, '.netrc'),
-  ];
+  return SECRET_FILE_SEGMENTS.map((seg) => join(h, ...seg));
+}
+
+function endsWithSegs(hay: string[], needle: string[]): boolean {
+  if (needle.length === 0 || needle.length > hay.length) return false;
+  const off = hay.length - needle.length;
+  return needle.every((s, i) => hay[off + i] === s);
+}
+
+function containsSegs(hay: string[], needle: string[]): boolean {
+  if (needle.length === 0 || needle.length > hay.length) return false;
+  for (let i = 0; i + needle.length <= hay.length; i++) {
+    if (needle.every((s, j) => hay[i + j] === s)) return true;
+  }
+  return false;
+}
+
+// Does a raw path TOKEN (from shell command text) name a secret location by its
+// TAIL, regardless of how the absolute prefix is produced? Catches env-var
+// indirection — `$HOME/.aws/credentials`, `${HOME}/.ssh/id_ed25519` — that the
+// absolute resolveInWorkspace blocklist misses because the resolved prefix isn't
+// the real $HOME. Matches a secret-dir segment sequence anywhere, or a
+// secret-file / secret-basename tail. Segment-exact, so `/project/.aws-config`
+// (segment `.aws-config` ≠ `.aws`) is not over-blocked.
+export function isSecretTailPath(token: string): boolean {
+  const segs = token
+    .split(/[/\\]+/)
+    .filter((s) => s.length > 0)
+    .map(fold);
+  if (segs.length === 0) return false;
+  if (isSecretBasename(segs[segs.length - 1]!)) return true;
+  for (const fileSeg of SECRET_FILE_SEGMENTS) {
+    if (endsWithSegs(segs, fileSeg.map(fold))) return true;
+  }
+  for (const dirSeg of SECRET_DIR_SEGMENTS) {
+    if (containsSegs(segs, dirSeg.map(fold))) return true;
+  }
+  return false;
 }
 
 // Secret filename / suffix patterns (matched on the basename), rejected for every

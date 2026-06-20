@@ -73,6 +73,10 @@ export type WalkOptions = {
   includeHidden: boolean;
   maxEntries: number;
   ignore: IgnoreMatcher;
+  // Security-sensitive callers (grep's content scan) skip symlinked entries
+  // entirely, so a symlink planted in the tree can't surface a file outside it.
+  // Mirrors ripgrep's default (no --follow). Default false (list_files shows them).
+  excludeSymlinks?: boolean;
 };
 
 // Breadth-first walk yielding entries until maxEntries, then setting truncated.
@@ -106,6 +110,7 @@ export async function walk(
       const abs = join(dir, ent.name);
       const rel = relative(root, abs) || ent.name;
       if (opts.ignore(rel, ent.isDir)) continue;
+      if (opts.excludeSymlinks && ent.isSymlink) continue;
 
       const type: 'file' | 'dir' = ent.isDir ? 'dir' : 'file';
       if (entries.length >= opts.maxEntries) {

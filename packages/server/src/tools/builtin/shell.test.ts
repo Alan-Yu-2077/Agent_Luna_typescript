@@ -123,6 +123,30 @@ describe('shell — sandbox / cwd', () => {
     expect(lastReq).toBeNull();
   });
 
+  // v0.20.1 — env-var indirection cannot launder a secret directory: the captured
+  // token (`/.aws/credentials`) resolves outside the real $HOME, so only the
+  // tail-segment check catches these.
+  for (const command of [
+    'cat $HOME/.aws/credentials',
+    'cat ${HOME}/.ssh/id_ed25519',
+    'cat $HOME/.config/gcloud/credentials.db',
+    'cat $HOME/.docker/config.json',
+    'cat $HOME/.gnupg/secring.gpg',
+  ]) {
+    test(`env-indirection secret read is rejected: ${command}`, async () => {
+      setSpawnerForTests(fakeSpawner({ stdout: 'x' }));
+      const e = await run({ command });
+      expect(e.kind).toBe('err');
+      expect(lastReq).toBeNull();
+    });
+  }
+
+  test('a non-secret path with a secret-like substring is NOT over-blocked', async () => {
+    setSpawnerForTests(fakeSpawner({ stdout: 'x' }));
+    const e = await run({ command: 'cat /tmp/.aws-notes/readme.txt' }); // .aws-notes ≠ .aws
+    expect(e.kind).toBe('ok');
+  });
+
   test('a non-existent cwd (not a directory) is refused', async () => {
     setSpawnerForTests(fakeSpawner({ stdout: 'x' }));
     const e = await run({ command: 'echo hi', cwd: join(tmp, 'does-not-exist') });
