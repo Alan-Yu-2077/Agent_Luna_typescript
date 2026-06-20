@@ -4,12 +4,14 @@ Forward development plan for the TypeScript rewrite. Each initiative is a folder
 self-contained version plans, executed one at a time. Version numbers reserve across initiatives so
 they never overlap.
 
-> **Main head: v0.18.4** (on `main`). **Initiatives 8–11 all ✅ shipped + merged**: code-agent capability
-> (v0.15.x), audit remediation (v0.16.x), memory-depth correction (v0.17.x), and **web tools (Initiative 11,
+> **Main head: v0.19.2** (on `main`). **Initiatives 8–12 all ✅ shipped + merged**: code-agent capability
+> (v0.15.x), audit remediation (v0.16.x), memory-depth correction (v0.17.x), **web tools (Initiative 11,
 > v0.18.0–v0.18.3)** — `web_search` + a DNS-**pinned** SSRF-guarded `web_fetch` + the standing injection
-> defense + citations, default-on. Plus C-side patches v0.17.2/v0.17.3 (memory) and v0.18.4 (a top-level
-> text leak no longer stored as the reply). **Next: Initiative 12 — time perception** (v0.19.0–v0.19.2).
-> 635 tests green, `tsc` clean ×3.
+> defense + citations, default-on — and **time perception (Initiative 12, v0.19.0–v0.19.2)** — cache-safe
+> passive time injection + memory temporal grounding + bounded subjective time, default-on. Plus C-side
+> patches v0.17.2/v0.17.3 (memory) and v0.18.4 (a top-level text leak no longer stored as the reply).
+> **Next: Initiative 13 — deep-audit remediation** (v0.20.0–v0.20.9): fix the 45 adversarially-confirmed
+> findings from the 2026-06-20 26-domain line-by-line audit. 667 tests green, `tsc` clean ×3.
 > **Initiatives 1, 1.5, 2, 3, 4, 5, 6 all ✅ complete.** The rewrite now has the full stack: the agent
 > brain + three-layer memory + dream consolidation + proactive agency, **and the body** — a redesigned
 > cute UI (chat left / model right, light-blue stripes + lace), the live Live2D **yumi** avatar with 14
@@ -41,6 +43,7 @@ they never overlap.
 | 10 | v0.17.0 – v0.17.1 | **Memory depth correction** — the **owner's design correction** (PR #3, all claims code-confirmed), target design settled with the owner after a SOTA review: the shipped L1 window is ~4–9 turns (a 24-message cap) and diaries are written but **never injected**. Restore depth as a **memory gradient** — a **~100 clean-turn verbatim window** (`LUNA_L1_RECENT_TURNS` 40–150; affordable because v0.16.3 makes a turn ≈ 200 tokens) + **structured bounded compression** + **importance anchors** (v0.17.0) + the **diary as the injected cross-day/week layer** (standing digest + recall candidates; monthly; recency×importance×relevance ranking — v0.17.1; amend LD #12). Ordered after Init 9 by *dependency* (clean history + efficiency fixes make the deep window cheap), not by priority. | [`memory-depth-2026-06/`](memory-depth-2026-06/) | ✅ shipped 2026-06-16 (2 versions) |
 | 11 | v0.18.0 – v0.18.2 | **Web tools (agent-side networking)** — give Luna the open web: `web_search` (client-side, provider abstraction, Tavily default; the Python `web_search` ported + the *"嘴上说手没动"* defection guard) — v0.18.0; `web_fetch` + the **SSRF/extraction safety core** (deny-list IP guard + redirect re-validation + DNS-rebinding pin + Readability/Turndown extraction + `<untrusted_content>` delimiting) — v0.18.1; then **integration** — the search→fetch loop, standing injection system-rule + read/write boundary, citation surfacing, optional fetch cache, measured + **default-flipped on** — v0.18.2. Client-side because the yunwu gateway strips Anthropic's native server tools. | [`web-tools-2026-06/`](web-tools-2026-06/) | ✅ shipped 2026-06-16 |
 | 12 | v0.19.0 – v0.19.2 | **Time perception** — give Luna a real sense of time (she has only a pull `time_now` tool today, so she drifts — calling an hour-ago event "yesterday"). Layered, from a 2023–2026 SOTA review: **(A)** cache-safe **passive time injection** in the per-turn uncached tail (local time + daypart + TS-precomputed elapsed-since-last + session bucket) — v0.19.0; **(B)** **memory temporal grounding** — relative-time labels + chronological order on recalled candidates, reusing Init 10's GA recall ranking — v0.19.1; **(C)** a bounded **subjective-time** layer (daypart-mood + felt absence) wired into the dream/proactive cycle, warmth-not-guilt — v0.19.2. Core rule: do all temporal arithmetic in TS, hand Claude labeled facts (benchmarks show LLMs can't reliably compute "how long ago"). Ports + beats Python's `temporal_reasoning` (adds B + cache-safe placement). | [`time-perception-2026-06/`](time-perception-2026-06/) | ✅ shipped 2026-06-17 (3 versions) |
+| 13 | v0.20.0 – v0.20.9 | **Deep-audit remediation** — fix the **45 adversarially-confirmed findings** (6 high / 30 medium / 9 medium→low) from the 2026-06-20 26-domain line-by-line audit (78 agents, every source file + sibling tests read in full, each serious finding independently re-verified). Risk-ordered, independently-shippable slices: the **shell/verify safety-gate cluster** (argv-spawn the verify tools to kill command-injection + the deny-gate bypass, broaden the deny-regex, firewall the enforcer files, close the `$HOME` secret-path indirection + grep symlink-to-secret, real process-tree kill + abort + tree-sitter parser free — v0.20.0–v0.20.2), then **user-facing correctness** (IME-safe Enter for Chinese input, wire barge-in, `formatGap` "Nh 60m", `LUNA_TZ` brick — v0.20.3–v0.20.4), then **memory/data integrity** (recall diary-drop + starvation + embedding dim guard, keep-newest-turns, empty-digest guard, atomic writes, fuzzy uniqueness — v0.20.5–v0.20.7), then **resilience** (trace-flush guard, turn abort on disconnect, keepalive ping, TTS latch self-heal — v0.20.8), then **contract/config/test-debt** (dead schema prune, `.env.example`, the untested SSRF DNS-pin, cosmetic UI nits — v0.20.9). Distinct from Initiative 9 (the v0.16.x PR#1/#2 remediation); this is the v0.19.2 full-tree pass. | [`deep-audit-remediation-2026-06/`](deep-audit-remediation-2026-06/) | 🟡 PLANNED |
 
 ## Ordering philosophy
 
@@ -248,3 +251,28 @@ warmth-not-guilt guardrail). See [`time-perception-2026-06/`](time-perception-20
 | v0.19.0 | [A — passive time injection](time-perception-2026-06/v0.19.0-passive-time-injection.md) | Low–Med | TS-computed time block (local time + day-of-week + daypart + **elapsed-since-last** + **session bucket**) pushed into the per-turn **uncached** user message; L1 clause (inform tone, don't announce, don't self-compute). Kills the "yesterday" drift. Flag `LUNA_TIME_AWARE` |
 | v0.19.1 | [B — memory temporal grounding](time-perception-2026-06/v0.19.1-memory-temporal-grounding.md) | Medium | `renderRecallBlock` renders a **relative-time label** (`3 days ago`/`this morning`) per recalled candidate from its `t_ms` + **chronological** order; reuses Init 10's GA recall ranking. The real fix for dating past events. Flag `LUNA_RECALL_TIME_LABELS` |
 | v0.19.2 | [C — subjective time + close](time-perception-2026-06/v0.19.2-subjective-time-close.md) | Medium | bounded **daypart-mood + felt-absence** signal (code-computed, suggestive) threaded into the dream/proactive framing; **warmth-not-guilt** L1 guardrail; measure (cache hit-rate unchanged) + **default-flip** A/B/C on — **Initiative 12 ✅**. Flag `LUNA_TIME_SUBJECTIVE`. (Option D — bi-temporal memory — deferred.) |
+
+## Initiative 13 — Deep-audit remediation (v0.20.0 – v0.20.9) — 🟡 PLANNED
+
+Remediates the **45 adversarially-confirmed findings** from the 2026-06-20 26-domain line-by-line deep
+audit (78 agents read every source file + sibling tests in full; each serious finding was independently
+re-verified by a second agent, refuting 6 false positives incl. a mis-flagged "high"). Baseline at audit
+time: `tsc` clean ×3, **667/667 tests green** — the rewrite is structurally sound; these are correctness,
+safety-gate, resource, and contract fixes, no new features. Risk-ordered, each version independently
+shippable. Distinct from **Initiative 9** (the v0.16.x PR#1/#2 remediation). Governing context: Luna is
+single-user / model-is-sole-actor / no-root-jail-by-owner-decision, so the "security" fixes harden
+safety gates the model can trip (LD #10 deny-regex, LD #14 evaluator firewall), not remote-attacker
+holes. See [`deep-audit-remediation-2026-06/`](deep-audit-remediation-2026-06/).
+
+| Version | Plan | Risk | Theme |
+|---|---|---|---|
+| v0.20.0 | [Shell deny-gate integrity](deep-audit-remediation-2026-06/v0.20.0-shell-deny-gate-integrity.md) | High | argv-spawn `typecheck`/`run_tests`/`lint` (kill command-injection + the deny-gate bypass), broaden the deny-regex (`find -delete`, more interpreters, intermediate-pipe, empty-quote), add the enforcer files to `evaluatorFiles()`. Bypass strings added to the tests first |
+| v0.20.1 | [Secret-blocklist hardening](deep-audit-remediation-2026-06/v0.20.1-secret-blocklist-hardening.md) | Medium | refuse `$HOME`/`${VAR}`/backtick path indirection to secret dirs, per-file `resolveInWorkspace` in grep's JS fallback, symlink-escape gate in `fsScan.walk` |
+| v0.20.2 | [Subprocess & resource cleanup](deep-audit-remediation-2026-06/v0.20.2-subprocess-resource-cleanup.md) | Medium | real process-tree kill (own group / descendant enumeration), thread abort into grep/find_symbol/repo_map, free the tree-sitter `Parser`, clear escalation timers |
+| v0.20.3 | [Frontend input & interrupt](deep-audit-remediation-2026-06/v0.20.3-frontend-input-interrupt.md) | Low–Med | IME-composition Enter guard (Chinese input), wire barge-in (`audio.stop()` on new turn) + abortable TTS fetch/decode, finalize the text-mode reply bubble |
+| v0.20.4 | [Temporal correctness](deep-audit-remediation-2026-06/v0.20.4-temporal-correctness.md) | Low | `formatGap` "Nh 60m" carry fix, validate `LUNA_TZ` (degrade-not-brick) |
+| v0.20.5 | [Recall correctness](deep-audit-remediation-2026-06/v0.20.5-recall-correctness.md) | Low–Med | `recall` timeline includes diary, scope pushed into `retrieve()` (no starvation), embedding dimension guard + model in cache key |
+| v0.20.6 | [Memory fold & summarization integrity](deep-audit-remediation-2026-06/v0.20.6-memory-fold-integrity.md) | Medium | `loadSession` keeps newest turns, `maybeFold` empty-digest guard, drop adaptive thinking from `complete()`, dream salience length check |
+| v0.20.7 | [Edit & code-map correctness](deep-audit-remediation-2026-06/v0.20.7-edit-codemap-correctness.md) | Low–Med | atomic temp+rename writes, fuzzy multi-window uniqueness fix, `isExported` class-method fix |
+| v0.20.8 | [Resilience & lifecycle](deep-audit-remediation-2026-06/v0.20.8-resilience-lifecycle.md) | Low–Med | guard off-path trace flush, turn abort on disconnect, continuation `.unref()`+cancel, wakeGate anti-repeat; client keepalive ping, reconnect stability window, `warmUpTts` timeout, TTS latch self-heal |
+| v0.20.9 | [Contract, config & test-debt](deep-audit-remediation-2026-06/v0.20.9-contract-config-testdebt.md) | Low | prune dead protocol schemas + tighten `Citation.url`/`ToolEvent.tool_name`, `.env.example` + `.prettierignore`, the **untested SSRF DNS-pin** + provider/`fsScan` tests, cosmetic UI nits — **Initiative 13 ✅** |
