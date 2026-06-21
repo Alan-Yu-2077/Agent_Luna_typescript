@@ -31,6 +31,7 @@ import { devChatHandler } from './devchat/devchat';
 import { setMemoryDb } from './memory/sessionStore';
 import { initCustomSqlite } from './memory/recall/vecRuntime';
 import { bootReconcile } from './dream/dreamState';
+import { startWeatherRefresh } from './tools/web/weather/snapshot';
 
 const port = Number(process.env['LUNA_PORT'] ?? 8787);
 
@@ -115,6 +116,10 @@ if (Bun.env['ANTHROPIC_API_KEY']) {
   // unless LUNA_PROACTIVE=1 (re-read per tick, so the kill switch toggles
   // without a restart). Bubbles push to all connected sockets.
   startScheduler({ provider, registry, dreamLlm, emit: broadcast });
+  // Ambient weather (Initiative 14, v0.21.1): a .unref()'d background refresh of
+  // the snapshot parse_input reads synchronously. No-op unless LUNA_WEATHER_AMBIENT=1
+  // and LUNA_LAT_LON is set; never fetches on the reactive path.
+  startWeatherRefresh();
 } else {
   console.warn('[luna-server] ANTHROPIC_API_KEY not set — chat.send disabled');
 }

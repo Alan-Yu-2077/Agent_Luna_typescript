@@ -29,6 +29,8 @@ import { loadPersona } from '../persona/loader';
 import { renderHumanityBlock } from '../persona/humanity';
 import { renderL1Contract } from '../persona/l1Contract';
 import { buildTimeBlock, resolveTz, timeAwareEnabled } from './temporalContext';
+import { buildWeatherBlock, weatherAmbientEnabled } from './weatherContext';
+import { getSnapshot } from '../tools/web/weather/snapshot';
 import { memoryEpoch } from '../memory/epoch';
 import { cleanHistoryEnabled, stripThinking } from '../memory/cleanHistory';
 import { WAKE_SCENE_BLOCK } from '../persona/scene';
@@ -111,7 +113,14 @@ export function buildSystemPrompt(
   // ride here too (gated, stable per process — only the per-turn time facts go in
   // the uncached user tail, never here).
   if (Bun.env['LUNA_L1_CONTRACT'] !== '0')
-    parts.push(renderL1Contract(webSearchMounted, webFetchMounted, timeAwareEnabled()));
+    parts.push(
+      renderL1Contract(
+        webSearchMounted,
+        webFetchMounted,
+        timeAwareEnabled(),
+        weatherAmbientEnabled(),
+      ),
+    );
   // Standing prompt-injection defense (Initiative 11, v0.18.2): when EITHER web
   // tool is mounted, the cached core carries the rule that names the
   // <untrusted_content> envelope and tells the model it is data, not orders
@@ -253,6 +262,18 @@ const graph: Graph<TurnState, TurnNode> = {
         });
       } catch (e) {
         console.warn('[time] buildTimeBlock failed — omitting the time block:', e);
+      }
+    }
+    // Initiative 14 (v0.21.1): hand her the current weather the same way — a
+    // TS-formatted snapshot read SYNCHRONOUSLY from the background cache, pushed
+    // into the UNCACHED user message (the snapshot is volatile → never the cached
+    // system block). No network call on the reactive path; a cold/stale cache omits it.
+    if (weatherAmbientEnabled()) {
+      try {
+        const snap = getSnapshot();
+        if (snap) blocks.push({ type: 'text', text: buildWeatherBlock(snap) });
+      } catch (e) {
+        console.warn('[weather] buildWeatherBlock failed — omitting the weather block:', e);
       }
     }
     blocks.push({ type: 'text', text: s.userText });

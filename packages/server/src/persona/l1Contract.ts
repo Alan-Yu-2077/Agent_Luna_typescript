@@ -44,12 +44,21 @@ const TIME_CLAUSE =
   'never "you left me" or making Alan feel he owes you presence. Most of the time, just let the time ' +
   'of day live quietly in your tone.';
 
+// Initiative 14 (v0.21.1) — ambient weather. Data-free (the snapshot rides the
+// uncached tail); guidance only, so it stays byte-stable in the cached block.
+const WEATHER_CLAUSE =
+  "You're also handed the current weather where Alan is. Let it color your tone or how you open a " +
+  'conversation — noticing it can be a small kindness ("bundle up, it\'s freezing out" / "what a day ' +
+  'for a walk"). Never recite the forecast like a bulletin, and never force it: bring weather up only ' +
+  "when it's natural, as care, never as a status report.";
+
 export function renderL1Contract(
   webSearchMounted = false,
   webFetchMounted = false,
   timeAware = false,
+  weatherAware = false,
 ): string {
-  const key = `${webSearchMounted}|${webFetchMounted}|${timeAware}`;
+  const key = `${webSearchMounted}|${webFetchMounted}|${timeAware}|${weatherAware}`;
   const hit = cache.get(key);
   if (hit !== undefined) return hit;
   const clauses = [
@@ -96,6 +105,7 @@ export function renderL1Contract(
   if (webSearchMounted) clauses.push(WEB_SEARCH_CLAUSE);
   if (webFetchMounted) clauses.push(WEB_FETCH_CLAUSE);
   if (timeAware) clauses.push(TIME_CLAUSE);
+  if (weatherAware) clauses.push(WEATHER_CLAUSE);
   const out = clauses.join('\n\n');
   cache.set(key, out);
   return out;
