@@ -1,7 +1,9 @@
 # Initiative 14 — Weather perception
 
-> **Status: PLANNED.** Order 14 (next, after Initiative 13 ✅ deep-audit remediation). Version range
-> **v0.21.0 – v0.21.2** (3 versions). Master index: [`../README.md`](../README.md).
+> **Status: ✅ SHIPPED 2026-06-21** (branch `feat/weather-perception`, 771 tests green; A+B+C
+> default-on, **location-gated** — dormant until `LUNA_LAT_LON` is set). Order 14 (after Initiative 13 ✅
+> deep-audit remediation). Version range **v0.21.0 – v0.21.2** (3 versions). Master index:
+> [`../README.md`](../README.md).
 > Source: owner request (a location-based weather tool **and** natural proactive mention — e.g. the
 > opening conversation after a night) + a Phase-A fact verification (7 parallel verifiers over the tool
 > registry, `temporalContext`, the proactive opening, the prompt-cache invariant, the Python parity
@@ -146,9 +148,9 @@ data spine (A — the fetch client + location resolver)** from the **cache-sensi
 
 | Plan | Version | Theme | Risk | Depends | Status |
 |---|---|---|---|---|---|
-| [v0.21.0](v0.21.0-weather-tool.md) | v0.21.0 | **Weather tool + location config** — `LUNA_LAT_LON` resolver (degrade like `resolveTz`); a no-key Open-Meteo client (WMO-code map, `assertPublicUrl` SSRF-validate + plain JSON GET, soft-fail, test seam); a model-callable `weather` pull tool registered in the 3 places. Flag `LUNA_WEATHER` (default-off) | Low–Med | nothing | PLANNED |
-| [v0.21.1](v0.21.1-ambient-weather.md) | v0.21.1 | **Passive ambient awareness** — a TTL-cached, background-refreshed snapshot (reusing the v0.21.0 client) read **synchronously** and formatted by a pure `buildWeatherBlock` pushed into the **uncached** tail next to `buildTimeBlock`; a stable `WEATHER_CLAUSE` in the cached contract. She *knows* without a tool call. Flag `LUNA_WEATHER_AMBIENT` (default-off) | Medium | v0.21.0 | PLANNED |
-| [v0.21.2](v0.21.2-proactive-weather-close.md) | v0.21.2 | **Proactive weather in the opening + close** — the `afterANightOpening` boolean (from existing `temporalContext` helpers) gates a bounded `weatherNoteFor()` suggestion woven into `framing()` after the felt-absence clause (morning/after-overnight only); the "care, not forecast" guardrail; measure cache-hit-rate unchanged + **default-flip A/B/C on**; close. Flag `LUNA_WEATHER_PROACTIVE` (default-off → flip) | Medium | v0.21.0, v0.21.1 | PLANNED |
+| [v0.21.0](v0.21.0-weather-tool.md) | v0.21.0 | **Weather tool + location config** — `LUNA_LAT_LON` resolver (degrade like `resolveTz`); a no-key Open-Meteo client (WMO-code map, `assertPublicUrl` SSRF-validate + plain JSON GET, soft-fail, test seam); a model-callable `weather` pull tool registered in the 3 places. Flag `LUNA_WEATHER` (default-off) | Low–Med | nothing | ✅ shipped |
+| [v0.21.1](v0.21.1-ambient-weather.md) | v0.21.1 | **Passive ambient awareness** — a TTL-cached, background-refreshed snapshot (reusing the v0.21.0 client) read **synchronously** and formatted by a pure `buildWeatherBlock` pushed into the **uncached** tail next to `buildTimeBlock`; a stable `WEATHER_CLAUSE` in the cached contract. She *knows* without a tool call. Flag `LUNA_WEATHER_AMBIENT` (default-off) | Medium | v0.21.0 | ✅ shipped |
+| [v0.21.2](v0.21.2-proactive-weather-close.md) | v0.21.2 | **Proactive weather in the opening + close** — the `afterANightOpening` boolean (from existing `temporalContext` helpers) gates a bounded `weatherNoteFor()` suggestion woven into `framing()` after the felt-absence clause (morning/after-overnight only); the "care, not forecast" guardrail; measure cache-hit-rate unchanged + **default-flip A/B/C on**; close. Flag `LUNA_WEATHER_PROACTIVE` (default-off → flip) | Medium | v0.21.0, v0.21.1 | ✅ shipped |
 
 ## Acceptance criteria for the whole initiative
 
