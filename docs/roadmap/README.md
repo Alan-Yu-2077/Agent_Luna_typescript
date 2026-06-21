@@ -14,6 +14,9 @@ they never overlap.
 > the 45 adversarially-confirmed findings from the 2026-06-20 26-domain line-by-line audit are fixed across
 > 10 risk-ordered versions (all 6 high + the confirmed mediums, red→green regressions; 3 owner-decision
 > items deferred). **735 tests green** (667→735, +68), `tsc` clean ×3. Awaiting merge to `main`.
+> **Next: Initiative 14 — weather perception** (v0.21.0–v0.21.2): a no-key location-based `weather` tool
+> (A) + cache-safe ambient awareness in the uncached tail (B) + a natural after-a-night proactive mention
+> (C) — the Initiative-12 shape, net-new over Python.
 > **Initiatives 1, 1.5, 2, 3, 4, 5, 6 all ✅ complete.** The rewrite now has the full stack: the agent
 > brain + three-layer memory + dream consolidation + proactive agency, **and the body** — a redesigned
 > cute UI (chat left / model right, light-blue stripes + lace), the live Live2D **yumi** avatar with 14
@@ -46,6 +49,7 @@ they never overlap.
 | 11 | v0.18.0 – v0.18.2 | **Web tools (agent-side networking)** — give Luna the open web: `web_search` (client-side, provider abstraction, Tavily default; the Python `web_search` ported + the *"嘴上说手没动"* defection guard) — v0.18.0; `web_fetch` + the **SSRF/extraction safety core** (deny-list IP guard + redirect re-validation + DNS-rebinding pin + Readability/Turndown extraction + `<untrusted_content>` delimiting) — v0.18.1; then **integration** — the search→fetch loop, standing injection system-rule + read/write boundary, citation surfacing, optional fetch cache, measured + **default-flipped on** — v0.18.2. Client-side because the yunwu gateway strips Anthropic's native server tools. | [`web-tools-2026-06/`](web-tools-2026-06/) | ✅ shipped 2026-06-16 |
 | 12 | v0.19.0 – v0.19.2 | **Time perception** — give Luna a real sense of time (she has only a pull `time_now` tool today, so she drifts — calling an hour-ago event "yesterday"). Layered, from a 2023–2026 SOTA review: **(A)** cache-safe **passive time injection** in the per-turn uncached tail (local time + daypart + TS-precomputed elapsed-since-last + session bucket) — v0.19.0; **(B)** **memory temporal grounding** — relative-time labels + chronological order on recalled candidates, reusing Init 10's GA recall ranking — v0.19.1; **(C)** a bounded **subjective-time** layer (daypart-mood + felt absence) wired into the dream/proactive cycle, warmth-not-guilt — v0.19.2. Core rule: do all temporal arithmetic in TS, hand Claude labeled facts (benchmarks show LLMs can't reliably compute "how long ago"). Ports + beats Python's `temporal_reasoning` (adds B + cache-safe placement). | [`time-perception-2026-06/`](time-perception-2026-06/) | ✅ shipped 2026-06-17 (3 versions) |
 | 13 | v0.20.0 – v0.20.9 | **Deep-audit remediation** — fix the **45 adversarially-confirmed findings** (6 high / 30 medium / 9 medium→low) from the 2026-06-20 26-domain line-by-line audit (78 agents, every source file + sibling tests read in full, each serious finding independently re-verified). Risk-ordered, independently-shippable slices: the **shell/verify safety-gate cluster** (argv-spawn the verify tools to kill command-injection + the deny-gate bypass, broaden the deny-regex, firewall the enforcer files, close the `$HOME` secret-path indirection + grep symlink-to-secret, real process-tree kill + abort + tree-sitter parser free — v0.20.0–v0.20.2), then **user-facing correctness** (IME-safe Enter for Chinese input, wire barge-in, `formatGap` "Nh 60m", `LUNA_TZ` brick — v0.20.3–v0.20.4), then **memory/data integrity** (recall diary-drop + starvation + embedding dim guard, keep-newest-turns, empty-digest guard, atomic writes, fuzzy uniqueness — v0.20.5–v0.20.7), then **resilience** (trace-flush guard, turn abort on disconnect, keepalive ping, TTS latch self-heal — v0.20.8), then **contract/config/test-debt** (dead schema prune, `.env.example`, the untested SSRF DNS-pin, cosmetic UI nits — v0.20.9). Distinct from Initiative 9 (the v0.16.x PR#1/#2 remediation); this is the v0.19.2 full-tree pass. | [`deep-audit-remediation-2026-06/`](deep-audit-remediation-2026-06/) | ✅ shipped 2026-06-20 (branch) |
+| 14 | v0.21.0 – v0.21.2 | **Weather perception** — give Luna a sense of the **weather where her person is** + the judgment to mention it *naturally* (care, not forecast); layered like Initiative 12: a no-key **Open-Meteo** model-callable **`weather` pull tool** (A, v0.21.0) — location via an explicit `LUNA_LAT_LON` knob (IP-geolocation is out behind the fake-IP proxy); **passive ambient awareness** — a TTL-cached, background-refreshed snapshot in the per-turn **uncached** tail like the time block (B, v0.21.1); a **proactive weather note** in the after-a-night / morning wake, gated on the existing daypart+new-day signal (C, v0.21.2). Volatile→uncached-tail (cache invariant), off-hot-path (no inline fetch), care-not-forecast guardrail. Net-new (Python has no weather). | [`weather-perception-2026-06/`](weather-perception-2026-06/) | 🟡 PLANNED |
 
 ## Ordering philosophy
 
@@ -254,7 +258,7 @@ warmth-not-guilt guardrail). See [`time-perception-2026-06/`](time-perception-20
 | v0.19.1 | [B — memory temporal grounding](time-perception-2026-06/v0.19.1-memory-temporal-grounding.md) | Medium | `renderRecallBlock` renders a **relative-time label** (`3 days ago`/`this morning`) per recalled candidate from its `t_ms` + **chronological** order; reuses Init 10's GA recall ranking. The real fix for dating past events. Flag `LUNA_RECALL_TIME_LABELS` |
 | v0.19.2 | [C — subjective time + close](time-perception-2026-06/v0.19.2-subjective-time-close.md) | Medium | bounded **daypart-mood + felt-absence** signal (code-computed, suggestive) threaded into the dream/proactive framing; **warmth-not-guilt** L1 guardrail; measure (cache hit-rate unchanged) + **default-flip** A/B/C on — **Initiative 12 ✅**. Flag `LUNA_TIME_SUBJECTIVE`. (Option D — bi-temporal memory — deferred.) |
 
-## Initiative 13 — Deep-audit remediation (v0.20.0 – v0.20.9) — 🟡 PLANNED
+## Initiative 13 — Deep-audit remediation (v0.20.0 – v0.20.9) — ✅ shipped (branch `feat/deep-audit-remediation`)
 
 Remediates the **45 adversarially-confirmed findings** from the 2026-06-20 26-domain line-by-line deep
 audit (78 agents read every source file + sibling tests in full; each serious finding was independently
@@ -278,3 +282,22 @@ holes. See [`deep-audit-remediation-2026-06/`](deep-audit-remediation-2026-06/).
 | v0.20.7 | [Edit & code-map correctness](deep-audit-remediation-2026-06/v0.20.7-edit-codemap-correctness.md) | Low–Med | atomic temp+rename writes, fuzzy multi-window uniqueness fix, `isExported` class-method fix |
 | v0.20.8 | [Resilience & lifecycle](deep-audit-remediation-2026-06/v0.20.8-resilience-lifecycle.md) | Low–Med | guard off-path trace flush, turn abort on disconnect, continuation `.unref()`+cancel, wakeGate anti-repeat; client keepalive ping, reconnect stability window, `warmUpTts` timeout, TTS latch self-heal |
 | v0.20.9 | [Contract, config & test-debt](deep-audit-remediation-2026-06/v0.20.9-contract-config-testdebt.md) | Low | prune dead protocol schemas + tighten `Citation.url`/`ToolEvent.tool_name`, `.env.example` + `.prettierignore`, the **untested SSRF DNS-pin** + provider/`fsScan` tests, cosmetic UI nits — **Initiative 13 ✅** |
+
+## Initiative 14 — Weather perception (v0.21.0 – v0.21.2) — 🟡 PLANNED
+
+Gives Luna a sense of the **weather where her person is** and the judgment to mention it *naturally*
+(care, not forecast) — the layered shape of Initiative 12 (time): a model-callable **`weather` pull
+tool** (A), **passive ambient awareness** injected into the per-turn **uncached** tail like the time
+block (B), and a **proactive weather note** woven into the after-a-night / morning wake (C). Source:
+**Open-Meteo** (free, **no API key**, lat/lon); location is an explicit `LUNA_LAT_LON` knob (degrade
+like `LUNA_TZ`; IP-geolocation is out — the fake-IP proxy reports the exit node). Net-new (Python has
+no weather feature). Governing constraints: weather is **volatile → uncached tail only** (the prompt-
+cache invariant), **no blocking fetch on the reactive path** (a TTL-cached, background-refreshed
+snapshot read synchronously), and **care-not-forecast** (the warmth-not-guilt sibling). See
+[`weather-perception-2026-06/`](weather-perception-2026-06/).
+
+| Version | Plan | Risk | Theme |
+|---|---|---|---|
+| v0.21.0 | [Weather tool + location config](weather-perception-2026-06/v0.21.0-weather-tool.md) | Low–Med | `LUNA_LAT_LON` resolver (degrade like `resolveTz`) + a no-key Open-Meteo client (WMO-code map, `assertPublicUrl` SSRF-validate + plain JSON GET — **not** `safeFetch`, whose text-only gate rejects JSON; soft-fail; test seam) + a `weather` pull tool registered in the 3 places. Flag `LUNA_WEATHER` (off) |
+| v0.21.1 | [Passive ambient awareness](weather-perception-2026-06/v0.21.1-ambient-weather.md) | Medium | a TTL-cached, **background-refreshed** snapshot read **synchronously** + a pure `buildWeatherBlock` pushed into the **uncached** tail next to `buildTimeBlock`; a stable data-free `WEATHER_CLAUSE` in the cached contract. She *knows* without a tool call. Flag `LUNA_WEATHER_AMBIENT` (off) |
+| v0.21.2 | [Proactive weather + close](weather-perception-2026-06/v0.21.2-proactive-weather-close.md) | Medium | the `afterANightOpening` boolean (composed from existing `temporalContext` helpers) gates a bounded `weatherNoteFor()` suggestion in `framing()` after the felt-absence clause (morning only); the care-not-forecast guardrail; measure cache-hit-rate + **default-flip A/B/C on** — **Initiative 14 ✅**. Flag `LUNA_WEATHER_PROACTIVE` (off→flip) |
