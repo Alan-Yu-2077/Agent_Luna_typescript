@@ -4,15 +4,21 @@ import {
   refreshWeather,
   resetWeatherSnapshotForTests,
   setSnapshotForTests,
+  startWeatherRefresh,
 } from './snapshot';
 import { setWeatherFetcher, type WeatherSnapshot } from './openMeteo';
+import {
+  clearRuntimeLocationForTests,
+  setRuntimeLocation,
+} from '../../../turn/temporalContext';
 
-const ENV = ['LUNA_LAT_LON', 'LUNA_WEATHER_TTL_MIN', 'LUNA_WEATHER_UNITS'];
+const ENV = ['LUNA_LAT_LON', 'LUNA_WEATHER_TTL_MIN', 'LUNA_WEATHER_UNITS', 'LUNA_WEATHER_AMBIENT'];
 const saved: Record<string, string | undefined> = {};
 
 beforeEach(() => {
   for (const k of ENV) saved[k] = Bun.env[k];
   resetWeatherSnapshotForTests();
+  clearRuntimeLocationForTests();
 });
 afterEach(() => {
   for (const k of ENV) {
@@ -20,6 +26,7 @@ afterEach(() => {
     else Bun.env[k] = saved[k];
   }
   resetWeatherSnapshotForTests();
+  clearRuntimeLocationForTests();
   setWeatherFetcher(null);
 });
 
@@ -75,6 +82,19 @@ describe('weather snapshot cache', () => {
       throw new Error('network down');
     });
     await refreshWeather();
+    expect(getSnapshot()?.temp).toBe(18);
+  });
+
+  test('startWeatherRefresh warms the snapshot when a runtime (GPS) location is set after boot', async () => {
+    // The v0.21.4 fix: a location that arrives post-boot (client.geo) must still
+    // start the background refresher (boot-time startWeatherRefresh no-op'd with
+    // no location). No LUNA_LAT_LON — only the runtime GPS location is set.
+    Bun.env['LUNA_WEATHER_AMBIENT'] = '1';
+    setRuntimeLocation(31.23, 121.47);
+    setWeatherFetcher(async () => CANNED);
+    expect(getSnapshot()).toBeNull();
+    startWeatherRefresh();
+    await Bun.sleep(5); // let the fire-and-forget initial refresh resolve
     expect(getSnapshot()?.temp).toBe(18);
   });
 

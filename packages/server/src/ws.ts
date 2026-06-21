@@ -1,6 +1,7 @@
 import type { ServerWebSocket } from 'bun';
 import { ClientEvent, ToolName, assertNever } from '@luna/protocol';
 import { setRuntimeLocation } from './turn/temporalContext';
+import { startWeatherRefresh } from './tools/web/weather/snapshot';
 import type { ServerEvent, ToolEvent } from '@luna/protocol';
 import { outbound } from './outbound';
 import { dispatchToolCalls } from './tools/dispatcher';
@@ -152,6 +153,10 @@ export function handleMessage(
       // GPS from the browser (Initiative 14, v0.21.3) — the user's actual location,
       // used for weather ahead of the LUNA_LAT_LON env fallback.
       setRuntimeLocation(event.lat, event.lon);
+      // v0.21.4: the location usually arrives AFTER boot (the GPS grant), when
+      // startWeatherRefresh already no-op'd for lack of a location — (re)start the
+      // background refresher now (idempotent) so the ambient snapshot actually warms.
+      startWeatherRefresh();
       return;
     case 'dev.dispatch_tool':
       if (Bun.env['LUNA_DEV_TOOLS'] !== '1') {
