@@ -31,8 +31,8 @@ export const ToolName = z.enum([
   // v0.18.3 pinned-lookup DNS fix — the rebinding defense narrows, not closes).
   'web_fetch',
   // Initiative 14 (v0.21.0) — current weather for the configured location
-  // (Open-Meteo, no key). Read-only; OPT-IN (default off, LUNA_WEATHER=1) until
-  // the Initiative 14 close (v0.21.2) flips it on.
+  // (Open-Meteo, no key). Read-only; default ON since v0.21.2 but gated on a
+  // configured LUNA_LAT_LON (dormant until set).
   'weather',
 ]);
 export type ToolName = z.infer<typeof ToolName>;

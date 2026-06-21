@@ -4,12 +4,21 @@
 // the cached L1 contract. Weather changes through the day, so a per-turn weather
 // string must NEVER enter the cached system block (the prompt-cache invariant).
 
+import { resolveLocation } from './temporalContext';
 import type { WeatherSnapshot } from '../tools/web/weather/openMeteo';
 
-// Master switch for the passive ambient weather layer. Opt-in (default off) until
-// the Initiative 14 close (v0.21.2) flips it on — the time-perception pattern.
+// Default ON since v0.21.2 (Initiative 14 close), but GATED on a configured
+// location — weather is dormant (no clause, no injection) until LUNA_LAT_LON is
+// set, then it just works. LUNA_WEATHER_AMBIENT=0 is the off switch.
 export function weatherAmbientEnabled(): boolean {
-  return Bun.env['LUNA_WEATHER_AMBIENT'] === '1';
+  return Bun.env['LUNA_WEATHER_AMBIENT'] !== '0' && resolveLocation() != null;
+}
+
+// Default ON since v0.21.2; same location-gate. Governs the proactive opening
+// weather note, which only fires on an after-a-night / morning wake (see
+// proactiveTurn). LUNA_WEATHER_PROACTIVE=0 is the off switch.
+export function weatherProactiveEnabled(): boolean {
+  return Bun.env['LUNA_WEATHER_PROACTIVE'] !== '0' && resolveLocation() != null;
 }
 
 // Pure, synchronous, format-only — takes an already-fetched snapshot and hands
@@ -26,5 +35,18 @@ export function buildWeatherBlock(s: WeatherSnapshot): string {
   return (
     `Weather where Alan is (${s.label}): ${s.condition}, ${t}${u}${feels} — ` +
     `today's high ${Math.round(s.high)}${u} / low ${Math.round(s.low)}${u}${rain}. Currently ${phase}.`
+  );
+}
+
+// A bounded, ignorable proactive opening note (Initiative 14, v0.21.2) — care,
+// not forecast. Reads the cached snapshot (never fetches); null snapshot → no
+// note. The morning / after-a-night gating lives in proactiveTurn's framing.
+export function weatherNoteFor(snapshot: WeatherSnapshot | null): string | null {
+  if (snapshot == null) return null;
+  const u = snapshot.units === 'fahrenheit' ? '°F' : '°C';
+  return (
+    ` (It's ${snapshot.condition} out (${Math.round(snapshot.temp)}${u}) where Alan is — if you do ` +
+    'reach out, a small weather-aware kindness can be a warm way in (note the cold, the rain, a fine ' +
+    'day), but only if it feels natural, never a forecast or a status report.)'
   );
 }

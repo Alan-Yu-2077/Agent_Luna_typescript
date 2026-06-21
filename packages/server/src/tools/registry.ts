@@ -24,6 +24,7 @@ import { writeFileTool } from './builtin/write_file';
 import { webSearchTool } from './web/web_search';
 import { webFetchTool } from './web/web_fetch';
 import { weatherTool } from './builtin/weather';
+import { resolveLocation } from '../turn/temporalContext';
 
 // Partial: `message` is mounted conditionally (LUNA_MESSAGE_TOOL), so a
 // registry without it must typecheck. Missing tools resolve to tool_not_found
@@ -212,14 +213,15 @@ export function isWebMode(registry: ToolRegistry): boolean {
 // Weather (Initiative 14, v0.21.0) — a no-key Open-Meteo pull tool for the
 // configured location (LUNA_LAT_LON). Read-only ⇒ proactiveRisk:'safe'. A network
 // surface but a single fixed trusted host, validated through assertPublicUrl; no
-// key needed, so the flag alone is the gate. OPT-IN (default OFF, LUNA_WEATHER=1)
-// until E2E-verified; flipped on at the Initiative 14 close (v0.21.2).
+// key needed. Default ON since v0.21.2 (Initiative 14 close) but GATED on a
+// configured location — not mounted until LUNA_LAT_LON is set (the web_search
+// no-key-degrade pattern); LUNA_WEATHER=0 is the off switch.
 export const weatherTools: ToolRegistry = {
   weather: weatherTool,
 };
 
 export function weatherEnabled(): boolean {
-  return Bun.env['LUNA_WEATHER'] === '1';
+  return Bun.env['LUNA_WEATHER'] !== '0' && resolveLocation() != null;
 }
 
 export function withWeather(base: ToolRegistry): ToolRegistry {

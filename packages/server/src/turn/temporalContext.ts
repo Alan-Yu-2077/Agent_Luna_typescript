@@ -206,6 +206,26 @@ export function classifyGap(gapSeconds: number | null, crossesCalendarDay: boole
   return 'same_day';
 }
 
+// Initiative 14 (v0.21.2): "the opening conversation after a night" — a new
+// calendar day + an overnight-or-longer gap + the morning daypart. Composed from
+// the existing helpers (no new arithmetic). The min-gap (default 6h) excludes a
+// trivial chat that just straddled local midnight (classifyGap has no such gate).
+export function afterANightOpening(
+  nowMs: number,
+  lastInteractionMs: number | null,
+  tz = resolveTz(),
+): boolean {
+  if (lastInteractionMs == null) return false;
+  const gapSec = (nowMs - lastInteractionMs) / 1000;
+  const raw = Number(Bun.env['LUNA_NIGHT_MIN_GAP_SEC'] ?? 21_600);
+  const minGap = Number.isFinite(raw) ? raw : 21_600;
+  if (gapSec < minGap) return false;
+  if (classifyDaypart(localParts(nowMs, tz).hour) !== 'morning') return false;
+  const crosses = localDayNumber(nowMs, tz) !== localDayNumber(lastInteractionMs, tz);
+  const bucket = classifyGap(gapSec, crosses);
+  return bucket === 'new_day' || bucket === 'long_away';
+}
+
 // A relative-time label for a past moment, from the LOCAL calendar (v0.19.1 B):
 // just now / this morning / yesterday / 3 days ago / on 2026-06-09 past horizon.
 export function relativeLabel(tMs: number, nowMs: number, tz = resolveTz()): string {

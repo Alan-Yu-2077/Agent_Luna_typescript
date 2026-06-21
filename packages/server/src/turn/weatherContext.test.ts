@@ -15,6 +15,9 @@ beforeEach(() => {
   for (const k of ENV) saved[k] = Bun.env[k];
   resetSessions();
   resetWeatherSnapshotForTests();
+  // v0.21.2: ambient is location-gated — a configured location is the precondition
+  // for the layer being active at all.
+  Bun.env['LUNA_LAT_LON'] = '31.23,121.47';
 });
 afterEach(() => {
   for (const k of ENV) {
@@ -92,13 +95,15 @@ describe('buildWeatherBlock', () => {
 });
 
 describe('weatherAmbientEnabled', () => {
-  test('opt-in: only "1" enables', () => {
+  test('default-on since v0.21.2, gated on a configured location', () => {
+    delete Bun.env['LUNA_WEATHER_AMBIENT'];
+    expect(weatherAmbientEnabled()).toBe(true); // default on when configured
+    Bun.env['LUNA_WEATHER_AMBIENT'] = '0';
+    expect(weatherAmbientEnabled()).toBe(false); // explicit off
     Bun.env['LUNA_WEATHER_AMBIENT'] = '1';
     expect(weatherAmbientEnabled()).toBe(true);
-    Bun.env['LUNA_WEATHER_AMBIENT'] = '0';
-    expect(weatherAmbientEnabled()).toBe(false);
-    delete Bun.env['LUNA_WEATHER_AMBIENT'];
-    expect(weatherAmbientEnabled()).toBe(false);
+    delete Bun.env['LUNA_LAT_LON'];
+    expect(weatherAmbientEnabled()).toBe(false); // no location → dormant
   });
 });
 
