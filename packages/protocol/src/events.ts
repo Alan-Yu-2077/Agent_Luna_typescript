@@ -39,6 +39,16 @@ export const ProactiveFireEvent = z.object({
   type: z.literal('proactive.fire'),
 });
 
+// Browser GPS (Initiative 14, v0.21.3) — navigator.geolocation coords sent once on
+// connect (and again on each reconnect) so the server uses the user's ACTUAL
+// location for weather, ahead of the LUNA_LAT_LON env fallback. Single-user /
+// localhost; range-validated at the schema boundary.
+export const ClientGeoEvent = z.object({
+  type: z.literal('client.geo'),
+  lat: z.number().min(-90).max(90),
+  lon: z.number().min(-180).max(180),
+});
+
 export const ClientEvent = z.discriminatedUnion('type', [
   PingEvent,
   DevDispatchToolEvent,
@@ -46,6 +56,7 @@ export const ClientEvent = z.discriminatedUnion('type', [
   DreamEnterEvent,
   DreamWakeEvent,
   ProactiveFireEvent,
+  ClientGeoEvent,
 ]);
 export type ClientEvent = z.infer<typeof ClientEvent>;
 

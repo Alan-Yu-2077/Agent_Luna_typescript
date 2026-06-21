@@ -1,13 +1,18 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { weatherTool } from './weather';
 import { setWeatherFetcher } from '../web/weather/openMeteo';
-import { resolveLocation } from '../../turn/temporalContext';
+import {
+  clearRuntimeLocationForTests,
+  resolveLocation,
+  setRuntimeLocation,
+} from '../../turn/temporalContext';
 
 const ENV_KEYS = ['LUNA_LAT_LON', 'LUNA_WEATHER_LOCATION', 'LUNA_WEATHER_UNITS'];
 const saved: Record<string, string | undefined> = {};
 
 beforeEach(() => {
   for (const k of ENV_KEYS) saved[k] = Bun.env[k];
+  clearRuntimeLocationForTests();
 });
 afterEach(() => {
   for (const k of ENV_KEYS) {
@@ -15,6 +20,7 @@ afterEach(() => {
     else Bun.env[k] = saved[k];
   }
   setWeatherFetcher(null);
+  clearRuntimeLocationForTests();
 });
 
 const ctx = () => ({ sessionId: 'test', callId: 'c1', abortSignal: new AbortController().signal });
@@ -106,5 +112,13 @@ describe('resolveLocation', () => {
     expect(resolveLocation()).toBeNull();
     Bun.env['LUNA_LAT_LON'] = '200,0';
     expect(resolveLocation()).toBeNull();
+  });
+
+  test('runtime GPS (client.geo) takes precedence over LUNA_LAT_LON', () => {
+    Bun.env['LUNA_LAT_LON'] = '31.23,121.47';
+    setRuntimeLocation(40, -74);
+    expect(resolveLocation()).toMatchObject({ lat: 40, lon: -74 });
+    clearRuntimeLocationForTests();
+    expect(resolveLocation()).toEqual({ lat: 31.23, lon: 121.47 }); // falls back to env
   });
 });

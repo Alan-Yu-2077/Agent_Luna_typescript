@@ -29,6 +29,20 @@ describe('ClientEvent', () => {
     const result = ClientEvent.safeParse({ seq: 1 });
     expect(result.success).toBe(false);
   });
+
+  test('parses a valid client.geo', () => {
+    const result = ClientEvent.safeParse({ type: 'client.geo', lat: 31.23, lon: 121.47 });
+    expect(result.success).toBe(true);
+    if (result.success && result.data.type === 'client.geo') {
+      expect(result.data.lat).toBe(31.23);
+      expect(result.data.lon).toBe(121.47);
+    }
+  });
+
+  test('rejects client.geo with out-of-range coords', () => {
+    expect(ClientEvent.safeParse({ type: 'client.geo', lat: 200, lon: 0 }).success).toBe(false);
+    expect(ClientEvent.safeParse({ type: 'client.geo', lat: 0, lon: 999 }).success).toBe(false);
+  });
 });
 
 describe('ServerEvent', () => {

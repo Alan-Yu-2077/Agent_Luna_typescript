@@ -92,12 +92,27 @@ export function resolveTz(): string {
 
 export type GeoLocation = { lat: number; lon: number; label?: string };
 
-// LUNA_LAT_LON ('lat,lon' decimal) → a validated coordinate, or null when unset
-// or malformed. Read per-call so the knob is live; degrade-not-throw (mirrors
-// resolveTz) — an unconfigured/bad location omits weather rather than guessing or
-// bricking a turn. IP-geolocation is deliberately NOT used (Initiative 14): the
-// deploy host's fake-IP proxy would report the exit node, not the user.
+let runtimeLocation: GeoLocation | null = null;
+
+// Set by the WS handler from the browser's GPS (client.geo, v0.21.3) — the user's
+// ACTUAL location, which takes precedence over the LUNA_LAT_LON env fallback.
+// In-memory: the client re-sends on each reconnect; null until a fix arrives.
+export function setRuntimeLocation(lat: number, lon: number): void {
+  const label = Bun.env['LUNA_WEATHER_LOCATION']?.trim();
+  runtimeLocation = label != null && label.length > 0 ? { lat, lon, label } : { lat, lon };
+}
+
+export function clearRuntimeLocationForTests(): void {
+  runtimeLocation = null;
+}
+
+// Resolve the user's location: GPS (set at runtime by client.geo) first, else the
+// LUNA_LAT_LON env knob ('lat,lon' decimal, validated, degrade-not-throw — an
+// unconfigured/bad value omits weather rather than guessing or bricking a turn).
+// IP-geolocation is deliberately NOT used (Initiative 14): the deploy host's
+// fake-IP proxy would report the exit node, not the user — GPS sidesteps that.
 export function resolveLocation(): GeoLocation | null {
+  if (runtimeLocation != null) return runtimeLocation;
   const raw = Bun.env['LUNA_LAT_LON'];
   if (raw == null || raw.trim().length === 0) return null;
   const parts = raw.split(',').map((s) => s.trim());

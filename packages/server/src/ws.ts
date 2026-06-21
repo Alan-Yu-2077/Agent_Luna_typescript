@@ -1,5 +1,6 @@
 import type { ServerWebSocket } from 'bun';
 import { ClientEvent, ToolName, assertNever } from '@luna/protocol';
+import { setRuntimeLocation } from './turn/temporalContext';
 import type { ServerEvent, ToolEvent } from '@luna/protocol';
 import { outbound } from './outbound';
 import { dispatchToolCalls } from './tools/dispatcher';
@@ -146,6 +147,11 @@ export function handleMessage(
         seq: event.seq,
         server_time_ms: Date.now(),
       });
+      return;
+    case 'client.geo':
+      // GPS from the browser (Initiative 14, v0.21.3) — the user's actual location,
+      // used for weather ahead of the LUNA_LAT_LON env fallback.
+      setRuntimeLocation(event.lat, event.lon);
       return;
     case 'dev.dispatch_tool':
       if (Bun.env['LUNA_DEV_TOOLS'] !== '1') {

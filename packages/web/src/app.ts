@@ -1,6 +1,7 @@
 import { MessageDelivery } from '@luna/protocol';
 import { createController } from './controller';
 import { LunaWsClient, type WsStatus } from './wsClient';
+import { lastGeoFix, requestGeolocation } from './geo';
 import { consoleLive2DSink, noopAudioSink, type AudioSink, type Live2DSink, type Live2DState } from './sinks';
 import { CuteBubbleView } from './ui/cuteBubbleView';
 import { buildLayout } from './ui/layout';
@@ -117,9 +118,19 @@ async function boot(): Promise<void> {
     onStatus: (s) => {
       refs.statusBadge.textContent = STATUS_TEXT[s];
       refs.statusBadge.dataset['status'] = s;
+      // Re-send the cached GPS fix on every (re)connect so a server restart still
+      // gets the location (the server holds it in-memory).
+      if (s === 'open') {
+        const fix = lastGeoFix();
+        if (fix) client.send({ type: 'client.geo', lat: fix.lat, lon: fix.lon });
+      }
     },
   });
   client.connect();
+  // Ask the browser for the user's location (one-time permission prompt). On a fix,
+  // send it (v0.21.3 GPS auto-location); onStatus re-sends on later reconnects.
+  // Silently no-ops if denied/unavailable → the LUNA_LAT_LON env fallback.
+  requestGeolocation((fix) => client.send({ type: 'client.geo', lat: fix.lat, lon: fix.lon }));
 
   function send(): void {
     const text = refs.input.value.trim();
