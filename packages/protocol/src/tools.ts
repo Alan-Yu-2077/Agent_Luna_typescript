@@ -30,6 +30,10 @@ export const ToolName = z.enum([
   // OPT-IN (default off): LUNA_WEB_FETCH=1 mounts it (held opt-in until the
   // v0.18.3 pinned-lookup DNS fix — the rebinding defense narrows, not closes).
   'web_fetch',
+  // Initiative 14 (v0.21.0) — current weather for the configured location
+  // (Open-Meteo, no key). Read-only; OPT-IN (default off, LUNA_WEATHER=1) until
+  // the Initiative 14 close (v0.21.2) flips it on.
+  'weather',
 ]);
 export type ToolName = z.infer<typeof ToolName>;
 

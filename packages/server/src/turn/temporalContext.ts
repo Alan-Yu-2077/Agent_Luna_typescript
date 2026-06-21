@@ -90,6 +90,38 @@ export function resolveTz(): string {
   }
 }
 
+export type GeoLocation = { lat: number; lon: number; label?: string };
+
+// LUNA_LAT_LON ('lat,lon' decimal) → a validated coordinate, or null when unset
+// or malformed. Read per-call so the knob is live; degrade-not-throw (mirrors
+// resolveTz) — an unconfigured/bad location omits weather rather than guessing or
+// bricking a turn. IP-geolocation is deliberately NOT used (Initiative 14): the
+// deploy host's fake-IP proxy would report the exit node, not the user.
+export function resolveLocation(): GeoLocation | null {
+  const raw = Bun.env['LUNA_LAT_LON'];
+  if (raw == null || raw.trim().length === 0) return null;
+  const parts = raw.split(',').map((s) => s.trim());
+  if (parts.length !== 2) {
+    console.warn(`[weather] invalid LUNA_LAT_LON "${raw}" — expected "lat,lon"`);
+    return null;
+  }
+  const lat = Number(parts[0]);
+  const lon = Number(parts[1]);
+  if (
+    !Number.isFinite(lat) ||
+    !Number.isFinite(lon) ||
+    lat < -90 ||
+    lat > 90 ||
+    lon < -180 ||
+    lon > 180
+  ) {
+    console.warn(`[weather] invalid LUNA_LAT_LON "${raw}" — out of range`);
+    return null;
+  }
+  const label = Bun.env['LUNA_WEATHER_LOCATION']?.trim();
+  return label != null && label.length > 0 ? { lat, lon, label } : { lat, lon };
+}
+
 type LocalParts = { year: number; month: number; day: number; hour: number; minute: number };
 
 function localParts(ms: number, tz: string): LocalParts {
