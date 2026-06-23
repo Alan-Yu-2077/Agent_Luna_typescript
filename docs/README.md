@@ -8,6 +8,7 @@ that the same `luna-dev` / `luna-orient` / `luna-roadmap` discipline applies.
 | File | Purpose | When to read |
 |---|---|---|
 | [`REWRITE_CONTEXT.md`](REWRITE_CONTEXT.md) | Audited facts about Python Luna + locked design decisions for v2 + still-open questions | **Read first** on any non-trivial change |
+| [`MEMORY_DESIGN_DIVERGENCE.md`](MEMORY_DESIGN_DIVERGENCE.md) | Owner's correction: L1 window + diary injection diverge from the intended memory design (supersedes LD #12 parts) | Before any memory / L1 / dream work |
 | [`history/DEVELOPMENT.md`](history/DEVELOPMENT.md) | Per-version log of what actually shipped in this TS repo | Truth source for "what version are we on" |
 | [`roadmap/README.md`](roadmap/README.md) | Forward plan: initiatives in execution order with status | Before planning the next version |
 | [`roadmap/<initiative>-YYYY-MM/`](roadmap/) | Self-contained version plans, one folder per initiative | When ready to execute a specific version |
