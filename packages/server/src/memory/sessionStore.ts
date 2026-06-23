@@ -41,6 +41,27 @@ export function loadSession(id: string): PersistedSession | null {
   };
 }
 
+// All persisted session ids — used to warm the in-memory session map at boot
+// (Initiative 14, v0.21.6) so the proactive scheduler considers them after a
+// restart without waiting for the next user message.
+export function listSessionIds(): string[] {
+  if (!db) return [];
+  return (db.prepare('SELECT id FROM sessions').all() as { id: string }[]).map((r) => r.id);
+}
+
+// The t_ms of the most recent NON-proactive (user) L2 turn — restores the
+// proactive idle-gap / deep-absence anchor across a restart (her own proactive
+// turns are lull anchoring, not user activity). null = no user turn persisted.
+export function lastUserTurnMs(sessionId: string): number | null {
+  if (!db) return null;
+  const row = db
+    .prepare(
+      "SELECT t_ms FROM l2_turns WHERE session_id = ? AND turn_id NOT LIKE 'proactive%' ORDER BY t_ms DESC, id DESC LIMIT 1",
+    )
+    .get(sessionId) as { t_ms: number } | null;
+  return row?.t_ms ?? null;
+}
+
 // CAS commit for the L1 fold: only lands if window_low_water is unchanged since
 // the fold snapshotted it. Returns false on a lost race. v0.17.0: the digest is
 // REPLACED (not appended) — the compressor re-derives a bounded structured digest

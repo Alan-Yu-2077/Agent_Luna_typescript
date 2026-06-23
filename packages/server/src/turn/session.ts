@@ -1,6 +1,6 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import { Mutex } from '../tools/mutex';
-import { loadSession } from '../memory/sessionStore';
+import { lastUserTurnMs, listSessionIds, loadSession } from '../memory/sessionStore';
 
 // A single todo item on the session's plan spine (Initiative 8, v0.15.3). The
 // plan is the visible, revisable scaffold for multi-step code work — set/update/
@@ -70,6 +70,20 @@ export function getSession(id: string): Session {
 // kept as a list so the scheduler doesn't hardcode 'default'.
 export function activeSessionIds(): string[] {
   return [...sessions.keys()];
+}
+
+// Boot warm-up (Initiative 14, v0.21.6): load the persisted sessions into the
+// in-memory map so the proactive scheduler — which only iterates activeSessionIds()
+// (the in-memory map) — considers them right after a restart instead of staying
+// dead until the next user message. Restore lastUserMs from the last real user
+// turn so the idle-gap / deep-absence math reflects the true last interaction,
+// not boot time (which would otherwise reset the gap on every restart).
+export function preloadSessions(): void {
+  for (const id of listSessionIds()) {
+    const s = getSession(id);
+    const last = lastUserTurnMs(id);
+    if (last != null) s.lastUserMs = last;
+  }
 }
 
 export function resetSessions(): void {

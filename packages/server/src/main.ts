@@ -32,6 +32,7 @@ import { setMemoryDb } from './memory/sessionStore';
 import { initCustomSqlite } from './memory/recall/vecRuntime';
 import { bootReconcile } from './dream/dreamState';
 import { startWeatherRefresh } from './tools/web/weather/snapshot';
+import { preloadSessions } from './turn/session';
 
 const port = Number(process.env['LUNA_PORT'] ?? 8787);
 
@@ -51,6 +52,10 @@ if (Bun.env['LUNA_PERSIST'] !== '0') {
   setMemoryDb(db);
 }
 bootReconcile();
+// v0.21.6: warm persisted sessions into the in-memory map so the proactive
+// scheduler considers them right after a restart (activeSessionIds() reads the
+// in-memory map) — without this, proactive stayed dead until the next chat.
+preloadSessions();
 console.log(`[luna-server] sqlite ready (schema v${version})`);
 
 const viewerEnabled = Bun.env['LUNA_VIEWER'] !== '0';
