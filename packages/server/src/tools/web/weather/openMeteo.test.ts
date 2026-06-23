@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { buildUrl, fetchWeather, setWeatherFetcher, wmoToCondition } from './openMeteo';
+import { buildUrl, fetchOpenMeteo, setWeatherFetcher, wmoToCondition } from './openMeteo';
 
 afterEach(() => setWeatherFetcher(null));
 
@@ -54,10 +54,10 @@ const CANNED = {
   },
 };
 
-describe('fetchWeather (seam-injected, network-free)', () => {
+describe('fetchOpenMeteo (seam-injected, network-free)', () => {
   test('maps canned Open-Meteo JSON to a WeatherSnapshot', async () => {
     setWeatherFetcher(async () => CANNED);
-    const snap = await fetchWeather(31.23, 121.47, 'Asia/Shanghai', 'Shanghai');
+    const snap = await fetchOpenMeteo(31.23, 121.47, 'Asia/Shanghai', 'Shanghai');
     expect(snap.label).toBe('Shanghai');
     expect(snap.temp).toBe(18.4);
     expect(snap.feelsLike).toBe(17.1);
@@ -72,6 +72,6 @@ describe('fetchWeather (seam-injected, network-free)', () => {
 
   test('a malformed payload throws (caught as soft-fail by the tool)', async () => {
     setWeatherFetcher(async () => ({ nope: true }));
-    await expect(fetchWeather(0, 0, 'UTC', 'x')).rejects.toThrow();
+    await expect(fetchOpenMeteo(0, 0, 'UTC', 'x')).rejects.toThrow();
   });
 });

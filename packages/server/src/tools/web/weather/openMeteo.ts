@@ -137,7 +137,7 @@ export function setWeatherFetcher(fn: RawFetcher | null): void {
 
 export type FetchWeatherOpts = { signal?: AbortSignal; units?: WeatherUnits };
 
-export async function fetchWeather(
+export async function fetchOpenMeteo(
   lat: number,
   lon: number,
   tz: string,

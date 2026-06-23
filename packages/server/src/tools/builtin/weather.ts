@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { defineTool } from '../defineTool';
 import { resolveLocation, resolveTz } from '../../turn/temporalContext';
-import { fetchWeather, type WeatherUnits } from '../web/weather/openMeteo';
+import { fetchWeather } from '../web/weather/weatherProvider';
+import type { WeatherUnits } from '../web/weather/openMeteo';
 
 // weather (Initiative 14, v0.21.0) — a no-key Open-Meteo pull tool for the
 // configured location (LUNA_LAT_LON). Read-only ⇒ proactiveRisk:'safe'. Location

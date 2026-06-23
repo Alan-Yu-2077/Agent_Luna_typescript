@@ -12,13 +12,22 @@ import {
   setRuntimeLocation,
 } from '../../../turn/temporalContext';
 
-const ENV = ['LUNA_LAT_LON', 'LUNA_WEATHER_TTL_MIN', 'LUNA_WEATHER_UNITS', 'LUNA_WEATHER_AMBIENT'];
+const ENV = [
+  'LUNA_LAT_LON',
+  'LUNA_WEATHER_TTL_MIN',
+  'LUNA_WEATHER_UNITS',
+  'LUNA_WEATHER_AMBIENT',
+  'LUNA_WEATHER_PROVIDER',
+];
 const saved: Record<string, string | undefined> = {};
 
 beforeEach(() => {
   for (const k of ENV) saved[k] = Bun.env[k];
   resetWeatherSnapshotForTests();
   clearRuntimeLocationForTests();
+  // .env may carry LUNA_WEATHER_PROVIDER=qweather; these tests drive the Open-Meteo
+  // seam, so pin the provider deterministically.
+  Bun.env['LUNA_WEATHER_PROVIDER'] = 'open-meteo';
 });
 afterEach(() => {
   for (const k of ENV) {

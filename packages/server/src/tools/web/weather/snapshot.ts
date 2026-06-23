@@ -1,6 +1,7 @@
 import { resolveLocation, resolveTz } from '../../../turn/temporalContext';
 import { weatherAmbientEnabled } from '../../../turn/weatherContext';
-import { fetchWeather, type WeatherSnapshot, type WeatherUnits } from './openMeteo';
+import { fetchWeather } from './weatherProvider';
+import type { WeatherSnapshot, WeatherUnits } from './openMeteo';
 
 // Background weather snapshot cache (Initiative 14, v0.21.1). Weather needs a
 // network call — time did not — so the per-turn injection NEVER fetches on the
