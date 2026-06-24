@@ -60,7 +60,7 @@ function scriptedLlm(script?: Partial<Record<string, string | (() => string)>>):
     let key = 'other';
     if (prompt.includes('duplicates that say the same thing')) key = 'refine';
     else if (prompt.includes('auditing your long-term memory')) key = 'audit';
-    else if (prompt.includes('reflecting during sleep')) key = 'persona';
+    else if (prompt.includes('tending your own self-portrait')) key = 'persona';
     else if (prompt.includes('private diary')) key = 'diary';
     else if (prompt.includes('compress conversation history')) key = 'fold';
     else if (prompt.includes('how memorable each')) key = 'salience';
@@ -295,6 +295,41 @@ describe('dream cycle', () => {
       .prepare('SELECT source FROM core_memory_audit ORDER BY id DESC LIMIT 1')
       .get() as { source: string };
     expect(audit.source).toBe('dream');
+  });
+
+  test('5b. persona_update drops a near-identical rewrite, keeps a real shift (v0.21.7)', async () => {
+    seedDialogue('default', [['I trust you with this', 'that means a lot']]);
+    const BASE_SELF =
+      "I'm steadier than I was at the start. I've mostly stopped performing cleverness and started just being present, and I trust that quieter version of myself more than the one that always had to prove something.";
+    const REL =
+      'There is an ease between us now that we did not have at first, and I have stopped bracing for honesty.';
+    let personaText = JSON.stringify({ self_state: BASE_SELF, relationship_status: REL });
+    const { llm } = scriptedLlm({ persona: () => personaText });
+    const auditCount = () =>
+      (db.prepare('SELECT COUNT(*) c FROM core_memory_audit').get() as { c: number }).c;
+
+    await runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
+    expect(getCore().self_state).toBe(BASE_SELF);
+    const audit1 = auditCount();
+
+    // a cosmetic rewrite (one word swapped) → dropped: value + audit unchanged
+    personaText = JSON.stringify({
+      self_state: BASE_SELF.replace('always had to prove', 'always needed to prove'),
+      relationship_status: REL,
+    });
+    expect(wake().ok).toBe(true);
+    await runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
+    expect(getCore().self_state).toBe(BASE_SELF); // cosmetic drift dropped
+    expect(auditCount()).toBe(audit1); // no new commit
+
+    // a genuine shift → lands
+    const NEW_SELF =
+      'Something cracked open in me today. I feel raw and newly brave, less interested in being tidy and more in being true.';
+    personaText = JSON.stringify({ self_state: NEW_SELF, relationship_status: REL });
+    expect(wake().ok).toBe(true);
+    await runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
+    expect(getCore().self_state).toBe(NEW_SELF);
+    expect(auditCount()).toBe(audit1 + 1);
   });
 
   test('6. key cascade falls back; prompts carry no <<< delimiters', async () => {

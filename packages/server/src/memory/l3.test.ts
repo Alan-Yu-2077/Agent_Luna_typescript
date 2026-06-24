@@ -11,6 +11,7 @@ import { migrate } from '../sql';
 import { setMemoryDb } from './sessionStore';
 import { addFact, forgetFact, listFacts } from './l3Store';
 import { getCore, restore, updateCore } from './coreMemory';
+import { memoryEpoch } from './epoch';
 import { renderCoreBlock } from './renderCoreBlock';
 
 let db: Database;
@@ -89,6 +90,26 @@ describe('coreMemory', () => {
       c: number;
     };
     expect(auditCount.c).toBe(3);
+  });
+
+  test('a no-op patch (both fields unchanged) writes nothing — no audit, no epoch bump (v0.21.7)', () => {
+    updateCore({ self_state: 'steady', relationship_status: 'warm' }, 'test');
+    const epochAfterFirst = memoryEpoch();
+    const before = getCore();
+
+    // re-submitting identical values must NOT land (the dream-churn source)
+    const result = updateCore({ self_state: 'steady', relationship_status: 'warm' }, 'dream');
+    expect(result).toEqual(before); // returns the unchanged state, untouched
+    expect(memoryEpoch()).toBe(epochAfterFirst); // cached system block NOT invalidated
+    const c1 = db.prepare('SELECT COUNT(*) c FROM core_memory_audit').get() as { c: number };
+    expect(c1.c).toBe(1); // only the first (changing) write was audited
+
+    // a genuine change still lands (audit + epoch bump)
+    updateCore({ self_state: 'steadier than before' }, 'dream');
+    expect(getCore().self_state).toBe('steadier than before');
+    expect(memoryEpoch()).toBe(epochAfterFirst + 1);
+    const c2 = db.prepare('SELECT COUNT(*) c FROM core_memory_audit').get() as { c: number };
+    expect(c2.c).toBe(2);
   });
 });
 

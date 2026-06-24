@@ -22,14 +22,20 @@ export function updateCore(patch: CorePatch, source: string): CoreMemory | null 
   const db = getMemoryDb();
   if (!db) return null;
   const prev = getCore();
+  const self_state = patch.self_state ?? prev.self_state;
+  const relationship_status = patch.relationship_status ?? prev.relationship_status;
+  // v0.21.7: a no-op write (the patch leaves BOTH fields byte-identical) must not
+  // land — it would append an audit row AND bump the memory epoch (invalidating the
+  // cached system block) for nothing. The dream's persona step re-emitting identical
+  // prose was the core-memory churn source; this guard kills it for every caller
+  // (dream + the `remember` tool), independent of the per-field gate in the dream.
+  if (self_state === prev.self_state && relationship_status === prev.relationship_status) {
+    return prev;
+  }
   db.prepare(
     'INSERT INTO core_memory_audit (t_ms, prev_self_state, prev_relationship, source) VALUES (?, ?, ?, ?)',
   ).run(Date.now(), prev.self_state, prev.relationship_status, source);
-  const next: CoreMemory = {
-    self_state: patch.self_state ?? prev.self_state,
-    relationship_status: patch.relationship_status ?? prev.relationship_status,
-    updated_ms: Date.now(),
-  };
+  const next: CoreMemory = { self_state, relationship_status, updated_ms: Date.now() };
   db.prepare(
     'UPDATE core_memory SET self_state = ?, relationship_status = ?, updated_ms = ? WHERE id = 1',
   ).run(next.self_state, next.relationship_status, next.updated_ms);

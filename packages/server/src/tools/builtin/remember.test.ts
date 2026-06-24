@@ -58,6 +58,16 @@ describe('remember tool (discriminated actions)', () => {
     expect(getCore().relationship_status).toBe('growing closer');
   });
 
+  test('update_self with identical values is a no-op write (the updateCore guard, v0.21.7)', async () => {
+    await run({ action: 'update_self', self_state: 'calm', relationship_status: 'close' });
+    const auditAfter = () =>
+      (db.prepare('SELECT COUNT(*) c FROM core_memory_audit').get() as { c: number }).c;
+    const before = auditAfter();
+    const e = await run({ action: 'update_self', self_state: 'calm', relationship_status: 'close' });
+    expect(e.data?.status).toBe('self_updated'); // the tool still reports success
+    expect(auditAfter()).toBe(before); // ...but no audit row was appended (no-op)
+  });
+
   test('unconfigured memory db → structured err, not a throw', async () => {
     setMemoryDb(null);
     const e = await run({ action: 'add', category: 'core_facts', text: 'x' });

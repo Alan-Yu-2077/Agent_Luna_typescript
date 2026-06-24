@@ -3,6 +3,7 @@ import { runGraph, type Graph } from '../turn/graph';
 import { getMemoryDb, listL2, listUnratedL2, setImportance } from '../memory/sessionStore';
 import { addFact, forgetFact, listFacts } from '../memory/l3Store';
 import { getCore, updateCore } from '../memory/coreMemory';
+import { similarityRatio } from '../memory/similarity';
 import { maybeFold } from '../memory/l1Window';
 import { getSession } from '../turn/session';
 import {
@@ -32,6 +33,17 @@ import {
 const MAX_DIARIES_PER_CYCLE = Number(Bun.env['LUNA_DREAM_MAX_DIARIES_PER_CYCLE'] ?? 20);
 const RECENT_DIALOGUE_TURNS = 30;
 const MAX_SALIENCE_PER_CYCLE = Number(Bun.env['LUNA_DREAM_MAX_SALIENCE_PER_CYCLE'] ?? 40);
+// v0.21.7: a persona field whose new prose is at least this similar to the current
+// value is treated as "no substantive change" and dropped — the prompt asks for null
+// when unchanged, but the model often re-emits a ~97%-identical rewrite anyway. The
+// updateCore no-op guard catches byte-identical re-emits; this catches cosmetic drift.
+const PERSONA_REWRITE_SIMILARITY = Number(Bun.env['LUNA_PERSONA_REWRITE_SIMILARITY'] ?? 0.95);
+
+function personaFieldChanged(next: string, prev: string): boolean {
+  const a = next.trim();
+  const b = prev.trim();
+  return a !== b && similarityRatio(a, b) < PERSONA_REWRITE_SIMILARITY;
+}
 
 export type DreamNode =
   | 'rate_salience'
@@ -202,8 +214,18 @@ const dreamGraph: Graph<DreamCycleState, DreamNode> = {
       const patch = parseJsonBlock(PersonaPatch, call.text);
       if (!patch) return ['failed', 'unparseable persona patch'];
       const update: { self_state?: string; relationship_status?: string } = {};
-      if (patch.self_state) update.self_state = patch.self_state;
-      if (patch.relationship_status) update.relationship_status = patch.relationship_status;
+      // Drop a field the model re-emitted with no substantive change (it tends to
+      // re-write near-identical prose instead of returning null) so a stable identity
+      // stops churning the audit log + cache epoch every dream (v0.21.7).
+      if (patch.self_state && personaFieldChanged(patch.self_state, core.self_state)) {
+        update.self_state = patch.self_state;
+      }
+      if (
+        patch.relationship_status &&
+        personaFieldChanged(patch.relationship_status, core.relationship_status)
+      ) {
+        update.relationship_status = patch.relationship_status;
+      }
       if (Object.keys(update).length === 0) return ['skipped', 'persona unchanged'];
       updateCore(update, 'dream');
       return ['ok', Object.keys(update).join('+')];
