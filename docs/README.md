@@ -11,6 +11,7 @@ that the same `luna-dev` / `luna-orient` / `luna-roadmap` discipline applies.
 | [`history/DEVELOPMENT.md`](history/DEVELOPMENT.md) | Per-version log of what actually shipped in this TS repo | Truth source for "what version are we on" |
 | [`roadmap/README.md`](roadmap/README.md) | Forward plan: initiatives in execution order with status | Before planning the next version |
 | [`roadmap/<initiative>-YYYY-MM/`](roadmap/) | Self-contained version plans, one folder per initiative | When ready to execute a specific version |
+| [`CODE_AUDIT.md`](CODE_AUDIT.md) | Code-verified audit & reminders (open risks, severity-ranked, with `file:line`) | Before hardening, packaging, or re-litigating a known risk |
 
 ## Discipline (carried over from Python Luna)
 
