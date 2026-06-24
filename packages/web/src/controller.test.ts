@@ -9,6 +9,9 @@ type Call = [string, ...unknown[]];
 
 function harness() {
   const calls: Call[] = [];
+  // typing-indicator states kept OUT of `calls` (like audioStops) so the exact-
+  // equality `calls` assertions stay stable while we assert the dots separately.
+  const thinking: boolean[] = [];
   const view: BubbleView = {
     open: (id) => calls.push(['open', id]),
     append: (id, t) => calls.push(['append', id, t]),
@@ -16,6 +19,7 @@ function harness() {
     discard: (id) => calls.push(['discard', id]),
     chip: (kind: ChipKind, text, href?: string) => calls.push(['chip', kind, text, href]),
     renderHistory: (turns) => calls.push(['history', turns]),
+    setThinking: (on) => thinking.push(on),
   };
   const states: string[] = [];
   const live2d: Live2DSink = {
@@ -35,7 +39,8 @@ function harness() {
     },
   };
   const { handle } = createController({ view, live2d, audio });
-  return { handle, calls, spoken, states, audioStops };
+  const lastThinking = () => thinking[thinking.length - 1];
+  return { handle, calls, spoken, states, audioStops, thinking, lastThinking };
 }
 
 function delivery(over: Partial<MessageDelivery> = {}): MessageDelivery {
@@ -226,6 +231,78 @@ describe('frontend controller — other events', () => {
     h.handle({ type: 'dream.status', is_dreaming: true, current_step: null, last_dream_ms: null });
     h.handle({ type: 'dream.status', is_dreaming: false, current_step: null, last_dream_ms: null });
     expect(h.states).toEqual(['thinking', 'speaking', 'neutral', 'sleeping', 'neutral']);
+  });
+});
+
+describe('frontend controller — persistent typing indicator (v0.21.9)', () => {
+  const result = (turn: string): ServerEvent => ({
+    type: 'turn.result',
+    turn_id: turn,
+    text: 'done',
+    finish_reason: 'end_turn',
+    usage: { input_tokens: 1, output_tokens: 1 },
+  });
+
+  test('dots show on turn.started, persist across a tool, hide while streaming, return between messages, vanish on result', () => {
+    const h = harness();
+    h.handle({ type: 'turn.started', turn_id: 't1' });
+    expect(h.lastThinking()).toBe(true); // thinking before she says anything
+
+    // a non-message tool runs → dots STAY (she's still working)
+    h.handle({ type: 'tool.started', call_id: 'r1', tool_name: 'recall', input: {} });
+    expect(h.lastThinking()).toBe(true);
+    h.handle({ type: 'tool.finished', call_id: 'r1', result: { kind: 'ok', data: {}, summary: '2 hits' } });
+    expect(h.lastThinking()).toBe(true);
+
+    // a message bubble streams → dots DOWN (the streaming text is its own signal)
+    h.handle({ type: 'tool.started', call_id: 'm1', tool_name: 'message', input: {} });
+    expect(h.lastThinking()).toBe(false);
+    // message finalizes but the turn is NOT over → dots come BACK (she may say more)
+    h.handle(okMessage('m1', delivery({ text: '第一句' })));
+    expect(h.lastThinking()).toBe(true);
+
+    // turn ends → dots gone for good
+    h.handle(result('t1'));
+    expect(h.lastThinking()).toBe(false);
+  });
+
+  test('text-mode streaming hides the dots; turn.result clears them', () => {
+    const h = harness();
+    h.handle({ type: 'turn.started', turn_id: 't1' });
+    h.handle({ type: 'reply.token', turn_id: 't1', text: 'Hi' });
+    expect(h.lastThinking()).toBe(false); // streaming text replaces the dots
+    h.handle(result('t1'));
+    expect(h.lastThinking()).toBe(false);
+  });
+
+  test('a proactive turn shows then clears the dots (no turn.result is emitted)', () => {
+    const h = harness();
+    h.handle({ type: 'proactive.started', cycle_id: 'c1' });
+    expect(h.lastThinking()).toBe(true);
+    h.handle({ type: 'proactive.finished', cycle_id: 'c1', spoke: true });
+    expect(h.lastThinking()).toBe(false);
+  });
+
+  // Regression for the review's medium finding: reflectTyping() gates on
+  // messageBubbles.size, so a leaked id (dropped tool.finished / reconnect) must not
+  // wedge the dots OFF on later turns — state resets at every boundary.
+  test('a dropped message tool.finished does not wedge the dots OFF on the next turn', () => {
+    const h = harness();
+    h.handle({ type: 'turn.started', turn_id: 't1' });
+    h.handle({ type: 'tool.started', call_id: 'm1', tool_name: 'message', input: {} });
+    h.handle(result('t1')); // turn ends; m1's tool.finished was lost
+    h.handle({ type: 'turn.started', turn_id: 't2' });
+    expect(h.lastThinking()).toBe(true); // not stuck off by the leaked m1 id
+  });
+
+  test('a reconnect (history) mid-message-turn resets stale state so dots still work', () => {
+    const h = harness();
+    h.handle({ type: 'turn.started', turn_id: 't1' });
+    h.handle({ type: 'tool.started', call_id: 'm1', tool_name: 'message', input: {} });
+    h.handle({ type: 'history', turns: [] }); // WS reconnect resends history
+    expect(h.lastThinking()).toBe(false); // no turn in flight after a reconnect
+    h.handle({ type: 'turn.started', turn_id: 't2' });
+    expect(h.lastThinking()).toBe(true);
   });
 });
 

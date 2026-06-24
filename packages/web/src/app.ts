@@ -105,8 +105,9 @@ async function boot(): Promise<void> {
   const client = new LunaWsClient({
     url: WS_URL,
     onEvent: (e) => {
-      if (e.type === 'turn.started' || e.type === 'proactive.started') view.showThinking();
-      if (e.type === 'turn.result') view.hideThinking();
+      // The typing indicator is owned by the controller now (v0.21.9): it keeps the
+      // dots up for the whole turn and hides them on turn.result / proactive.finished,
+      // instead of this open-only show that the first tool/message used to kill.
       if (e.type === 'dream.status') setDream(e.is_dreaming);
       if (e.type === 'dream.step') refs.dreamCaption.textContent = e.detail || e.step;
       if (e.type === 'tool.finished' && e.result.kind === 'ok') {

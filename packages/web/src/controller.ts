@@ -23,6 +23,23 @@ export function createController(deps: ControllerDeps): { handle: (e: ServerEven
   // call_ids that opened as message-tool bubbles (vs other tools → chips)
   const messageBubbles = new Set<string>();
   let textStreaming = false;
+  // Whether a reactive OR proactive turn is in flight. Drives the persistent typing
+  // indicator (v0.21.9): the dots stay up for the WHOLE turn — through tool runs and
+  // between consecutive messages — and vanish only when the turn ends, so the user
+  // can tell she hasn't finished and doesn't cut her off mid-turn. Hidden while a
+  // visible bubble is actively streaming (the streaming text is its own signal).
+  let turnActive = false;
+  function reflectTyping(): void {
+    deps.view.setThinking(turnActive && !textStreaming && messageBubbles.size === 0);
+  }
+  // Clear all turn-local tracking. Called at every turn boundary + on reconnect so a
+  // dropped/mismatched event can't strand state (a leaked messageBubbles id would
+  // keep size>0 and wedge the dots off; a stuck textStreaming would hide them).
+  function resetTurnState(): void {
+    messageBubbles.clear();
+    textStreaming = false;
+    turnActive = false;
+  }
 
   function handle(e: ServerEvent): void {
     switch (e.type) {
@@ -33,6 +50,11 @@ export function createController(deps: ControllerDeps): { handle: (e: ServerEven
         deps.view.renderHistory?.(
           e.turns.map((t) => ({ userText: t.user_text, assistantText: t.assistant_text, tMs: t.t_ms })),
         );
+        // A reconnect resends the full history; renderHistory wipes the view but not
+        // this closure's turn-local state — reset it so a turn interrupted by the drop
+        // can't leave the typing dots wedged off afterward (v0.21.9 review).
+        resetTurnState();
+        reflectTyping();
         return;
 
       case 'turn.started':
@@ -41,8 +63,12 @@ export function createController(deps: ControllerDeps): { handle: (e: ServerEven
         // (proactive turns emit proactive.started, not turn.started — they don't
         // interrupt themselves.)
         deps.audio.stop();
-        textStreaming = false;
+        // Reset at the boundary so a leaked id from a PRIOR turn (a dropped
+        // tool.finished) can't keep messageBubbles non-empty and wedge the dots off.
+        resetTurnState();
+        turnActive = true;
         deps.live2d.setState('thinking');
+        reflectTyping();
         return;
 
       case 'reply.token':
@@ -51,6 +77,7 @@ export function createController(deps: ControllerDeps): { handle: (e: ServerEven
           textStreaming = true;
         }
         deps.view.append(TEXT_BUBBLE, e.text);
+        reflectTyping();
         return;
 
       case 'tool.started':
@@ -61,6 +88,7 @@ export function createController(deps: ControllerDeps): { handle: (e: ServerEven
         } else {
           deps.view.chip('tool', `🔧 ${e.tool_name}…`);
         }
+        reflectTyping();
         return;
 
       case 'tool.progress':
@@ -95,11 +123,15 @@ export function createController(deps: ControllerDeps): { handle: (e: ServerEven
             // L1 "keep the machinery backstage" rule).
             deps.view.discard(e.call_id);
           }
+          // The message bubble closed; if the turn is still going (more tools/messages
+          // to come), bring the typing dots back so she still reads as "not finished".
+          reflectTyping();
           return;
         }
         // a non-message tool
         if (e.result.kind === 'ok') deps.view.chip('tool', `🔧 ${e.result.summary || 'done'}`);
         else deps.view.chip('error', `Failed: ${e.result.message}`);
+        reflectTyping();
         return;
       }
 
@@ -118,8 +150,9 @@ export function createController(deps: ControllerDeps): { handle: (e: ServerEven
         // bubble so the NEXT turn opens a fresh one. Without this, open() no-ops on
         // the existing id and consecutive replies merge into one growing bubble.
         if (textStreaming) deps.view.finalize(TEXT_BUBBLE, e.text);
-        textStreaming = false;
+        resetTurnState();
         deps.live2d.setState('neutral');
+        reflectTyping(); // turn over → dots down
         return;
 
       case 'dream.status':
@@ -138,14 +171,26 @@ export function createController(deps: ControllerDeps): { handle: (e: ServerEven
 
       case 'proactive.started':
         deps.view.chip('proactive', '🌱 …');
+        turnActive = true;
+        reflectTyping();
         return;
 
       case 'proactive.finished':
+        // A proactive turn never emits turn.result, so it must clear state here or
+        // the dots would hang forever after she speaks unprompted (latent pre-v0.21.9
+        // bug, when app.ts only hid on turn.result).
+        resetTurnState();
+        reflectTyping();
         if (!e.spoke) deps.view.chip('proactive', '🌱 (quietly did something)');
         return;
 
       case 'error':
+        // Discard any half-streamed message bubble whose tool.finished won't arrive,
+        // then reset so neither an orphan bubble nor a leaked id lingers (review).
+        for (const id of messageBubbles) deps.view.discard(id);
+        resetTurnState();
         deps.view.chip('error', `⚠ ${e.code}: ${e.message}`);
+        reflectTyping();
         return;
 
       default:

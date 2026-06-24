@@ -35,14 +35,31 @@ export interface BubbleView {
   discard(id: string): void;
   // a non-bubble marker: tool/dream/proactive/expression/error
   chip(kind: ChipKind, text: string, href?: string): void;
+  // show/hide the "she's still going" typing indicator. Driven by the controller
+  // for the WHOLE turn (not just the opening) so the user can tell she hasn't
+  // finished — shown whenever a turn/proactive is in flight and no visible bubble
+  // is actively streaming, hidden on turn.result / proactive.finished (v0.21.9).
+  setThinking(on: boolean): void;
 }
 
 // A DOM implementation for the browser. Renders bubbles + chips into a host
 // element. Deliberately minimal — the real Live2D-framed UI is a later pass.
 export class DomBubbleView implements BubbleView {
   private readonly bubbles = new Map<string, HTMLElement>();
+  private thinkingEl: HTMLElement | null = null;
 
   constructor(private readonly host: HTMLElement) {}
+
+  setThinking(on: boolean): void {
+    if (on) {
+      if (!this.thinkingEl) this.thinkingEl = this.el('luna-thinking', '…');
+      else this.host.appendChild(this.thinkingEl); // keep it the last child (below chips)
+      this.host.scrollTop = this.host.scrollHeight;
+    } else {
+      this.thinkingEl?.remove();
+      this.thinkingEl = null;
+    }
+  }
 
   private el(cls: string, text = ''): HTMLElement {
     const d = this.host.ownerDocument.createElement('div');

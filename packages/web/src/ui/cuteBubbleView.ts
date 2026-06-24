@@ -53,15 +53,29 @@ export class CuteBubbleView implements BubbleView {
     this.scrollPill?.classList.remove('on');
   }
 
+  // Driven by the controller for the WHOLE turn (v0.21.9): re-appending an existing
+  // dots element moves it to the end (below any chip added since) WITHOUT recreating
+  // the node, so the CSS bounce keeps running uninterrupted — "持续跳跃".
+  setThinking(on: boolean): void {
+    if (on) this.showThinking();
+    else this.hideThinking();
+  }
   showThinking(): void {
-    if (this.thinkingEl) return;
-    const doc = this.host.ownerDocument;
-    const el = doc.createElement('div');
-    el.className = 'thinking';
-    for (let i = 0; i < 3; i++) el.appendChild(doc.createElement('i'));
-    this.host.appendChild(el);
-    this.thinkingEl = el;
-    this.scrollToBottom();
+    if (!this.thinkingEl) {
+      const doc = this.host.ownerDocument;
+      const el = doc.createElement('div');
+      el.className = 'thinking';
+      for (let i = 0; i < 3; i++) el.appendChild(doc.createElement('i'));
+      this.thinkingEl = el;
+    }
+    // reflectTyping() calls this on nearly every event of a multi-step turn, so only
+    // (re)append + scroll when the dots aren't already the last child — otherwise we
+    // would yank the viewport on every event. Use the gated scroll() so a user who
+    // has scrolled up to read isn't dragged back to the bottom (v0.21.9 review).
+    if (this.host.lastElementChild !== this.thinkingEl) {
+      this.host.appendChild(this.thinkingEl);
+      this.scroll();
+    }
   }
   hideThinking(): void {
     this.thinkingEl?.remove();
@@ -69,7 +83,6 @@ export class CuteBubbleView implements BubbleView {
   }
 
   open(id: string): void {
-    this.hideThinking();
     if (this.bubbles.has(id)) return;
     const b = this.make('luna');
     this.bubbles.set(id, b);
@@ -106,7 +119,6 @@ export class CuteBubbleView implements BubbleView {
   }
 
   chip(kind: ChipKind, text: string, href?: string): void {
-    this.hideThinking();
     const safe = kind === 'source' && href ? safeHttpHref(href) : null;
     if (safe) {
       const a = this.host.ownerDocument.createElement('a');
