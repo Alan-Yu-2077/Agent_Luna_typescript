@@ -228,25 +228,27 @@ const dreamGraph: Graph<DreamCycleState, DreamNode> = {
       const insertDiary = db.prepare(
         'INSERT OR IGNORE INTO diaries (kind, period_key, text, generated_ms) VALUES (?, ?, ?, ?)',
       );
-      // v0.17.3 (option 2): today's day-diary is rewritten on every dream, so a
-      // dream during the day captures the whole day so far instead of freezing it
-      // at the first dream (the old INSERT OR IGNORE lost everything after a noon
-      // dream). Past days stay write-once — they are complete and immutable.
-      // "Today" is the same UTC calendar key the rows are grouped under above.
+      // v0.17.3 (option 2) + v0.21.7: today AND yesterday's day-diary are rewritten
+      // on every dream — a dream during the day captures the whole day so far, and
+      // the NEXT day's first dream gives yesterday one final complete pass (catching
+      // anything said after the last in-day dream, before midnight) before it
+      // freezes. Days older than yesterday stay write-once — complete + immutable.
+      // The keys are the same UTC calendar grouping the rows use above.
       const upsertDiary = db.prepare(
         `INSERT INTO diaries (kind, period_key, text, generated_ms) VALUES (?, ?, ?, ?)
          ON CONFLICT(kind, period_key) DO UPDATE SET text = excluded.text, generated_ms = excluded.generated_ms`,
       );
       const todayKey = new Date(Date.now()).toISOString().slice(0, 10);
+      const yesterdayKey = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
       let written = 0;
 
       for (const [day, pieces] of [...byDay.entries()].sort()) {
         if (written >= MAX_DIARIES_PER_CYCLE) break;
-        const isToday = day === todayKey;
-        if (!isToday && hasDiary.get('day', day)) continue;
+        const rewritable = day === todayKey || day === yesterdayKey;
+        if (!rewritable && hasDiary.get('day', day)) continue;
         const call = await dreamCall(s.llm, diaryPrompt('day', day, pieces.join('\n\n')), 1400);
         if (!call.ok) return ['failed', `day ${day}: ${call.failure}: ${call.detail}`];
-        (isToday ? upsertDiary : insertDiary).run('day', day, call.text.trim(), Date.now());
+        (rewritable ? upsertDiary : insertDiary).run('day', day, call.text.trim(), Date.now());
         written += 1;
       }
 

@@ -30,9 +30,10 @@ import { workspaceHandler } from './workspace/workspace';
 import { devChatHandler } from './devchat/devchat';
 import { setMemoryDb } from './memory/sessionStore';
 import { initCustomSqlite } from './memory/recall/vecRuntime';
-import { bootReconcile } from './dream/dreamState';
+import { bootReconcile, isDreaming } from './dream/dreamState';
+import { runDreamCycle } from './dream/cycle';
 import { startWeatherRefresh } from './tools/web/weather/snapshot';
-import { preloadSessions } from './turn/session';
+import { activeSessionIds, preloadSessions } from './turn/session';
 
 const port = Number(process.env['LUNA_PORT'] ?? 8787);
 
@@ -59,11 +60,6 @@ preloadSessions();
 console.log(`[luna-server] sqlite ready (schema v${version})`);
 
 const viewerEnabled = Bun.env['LUNA_VIEWER'] !== '0';
-
-process.on('SIGTERM', () => {
-  closeDb(db);
-  process.exit(0);
-});
 
 // Defense-in-depth: a stray rejection from a fire-and-forget path (a turn,
 // proactive cycle, or dream) must log, never terminate the companion process.
@@ -125,8 +121,44 @@ if (Bun.env['ANTHROPIC_API_KEY']) {
   // the snapshot parse_input reads synchronously. No-op unless LUNA_WEATHER_AMBIENT=1
   // and LUNA_LAT_LON is set; never fetches on the reactive path.
   startWeatherRefresh();
+
+  // Shutdown dream (v0.21.7): on a graceful exit (Ctrl-C / SIGTERM) run one last
+  // dream so the day's diary + memory consolidate before the process dies — the
+  // terminal-exit equivalent of going to sleep. Best-effort + deadline-bounded; a
+  // second signal forces an immediate exit. LUNA_SHUTDOWN_DREAM=0 disables it (for
+  // fast dev restarts); LUNA_SHUTDOWN_DREAM_TIMEOUT_MS (default 120s) bounds the wait.
+  let shuttingDown = false;
+  const shutdown = async (signal: string): Promise<void> => {
+    if (shuttingDown) process.exit(1); // a second signal → force exit now
+    shuttingDown = true;
+    try {
+      if (Bun.env['LUNA_SHUTDOWN_DREAM'] !== '0' && !isDreaming()) {
+        console.log(`[luna-server] ${signal} — running a shutdown dream…`);
+        const deadlineMs = Number(Bun.env['LUNA_SHUTDOWN_DREAM_TIMEOUT_MS'] ?? 120_000);
+        const dreams = (async () => {
+          for (const sessionId of activeSessionIds()) {
+            await runDreamCycle({ sessionId, llm: dreamLlm, emit: broadcast });
+          }
+        })();
+        await Promise.race([dreams, Bun.sleep(deadlineMs)]);
+      }
+    } catch (e) {
+      console.error('[luna-server] shutdown dream failed:', e);
+    } finally {
+      closeDb(db);
+      process.exit(0);
+    }
+  };
+  process.on('SIGTERM', () => void shutdown('SIGTERM'));
+  process.on('SIGINT', () => void shutdown('SIGINT'));
 } else {
   console.warn('[luna-server] ANTHROPIC_API_KEY not set — chat.send disabled');
+  const bye = (): void => {
+    closeDb(db);
+    process.exit(0);
+  };
+  process.on('SIGTERM', bye);
+  process.on('SIGINT', bye);
 }
 
 const server = Bun.serve<WSData>({

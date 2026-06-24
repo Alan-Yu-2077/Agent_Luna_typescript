@@ -243,21 +243,25 @@ describe('dream cycle', () => {
     expect(monthCount).toBe(1);
   });
 
-  test("4c. today's day-diary is rewritten each dream; past days stay write-once (v0.17.3)", async () => {
+  test('4c. today + yesterday rewritten each dream; older days stay write-once (v0.17.3 + v0.21.7)', async () => {
     let diaryN = 0;
     const { llm } = scriptedLlm({ diary: () => `diary v${++diaryN}` });
     const today = new Date(Date.now()).toISOString().slice(0, 10);
     const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+    const twoDaysAgo = new Date(Date.now() - 2 * 86_400_000).toISOString().slice(0, 10);
     const readDay = (key: string) =>
       ((db.prepare("SELECT text FROM diaries WHERE kind = 'day' AND period_key = ?").get(key) as
         | { text: string }
         | null) ?? null)?.text ?? null;
 
+    seedDialogue('default', [['two days ago talk', 'noted']], 2);
     seedDialogue('default', [['yesterday talk', 'noted']], 1);
     seedDialogue('default', [['this morning', 'good morning']], 0);
     await runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
+    const twoAfter1 = readDay(twoDaysAgo);
     const yAfter1 = readDay(yesterday);
     const todayAfter1 = readDay(today);
+    expect(twoAfter1).not.toBeNull();
     expect(yAfter1).not.toBeNull();
     expect(todayAfter1).not.toBeNull();
 
@@ -266,7 +270,8 @@ describe('dream cycle', () => {
     await runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
 
     expect(readDay(today)).not.toBe(todayAfter1); // option 2: today refreshed
-    expect(readDay(yesterday)).toBe(yAfter1); // past day immutable
+    expect(readDay(yesterday)).not.toBe(yAfter1); // v0.21.7: yesterday refreshed too
+    expect(readDay(twoDaysAgo)).toBe(twoAfter1); // days older than yesterday immutable
     const todayRows = (
       db.prepare("SELECT COUNT(*) c FROM diaries WHERE kind = 'day' AND period_key = ?").get(today) as {
         c: number;
