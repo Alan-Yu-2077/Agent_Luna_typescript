@@ -1,5 +1,5 @@
 import type { BubbleView, ChipKind, HistoryTurnView } from '../bubbles';
-import { safeHttpHref } from '../bubbles';
+import { messageSegments, safeHttpHref } from '../bubbles';
 import { absoluteStamp, relativeTime } from './time';
 import { toolCardLabel } from './toolLabels';
 
@@ -151,9 +151,12 @@ export class CuteBubbleView implements BubbleView {
         this.host.appendChild(u.row);
         this.stamp(u.row, t.tMs);
       }
-      if (t.assistantText) {
+      // One bubble per message the turn delivered (v0.21.10) — a multi-message turn
+      // was newline-joined into assistant_text, so render it back as separate bubbles
+      // instead of one merged block, matching how it looked live.
+      for (const seg of t.assistantText ? messageSegments(t.assistantText) : []) {
         const l = this.make('luna');
-        l.body.textContent = t.assistantText;
+        l.body.textContent = seg;
         this.host.appendChild(l.row);
         this.stamp(l.row, t.tMs);
       }

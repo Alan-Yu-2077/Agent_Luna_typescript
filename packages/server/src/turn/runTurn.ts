@@ -475,7 +475,16 @@ const graph: Graph<TurnState, TurnNode> = {
           case 'final':
             if (evt.tool_name === 'message' && evt.result.kind === 'ok') {
               const delivery = evt.result.data as { text?: unknown; is_final?: unknown };
-              if (typeof delivery.text === 'string') s.messageTexts.push(delivery.text);
+              // Drop a verbatim-consecutive duplicate (the model occasionally
+              // stutters — calls `message` twice with identical text), so it's not
+              // double-stored in assistant_text / recall. The frontend discards the
+              // already-rendered live bubble symmetrically (v0.21.10).
+              if (typeof delivery.text === 'string') {
+                const prev = s.messageTexts[s.messageTexts.length - 1];
+                if (prev === undefined || prev.trim() !== delivery.text.trim()) {
+                  s.messageTexts.push(delivery.text);
+                }
+              }
               if (typeof delivery.is_final === 'boolean') s.lastMessageIsFinal = delivery.is_final;
             }
             if (

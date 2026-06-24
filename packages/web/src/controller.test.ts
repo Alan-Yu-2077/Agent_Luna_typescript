@@ -130,6 +130,33 @@ describe('frontend controller — message-tool consumption', () => {
     expect(h.calls.some((c) => c[0] === 'chip')).toBe(false); // no failure chip at all
   });
 
+  // v0.21.10 — the model occasionally stutters: two `message` calls with identical
+  // text. Drop the verbatim repeat instead of rendering + speaking it twice.
+  test('a verbatim-duplicate consecutive message is discarded, not shown/spoken twice', () => {
+    const h = harness();
+    h.handle({ type: 'turn.started', turn_id: 't1' });
+    h.handle({ type: 'tool.started', call_id: 'm1', tool_name: 'message', input: {} });
+    h.handle(okMessage('m1', delivery({ text: 'Still here.' })));
+    h.handle({ type: 'tool.started', call_id: 'm2', tool_name: 'message', input: {} });
+    h.handle(okMessage('m2', delivery({ text: 'Still here.' })));
+    expect(h.calls).toContainEqual(['finalize', 'm1', 'Still here.']);
+    expect(h.calls).toContainEqual(['discard', 'm2']); // the stutter is dropped
+    expect(h.calls).not.toContainEqual(['finalize', 'm2', 'Still here.']);
+    expect(h.spoken).toEqual(['Still here.']); // spoken exactly once
+  });
+
+  test('distinct consecutive messages both render (no false dedup)', () => {
+    const h = harness();
+    h.handle({ type: 'turn.started', turn_id: 't1' });
+    h.handle({ type: 'tool.started', call_id: 'm1', tool_name: 'message', input: {} });
+    h.handle(okMessage('m1', delivery({ text: 'First.' })));
+    h.handle({ type: 'tool.started', call_id: 'm2', tool_name: 'message', input: {} });
+    h.handle(okMessage('m2', delivery({ text: 'Second.' })));
+    expect(h.calls).toContainEqual(['finalize', 'm1', 'First.']);
+    expect(h.calls).toContainEqual(['finalize', 'm2', 'Second.']);
+    expect(h.spoken).toEqual(['First.', 'Second.']);
+  });
+
   test('no expression / no voice → finalize only, no live2d/audio', () => {
     const h = harness();
     h.handle({ type: 'tool.started', call_id: 'm1', tool_name: 'message', input: {} });

@@ -29,6 +29,9 @@ export function createController(deps: ControllerDeps): { handle: (e: ServerEven
   // can tell she hasn't finished and doesn't cut her off mid-turn. Hidden while a
   // visible bubble is actively streaming (the streaming text is its own signal).
   let turnActive = false;
+  // Trimmed text of the last finalized luna bubble — used to drop a verbatim-
+  // consecutive duplicate the model occasionally stutters out (v0.21.10).
+  let lastLunaText = '';
   function reflectTyping(): void {
     deps.view.setThinking(turnActive && !textStreaming && messageBubbles.size === 0);
   }
@@ -39,6 +42,7 @@ export function createController(deps: ControllerDeps): { handle: (e: ServerEven
     messageBubbles.clear();
     textStreaming = false;
     turnActive = false;
+    lastLunaText = '';
   }
 
   function handle(e: ServerEvent): void {
@@ -110,9 +114,17 @@ export function createController(deps: ControllerDeps): { handle: (e: ServerEven
             const parsed = MessageDelivery.safeParse(e.result.data);
             if (parsed.success) {
               const d = parsed.data;
-              deps.view.finalize(e.call_id, d.text);
-              if (d.expression) deps.live2d.setExpression(d.expression, d.emotion);
-              void deps.audio.speak(d.text, d.voice_params);
+              const t = d.text.trim();
+              if (t !== '' && t === lastLunaText) {
+                // The model stuttered — the same bubble twice in a row. Drop the
+                // verbatim repeat instead of rendering + speaking it again (v0.21.10).
+                deps.view.discard(e.call_id);
+              } else {
+                lastLunaText = t;
+                deps.view.finalize(e.call_id, d.text);
+                if (d.expression) deps.live2d.setExpression(d.expression, d.emotion);
+                void deps.audio.speak(d.text, d.voice_params);
+              }
             } else {
               deps.view.finalize(e.call_id, ''); // delivery shape unexpected — degrade, don't crash
             }

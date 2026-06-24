@@ -21,6 +21,22 @@ export function safeHttpHref(url: string): string | null {
 // One persisted turn, replayed on (re)connect. user is empty for a proactive turn.
 export type HistoryTurnView = { userText: string; assistantText: string; tMs: number };
 
+// Split a persisted turn's assistant_text back into the individual message bubbles
+// it was newline-joined from (one per `message` tool call) so a reloaded turn renders
+// as separate bubbles, not one block — matching the live multi-bubble look. Also
+// drops a verbatim-consecutive duplicate (a model stutter), which cleans the dup that
+// older rows already baked into assistant_text on reload (v0.21.10).
+export function messageSegments(assistantText: string): string[] {
+  const out: string[] = [];
+  for (const raw of assistantText.split('\n')) {
+    const seg = raw.trim();
+    if (!seg) continue;
+    if (out[out.length - 1] === seg) continue; // consecutive duplicate → drop
+    out.push(seg);
+  }
+  return out.length > 0 ? out : [assistantText];
+}
+
 export interface BubbleView {
   // replay the persisted conversation on connect — clears + rerenders so it is
   // idempotent across reconnects (optional; only the cute view implements it)
