@@ -12,7 +12,7 @@ import { getSession, resetSessions } from '../turn/session';
 import { resetDreamStateForTests } from '../dream/dreamState';
 import { TraceStore } from '../trace/store';
 import { setTraceStore } from '../trace/instrument';
-import { loadCadence } from './cadence';
+import { dateKey, loadCadence } from './cadence';
 import { runTick, setProactiveDetectorForTests, type SchedulerDeps } from './scheduler';
 
 const endRound: ProviderEvent = {
@@ -75,9 +75,24 @@ function allWakeDecisions(): { decision: string; reason: string }[] {
 
 // ─── the deterministic detector path (v0.22.0 default) ──────────────────────────
 describe('proactive scheduler — detector path (default)', () => {
-  // force the after-a-night detector on/off so the tick is clock-independent
-  const triggerOn = () => setProactiveDetectorForTests(() => ({ seed: 'after-a-night context' }));
+  // force a detector on/off so the tick is clock-independent
+  const triggerOn = () =>
+    setProactiveDetectorForTests(() => ({
+      intent: 'spontaneous' as const,
+      seed: 'after-a-night context',
+      debounceKey: 'after_night',
+    }));
+  const triggerSlot = () =>
+    setProactiveDetectorForTests(() => ({
+      intent: 'spontaneous' as const,
+      seed: 'scheduled context',
+      debounceKey: 'slot:11',
+    }));
   const triggerOff = () => setProactiveDetectorForTests(() => null);
+  // register the session + put it past the small idle floor (so passesAntiSpam allows it)
+  const idle = () => {
+    getSession('default').lastUserMs = Date.now() - 5 * 60_000;
+  };
 
   test('disabled (LUNA_PROACTIVE=0) → no-op even if a detector would fire', async () => {
     Bun.env['LUNA_PROACTIVE'] = '0';
@@ -98,7 +113,7 @@ describe('proactive scheduler — detector path (default)', () => {
 
   test('a trigger + a SILENT turn fires, no gate call, stamps cooldown, quota stays 0', async () => {
     triggerOn();
-    getSession('default'); // register the session so the scheduler considers it
+    idle();
     const { deps, gate, turnProvider, events } = makeDeps('', [[endRound]]); // silent
     await runTick(deps);
     expect(gate.completeRequests.length).toBe(0); // detector path never calls the LLM gate
@@ -119,7 +134,7 @@ describe('proactive scheduler — detector path (default)', () => {
 
   test('cooldown blocks a second tick right after a fire', async () => {
     triggerOn();
-    getSession('default');
+    idle();
     await runTick(makeDeps('', [[endRound]]).deps);
     expect(loadCadence('default').lastProactiveMs).toBeGreaterThan(0);
     const second = makeDeps('', [[endRound]]);
@@ -139,7 +154,7 @@ describe('proactive scheduler — detector path (default)', () => {
 
   test('concurrent ticks: the reentrancy guard prevents a second back-to-back fire', async () => {
     triggerOn();
-    getSession('default');
+    idle();
     const a = makeDeps('', [[endRound]]);
     const b = makeDeps('', [[endRound]]);
     await Promise.all([runTick(a.deps), runTick(b.deps)]);
@@ -166,10 +181,27 @@ describe('proactive scheduler — detector path (default)', () => {
       dreamLlm: { primary: new MockProvider([]), fallback: null },
       emit: () => {},
     };
+    idle();
     const session = getSession('default');
     await runTick(deps);
     expect(session.pendingDream).toBeNull(); // the scheduler consumed the intent
     expect(turnProvider.requests.length).toBeGreaterThanOrEqual(1);
+  });
+
+  test('a scheduled-slot trigger marks the slot consumed for the day (v0.22.1)', async () => {
+    triggerSlot(); // debounceKey 'slot:11'
+    idle();
+    await runTick(makeDeps('', [[endRound]]).deps);
+    const c = loadCadence('default');
+    expect(c.slotsUsed).not.toBe(0); // the current hour's slot bit is set
+    expect(c.slotsDate).toBe(dateKey(Date.now()));
+  });
+
+  test('a non-slot trigger (after-night) does NOT mark any slot', async () => {
+    triggerOn(); // debounceKey 'after_night'
+    idle();
+    await runTick(makeDeps('', [[endRound]]).deps);
+    expect(loadCadence('default').slotsUsed).toBe(0);
   });
 });
 

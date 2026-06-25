@@ -7,41 +7,28 @@ import { listRecentProactiveTexts } from '../memory/sessionStore';
 import { isDreaming } from '../dream/dreamState';
 import { runDreamCycle } from '../dream/cycle';
 import { trace, flushTrace, traceEnabled } from '../trace/instrument';
-import { runProactiveTurn, lastInteractionMs, type ProactiveIntent } from './proactiveTurn';
+import { runProactiveTurn, type ProactiveIntent } from './proactiveTurn';
 import { buildWakeContext, wakeGate, type WakeVerdict } from './wakeGate';
-import { afterANightOpening } from '../turn/temporalContext';
+import { evaluateDetectors, type DetectorCtx, type ProactiveTrigger } from './detectors';
 import {
   commitProactive,
   commitProactiveSilent,
   loadCadence,
+  markSlotConsumed,
   passesAntiSpam,
   proactiveEnabled,
   saveCadence,
   shouldConsiderWake,
 } from './cadence';
 
-// v0.22.0 (Initiative 15): the after-a-night detector's seed — a concrete reason
-// appended to the proactive turn's framing so she drafts from "it's the first I'm
-// seeing him after a night" instead of the old gate hunting for a reason in the
-// abstract (and always finding none).
-const AFTER_NIGHT_SEED =
-  '(Context: this is the first time you are seeing Alan again after a night — or a longer ' +
-  'absence. A warm, natural hello, or quietly picking up a real thread from before, would fit ' +
-  'here — only if you genuinely have something to bring; never a status or check-in question, ' +
-  'and staying silent is completely fine.)';
-
-// v0.22.0: the detector seam — `null` = no trigger, else the trigger's seed. Today
-// it's just the after-a-night opener; v0.22.1 grows it into the detector registry.
-// Injectable so the scheduler is testable without the real morning/clock dependency
-// inside `afterANightOpening` (mirrors the `setWeatherFetcher` seam pattern).
-export type ProactiveTrigger = { seed: string };
-const defaultDetector = (session: Session, nowMs: number): ProactiveTrigger | null =>
-  afterANightOpening(nowMs, lastInteractionMs(session)) ? { seed: AFTER_NIGHT_SEED } : null;
-let detectProactive = defaultDetector;
+// v0.22.1 (Initiative 15): the detector seam — defaults to the detector registry
+// (after-a-night + scheduled slots), injectable so the scheduler is testable without
+// the real morning/clock dependency inside the detectors (the setWeatherFetcher pattern).
+let detectProactive: (ctx: DetectorCtx) => ProactiveTrigger | null = evaluateDetectors;
 export function setProactiveDetectorForTests(
-  fn: ((session: Session, nowMs: number) => ProactiveTrigger | null) | null,
+  fn: ((ctx: DetectorCtx) => ProactiveTrigger | null) | null,
 ): void {
-  detectProactive = fn ?? defaultDetector;
+  detectProactive = fn ?? evaluateDetectors;
 }
 
 // The proactive heartbeat (Initiative 5, v0.10.3) — a single server-side timer
@@ -145,6 +132,7 @@ async function tickOnce(deps: SchedulerDeps): Promise<void> {
     const wakeCtx = { lastUserMs: session.lastUserMs, nowMs: now, nowHour };
     let intent: ProactiveIntent = 'spontaneous';
     let seed = '';
+    let trigger: ProactiveTrigger | null = null;
 
     if (llmGate) {
       const pf = shouldConsiderWake(cadence, wakeCtx);
@@ -161,12 +149,13 @@ async function tickOnce(deps: SchedulerDeps): Promise<void> {
       if (!verdict.act) continue;
       intent = verdict.intent === 'consolidate' ? 'consolidate' : 'spontaneous';
     } else {
-      // Anti-spam SUBSET only (quiet hours + cooldown + quota — NOT deep_absence,
-      // NOT the 10m too_soon floor, so a >18h overnight/weekend gap still fires),
-      // then the deterministic detector. The turn itself decides whether to speak.
+      // Anti-spam SUBSET only (quiet hours + idle floor + cooldown + quota — NOT
+      // deep_absence, NOT the 10m too_soon floor, so a >18h overnight/weekend gap still
+      // fires), then the deterministic detector registry. The turn decides whether to speak.
       if (!passesAntiSpam(cadence, wakeCtx).ok) continue;
-      const trigger = detectProactive(session, now);
+      trigger = detectProactive({ session, cadence, nowMs: now, nowHour });
       if (!trigger) continue;
+      intent = trigger.intent;
       seed = trigger.seed;
     }
 
@@ -187,7 +176,13 @@ async function tickOnce(deps: SchedulerDeps): Promise<void> {
     });
     // v0.22.0: only a turn that actually spoke consumes the daily message quota; a
     // silent consideration just stamps the cooldown (so it can't re-fire next tick).
-    saveCadence(sessionId, spoke ? commitProactive(cadence, now) : commitProactiveSilent(cadence, now));
+    // v0.22.1: a scheduled-slot trigger is also marked consumed for the day (fired or
+    // silent — the slot is "used" either way; it shouldn't re-fire every tick).
+    let next = spoke ? commitProactive(cadence, now) : commitProactiveSilent(cadence, now);
+    if (trigger && trigger.debounceKey.startsWith('slot:')) {
+      next = markSlotConsumed(next, nowHour, now);
+    }
+    saveCadence(sessionId, next);
 
     // Dream auto-trigger (v0.11.0, closes LD #11's deferred half): if she chose
     // to dream during the proactive turn, start the cycle. Fire-and-forget —

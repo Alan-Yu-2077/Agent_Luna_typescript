@@ -8,10 +8,13 @@ import {
   commitProactive,
   commitProactiveSilent,
   dateKey,
+  isSlotConsumed,
   loadCadence,
+  markSlotConsumed,
   passesAntiSpam,
   recordUserActivity,
   saveCadence,
+  scheduledSlots,
   shouldConsiderWake,
 } from './cadence';
 
@@ -24,6 +27,8 @@ const base: Cadence = {
   quotaDate: '',
   lastProactiveMs: 0,
   nudgesSent: 0,
+  slotsUsed: 0,
+  slotsDate: '',
 };
 
 const ctx = (over: Partial<{ lastUserMs: number; nowMs: number; nowHour: number }> = {}) => ({
@@ -120,11 +125,38 @@ describe('passesAntiSpam (v0.22.0 detector gate — anti-spam subset only)', () 
   test('a > 18h gap STILL passes (no deep_absence cut — the redesign HIGH fix)', () => {
     expect(passesAntiSpam(base, ctx({ lastUserMs: NOW - 40 * 3600_000 })).ok).toBe(true);
   });
-  test('a fresh 0-min gap STILL passes (no too_soon floor — detectors decide, not the idle window)', () => {
-    expect(passesAntiSpam(base, ctx({ lastUserMs: NOW })).ok).toBe(true);
+  test('a 2-min gap passes (the old 10m too_soon floor is gone — detectors decide)', () => {
+    expect(passesAntiSpam(base, ctx({ lastUserMs: NOW - 2 * 60_000 })).ok).toBe(true);
+  });
+  test('a 0-min gap is blocked by the small idle floor (no interrupting a live exchange)', () => {
+    expect(passesAntiSpam(base, ctx({ lastUserMs: NOW })).reason).toBe('mid_conversation');
   });
   test('normal → ok', () => {
     expect(passesAntiSpam(base, ctx()).ok).toBe(true);
+  });
+});
+
+describe('scheduled slots (v0.22.1)', () => {
+  afterEach(() => delete Bun.env['LUNA_PROACTIVE_SLOTS']);
+  test('scheduledSlots parses LUNA_PROACTIVE_SLOTS; unset → empty', () => {
+    expect(scheduledSlots()).toEqual([]);
+    Bun.env['LUNA_PROACTIVE_SLOTS'] = '11, 20';
+    expect(scheduledSlots()).toEqual([11, 20]);
+    Bun.env['LUNA_PROACTIVE_SLOTS'] = '11,99,xx,5';
+    expect(scheduledSlots()).toEqual([11, 5]); // out-of-range / non-numeric dropped
+  });
+  test('markSlotConsumed sets the hour bit; isSlotConsumed reads it; resets on a new day', () => {
+    expect(isSlotConsumed(base, 11, NOW)).toBe(false);
+    const c = markSlotConsumed(base, 11, NOW);
+    expect(isSlotConsumed(c, 11, NOW)).toBe(true);
+    expect(isSlotConsumed(c, 20, NOW)).toBe(false); // a different slot is untouched
+    const c2 = markSlotConsumed(c, 20, NOW);
+    expect(isSlotConsumed(c2, 11, NOW)).toBe(true); // both bits set same day
+    expect(isSlotConsumed(c2, 20, NOW)).toBe(true);
+    // a new day clears the mask
+    const nextDay = NOW + 24 * 3600_000;
+    expect(isSlotConsumed(c2, 11, nextDay)).toBe(false);
+    expect(isSlotConsumed(markSlotConsumed(c2, 11, nextDay), 20, nextDay)).toBe(false);
   });
 });
 
@@ -144,7 +176,7 @@ describe('cadence persistence (restart-survival)', () => {
     expect(loadCadence('nope')).toEqual(base);
   });
   test('save then load round-trips (upsert when no prior row)', () => {
-    const c: Cadence = { phase: 'dormant', quotaUsed: 3, quotaDate: TODAY, lastProactiveMs: NOW, nudgesSent: 2 };
+    const c: Cadence = { phase: 'dormant', quotaUsed: 3, quotaDate: TODAY, lastProactiveMs: NOW, nudgesSent: 2, slotsUsed: 0, slotsDate: '' };
     saveCadence('s1', c);
     expect(loadCadence('s1')).toEqual(c);
   });
