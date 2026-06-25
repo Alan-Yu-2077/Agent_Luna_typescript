@@ -6,8 +6,10 @@ import { setMemoryDb } from '../memory/sessionStore';
 import {
   type Cadence,
   commitProactive,
+  commitProactiveSilent,
   dateKey,
   loadCadence,
+  passesAntiSpam,
   recordUserActivity,
   saveCadence,
   shouldConsiderWake,
@@ -89,6 +91,40 @@ describe('cadence transitions', () => {
     const c = recordUserActivity({ ...base, phase: 'dormant', nudgesSent: 3 });
     expect(c.phase).toBe('engaged');
     expect(c.nudgesSent).toBe(0);
+  });
+  test('commitProactiveSilent stamps the cooldown but does NOT bump the quota (v0.22.0)', () => {
+    const c = commitProactiveSilent({ ...base, quotaDate: TODAY, quotaUsed: 2 }, NOW);
+    expect(c.lastProactiveMs).toBe(NOW); // cooldown anchor stamped
+    expect(c.quotaUsed).toBe(2); // ...but a silent draft does not consume the daily budget
+    expect(c.quotaDate).toBe(TODAY);
+  });
+});
+
+describe('passesAntiSpam (v0.22.0 detector gate — anti-spam subset only)', () => {
+  test('disabled when LUNA_PROACTIVE=0', () => {
+    Bun.env['LUNA_PROACTIVE'] = '0';
+    expect(passesAntiSpam(base, ctx()).reason).toBe('disabled');
+    delete Bun.env['LUNA_PROACTIVE'];
+  });
+  test('quiet hours block', () => {
+    expect(passesAntiSpam(base, ctx({ nowHour: 3 })).reason).toBe('quiet_hours');
+  });
+  test('cooldown blocks (< 5m since last proactive)', () => {
+    expect(passesAntiSpam({ ...base, lastProactiveMs: NOW - 60_000 }, ctx()).reason).toBe('cooldown');
+  });
+  test('daily quota exhausted blocks', () => {
+    expect(passesAntiSpam({ ...base, quotaDate: TODAY, quotaUsed: 5 }, ctx()).reason).toBe(
+      'quota_exhausted',
+    );
+  });
+  test('a > 18h gap STILL passes (no deep_absence cut — the redesign HIGH fix)', () => {
+    expect(passesAntiSpam(base, ctx({ lastUserMs: NOW - 40 * 3600_000 })).ok).toBe(true);
+  });
+  test('a fresh 0-min gap STILL passes (no too_soon floor — detectors decide, not the idle window)', () => {
+    expect(passesAntiSpam(base, ctx({ lastUserMs: NOW })).ok).toBe(true);
+  });
+  test('normal → ok', () => {
+    expect(passesAntiSpam(base, ctx()).ok).toBe(true);
   });
 });
 

@@ -42,6 +42,10 @@ export type RunProactiveOptions = {
   registry: ToolRegistry;
   emit: (e: ServerEvent) => void;
   intent?: ProactiveIntent;
+  // v0.22.0: a detector's concrete trigger context, appended to the USER-tail framing
+  // (rides the uncached tail — cache invariant preserved). She drafts from a real
+  // reason instead of the old gate hunting for one in the abstract.
+  seed?: string;
 };
 
 // C (v0.19.2): on a long-away wake, color the framing so it reads as "she noticed
@@ -49,7 +53,7 @@ export type RunProactiveOptions = {
 // decision (cadence/wake-gate) is untouched.
 // Restart-safe last-interaction time (mirrors runTurn): the last persisted L2
 // turn's t_ms, falling back to the in-memory lastUserMs.
-function lastInteractionMs(session: Session): number | null {
+export function lastInteractionMs(session: Session): number | null {
   const row = getMemoryDb() ? listRecentL2(session.id, 1)[0] : undefined;
   return row?.t_ms ?? (session.turnSeq > 0 ? session.lastUserMs : null);
 }
@@ -64,7 +68,7 @@ export function proactiveWeatherNote(session: Session, nowMs = Date.now()): stri
   return weatherNoteFor(getSnapshot()) ?? '';
 }
 
-function framing(intent: ProactiveIntent, session: Session): string {
+function framing(intent: ProactiveIntent, session: Session, seed?: string): string {
   let out = DIRECTIVES[intent];
   if (subjectiveTimeEnabled()) {
     const felt = feltAbsenceFor(session.lastUserMs, Date.now());
@@ -75,6 +79,7 @@ function framing(intent: ProactiveIntent, session: Session): string {
     }
   }
   out += proactiveWeatherNote(session);
+  if (seed) out += `\n${seed}`;
   return out;
 }
 
@@ -85,7 +90,7 @@ export async function runProactiveTurn(opts: RunProactiveOptions): Promise<{ spo
   const state = await runTurn({
     session: opts.session,
     turnId: `proactive:${opts.cycleId}`,
-    userText: framing(opts.intent ?? 'spontaneous', opts.session),
+    userText: framing(opts.intent ?? 'spontaneous', opts.session, opts.seed),
     provider: opts.provider,
     registry: opts.registry,
     emit: opts.emit,

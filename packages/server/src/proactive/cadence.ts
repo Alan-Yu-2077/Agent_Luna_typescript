@@ -91,8 +91,28 @@ export function shouldConsiderWake(
   return { consider: true, reason: 'idle' };
 }
 
+// v0.22.0 (Initiative 15): the anti-spam SUBSET used to gate the deterministic
+// detector path — quiet hours + cooldown + daily quota ONLY. Deliberately omits
+// `deep_absence` (>18h) and the `too_soon` (<10m) idle floor that `shouldConsiderWake`
+// applies: a long overnight/weekend absence is exactly when an after-a-night greeting
+// SHOULD fire, so it must not be swallowed (the never-fires hole the redesign kills).
+export function passesAntiSpam(c: Cadence, x: WakeContext): { ok: boolean; reason: string } {
+  if (!proactiveEnabled()) return { ok: false, reason: 'disabled' };
+  if (quietHours().has(x.nowHour)) return { ok: false, reason: 'quiet_hours' };
+  const sinceProactive = c.lastProactiveMs > 0 ? x.nowMs - c.lastProactiveMs : Infinity;
+  if (sinceProactive < num('LUNA_PROACTIVE_MIN_INTERVAL_MS', 300_000)) {
+    return { ok: false, reason: 'cooldown' };
+  }
+  if (c.quotaDate === dateKey(x.nowMs) && c.quotaUsed >= num('LUNA_PROACTIVE_DAILY_QUOTA', 5)) {
+    return { ok: false, reason: 'quota_exhausted' };
+  }
+  return { ok: true, reason: 'ok' };
+}
+
 // After a proactive cycle fires: bump the daily quota (rolling over on a new
-// day) and stamp the time, for lull anchoring + cooldown next tick.
+// day) and stamp the time, for lull anchoring + cooldown next tick. v0.22.0: this
+// is the SPOKE commit — only a turn that actually sent a message consumes the daily
+// message budget. A silent draft uses commitProactiveSilent (stamp only).
 export function commitProactive(c: Cadence, nowMs: number): Cadence {
   const today = dateKey(nowMs);
   const sameDay = c.quotaDate === today;
@@ -102,6 +122,14 @@ export function commitProactive(c: Cadence, nowMs: number): Cadence {
     quotaDate: today,
     lastProactiveMs: nowMs,
   };
+}
+
+// v0.22.0 (Initiative 15): a proactive turn that considered but stayed SILENT — stamp
+// the cooldown anchor (so it can't re-fire next tick) but do NOT bump the daily quota
+// (the budget counts MESSAGES, not considerations). Lets her "consider and stay quiet"
+// cheaply without exhausting the 5/day cap.
+export function commitProactiveSilent(c: Cadence, nowMs: number): Cadence {
+  return { ...c, lastProactiveMs: nowMs };
 }
 
 // User spoke → reset the cadence to engaged (Python: any user message resets
