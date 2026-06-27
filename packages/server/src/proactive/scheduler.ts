@@ -9,27 +9,19 @@ import { runDreamCycle } from '../dream/cycle';
 import { trace, flushTrace, traceEnabled } from '../trace/instrument';
 import { runProactiveTurn, type ProactiveIntent } from './proactiveTurn';
 import { buildWakeContext, wakeGate, type WakeVerdict } from './wakeGate';
-import { evaluateDetectors, type DetectorCtx, type ProactiveTrigger } from './detectors';
+import { maybeFireProactive, withProactiveLock } from './fire';
 import {
   commitProactive,
   commitProactiveSilent,
   loadCadence,
-  markSlotConsumed,
-  passesAntiSpam,
   proactiveEnabled,
   saveCadence,
   shouldConsiderWake,
 } from './cadence';
 
-// v0.22.1 (Initiative 15): the detector seam — defaults to the detector registry
-// (after-a-night + scheduled slots), injectable so the scheduler is testable without
-// the real morning/clock dependency inside the detectors (the setWeatherFetcher pattern).
-let detectProactive: (ctx: DetectorCtx) => ProactiveTrigger | null = evaluateDetectors;
-export function setProactiveDetectorForTests(
-  fn: ((ctx: DetectorCtx) => ProactiveTrigger | null) | null,
-): void {
-  detectProactive = fn ?? evaluateDetectors;
-}
+// v0.22.2 (Initiative 15): the detector seam moved to fire.ts (with the funnel that consumes
+// it). Re-export so existing callers/tests keep importing it from the scheduler.
+export { setProactiveDetectorForTests } from './fire';
 
 // The proactive heartbeat (Initiative 5, v0.10.3) — a single server-side timer
 // that, on each tick, runs the wake chain (prefilter → judgment) and fires a
@@ -126,70 +118,87 @@ async function tickOnce(deps: SchedulerDeps): Promise<void> {
   const llmGate = Bun.env['LUNA_PROACTIVE_LLM_GATE'] === '1';
   for (const sessionId of activeSessionIds()) {
     const session = getSession(sessionId);
-    if (session.activeTurn !== null) continue; // never overlap a user turn
-
-    const cadence = loadCadence(sessionId);
-    const wakeCtx = { lastUserMs: session.lastUserMs, nowMs: now, nowHour };
-    let intent: ProactiveIntent = 'spontaneous';
-    let seed = '';
-    let trigger: ProactiveTrigger | null = null;
-
     if (llmGate) {
-      const pf = shouldConsiderWake(cadence, wakeCtx);
-      if (!pf.consider) continue;
-      const verdict = await wakeGate(
-        deps.dreamLlm,
-        buildWakeContext({
-          gapLabel: gapLabel(now - session.lastUserMs),
-          daypart: daypartOf(nowHour),
-          recentProactive: listRecentProactiveTexts(sessionId, 3),
-        }),
-      );
-      emitWakeDecision(session, now, verdict);
-      if (!verdict.act) continue;
-      intent = verdict.intent === 'consolidate' ? 'consolidate' : 'spontaneous';
+      await tickLlmGateSession(session, now, nowHour, deps);
     } else {
-      // Anti-spam SUBSET only (quiet hours + idle floor + cooldown + quota — NOT
-      // deep_absence, NOT the 10m too_soon floor, so a >18h overnight/weekend gap still
-      // fires), then the deterministic detector registry. The turn decides whether to speak.
-      if (!passesAntiSpam(cadence, wakeCtx).ok) continue;
-      trigger = detectProactive({ session, cadence, nowMs: now, nowHour });
-      if (!trigger) continue;
-      intent = trigger.intent;
-      seed = trigger.seed;
+      // v0.22.2: the whole decision (anti-spam → detectors → debounce → turn → cadence
+      // commit) runs inside maybeFireProactive's single-turn lock — the same funnel the
+      // event hooks use, so a tick and a hook can never double-fire.
+      await maybeFireProactive({
+        session,
+        provider: deps.provider,
+        registry: deps.registry,
+        emit: deps.emit,
+        dreamLlm: deps.dreamLlm,
+        nowMs: now,
+        nowHour,
+      });
     }
+  }
+}
 
-    // TOCTOU re-check: any await above (wakeGate, or none on the detector path) took
-    // real time; a user turn or a dream may have started, or the kill switch flipped.
-    // runProactiveTurn sets activeTurn synchronously before its first await, so once
-    // this passes there is no interleaving window with chat.send.
-    if (session.activeTurn !== null || isDreaming() || !proactiveEnabled()) continue;
+// v0.22.2: the weather refresher's event hook — on a notable snapshot change, run one
+// detector eval for every active session at the natural instant (not up to a tick late).
+// Same funnel + lock as the heartbeat; the weatherShift detector decides notability. A
+// no-op under the legacy LLM-gate (hooks are a detector-path feature).
+export async function fireProactiveForActiveSessions(deps: SchedulerDeps): Promise<void> {
+  if (!proactiveEnabled() || isDreaming()) return;
+  if (Bun.env['LUNA_PROACTIVE_LLM_GATE'] === '1') return;
+  const now = Date.now();
+  const nowHour = new Date(now).getHours();
+  for (const sessionId of activeSessionIds()) {
+    await maybeFireProactive({
+      session: getSession(sessionId),
+      provider: deps.provider,
+      registry: deps.registry,
+      emit: deps.emit,
+      dreamLlm: deps.dreamLlm,
+      nowMs: now,
+      nowHour,
+    });
+  }
+}
 
+// The legacy LLM wake-gate path (LUNA_PROACTIVE_LLM_GATE=1) — a default-off fallback,
+// deleted in v0.22.3. Now routes its fire through the shared single-turn lock so it can't
+// overlap a hook/continuation either.
+async function tickLlmGateSession(
+  session: Session,
+  now: number,
+  nowHour: number,
+  deps: SchedulerDeps,
+): Promise<void> {
+  if (session.activeTurn !== null) return; // short-circuit BEFORE the wakeGate LLM call (parity
+  // with the pre-v0.22.2 loop) — don't spend a gate call on a session with a live user turn.
+  const cadence = loadCadence(session.id);
+  const pf = shouldConsiderWake(cadence, { lastUserMs: session.lastUserMs, nowMs: now, nowHour });
+  if (!pf.consider) return;
+  const verdict = await wakeGate(
+    deps.dreamLlm,
+    buildWakeContext({
+      gapLabel: gapLabel(now - session.lastUserMs),
+      daypart: daypartOf(nowHour),
+      recentProactive: listRecentProactiveTexts(session.id, 3),
+    }),
+  );
+  emitWakeDecision(session, now, verdict);
+  if (!verdict.act) return;
+  const intent: ProactiveIntent = verdict.intent === 'consolidate' ? 'consolidate' : 'spontaneous';
+  await withProactiveLock(session, async () => {
     const { spoke } = await runProactiveTurn({
       session,
-      cycleId: `${sessionId}:${now}`,
+      cycleId: `${session.id}:${now}`,
       provider: deps.provider,
       registry: deps.registry,
       emit: deps.emit,
       intent,
-      seed,
     });
-    // v0.22.0: only a turn that actually spoke consumes the daily message quota; a
-    // silent consideration just stamps the cooldown (so it can't re-fire next tick).
-    // v0.22.1: a scheduled-slot trigger is also marked consumed for the day (fired or
-    // silent — the slot is "used" either way; it shouldn't re-fire every tick).
-    let next = spoke ? commitProactive(cadence, now) : commitProactiveSilent(cadence, now);
-    if (trigger && trigger.debounceKey.startsWith('slot:')) {
-      next = markSlotConsumed(next, nowHour, now);
-    }
-    saveCadence(sessionId, next);
-
-    // Dream auto-trigger (v0.11.0, closes LD #11's deferred half): if she chose
-    // to dream during the proactive turn, start the cycle. Fire-and-forget —
-    // isDreaming() gates every subsequent tick, so no overlap.
+    saveCadence(session.id, spoke ? commitProactive(cadence, now) : commitProactiveSilent(cadence, now));
     if (session.pendingDream !== null) {
       session.pendingDream = null;
-      void runDreamCycle({ sessionId, llm: deps.dreamLlm, emit: deps.emit }).catch(() => {});
+      void runDreamCycle({ sessionId: session.id, llm: deps.dreamLlm, emit: deps.emit }).catch(
+        () => {},
+      );
     }
-  }
+  });
 }

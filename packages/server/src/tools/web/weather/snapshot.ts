@@ -11,6 +11,15 @@ import type { WeatherSnapshot, WeatherUnits } from './openMeteo';
 let lastSnapshot: WeatherSnapshot | null = null;
 let timer: ReturnType<typeof setInterval> | null = null;
 
+// v0.22.2 (Initiative 15): an optional hook fired AFTER a successful refresh updates the
+// snapshot, so the proactive layer can evaluate a weather-shift opening at the natural
+// instant (the weatherShift detector decides notability). Injected from main.ts to keep
+// this low-level module decoupled from session/proactive code (no import cycle).
+let onRefresh: (() => void) | null = null;
+export function setOnWeatherRefresh(cb: (() => void) | null): void {
+  onRefresh = cb;
+}
+
 function ttlMs(): number {
   const min = Number(Bun.env['LUNA_WEATHER_TTL_MIN'] ?? 30);
   return (Number.isFinite(min) && min > 0 ? min : 30) * 60_000;
@@ -43,6 +52,13 @@ export async function refreshWeather(): Promise<void> {
   try {
     const label = loc.label ?? `${loc.lat},${loc.lon}`;
     lastSnapshot = await fetchWeather(loc.lat, loc.lon, resolveTz(), label, { units: units() });
+    // After the snapshot updates — let the proactive layer react (weatherShift). Never let
+    // a hook error break the refresh timer.
+    try {
+      onRefresh?.();
+    } catch (e) {
+      console.warn('[weather] onRefresh hook failed:', e);
+    }
   } catch (e) {
     console.warn('[weather] background refresh failed — keeping last snapshot:', e);
   }
@@ -65,6 +81,7 @@ export function setSnapshotForTests(s: WeatherSnapshot | null): void {
 
 export function resetWeatherSnapshotForTests(): void {
   lastSnapshot = null;
+  onRefresh = null;
   if (timer != null) {
     clearInterval(timer);
     timer = null;

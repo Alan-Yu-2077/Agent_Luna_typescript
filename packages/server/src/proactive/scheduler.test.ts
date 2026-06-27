@@ -13,7 +13,13 @@ import { resetDreamStateForTests } from '../dream/dreamState';
 import { TraceStore } from '../trace/store';
 import { setTraceStore } from '../trace/instrument';
 import { dateKey, loadCadence } from './cadence';
-import { runTick, setProactiveDetectorForTests, type SchedulerDeps } from './scheduler';
+import { resetProactiveFireStateForTests } from './fire';
+import {
+  fireProactiveForActiveSessions,
+  runTick,
+  setProactiveDetectorForTests,
+  type SchedulerDeps,
+} from './scheduler';
 
 const endRound: ProviderEvent = {
   kind: 'message_stop',
@@ -39,6 +45,7 @@ beforeEach(() => {
   Bun.env['LUNA_PROACTIVE_QUIET_HOURS'] = '';
   resetSessions();
   resetDreamStateForTests(); // clear any fire-and-forget dream leaked from a prior test
+  resetProactiveFireStateForTests(); // clear the in-flight lock + per-key debounce between tests
 });
 afterEach(() => {
   setMemoryDb(null);
@@ -202,6 +209,26 @@ describe('proactive scheduler — detector path (default)', () => {
     idle();
     await runTick(makeDeps('', [[endRound]]).deps);
     expect(loadCadence('default').slotsUsed).toBe(0);
+  });
+
+  // v0.22.2: the weather event hook reuses the SAME funnel + lock as the heartbeat.
+  test('fireProactiveForActiveSessions runs the detector funnel for active sessions', async () => {
+    triggerOn();
+    idle();
+    const { deps, turnProvider } = makeDeps('', [[endRound]]);
+    await fireProactiveForActiveSessions(deps);
+    expect(turnProvider.requests.length).toBeGreaterThanOrEqual(1);
+    expect(loadCadence('default').lastProactiveMs).toBeGreaterThan(0);
+  });
+
+  test('the hook is a no-op while a user turn is active (shared single-turn lock)', async () => {
+    triggerOn();
+    const s = getSession('default');
+    s.activeTurn = 'busy-turn';
+    const { deps, turnProvider } = makeDeps('', [[endRound]]);
+    await fireProactiveForActiveSessions(deps);
+    expect(turnProvider.requests.length).toBe(0);
+    s.activeTurn = null;
   });
 });
 

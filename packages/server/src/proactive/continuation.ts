@@ -2,8 +2,8 @@ import type { ServerEvent } from '@luna/protocol';
 import type { Provider } from '../provider/types';
 import type { ToolRegistry } from '../tools/registry';
 import type { Session } from '../turn/session';
-import { isDreaming } from '../dream/dreamState';
 import { runProactiveTurn } from './proactiveTurn';
+import { withProactiveLock } from './fire';
 import { proactiveEnabled } from './cadence';
 
 // Self-continuation (Initiative 5, v0.11.0) — "a real person paused, then added
@@ -34,20 +34,24 @@ export function shouldContinue(): boolean {
   return Math.random() < prob;
 }
 
-// Runs the continuation micro-wake, guarded so it never overlaps a user turn or
-// dream (the same activeTurn discipline as the scheduler). Exported for tests.
+// Runs the continuation micro-wake. v0.22.2: routed through the SHARED single-turn lock
+// (withProactiveLock applies the activeTurn / isDreaming / proactiveEnabled rail), so a
+// continuation and a scheduler/hook turn can never overlap. Deliberately rail-LIGHT: a
+// continuation is a bounded one-per-reply micro-wake (LD #11), so it stays quota- and
+// cooldown-exempt by design — no cadence commit here. Exported for tests.
 export async function fireContinuation(deps: ContinuationDeps): Promise<void> {
   const { session } = deps;
-  if (session.activeTurn !== null || isDreaming() || !proactiveEnabled()) return;
   if (deps.hasListener && !deps.hasListener()) return; // client gone — don't waste a turn
-  await runProactiveTurn({
-    session,
-    cycleId: `${session.id}:cont:${Date.now()}`,
-    provider: deps.provider,
-    registry: deps.registry,
-    emit: deps.emit,
-    intent: 'continuation',
-  });
+  await withProactiveLock(session, () =>
+    runProactiveTurn({
+      session,
+      cycleId: `${session.id}:cont:${Date.now()}`,
+      provider: deps.provider,
+      registry: deps.registry,
+      emit: deps.emit,
+      intent: 'continuation',
+    }),
+  );
 }
 
 // Call after a user turn finalizes: maybe schedule a continuation after a short

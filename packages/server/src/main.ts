@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { broadcast, handleClose, handleMessage, handleOpen, setRuntime, type WSData } from './ws';
-import { startScheduler } from './proactive/scheduler';
+import { fireProactiveForActiveSessions, startScheduler } from './proactive/scheduler';
 import { AnthropicProvider } from './provider/anthropic';
 import {
   builtinRegistry,
@@ -32,7 +32,7 @@ import { setMemoryDb } from './memory/sessionStore';
 import { initCustomSqlite } from './memory/recall/vecRuntime';
 import { bootReconcile, isDreaming } from './dream/dreamState';
 import { runDreamCycle } from './dream/cycle';
-import { startWeatherRefresh } from './tools/web/weather/snapshot';
+import { setOnWeatherRefresh, startWeatherRefresh } from './tools/web/weather/snapshot';
 import { activeSessionIds, preloadSessions } from './turn/session';
 
 const port = Number(process.env['LUNA_PORT'] ?? 8787);
@@ -116,10 +116,19 @@ if (Bun.env['ANTHROPIC_API_KEY']) {
   // Proactive heartbeat (v0.10.3). The timer runs always; each tick no-ops
   // unless LUNA_PROACTIVE=1 (re-read per tick, so the kill switch toggles
   // without a restart). Bubbles push to all connected sockets.
-  startScheduler({ provider, registry, dreamLlm, emit: broadcast });
+  const schedulerDeps = { provider, registry, dreamLlm, emit: broadcast };
+  startScheduler(schedulerDeps);
   // Ambient weather (Initiative 14, v0.21.1): a .unref()'d background refresh of
   // the snapshot parse_input reads synchronously. No-op unless LUNA_WEATHER_AMBIENT=1
   // and LUNA_LAT_LON is set; never fetches on the reactive path.
+  // v0.22.2 (Initiative 15): the weather event hook — a notable snapshot change runs one
+  // proactive eval (weatherShift) at the natural instant. Gated by LUNA_PROACTIVE_EVENT_HOOKS
+  // (default off); wired before startWeatherRefresh so the first refresh is covered.
+  setOnWeatherRefresh(() => {
+    if (Bun.env['LUNA_PROACTIVE_EVENT_HOOKS'] === '1') {
+      void fireProactiveForActiveSessions(schedulerDeps).catch(() => {});
+    }
+  });
   startWeatherRefresh();
 
   // Shutdown dream (v0.21.7): on a graceful exit (Ctrl-C / SIGTERM) run one last

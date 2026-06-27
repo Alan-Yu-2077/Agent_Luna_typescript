@@ -10,8 +10,10 @@ import type { Provider } from './provider/types';
 import { getSession, type Session } from './turn/session';
 import { listL2 } from './memory/sessionStore';
 import { runTurn } from './turn/runTurn';
-import { runProactiveTurn } from './proactive/proactiveTurn';
+import { afterANightOpening } from './turn/temporalContext';
+import { runProactiveTurn, lastInteractionMs } from './proactive/proactiveTurn';
 import { proactiveEnabled } from './proactive/cadence';
+import { maybeFireProactive, withProactiveLock } from './proactive/fire';
 import { maybeScheduleContinuation } from './proactive/continuation';
 import { dreamStatus, isDreaming, wake } from './dream/dreamState';
 import { runDreamCycle } from './dream/cycle';
@@ -95,6 +97,35 @@ export function handleOpen(ws: ServerWebSocket<WSData>): void {
     .slice(-300);
   if (turns.length > 0) outbound(ws, { type: 'history', turns });
   console.log(`[ws] open ${ws.remoteAddress} session=${ws.data.sessionId} history=${turns.length}`);
+  maybeFireOnReconnect(ws.data.sessionId);
+}
+
+// v0.22.2 (Initiative 15): an event hook — when a client (re)connects after an overnight
+// gap, evaluate the proactive funnel immediately so a morning greeting lands the instant
+// she's seen, not up to a tick (60s) later. Gated by LUNA_PROACTIVE_EVENT_HOOKS (default
+// off). The pre-gate is a cheap "is this worth an immediate eval"; maybeFireProactive then
+// re-applies the full rail + single-turn lock, so it only fires if a detector actually
+// matches and nothing else is running.
+function proactiveEventHooksEnabled(): boolean {
+  return Bun.env['LUNA_PROACTIVE_EVENT_HOOKS'] === '1';
+}
+
+function maybeFireOnReconnect(sessionId: string): void {
+  if (!proactiveEventHooksEnabled()) return;
+  const rt = runtime;
+  if (!rt?.dreamLlm) return;
+  const session = getSession(sessionId);
+  const now = Date.now();
+  if (!afterANightOpening(now, lastInteractionMs(session))) return;
+  void maybeFireProactive({
+    session,
+    provider: rt.provider,
+    registry: rt.registry,
+    emit: broadcast,
+    dreamLlm: rt.dreamLlm,
+    nowMs: now,
+    nowHour: new Date(now).getHours(),
+  }).catch(() => {});
 }
 
 export function handleClose(
@@ -303,13 +334,18 @@ export function handleMessage(
         });
         return;
       }
-      void runProactiveTurn({
-        session,
-        cycleId: `${session.id}:${Date.now()}`,
-        provider: runtime.provider,
-        registry: runtime.registry,
-        emit: safeEmit(ws),
-      }).catch((e) => {
+      // v0.22.2: through the shared single-turn lock (won't overlap a tick/hook/continuation
+      // that's mid-flight). A dev force-fire — no cadence rail, no detector.
+      const rt = runtime;
+      void withProactiveLock(session, () =>
+        runProactiveTurn({
+          session,
+          cycleId: `${session.id}:${Date.now()}`,
+          provider: rt.provider,
+          registry: rt.registry,
+          emit: safeEmit(ws),
+        }),
+      ).catch((e) => {
         console.error('[ws] proactive.fire failed:', e);
       });
       return;

@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { setMemoryDb } from '../memory/sessionStore';
 import { getSession, resetSessions } from '../turn/session';
+import { resetWeatherSnapshotForTests, setSnapshotForTests } from '../tools/web/weather/snapshot';
+import type { WeatherSnapshot } from '../tools/web/weather/openMeteo';
 import { type Cadence, dateKey } from './cadence';
-import { evaluateDetectors, type DetectorCtx } from './detectors';
+import { evaluateDetectors, resetWeatherBaselineForTests, type DetectorCtx } from './detectors';
 
 const NOW = 1_700_000_000_000;
 const baseCadence: Cadence = {
@@ -58,5 +60,69 @@ describe('proactive detectors (v0.22.1)', () => {
 
   test('no slots + no prior interaction → no detector fires (afterNight null)', () => {
     expect(evaluateDetectors(ctx(11))).toBeNull();
+  });
+});
+
+// observedMs must be ~now so getSnapshot() doesn't treat the canned snapshot as stale (its
+// staleness check uses the real clock); the bucket only reads condition + temp.
+function snap(condition: string, temp: number): WeatherSnapshot {
+  return {
+    label: 'Home',
+    temp,
+    feelsLike: temp,
+    condition,
+    code: 0,
+    isDay: true,
+    precipMm: 0,
+    windKmh: 5,
+    high: temp + 2,
+    low: temp - 2,
+    precipChance: 0,
+    sunrise: '',
+    sunset: '',
+    units: 'celsius',
+    observedMs: Date.now(),
+  };
+}
+
+describe('weatherShift detector (v0.22.2)', () => {
+  beforeEach(() => {
+    resetWeatherBaselineForTests();
+    resetWeatherSnapshotForTests();
+  });
+  afterEach(() => {
+    resetWeatherBaselineForTests();
+    resetWeatherSnapshotForTests();
+    delete Bun.env['LUNA_PROACTIVE_WEATHER_SHIFT'];
+  });
+
+  test('null when the snapshot is cold (no weather cached)', () => {
+    setSnapshotForTests(null);
+    expect(evaluateDetectors(ctx(14))).toBeNull();
+  });
+
+  test('first observation seeds the baseline, does not fire', () => {
+    setSnapshotForTests(snap('clear', 18));
+    expect(evaluateDetectors(ctx(14))).toBeNull(); // can't shift from nothing
+  });
+
+  test('fires once on a notable condition-class change, not on same-bucket noise', () => {
+    setSnapshotForTests(snap('clear', 18)); // baseline = clear:mild
+    evaluateDetectors(ctx(14));
+    setSnapshotForTests(snap('light rain', 17)); // → rain:mild — the class changed
+    const hit = evaluateDetectors(ctx(14));
+    expect(hit?.debounceKey).toBe('weather:rain:mild');
+    expect(hit?.intent).toBe('spontaneous');
+    // a fluctuation within the same bucket (still rain, still mild) does NOT re-fire
+    setSnapshotForTests(snap('rain', 16));
+    expect(evaluateDetectors(ctx(14))).toBeNull();
+  });
+
+  test('LUNA_PROACTIVE_WEATHER_SHIFT=0 disables it', () => {
+    Bun.env['LUNA_PROACTIVE_WEATHER_SHIFT'] = '0';
+    setSnapshotForTests(snap('clear', 18));
+    evaluateDetectors(ctx(14));
+    setSnapshotForTests(snap('thunderstorm', 25));
+    expect(evaluateDetectors(ctx(14))).toBeNull();
   });
 });
