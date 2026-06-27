@@ -23,7 +23,10 @@ export type ProviderEvent =
       kind: 'message_stop';
       stopReason: string;
       toolUses: ProviderToolUse[];
-      assistantContent: Anthropic.ContentBlock[];
+      // The assistant turn to replay into session.history — a PARAM type (input for the next
+      // turn), so a non-Anthropic provider can synthesize it without response-only fields
+      // (ToolUseBlock.caller etc.). Anthropic's response ContentBlock[] assigns to this directly.
+      assistantContent: Anthropic.ContentBlockParam[];
       usage: ProviderUsage;
     };
 

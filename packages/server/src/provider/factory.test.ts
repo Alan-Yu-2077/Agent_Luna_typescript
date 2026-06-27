@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { AnthropicProvider } from './anthropic';
 import { MockProvider } from './mock';
+import { OpenAIProvider } from './openai/openaiProvider';
 import { providerFor } from './factory';
 import type { ProviderCapabilities } from './capabilities';
 
@@ -38,9 +39,9 @@ describe('providerFor (provider factory, v0.23.0)', () => {
     expect(providerFor()).toBeInstanceOf(AnthropicProvider);
   });
 
-  test('LUNA_PROVIDER=openai throws not-implemented (until v0.23.1)', () => {
+  test('LUNA_PROVIDER=openai → OpenAIProvider (v0.23.1)', () => {
     Bun.env['LUNA_PROVIDER'] = 'openai';
-    expect(() => providerFor()).toThrow(/not implemented until v0\.23\.1/);
+    expect(providerFor()).toBeInstanceOf(OpenAIProvider);
   });
 
   test('an unknown LUNA_PROVIDER fails fast', () => {
