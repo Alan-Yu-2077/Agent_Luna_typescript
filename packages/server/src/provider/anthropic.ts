@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
+import type { ProviderCapabilities } from './capabilities';
 import type {
   CompleteRequest,
   CompleteResult,
@@ -36,6 +37,15 @@ export function unwrapGatewayInput(input: unknown): unknown {
 
 export class AnthropicProvider implements Provider {
   private client: Anthropic;
+
+  readonly capabilities: ProviderCapabilities = {
+    thinking: true,
+    promptCache: true,
+    interleavedToolStreaming: true,
+    toolUse: true,
+    systemRole: true,
+    maxOutputTokens: MAX_TOKENS,
+  };
 
   constructor(opts?: { apiKey?: string }) {
     this.client = new Anthropic({

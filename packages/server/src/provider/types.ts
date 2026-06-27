@@ -1,4 +1,5 @@
 import type Anthropic from '@anthropic-ai/sdk';
+import type { ProviderCapabilities } from './capabilities';
 
 export type ProviderToolUse = {
   id: string;
@@ -48,6 +49,7 @@ export type CompleteResult = {
 };
 
 export interface Provider {
+  readonly capabilities: ProviderCapabilities;
   chatStream(req: ProviderRequest): AsyncIterable<ProviderEvent>;
   complete(req: CompleteRequest): Promise<CompleteResult>;
 }

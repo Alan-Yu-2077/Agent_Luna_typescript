@@ -102,6 +102,7 @@ describe('dream cycle', () => {
     // Make refine_semantic wait so the cycle is observably "running".
     const slowLlm: DreamLLM = {
       primary: {
+        capabilities: llm.primary.capabilities,
         complete: async (req) => {
           if (
             typeof req.messages[0]?.content === 'string' &&

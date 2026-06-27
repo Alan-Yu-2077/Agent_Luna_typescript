@@ -1,7 +1,8 @@
 import { join } from 'node:path';
 import { broadcast, handleClose, handleMessage, handleOpen, setRuntime, type WSData } from './ws';
 import { fireProactiveForActiveSessions, startScheduler } from './proactive/scheduler';
-import { AnthropicProvider } from './provider/anthropic';
+import { providerFor } from './provider/factory';
+import { describeCapabilities } from './provider/capabilities';
 import {
   builtinRegistry,
   codeWriteEnabled,
@@ -68,12 +69,12 @@ process.on('unhandledRejection', (reason) => {
 });
 
 if (Bun.env['ANTHROPIC_API_KEY']) {
-  const provider = new AnthropicProvider();
+  const provider = providerFor();
   const summarizerKey = Bun.env['LUNA_SUMMARIZER_API_KEY'];
   // Dream cascade: summarizer-key provider first (never competes with the main
   // reply key's quota), default provider as fallback.
   const dreamLlm = summarizerKey
-    ? { primary: new AnthropicProvider({ apiKey: summarizerKey }), fallback: provider }
+    ? { primary: providerFor({ apiKey: summarizerKey }), fallback: provider }
     : { primary: provider, fallback: null };
   // LD #9 mode switch, read once at boot: registry content IS the mode —
   // everything downstream derives it from the registry, never from env.
@@ -111,7 +112,7 @@ if (Bun.env['ANTHROPIC_API_KEY']) {
   );
   setRuntime({ provider, registry, dreamLlm });
   console.log(
-    `[luna-server] provider: ${Bun.env['LUNA_MODEL'] ?? 'claude-opus-4-8'} via ${Bun.env['ANTHROPIC_BASE_URL'] ?? 'https://api.anthropic.com'}${summarizerKey ? ' (+summarizer key)' : ''}${messageMode ? ' [message-tool mode]' : ''}${writeMode ? ' [code-write]' : ''}${shellMode ? ' [shell]' : ''}${repoMapMode ? ' [repo-map]' : ''}${skillMode ? ' [skills]' : ''}${selfEditMode ? ' [self-edit]' : ''}${webSearchMode ? ' [web-search]' : ''}${webFetchMode ? ' [web-fetch]' : ''}${weatherMode ? ' [weather]' : ''}`,
+    `[luna-server] provider: ${Bun.env['LUNA_PROVIDER'] ?? 'anthropic'}/${Bun.env['LUNA_MODEL'] ?? 'claude-opus-4-8'} via ${Bun.env['ANTHROPIC_BASE_URL'] ?? 'https://api.anthropic.com'} (${describeCapabilities(provider.capabilities)})${summarizerKey ? ' (+summarizer key)' : ''}${messageMode ? ' [message-tool mode]' : ''}${writeMode ? ' [code-write]' : ''}${shellMode ? ' [shell]' : ''}${repoMapMode ? ' [repo-map]' : ''}${skillMode ? ' [skills]' : ''}${selfEditMode ? ' [self-edit]' : ''}${webSearchMode ? ' [web-search]' : ''}${webFetchMode ? ' [web-fetch]' : ''}${weatherMode ? ' [weather]' : ''}`,
   );
   // Proactive heartbeat (v0.10.3). The timer runs always; each tick no-ops
   // unless LUNA_PROACTIVE=1 (re-read per tick, so the kill switch toggles

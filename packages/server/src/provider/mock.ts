@@ -1,3 +1,4 @@
+import type { ProviderCapabilities } from './capabilities';
 import type {
   CompleteRequest,
   CompleteResult,
@@ -12,6 +13,17 @@ export class MockProvider implements Provider {
   requests: ProviderRequest[] = [];
   completeRequests: CompleteRequest[] = [];
   completeResponder: (req: CompleteRequest) => Promise<string> | string = () => '[mock summary]';
+
+  // Mirrors the Anthropic defaults so existing tests need no change; mutable so a future
+  // capability-branch test can flip a flag.
+  capabilities: ProviderCapabilities = {
+    thinking: true,
+    promptCache: true,
+    interleavedToolStreaming: true,
+    toolUse: true,
+    systemRole: true,
+    maxOutputTokens: 8192,
+  };
 
   constructor(rounds: ProviderEvent[][]) {
     this.rounds = rounds;
