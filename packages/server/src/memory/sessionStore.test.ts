@@ -8,14 +8,7 @@ import { builtinRegistry } from '../tools/registry';
 import { getSession, resetSessions } from '../turn/session';
 import { runTurn } from '../turn/runTurn';
 import { migrate } from '../sql';
-import {
-  appendL2,
-  listL2,
-  listRecentProactiveTexts,
-  loadSession,
-  persistSession,
-  setMemoryDb,
-} from './sessionStore';
+import { appendL2, listL2, loadSession, persistSession, setMemoryDb } from './sessionStore';
 
 let db: Database;
 
@@ -132,17 +125,6 @@ describe('sessionStore', () => {
     expect(raw.length).toBe(2);
     expect(raw[0]?.role).toBe('user');
     expect(raw[1]?.role).toBe('assistant');
-  });
-
-  // v0.20.8 — the wake gate's anti-repeat list: recent SPOKEN proactive openers
-  // (turn_id 'proactive:%', non-empty assistant_text), most-recent first.
-  test('listRecentProactiveTexts returns recent spoken proactive openers only', () => {
-    appendL2({ sessionId: 'p', turnId: 'p:turn:0', userText: 'hi', assistantText: 'a reactive reply', rawContent: [] });
-    appendL2({ sessionId: 'p', turnId: 'proactive:p:c1', userText: '(woke)', assistantText: '想到你了', rawContent: [] });
-    appendL2({ sessionId: 'p', turnId: 'proactive:p:c2', userText: '(woke)', assistantText: '', rawContent: [] }); // silent → excluded
-    appendL2({ sessionId: 'p', turnId: 'proactive:p:c3', userText: '(woke)', assistantText: '在看一本书', rawContent: [] });
-    const texts = listRecentProactiveTexts('p', 5);
-    expect(texts).toEqual(['在看一本书', '想到你了']); // most-recent first, reactive + silent excluded
   });
 
   // v0.20.6 — listL2 without a limit loads the WHOLE timeline (the old 10000 magic

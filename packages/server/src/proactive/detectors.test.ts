@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { setMemoryDb } from '../memory/sessionStore';
+import { Database } from 'bun:sqlite';
+import { join } from 'node:path';
+import { migrate } from '../sql';
+import { appendL2, setMemoryDb } from '../memory/sessionStore';
+import { addFact } from '../memory/l3Store';
 import { getSession, resetSessions } from '../turn/session';
 import { resetWeatherSnapshotForTests, setSnapshotForTests } from '../tools/web/weather/snapshot';
 import type { WeatherSnapshot } from '../tools/web/weather/openMeteo';
@@ -124,5 +128,123 @@ describe('weatherShift detector (v0.22.2)', () => {
     evaluateDetectors(ctx(14));
     setSnapshotForTests(snap('thunderstorm', 25));
     expect(evaluateDetectors(ctx(14))).toBeNull();
+  });
+});
+
+// The two soft detectors read DB state (L3 active_threads / L2 turns) — give them a real DB.
+// `appendL2`/`addFact` stamp t_ms/created_ms at the real Date.now(); to simulate "aged" we run
+// the detector with a future-shifted ctx.nowMs (the detectors compare against ctx.nowMs).
+const HOUR = 3_600_000;
+describe('fuzzy detectors (v0.22.3, default-off)', () => {
+  let fdb: Database;
+  beforeEach(() => {
+    fdb = new Database(':memory:', { strict: true });
+    migrate(fdb, join(import.meta.dir, '..', 'migrations'));
+    setMemoryDb(fdb);
+    resetSessions();
+  });
+  afterEach(() => {
+    setMemoryDb(null);
+    fdb.close(false);
+    delete Bun.env['LUNA_PROACTIVE_OPEN_THREADS'];
+    delete Bun.env['LUNA_PROACTIVE_FOLLOW_THROUGH'];
+    delete Bun.env['LUNA_PROACTIVE_PROMISE_AGE_MS'];
+    delete Bun.env['LUNA_PROACTIVE_PROMISE_MAX_AGE_MS'];
+  });
+
+  const dbCtx = (nowMs: number): DetectorCtx => ({
+    session: getSession('default'),
+    cadence: baseCadence,
+    nowMs,
+    nowHour: 14, // afternoon — keeps afterNight off regardless of the real clock
+  });
+
+  describe('openThreadAged', () => {
+    test('fires past the age threshold when the flag is on, soft seed names the thread', () => {
+      Bun.env['LUNA_PROACTIVE_OPEN_THREADS'] = '1';
+      addFact('active_threads', 'the database migration plan');
+      const hit = evaluateDetectors(dbCtx(Date.now() + 48 * HOUR)); // 48h "later" > 24h default
+      expect(hit?.debounceKey).toMatch(/^thread:at_/);
+      expect(hit?.seed).toContain('the database migration plan');
+      expect(hit?.intent).toBe('spontaneous');
+    });
+
+    test('null when the thread is not yet aged', () => {
+      Bun.env['LUNA_PROACTIVE_OPEN_THREADS'] = '1';
+      addFact('active_threads', 'a fresh thread');
+      expect(evaluateDetectors(dbCtx(Date.now()))).toBeNull();
+    });
+
+    test('null with the flag off (default)', () => {
+      addFact('active_threads', 'a thread');
+      expect(evaluateDetectors(dbCtx(Date.now() + 48 * HOUR))).toBeNull();
+    });
+  });
+
+  describe('promisedFollowThrough', () => {
+    const promise = () =>
+      appendL2({
+        sessionId: 'default',
+        turnId: 'reactive:1',
+        userText: 'can you find that doc?',
+        assistantText: "Sure — I'll look into it and get back to you.",
+        rawContent: [],
+      });
+
+    test('fires when the newest turn is an aged promise and the flag is on', () => {
+      Bun.env['LUNA_PROACTIVE_FOLLOW_THROUGH'] = '1';
+      Bun.env['LUNA_PROACTIVE_PROMISE_AGE_MS'] = String(HOUR); // 1h threshold
+      promise();
+      const hit = evaluateDetectors(dbCtx(Date.now() + 2 * HOUR)); // 2h later, no follow-up
+      expect(hit?.debounceKey).toMatch(/^promise:/);
+      expect(hit?.seed).toContain('follow up');
+    });
+
+    test('null when the last turn is not a promise', () => {
+      Bun.env['LUNA_PROACTIVE_FOLLOW_THROUGH'] = '1';
+      Bun.env['LUNA_PROACTIVE_PROMISE_AGE_MS'] = String(HOUR);
+      appendL2({
+        sessionId: 'default',
+        turnId: 'reactive:1',
+        userText: 'hi',
+        assistantText: 'Hey — good to see you.',
+        rawContent: [],
+      });
+      expect(evaluateDetectors(dbCtx(Date.now() + 2 * HOUR))).toBeNull();
+    });
+
+    test('null with the flag off (default), even with an aged promise', () => {
+      Bun.env['LUNA_PROACTIVE_PROMISE_AGE_MS'] = String(HOUR);
+      promise();
+      expect(evaluateDetectors(dbCtx(Date.now() + 2 * HOUR))).toBeNull();
+    });
+
+    test('null when the promise is too recent (followed up within the window)', () => {
+      Bun.env['LUNA_PROACTIVE_FOLLOW_THROUGH'] = '1'; // default 6h threshold
+      promise();
+      expect(evaluateDetectors(dbCtx(Date.now() + 1 * HOUR))).toBeNull(); // 1h < 6h
+    });
+
+    test('null for an empathy line that is not a real promise (tightened regex)', () => {
+      Bun.env['LUNA_PROACTIVE_FOLLOW_THROUGH'] = '1';
+      Bun.env['LUNA_PROACTIVE_PROMISE_AGE_MS'] = String(HOUR);
+      appendL2({
+        sessionId: 'default',
+        turnId: 'reactive:1',
+        userText: 'i feel stuck',
+        assistantText: "I can see why that feels heavy. I'll see you tomorrow, okay?",
+        rawContent: [],
+      });
+      expect(evaluateDetectors(dbCtx(Date.now() + 2 * HOUR))).toBeNull();
+    });
+
+    test('null once abandoned past the max-age window (no infinite re-fire)', () => {
+      Bun.env['LUNA_PROACTIVE_FOLLOW_THROUGH'] = '1';
+      Bun.env['LUNA_PROACTIVE_PROMISE_AGE_MS'] = String(HOUR);
+      Bun.env['LUNA_PROACTIVE_PROMISE_MAX_AGE_MS'] = String(4 * HOUR);
+      promise();
+      expect(evaluateDetectors(dbCtx(Date.now() + 2 * HOUR))?.debounceKey).toMatch(/^promise:/);
+      expect(evaluateDetectors(dbCtx(Date.now() + 10 * HOUR))).toBeNull(); // past max → abandoned
+    });
   });
 });

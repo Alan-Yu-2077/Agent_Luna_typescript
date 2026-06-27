@@ -15,7 +15,6 @@ import {
   recordUserActivity,
   saveCadence,
   scheduledSlots,
-  shouldConsiderWake,
 } from './cadence';
 
 const NOW = 1_700_000_000_000; // fixed 2023-11-14T22:13:20Z
@@ -36,51 +35,6 @@ const ctx = (over: Partial<{ lastUserMs: number; nowMs: number; nowHour: number 
   nowMs: NOW,
   nowHour: 14, // 2pm
   ...over,
-});
-
-describe('shouldConsiderWake (prefilter)', () => {
-  beforeEach(() => {
-    Bun.env['LUNA_PROACTIVE'] = '1';
-  });
-  afterEach(() => {
-    delete Bun.env['LUNA_PROACTIVE'];
-    delete Bun.env['LUNA_PROACTIVE_QUIET_HOURS'];
-  });
-
-  test('disabled when LUNA_PROACTIVE=0 (kill switch; default ON since v0.11.0)', () => {
-    Bun.env['LUNA_PROACTIVE'] = '0';
-    expect(shouldConsiderWake(base, ctx()).reason).toBe('disabled');
-  });
-  test('quiet hours short-circuit', () => {
-    expect(shouldConsiderWake(base, ctx({ nowHour: 3 })).reason).toBe('quiet_hours');
-  });
-  test('deep absence (>18h) → no wake', () => {
-    expect(shouldConsiderWake(base, ctx({ lastUserMs: NOW - 19 * 3600_000 })).reason).toBe(
-      'deep_absence',
-    );
-  });
-  test('cooldown since last proactive', () => {
-    expect(shouldConsiderWake({ ...base, lastProactiveMs: NOW - 60_000 }, ctx()).reason).toBe(
-      'cooldown',
-    );
-  });
-  test('daily quota exhausted', () => {
-    const c = { ...base, quotaDate: TODAY, quotaUsed: 5 };
-    expect(shouldConsiderWake(c, ctx()).reason).toBe('quota_exhausted');
-  });
-  test('too soon (gap below idle threshold)', () => {
-    expect(shouldConsiderWake(base, ctx({ lastUserMs: NOW - 5 * 60_000 })).reason).toBe('too_soon');
-  });
-  test('idle past the threshold → consider', () => {
-    const r = shouldConsiderWake(base, ctx());
-    expect(r.consider).toBe(true);
-    expect(r.reason).toBe('idle');
-  });
-  test('lull anchoring: her own recent message keeps the effective gap small', () => {
-    // 20-min user gap, but she messaged 8 min ago → effective gap 8 min < threshold
-    const c = { ...base, lastProactiveMs: NOW - 8 * 60_000 };
-    expect(shouldConsiderWake(c, ctx()).reason).toBe('too_soon');
-  });
 });
 
 describe('cadence transitions', () => {

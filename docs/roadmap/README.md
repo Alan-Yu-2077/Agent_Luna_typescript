@@ -4,7 +4,7 @@ Forward development plan for the TypeScript rewrite. Each initiative is a folder
 self-contained version plans, executed one at a time. Version numbers reserve across initiatives so
 they never overlap.
 
-> **Main head: v0.21.10** (branch `feat/weather-perception`). **Initiatives 8–12 all ✅ shipped + merged**: code-agent capability
+> **Main head: v0.22.3** (branch `feat/weather-perception`). **Initiatives 8–12 all ✅ shipped + merged**: code-agent capability
 > (v0.15.x), audit remediation (v0.16.x), memory-depth correction (v0.17.x), **web tools (Initiative 11,
 > v0.18.0–v0.18.3)** — `web_search` + a DNS-**pinned** SSRF-guarded `web_fetch` + the standing injection
 > defense + citations, default-on — and **time perception (Initiative 12, v0.19.0–v0.19.2)** — cache-safe
@@ -17,12 +17,13 @@ they never overlap.
 > **Initiative 14 — weather perception ✅ shipped** (v0.21.0–v0.21.2, branch `feat/weather-perception`): a no-key location-based `weather` tool
 > (A) + cache-safe ambient awareness in the uncached tail (B) + a natural after-a-night proactive mention
 > (C) — the Initiative-12 shape, net-new over Python.
-> **Initiative 15 — proactive pipeline redesign 🟡 PLANNED** (v0.22.0–v0.22.3): the proactive system is
-> *configured on* but has **never once spoken** (live data: every `proactive_wake` decision is `hold`,
-> **0 `act` ever**; 0 scheduler-driven proactive messages). Replace the per-tick **LLM wake-gate** with
-> cheap **deterministic trigger detectors** feeding the existing **silence-capable** turn graph — the
-> proactive turn's own `{spoke}` becomes the only "should I speak?" judgment (drafting-as-decision).
-> ~100–300× less proactive token spend; **0 → a reliable handful of messages/day**.
+> **Initiative 15 — proactive pipeline redesign ✅ SHIPPED** (v0.22.0–v0.22.3, branch `feat/weather-perception`):
+> the proactive system was *configured on* but had **never once spoken** (live data: every `proactive_wake`
+> decision was `hold`, **0 `act` ever**). The per-tick **LLM wake-gate** is **deleted**; a registry of cheap
+> **deterministic detectors** (after-a-night, scheduled slots, weather-shift, open-thread, promised-follow-through)
+> now feeds the existing **silence-capable** turn graph — the proactive turn's own `{spoke}` is the only
+> "should I speak?" judgment (drafting-as-decision), behind a real per-session single-turn lock + event hooks.
+> **Heartbeat is now LLM-free** (zero speculative spend on an idle day); 0 → a reliable handful/day.
 > **Initiatives 1, 1.5, 2, 3, 4, 5, 6 all ✅ complete.** The rewrite now has the full stack: the agent
 > brain + three-layer memory + dream consolidation + proactive agency, **and the body** — a redesigned
 > cute UI (chat left / model right, light-blue stripes + lace), the live Live2D **yumi** avatar with 14
@@ -56,7 +57,7 @@ they never overlap.
 | 12 | v0.19.0 – v0.19.2 | **Time perception** — give Luna a real sense of time (she has only a pull `time_now` tool today, so she drifts — calling an hour-ago event "yesterday"). Layered, from a 2023–2026 SOTA review: **(A)** cache-safe **passive time injection** in the per-turn uncached tail (local time + daypart + TS-precomputed elapsed-since-last + session bucket) — v0.19.0; **(B)** **memory temporal grounding** — relative-time labels + chronological order on recalled candidates, reusing Init 10's GA recall ranking — v0.19.1; **(C)** a bounded **subjective-time** layer (daypart-mood + felt absence) wired into the dream/proactive cycle, warmth-not-guilt — v0.19.2. Core rule: do all temporal arithmetic in TS, hand Claude labeled facts (benchmarks show LLMs can't reliably compute "how long ago"). Ports + beats Python's `temporal_reasoning` (adds B + cache-safe placement). | [`time-perception-2026-06/`](time-perception-2026-06/) | ✅ shipped 2026-06-17 (3 versions) |
 | 13 | v0.20.0 – v0.20.9 | **Deep-audit remediation** — fix the **45 adversarially-confirmed findings** (6 high / 30 medium / 9 medium→low) from the 2026-06-20 26-domain line-by-line audit (78 agents, every source file + sibling tests read in full, each serious finding independently re-verified). Risk-ordered, independently-shippable slices: the **shell/verify safety-gate cluster** (argv-spawn the verify tools to kill command-injection + the deny-gate bypass, broaden the deny-regex, firewall the enforcer files, close the `$HOME` secret-path indirection + grep symlink-to-secret, real process-tree kill + abort + tree-sitter parser free — v0.20.0–v0.20.2), then **user-facing correctness** (IME-safe Enter for Chinese input, wire barge-in, `formatGap` "Nh 60m", `LUNA_TZ` brick — v0.20.3–v0.20.4), then **memory/data integrity** (recall diary-drop + starvation + embedding dim guard, keep-newest-turns, empty-digest guard, atomic writes, fuzzy uniqueness — v0.20.5–v0.20.7), then **resilience** (trace-flush guard, turn abort on disconnect, keepalive ping, TTS latch self-heal — v0.20.8), then **contract/config/test-debt** (dead schema prune, `.env.example`, the untested SSRF DNS-pin, cosmetic UI nits — v0.20.9). Distinct from Initiative 9 (the v0.16.x PR#1/#2 remediation); this is the v0.19.2 full-tree pass. | [`deep-audit-remediation-2026-06/`](deep-audit-remediation-2026-06/) | ✅ shipped 2026-06-20 (branch) |
 | 14 | v0.21.0 – v0.21.2 | **Weather perception** — give Luna a sense of the **weather where her person is** + the judgment to mention it *naturally* (care, not forecast); layered like Initiative 12: a no-key **Open-Meteo** model-callable **`weather` pull tool** (A, v0.21.0) — location via an explicit `LUNA_LAT_LON` knob (IP-geolocation is out behind the fake-IP proxy); **passive ambient awareness** — a TTL-cached, background-refreshed snapshot in the per-turn **uncached** tail like the time block (B, v0.21.1); a **proactive weather note** in the after-a-night / morning wake, gated on the existing daypart+new-day signal (C, v0.21.2). Volatile→uncached-tail (cache invariant), off-hot-path (no inline fetch), care-not-forecast guardrail. Net-new (Python has no weather). | [`weather-perception-2026-06/`](weather-perception-2026-06/) | ✅ shipped 2026-06-21 (branch) |
-| 15 | v0.22.0 – v0.22.3 | **Proactive pipeline redesign** — the proactive system is "on" but has **never once spoken** (live trace data: every `proactive_wake` decision is `hold`, **0 `act` ever**; 0 scheduler-driven proactive messages; the few `proactive%` L2 rows are continuations). Replace the per-tick **LLM wake-gate** (it decides *before* drafting, is calibrated to "stay quiet", and fails-closed on bad JSON) with cheap **deterministic trigger detectors** feeding the existing **silence-capable** turn graph — the proactive turn's own `{spoke}` becomes the only "should I speak?" judgment (drafting-as-decision). **Detector-MVP** (after-a-night + spoke/silent quota split; wake-gate→flag — v0.22.0), **registry + scheduled slots** + migration `0013` (v0.22.1), **event hooks + debounce + weather-shift** (v0.22.2), **fuzzy detectors + delete the wake-gate** (v0.22.3). ~100–300× less proactive token spend; **0 → a reliable handful of messages/day**. Distinct from Initiative 5 (which built the proactive *turn*; this replaces the *wake decision*). | [`proactive-pipeline-redesign-2026-06/`](proactive-pipeline-redesign-2026-06/) | 🟡 PLANNED |
+| 15 | v0.22.0 – v0.22.3 | **Proactive pipeline redesign** — the proactive system is "on" but has **never once spoken** (live trace data: every `proactive_wake` decision is `hold`, **0 `act` ever**; 0 scheduler-driven proactive messages; the few `proactive%` L2 rows are continuations). Replace the per-tick **LLM wake-gate** (it decides *before* drafting, is calibrated to "stay quiet", and fails-closed on bad JSON) with cheap **deterministic trigger detectors** feeding the existing **silence-capable** turn graph — the proactive turn's own `{spoke}` becomes the only "should I speak?" judgment (drafting-as-decision). **Detector-MVP** (after-a-night + spoke/silent quota split; wake-gate→flag — v0.22.0), **registry + scheduled slots** + migration `0013` (v0.22.1), **event hooks + debounce + weather-shift** (v0.22.2), **fuzzy detectors + delete the wake-gate** (v0.22.3). ~100–300× less proactive token spend; **0 → a reliable handful of messages/day**. Distinct from Initiative 5 (which built the proactive *turn*; this replaces the *wake decision*). | [`proactive-pipeline-redesign-2026-06/`](proactive-pipeline-redesign-2026-06/) | ✅ SHIPPED |
 
 ## Ordering philosophy
 
@@ -309,17 +310,18 @@ snapshot read synchronously), and **care-not-forecast** (the warmth-not-guilt si
 | v0.21.1 | [Passive ambient awareness](weather-perception-2026-06/v0.21.1-ambient-weather.md) | Medium | a TTL-cached, **background-refreshed** snapshot read **synchronously** + a pure `buildWeatherBlock` pushed into the **uncached** tail next to `buildTimeBlock`; a stable data-free `WEATHER_CLAUSE` in the cached contract. She *knows* without a tool call. Flag `LUNA_WEATHER_AMBIENT` (off) |
 | v0.21.2 | [Proactive weather + close](weather-perception-2026-06/v0.21.2-proactive-weather-close.md) | Medium | the `afterANightOpening` boolean (composed from existing `temporalContext` helpers) gates a bounded `weatherNoteFor()` suggestion in `framing()` after the felt-absence clause (morning only); the care-not-forecast guardrail; measure cache-hit-rate + **default-flip A/B/C on** — **Initiative 14 ✅**. Flag `LUNA_WEATHER_PROACTIVE` (off→flip) |
 
-## Initiative 15 — Proactive pipeline redesign (v0.22.0 – v0.22.3) — 🟡 PLANNED
+## Initiative 15 — Proactive pipeline redesign (v0.22.0 – v0.22.3) — ✅ SHIPPED
 
-The proactive system runs but **never fires**: every `proactive_wake` decision in the product's life is
-`hold` (0 `act`), the LLM wake-gate decides *before* drafting + is calibrated to stay quiet + fails-closed
-on bad JSON. Replace it with **deterministic trigger detectors** → the existing **silence-capable** turn
-graph, where the proactive turn's own `{spoke}` is the only judgment (drafting-as-decision). LLM only
-*drafts* on a concrete code-detected reason. Folder: [`proactive-pipeline-redesign-2026-06/`](proactive-pipeline-redesign-2026-06/).
+The proactive system ran but **never fired**: every `proactive_wake` decision in the product's life was
+`hold` (0 `act`) — the LLM wake-gate decided *before* drafting, was calibrated to stay quiet, and
+failed-closed on bad JSON. It is **replaced** by **deterministic trigger detectors** → the existing
+**silence-capable** turn graph, where the proactive turn's own `{spoke}` is the only judgment
+(drafting-as-decision); the LLM only *drafts* on a concrete code-detected reason. The wake-gate is
+**deleted** — the heartbeat is now LLM-free. Folder: [`proactive-pipeline-redesign-2026-06/`](proactive-pipeline-redesign-2026-06/).
 
-| Version | Plan | Risk | Theme |
-|---|---|---|---|
-| v0.22.0 | [Detector-MVP](proactive-pipeline-redesign-2026-06/v0.22.0-detector-mvp.md) | Low | inline after-a-night detector replaces the wake-gate call; **spoke/silent quota split** (a silent draft doesn't burn the daily budget); `wakeGate` behind `LUNA_PROACTIVE_LLM_GATE` (default off). **She starts speaking.** |
-| v0.22.1 | [Detector registry + scheduled slots](proactive-pipeline-redesign-2026-06/v0.22.1-detector-registry-slots.md) | Medium | `safetyRail`/`considerProactive` split; `detectors.ts` registry (after-night + scheduled-window); migration `0013` (per-day slot bitmask); `LUNA_PROACTIVE_SLOTS` — a guaranteed daily speaking floor |
-| v0.22.2 | [Event hooks + debounce + weather-shift](proactive-pipeline-redesign-2026-06/v0.22.2-event-hooks-debounce.md) | Medium | per-detector debounce; `weatherShift` detector; fire the same `evaluateDetectors` funnel from `ws` reconnect-after-a-night + the weather refresher (natural-instant, not the 60s grid); one shared single-turn lock |
-| v0.22.3 | [Fuzzy detectors + close](proactive-pipeline-redesign-2026-06/v0.22.3-fuzzy-detectors-close.md) | Low | `openThreadAged` + `promisedFollowThrough` (default OFF, soft-seed); **delete `wakeGate`** + its failure classes; a dev force-trigger; **Initiative 15 ✅** |
+| Version | Plan | Risk | Theme | Status |
+|---|---|---|---|---|
+| v0.22.0 | [Detector-MVP](proactive-pipeline-redesign-2026-06/v0.22.0-detector-mvp.md) | Low | inline after-a-night detector replaces the wake-gate call; **spoke/silent quota split** (a silent draft doesn't burn the daily budget); `wakeGate` behind `LUNA_PROACTIVE_LLM_GATE` (default off). **She starts speaking.** | ✅ |
+| v0.22.1 | [Detector registry + scheduled slots](proactive-pipeline-redesign-2026-06/v0.22.1-detector-registry-slots.md) | Medium | `passesAntiSpam` rail; `detectors.ts` registry (after-night + scheduled-window); migration `0013` (per-day slot bitmask); `LUNA_PROACTIVE_SLOTS` — a guaranteed daily speaking floor | ✅ |
+| v0.22.2 | [Event hooks + debounce + weather-shift](proactive-pipeline-redesign-2026-06/v0.22.2-event-hooks-debounce.md) | Medium | per-detector debounce; `weatherShift` detector; fire the same `evaluateDetectors` funnel from `ws` reconnect-after-a-night + the weather refresher (natural-instant, not the 60s grid); one shared real single-turn lock (`fire.ts`) | ✅ |
+| v0.22.3 | [Fuzzy detectors + close](proactive-pipeline-redesign-2026-06/v0.22.3-fuzzy-detectors-close.md) | Low | `openThreadAged` + `promisedFollowThrough` (default OFF, soft-seed); **delete `wakeGate`** + its failure classes + the orphaned `shouldConsiderWake`/`listRecentProactiveTexts`; dev force-trigger via lock-routed `proactive.fire`; **Initiative 15 ✅** | ✅ |

@@ -168,19 +168,6 @@ export function listRecentL2(sessionId: string, limit: number): L2Row[] {
   return rows.reverse();
 }
 
-// v0.20.8: the most-recent SPOKEN self-initiated openers (proactive + continuation
-// turns persist under a `proactive:` turn_id; silent ones leave no row), so the
-// wake gate can tell Luna not to repeat them.
-export function listRecentProactiveTexts(sessionId: string, limit: number): string[] {
-  if (!db) return [];
-  const rows = db
-    .prepare(
-      "SELECT assistant_text FROM l2_turns WHERE session_id = ? AND turn_id LIKE 'proactive:%' AND assistant_text != '' ORDER BY t_ms DESC LIMIT ?",
-    )
-    .all(sessionId, limit) as { assistant_text: string }[];
-  return rows.map((r) => r.assistant_text);
-}
-
 // v0.17.0 (Initiative 10): turns not yet rated for salience (importance IS NULL),
 // most-recent first — the dream cycle rates these 1–5.
 export function listUnratedL2(sessionId: string, limit: number): L2Row[] {

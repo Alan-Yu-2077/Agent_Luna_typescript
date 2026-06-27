@@ -67,14 +67,15 @@ packages/server/src/
   proactive/
     proactiveTurn.ts   runProactiveTurn = runTurn + proactiveTurn:true (silence allowed) + intent framing (spontaneous/continuation/consolidate)
     safetyGate.ts      proactiveRiskOf FAIL-CLOSED (safe only if opted in) · isProactiveActionAllowed (surface needs a prior-round message) · maxProactiveActions()
-    cadence.ts         shouldConsiderWake prefilter (quiet/quota/cooldown/deep-absence/lull-anchor) · commit/load/save · proactiveEnabled() = LUNA_PROACTIVE!=='0' (default ON)
-    wakeGate.ts        bounded "act now?" L2 judgment, off the reply key (dreamCall), Zod {act,intent,reason}, FAILS CLOSED
-    scheduler.ts       runTick (in-flight guard) → prefilter → wakeGate → re-check → runProactiveTurn → commit; dream auto-trigger on pendingDream; startScheduler in main.ts
-    continuation.ts    self-continuation = setTimeout micro-wake after a user turn (mechanical probability gate)
+    cadence.ts         passesAntiSpam rail (quiet/idle-floor/cooldown/quota; NO deep-absence/too-soon) · slot bitmask (scheduledSlots/isSlotConsumed/markSlotConsumed) · commit/commitSilent/load/save · proactiveEnabled() = LUNA_PROACTIVE!=='0' (default ON)
+    detectors.ts       the registry (v0.22): evaluateDetectors first-match over afterNight · scheduledWindow · weatherShift · openThreadAged · promisedFollowThrough (last two default-off); pure, LLM-free, drafting-as-decision (NO wake-gate since v0.22.3)
+    fire.ts            maybeFireProactive = the funnel (anti-spam→detector→debounce→turn→cadence commit→dream handoff) inside withProactiveLock, the REAL per-session single-turn lock every path shares
+    scheduler.ts       runTick (in-flight guard) → tickOnce iterates sessions → maybeFireProactive; fireProactiveForActiveSessions (the weather hook); startScheduler in main.ts. Heartbeat is LLM-free.
+    continuation.ts    self-continuation = setTimeout micro-wake after a user turn (mechanical probability gate); through withProactiveLock, rail-light (no cadence commit)
   turn/runTurn.ts      dispatch_tools HARD GATE (proactive surface-risk blocked until surfaced) + action budget; finalize exempts the empty-reply guard for proactive turns
-  ws.ts                proactive.fire branch + activeSockets/broadcast (push proactive bubbles) + lastUserMs stamp + maybeScheduleContinuation
+  ws.ts                proactive.fire branch (lock-routed) + maybeFireOnReconnect event hook + activeSockets/broadcast + lastUserMs stamp + maybeScheduleContinuation
   scripts/proactive-soak.ts        manual heartbeat soak vs the real model
-  FLAGS: LUNA_PROACTIVE (default ON) · LUNA_PROACTIVE_TICK_SECONDS/IDLE_THRESHOLD_MS/MIN_INTERVAL_MS/DAILY_QUOTA/QUIET_HOURS/LONG_ABSENCE_MS/MAX_ACTIONS · LUNA_SELFCONT(_PROBABILITY/_PAUSE_MS)
+  FLAGS: LUNA_PROACTIVE (default ON) · rail: TICK_SECONDS/IDLE_FLOOR_MS/MIN_INTERVAL_MS/DAILY_QUOTA/QUIET_HOURS/DEBOUNCE_MS/MAX_ACTIONS · detectors: SLOTS/WEATHER_SHIFT/EVENT_HOOKS/OPEN_THREADS(_THREAD_AGE_MS)/FOLLOW_THROUGH(_PROMISE_AGE_MS/_PROMISE_MAX_AGE_MS) · LUNA_SELFCONT(_PROBABILITY/_PAUSE_MS)
 ```
 
 ### Action-integrity additions (v0.8.0–v0.9.0, Initiative 4 — LD #14)

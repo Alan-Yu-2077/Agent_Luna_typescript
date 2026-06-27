@@ -52,15 +52,15 @@ afterEach(() => {
   setTraceStore(null);
   delete Bun.env['LUNA_PROACTIVE'];
   delete Bun.env['LUNA_PROACTIVE_QUIET_HOURS'];
-  delete Bun.env['LUNA_PROACTIVE_LLM_GATE'];
   delete Bun.env['LUNA_TRACE'];
   setProactiveDetectorForTests(null); // restore the real detector
   db.close(false);
 });
 
-function makeDeps(gateVerdict: string, turnRounds: ProviderEvent[][]) {
+// `gate` is the dream-LLM primary; since v0.22.3 deleted the wake-gate it is never called on
+// the heartbeat — several tests assert exactly that (gate.completeRequests.length === 0).
+function makeDeps(_unused: string, turnRounds: ProviderEvent[][]) {
   const gate = new MockProvider([]);
-  gate.completeResponder = () => gateVerdict;
   const turnProvider = new MockProvider(turnRounds);
   const events: ServerEvent[] = [];
   const deps: SchedulerDeps = {
@@ -72,15 +72,7 @@ function makeDeps(gateVerdict: string, turnRounds: ProviderEvent[][]) {
   return { deps, gate, turnProvider, events };
 }
 
-function allWakeDecisions(): { decision: string; reason: string }[] {
-  return (
-    db
-      .prepare("SELECT payload_json FROM traces WHERE kind='decision' AND payload_json LIKE '%proactive_wake%'")
-      .all() as { payload_json: string }[]
-  ).map((r) => JSON.parse(r.payload_json));
-}
-
-// ─── the deterministic detector path (v0.22.0 default) ──────────────────────────
+// ─── the deterministic detector path (the only path since v0.22.3) ───────────────
 describe('proactive scheduler — detector path (default)', () => {
   // force a detector on/off so the tick is clock-independent
   const triggerOn = () =>
@@ -229,51 +221,5 @@ describe('proactive scheduler — detector path (default)', () => {
     await fireProactiveForActiveSessions(deps);
     expect(turnProvider.requests.length).toBe(0);
     s.activeTurn = null;
-  });
-});
-
-// ─── the legacy LLM wake-gate, now a default-off fallback ────────────────────────
-describe('proactive scheduler — LLM wake-gate fallback (LUNA_PROACTIVE_LLM_GATE=1)', () => {
-  // registers the session + puts it past the idle threshold the prefilter requires,
-  // and flips on the legacy LLM gate (every fallback test calls this first).
-  function idleSession() {
-    Bun.env['LUNA_PROACTIVE_LLM_GATE'] = '1';
-    const s = getSession('default');
-    s.lastUserMs = Date.now() - 20 * 60_000; // 20 min idle (within [10m,18h])
-    return s;
-  }
-
-  test('idle + verdict hold → wake decision logged, no turn', async () => {
-    idleSession();
-    const { deps, gate, turnProvider } = makeDeps('{"act":false,"reason":"nothing to do"}', [[endRound]]);
-    await runTick(deps);
-    expect(gate.completeRequests.length).toBe(1);
-    expect(turnProvider.requests.length).toBe(0);
-    expect(allWakeDecisions().some((d) => d.decision === 'hold')).toBe(true);
-  });
-
-  test('idle + verdict act → proactive turn fires (gate called); a silent turn keeps quota 0', async () => {
-    idleSession();
-    const { deps, gate, turnProvider, events } = makeDeps(
-      '{"act":true,"intent":"reflect","reason":"a quiet thought"}',
-      [[endRound]], // silent proactive turn
-    );
-    await runTick(deps);
-    expect(gate.completeRequests.length).toBe(1);
-    expect(turnProvider.requests.length).toBeGreaterThanOrEqual(1);
-    expect(events.some((e) => e.type === 'proactive.started')).toBe(true);
-    expect(allWakeDecisions().some((d) => d.decision === 'act')).toBe(true);
-    const c = loadCadence('default');
-    expect(c.quotaUsed).toBe(0); // silent → no quota burn (spoke/silent split)
-    expect(c.lastProactiveMs).toBeGreaterThan(0);
-  });
-
-  test('prefilter cooldown blocks the gate call after a fire', async () => {
-    idleSession();
-    await runTick(makeDeps('{"act":true,"reason":"x"}', [[endRound]]).deps);
-    const second = makeDeps('{"act":true,"reason":"x"}', [[endRound]]);
-    await runTick(second.deps);
-    expect(second.gate.completeRequests.length).toBe(0); // shouldConsiderWake cooldown short-circuit
-    expect(second.turnProvider.requests.length).toBe(0);
   });
 });

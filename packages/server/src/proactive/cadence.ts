@@ -65,43 +65,12 @@ function quietHours(): Set<number> {
 
 export type WakeContext = { lastUserMs: number; nowMs: number; nowHour: number };
 
-// Pure cheap-exit prefilter: returns whether the (expensive) wake judgment
-// should run at all. Lull anchoring counts Luna's OWN last proactive message
-// toward the silence measurement so she can't nudge into a lull she just broke.
-export function shouldConsiderWake(
-  c: Cadence,
-  x: WakeContext,
-): { consider: boolean; reason: string } {
-  if (!proactiveEnabled()) return { consider: false, reason: 'disabled' };
-  if (quietHours().has(x.nowHour)) return { consider: false, reason: 'quiet_hours' };
-
-  const userGap = x.lastUserMs > 0 ? x.nowMs - x.lastUserMs : Infinity;
-  if (userGap > num('LUNA_PROACTIVE_LONG_ABSENCE_MS', 64_800_000)) {
-    return { consider: false, reason: 'deep_absence' }; // > ~18h → don't wake her world
-  }
-
-  const sinceProactive = c.lastProactiveMs > 0 ? x.nowMs - c.lastProactiveMs : Infinity;
-  if (sinceProactive < num('LUNA_PROACTIVE_MIN_INTERVAL_MS', 300_000)) {
-    return { consider: false, reason: 'cooldown' };
-  }
-
-  if (c.quotaDate === dateKey(x.nowMs) && c.quotaUsed >= num('LUNA_PROACTIVE_DAILY_QUOTA', 5)) {
-    return { consider: false, reason: 'quota_exhausted' };
-  }
-
-  const effectiveGap = Math.min(userGap, sinceProactive);
-  if (effectiveGap < num('LUNA_PROACTIVE_IDLE_THRESHOLD_MS', 600_000)) {
-    return { consider: false, reason: 'too_soon' };
-  }
-
-  return { consider: true, reason: 'idle' };
-}
-
-// v0.22.0 (Initiative 15): the anti-spam SUBSET used to gate the deterministic
-// detector path — quiet hours + cooldown + daily quota ONLY. Deliberately omits
-// `deep_absence` (>18h) and the `too_soon` (<10m) idle floor that `shouldConsiderWake`
-// applies: a long overnight/weekend absence is exactly when an after-a-night greeting
-// SHOULD fire, so it must not be swallowed (the never-fires hole the redesign kills).
+// v0.22.0 (Initiative 15): the anti-spam rail that gates the deterministic detector path —
+// quiet hours + a small idle floor + cooldown + daily quota. Deliberately does NOT apply a
+// `deep_absence` (>18h) cut or a 10-minute `too_soon` floor: a long overnight/weekend absence is
+// exactly when an after-a-night greeting SHOULD fire, so it must not be swallowed (the never-fires
+// hole the redesign killed). v0.22.3 deleted the old LLM-gate prefilter (`shouldConsiderWake`),
+// which DID apply those cuts, together with the wake-gate it fed.
 export function passesAntiSpam(c: Cadence, x: WakeContext): { ok: boolean; reason: string } {
   if (!proactiveEnabled()) return { ok: false, reason: 'disabled' };
   if (quietHours().has(x.nowHour)) return { ok: false, reason: 'quiet_hours' };
