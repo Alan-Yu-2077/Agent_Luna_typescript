@@ -138,30 +138,119 @@ export function parseOpenAIResponse(json: unknown): OAParsedResponse {
   return OAResponse.parse(json);
 }
 
-// Synthesize the assistant turn runTurn stores in session.history (a ContentBlockParam[] — input
-// for the next turn), so replay is unchanged and the NEXT turn translates it back to OpenAI.
-export function toAssistantContent(message: OAMessage): Anthropic.ContentBlockParam[] {
+// A tool call reduced to its replayable parts — the shared currency of the non-streaming response
+// path and the streaming accumulator, so both synthesize byte-identical history.
+export type ToolCallParts = { id: string; name: string; arguments: string };
+
+function blocksFromParts(text: string | null, toolCalls: ToolCallParts[]): Anthropic.ContentBlockParam[] {
   const blocks: Anthropic.ContentBlockParam[] = [];
-  if (message.content && message.content.length > 0) {
-    blocks.push({ type: 'text', text: message.content });
-  }
-  for (const tc of message.tool_calls ?? []) {
+  if (text && text.length > 0) blocks.push({ type: 'text', text });
+  for (const tc of toolCalls) {
     blocks.push({
       type: 'tool_use',
       id: tc.id,
-      name: tc.function.name,
-      input: unwrapGatewayInput(parseToolArguments(tc.function.arguments)),
+      name: tc.name,
+      input: unwrapGatewayInput(parseToolArguments(tc.arguments)),
     });
   }
   return blocks;
 }
 
-export function toProviderToolUses(message: OAMessage): ProviderToolUse[] {
+function toolUsesFromParts(toolCalls: ToolCallParts[]): ProviderToolUse[] {
+  return toolCalls.map((tc) => ({
+    id: tc.id,
+    name: tc.name,
+    input: unwrapGatewayInput(parseToolArguments(tc.arguments)),
+  }));
+}
+
+function messageParts(message: OAMessage): ToolCallParts[] {
   return (message.tool_calls ?? []).map((tc) => ({
     id: tc.id,
     name: tc.function.name,
-    input: unwrapGatewayInput(parseToolArguments(tc.function.arguments)),
+    arguments: tc.function.arguments,
   }));
+}
+
+// Synthesize the assistant turn runTurn stores in session.history (a ContentBlockParam[] — input
+// for the next turn), so replay is unchanged and the NEXT turn translates it back to OpenAI.
+export function toAssistantContent(message: OAMessage): Anthropic.ContentBlockParam[] {
+  return blocksFromParts(message.content ?? null, messageParts(message));
+}
+
+export function toProviderToolUses(message: OAMessage): ProviderToolUse[] {
+  return toolUsesFromParts(messageParts(message));
+}
+
+// The streaming path's counterparts: assemble from accumulated text + tool-call parts. Same
+// builders as the non-streaming path → identical history whether or not streaming is on.
+export function streamedAssistantContent(
+  text: string,
+  toolCalls: ToolCallParts[],
+): Anthropic.ContentBlockParam[] {
+  return blocksFromParts(text.length > 0 ? text : null, toolCalls);
+}
+
+export function streamedToolUses(toolCalls: ToolCallParts[]): ProviderToolUse[] {
+  return toolUsesFromParts(toolCalls);
+}
+
+// ── streaming chunk translation (OpenAI SSE delta → ProviderEvent pieces) ──
+
+const StreamChunk = z.object({
+  choices: z
+    .array(
+      z.object({
+        delta: z
+          .object({
+            content: z.string().nullable().optional(),
+            reasoning: z.string().nullable().optional(),
+            reasoning_content: z.string().nullable().optional(),
+            tool_calls: z
+              .array(
+                z.object({
+                  index: z.number(),
+                  id: z.string().optional(),
+                  function: z
+                    .object({ name: z.string().optional(), arguments: z.string().optional() })
+                    .optional(),
+                }),
+              )
+              .optional(),
+          })
+          .optional(),
+        finish_reason: z.string().nullable().optional(),
+      }),
+    )
+    .optional(),
+  usage: z.object({ prompt_tokens: z.number(), completion_tokens: z.number() }).partial().optional(),
+});
+
+export type OAStreamChunk = z.infer<typeof StreamChunk>;
+
+export function parseStreamChunk(json: unknown): OAStreamChunk {
+  return StreamChunk.parse(json);
+}
+
+// Pure SSE framing: pull complete `data:` payloads out of a text buffer, returning the unconsumed
+// remainder (a line split across network reads) and whether `[DONE]` was seen. Handles CRLF
+// (trim strips the trailing \r) + multiple data lines. The caller force-terminates the final line
+// at stream end so a payload without a trailing newline isn't lost.
+export function consumeSSE(buffer: string): { payloads: string[]; rest: string; done: boolean } {
+  const payloads: string[] = [];
+  let rest = buffer;
+  let nl = rest.indexOf('\n');
+  while (nl !== -1) {
+    const line = rest.slice(0, nl).trim();
+    rest = rest.slice(nl + 1);
+    if (line.startsWith('data:')) {
+      const data = line.slice(5).trim();
+      if (data === '[DONE]') return { payloads, rest: '', done: true };
+      if (data) payloads.push(data);
+    }
+    nl = rest.indexOf('\n');
+  }
+  return { payloads, rest, done: false };
 }
 
 export function mapStopReason(finish: string | null | undefined): string {

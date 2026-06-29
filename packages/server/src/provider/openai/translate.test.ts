@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import type Anthropic from '@anthropic-ai/sdk';
 import {
+  consumeSSE,
   mapStopReason,
   mapUsage,
   messagesToOpenAI,
@@ -176,5 +177,34 @@ describe('response translation (OpenAI → Anthropic-shaped)', () => {
   test('usage absent → zeros', () => {
     const parsed = parseOpenAIResponse({ choices: [{ message: { content: 'x' }, finish_reason: 'stop' }] });
     expect(mapUsage(parsed.usage)).toEqual({ input_tokens: 0, output_tokens: 0 });
+  });
+});
+
+describe('consumeSSE (the byte-framing parser)', () => {
+  test('complete data lines → payloads, empty remainder', () => {
+    const r = consumeSSE('data: {"a":1}\ndata: {"b":2}\n');
+    expect(r.payloads).toEqual(['{"a":1}', '{"b":2}']);
+    expect(r.rest).toBe('');
+    expect(r.done).toBe(false);
+  });
+  test('a line split across reads is kept in the remainder', () => {
+    const r = consumeSSE('data: {"a":1}\ndata: {"b"');
+    expect(r.payloads).toEqual(['{"a":1}']);
+    expect(r.rest).toBe('data: {"b"'); // re-fed with the next read
+  });
+  test('CRLF endings are tolerated', () => {
+    expect(consumeSSE('data: {"a":1}\r\n').payloads).toEqual(['{"a":1}']);
+  });
+  test('[DONE] sets done and stops', () => {
+    const r = consumeSSE('data: {"a":1}\ndata: [DONE]\ndata: {"ignored":1}\n');
+    expect(r.payloads).toEqual(['{"a":1}']);
+    expect(r.done).toBe(true);
+  });
+  test('non-data lines (comments/keepalives) are skipped', () => {
+    expect(consumeSSE(': keepalive\n\ndata: {"a":1}\n').payloads).toEqual(['{"a":1}']);
+  });
+  test('a final line with a forced terminating newline is recovered (the end-of-stream flush)', () => {
+    // the caller appends "\n" at stream end so a trailing payload without a newline is not lost
+    expect(consumeSSE('data: {"last":true}\n').payloads).toEqual(['{"last":true}']);
   });
 });
