@@ -14,7 +14,7 @@ export type OAToolCall = {
   function: { name: string; arguments: string };
 };
 export type OAChatMessage =
-  | { role: 'system' | 'user'; content: string }
+  | { role: 'system' | 'developer' | 'user'; content: string }
   | { role: 'assistant'; content: string | null; tool_calls?: OAToolCall[] }
   | { role: 'tool'; tool_call_id: string; content: string };
 export type OATool = {
@@ -24,11 +24,15 @@ export type OATool = {
 
 // ── request translation (Anthropic-shaped → OpenAI) ──
 
-// The system param (string or cache_control-marked text blocks) → a single system message. The
-// cache_control breakpoint is simply NOT read here — OpenAI has no explicit cache control.
-export function systemToOpenAI(system: string | Anthropic.TextBlockParam[]): OAChatMessage {
+// The system param (string or cache_control-marked text blocks) → a single system/developer
+// message (some reasoning models reject the `system` role). The cache_control breakpoint is simply
+// NOT read here — OpenAI has no explicit cache control.
+export function systemToOpenAI(
+  system: string | Anthropic.TextBlockParam[],
+  role: 'system' | 'developer' = 'system',
+): OAChatMessage {
   const content = typeof system === 'string' ? system : system.map((b) => b.text).join('\n\n');
-  return { role: 'system', content };
+  return { role, content };
 }
 
 function toolResultText(content: Anthropic.ToolResultBlockParam['content']): string {

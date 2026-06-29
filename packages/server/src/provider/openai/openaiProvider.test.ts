@@ -82,4 +82,33 @@ describe('OpenAIProvider (v0.23.1, injected fetcher)', () => {
     setOpenAIFetcher(async () => ({ choices: [] }));
     await expect(new OpenAIProvider({ apiKey: 'k' }).complete({ system: 's', messages: [] })).rejects.toThrow();
   });
+
+  test('a registry entry shapes the request: developer role + max_completion_tokens (v0.23.3)', async () => {
+    let captured = '';
+    setOpenAIFetcher(async (args) => {
+      captured = JSON.stringify(args.body);
+      return { choices: [{ message: { content: 'ok' }, finish_reason: 'stop' }] };
+    });
+    const p = new OpenAIProvider({
+      apiKey: 'k',
+      entry: { id: 'o3', protocol: 'openai', tokenParam: 'max_completion_tokens', systemRole: 'developer', reasoning: true },
+    });
+    await p.complete({ system: 'sys', messages: [{ role: 'user', content: 'hi' }] });
+    expect(captured).toContain('"role":"developer"');
+    expect(captured).toContain('"max_completion_tokens"');
+    expect(captured).not.toContain('"max_tokens"');
+    expect(p.capabilities.thinking).toBe(true);
+  });
+
+  test('a no-tool entry omits tools from the request (v0.23.3)', async () => {
+    let captured = '';
+    setOpenAIFetcher(async (args) => {
+      captured = JSON.stringify(args.body);
+      return { choices: [{ message: { content: 'ok' }, finish_reason: 'stop' }] };
+    });
+    const p = new OpenAIProvider({ apiKey: 'k', entry: { id: 'x', protocol: 'openai', toolUse: false } });
+    for await (const _ of p.chatStream(chatReq())) void _;
+    expect(captured).not.toContain('"tools"');
+    expect(p.capabilities.toolUse).toBe(false);
+  });
 });

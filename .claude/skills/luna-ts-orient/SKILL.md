@@ -168,10 +168,16 @@ packages/server/src/
   ws.ts                  handleMessage exhaustive switch; chat.send → runTurn; dev.dispatch_tool (LUNA_DEV_TOOLS=1); setRuntime
   outbound.ts            outbound(ws, event) — sole validated ServerEvent send boundary (SHIPPED, do not instrument here)
   sql.ts                 openDb (WAL) / migrate (PRAGMA user_version) / closeDb — GENERIC, v0.4 memory reuses verbatim
-  provider/
-    types.ts             ProviderEvent union + Provider interface
+  provider/             (Initiative 16: multi-protocol behind the Provider seam)
+    types.ts             ProviderEvent union + Provider interface (incl. capabilities); assistantContent is ContentBlockParam[]
+    capabilities.ts      ProviderCapabilities (thinking/promptCache/interleavedToolStreaming/toolUse/systemRole/maxOutputTokens)
+    factory.ts           providerFor() — the ONE construction point; LUNA_PROVIDER override else registry by LUNA_MODEL
+    registry.ts          resolveModel(id) → ModelEntry {protocol, tokenParam, systemRole, reasoning, toolUse}; built-ins + LUNA_MODELS_JSON override
     anthropic.ts         AnthropicProvider — @anthropic-ai/sdk@0.104.1, adaptive thinking, finalMessage()-based tool extraction
+    openai/translate.ts  pure Anthropic⇄OpenAI (messages/tools/system + response→ContentBlockParam[]); parseStreamChunk + consumeSSE
+    openai/openaiProvider.ts  OpenAIProvider — complete() + chatStream (non-streaming default; SSE behind LUNA_OPENAI_STREAM); entry-driven quirks
     mock.ts              MockProvider — scripted rounds for tests
+    FLAGS: LUNA_PROVIDER (anthropic|openai; default by model) · LUNA_OPENAI_BASE_URL/_API_KEY · LUNA_OPENAI_STREAM · LUNA_OPENAI_REASONING · LUNA_MODELS_JSON
   turn/
     graph.ts             inline 7-node StateGraph + runGraph(onTransition)
     runTurn.ts           node implementations; MAX_TOOL_ITERATIONS=8; trace instrumentation (guarded by traceEnabled())

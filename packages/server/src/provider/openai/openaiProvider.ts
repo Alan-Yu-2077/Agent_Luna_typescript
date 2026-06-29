@@ -1,4 +1,5 @@
 import type { ProviderCapabilities } from '../capabilities';
+import type { ModelEntry } from '../registry';
 import type {
   CompleteRequest,
   CompleteResult,
@@ -121,17 +122,23 @@ export function setOpenAIStreamFetcher(fn: OpenAIStreamFetcher | null): void {
 // ProviderEvent sequence shape and reuse the same block builders → identical replayed history.
 export class OpenAIProvider implements Provider {
   private apiKey: string;
+  private tokenParam: 'max_tokens' | 'max_completion_tokens';
+  private systemRole: 'system' | 'developer';
   readonly capabilities: ProviderCapabilities;
 
-  constructor(opts?: { apiKey?: string }) {
+  // v0.23.3: per-model quirks come from the registry entry (token-param name, system/developer
+  // role, reasoning), never a model-id regex here. Constructed directly (no entry) → safe defaults.
+  constructor(opts?: { apiKey?: string; entry?: ModelEntry }) {
     this.apiKey =
       opts?.apiKey ?? Bun.env['LUNA_OPENAI_API_KEY'] ?? Bun.env['ANTHROPIC_API_KEY'] ?? '';
+    const entry = opts?.entry;
+    this.tokenParam = entry?.tokenParam ?? 'max_tokens';
+    this.systemRole = entry?.systemRole ?? 'system';
     this.capabilities = {
-      // reasoning models surface reasoning as thinking_delta; flagged until the v0.23.3 registry.
-      thinking: Bun.env['LUNA_OPENAI_REASONING'] === '1',
+      thinking: entry?.reasoning ?? Bun.env['LUNA_OPENAI_REASONING'] === '1',
       promptCache: false,
       interleavedToolStreaming: Bun.env['LUNA_OPENAI_STREAM'] === '1',
-      toolUse: true,
+      toolUse: entry?.toolUse ?? true,
       systemRole: true,
       maxOutputTokens: MAX_TOKENS,
     };
@@ -140,8 +147,8 @@ export class OpenAIProvider implements Provider {
   async complete(req: CompleteRequest): Promise<CompleteResult> {
     const body = {
       model: MODEL,
-      max_tokens: req.maxTokens ?? 2048,
-      messages: [systemToOpenAI(req.system), ...messagesToOpenAI(req.messages)],
+      [this.tokenParam]: req.maxTokens ?? 2048,
+      messages: [systemToOpenAI(req.system, this.systemRole), ...messagesToOpenAI(req.messages)],
     };
     const parsed = parseOpenAIResponse(await rawFetch({ url: chatUrl(), apiKey: this.apiKey, body }));
     const choice = parsed.choices[0];
@@ -156,11 +163,13 @@ export class OpenAIProvider implements Provider {
   }
 
   private requestBody(req: ProviderRequest, stream: boolean): Record<string, unknown> {
-    const tools = req.tools.length > 0 ? toolsToOpenAI(req.tools) : undefined;
+    // omit tools for a no-tool model (the model degrades to text — it can't call the message tool)
+    const tools =
+      this.capabilities.toolUse && req.tools.length > 0 ? toolsToOpenAI(req.tools) : undefined;
     return {
       model: MODEL,
-      max_tokens: MAX_TOKENS,
-      messages: [systemToOpenAI(req.system), ...messagesToOpenAI(req.messages)],
+      [this.tokenParam]: MAX_TOKENS,
+      messages: [systemToOpenAI(req.system, this.systemRole), ...messagesToOpenAI(req.messages)],
       ...(tools ? { tools } : {}),
       ...(stream ? { stream: true, stream_options: { include_usage: true } } : { stream: false }),
     };
