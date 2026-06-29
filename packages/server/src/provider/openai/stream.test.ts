@@ -142,4 +142,33 @@ describe('OpenAIProvider SSE streaming (v0.23.2)', () => {
       expect(stop.toolUses).toEqual([{ id: 'c9', name: 'f', input: { a: 1 } }]);
     }
   });
+
+  // ── v0.23.4 hardening ──
+  test('a malformed chunk is skipped (safeParse), the turn still completes', async () => {
+    injectChunks(
+      { choices: 'not-an-array' }, // fails the schema → skipped, not a crash
+      { choices: [{ delta: { content: 'hi' }, finish_reason: 'stop' }] },
+    );
+    const events = await collect();
+    expect(textOf(events)).toEqual(['hi']);
+    expect(events.at(-1)?.kind).toBe('message_stop');
+  });
+
+  test('a tool-call delta with NO id gets a synthesized stable call_<index> id', async () => {
+    injectChunks(
+      { choices: [{ delta: { tool_calls: [{ index: 0, function: { name: 'f', arguments: '{}' } }] } }] },
+      { choices: [{ delta: {}, finish_reason: 'tool_calls' }] },
+    );
+    const stop = (await collect()).find((e) => e.kind === 'message_stop');
+    if (stop?.kind === 'message_stop') {
+      expect(stop.toolUses).toEqual([{ id: 'call_0', name: 'f', input: {} }]); // not id:''
+    }
+  });
+
+  test('an in-band error frame throws (not silently swallowed) — object or string shape', async () => {
+    injectChunks({ error: { message: 'rate limited' } });
+    await expect(collect()).rejects.toThrow(/rate limited/);
+    injectChunks({ error: 'upstream overloaded' }); // bare-string error frame (non-conformant gateway)
+    await expect(collect()).rejects.toThrow(/upstream overloaded/);
+  });
 });

@@ -3,6 +3,7 @@ import { broadcast, handleClose, handleMessage, handleOpen, setRuntime, type WSD
 import { fireProactiveForActiveSessions, startScheduler } from './proactive/scheduler';
 import { providerFor } from './provider/factory';
 import { describeCapabilities } from './provider/capabilities';
+import { DEFAULT_OPENAI_MODEL, resolveModel } from './provider/registry';
 import {
   builtinRegistry,
   codeWriteEnabled,
@@ -111,8 +112,18 @@ if (Bun.env['ANTHROPIC_API_KEY']) {
     ),
   );
   setRuntime({ provider, registry, dreamLlm });
+  // Resolve the SAME way providerFor() does, so the log can't lie about the model/endpoint that
+  // will actually be hit (v0.23.4 D2).
+  const cfgModel =
+    Bun.env['LUNA_MODEL'] && Bun.env['LUNA_MODEL'].trim() !== '' ? Bun.env['LUNA_MODEL'] : undefined;
+  const proto = Bun.env['LUNA_PROVIDER'] ?? resolveModel(cfgModel ?? 'claude-opus-4-8').protocol;
+  const wireModel = cfgModel ?? (proto === 'openai' ? DEFAULT_OPENAI_MODEL : 'claude-opus-4-8');
+  const endpoint =
+    proto === 'openai'
+      ? (Bun.env['LUNA_OPENAI_BASE_URL'] ?? 'https://api.openai.com/v1')
+      : (Bun.env['ANTHROPIC_BASE_URL'] ?? 'https://api.anthropic.com');
   console.log(
-    `[luna-server] provider: ${Bun.env['LUNA_PROVIDER'] ?? 'anthropic'}/${Bun.env['LUNA_MODEL'] ?? 'claude-opus-4-8'} via ${Bun.env['ANTHROPIC_BASE_URL'] ?? 'https://api.anthropic.com'} (${describeCapabilities(provider.capabilities)})${summarizerKey ? ' (+summarizer key)' : ''}${messageMode ? ' [message-tool mode]' : ''}${writeMode ? ' [code-write]' : ''}${shellMode ? ' [shell]' : ''}${repoMapMode ? ' [repo-map]' : ''}${skillMode ? ' [skills]' : ''}${selfEditMode ? ' [self-edit]' : ''}${webSearchMode ? ' [web-search]' : ''}${webFetchMode ? ' [web-fetch]' : ''}${weatherMode ? ' [weather]' : ''}`,
+    `[luna-server] provider: ${proto}/${wireModel} via ${endpoint} (${describeCapabilities(provider.capabilities)})${summarizerKey ? ' (+summarizer key)' : ''}${messageMode ? ' [message-tool mode]' : ''}${writeMode ? ' [code-write]' : ''}${shellMode ? ' [shell]' : ''}${repoMapMode ? ' [repo-map]' : ''}${skillMode ? ' [skills]' : ''}${selfEditMode ? ' [self-edit]' : ''}${webSearchMode ? ' [web-search]' : ''}${webFetchMode ? ' [web-fetch]' : ''}${weatherMode ? ' [weather]' : ''}`,
   );
   // Proactive heartbeat (v0.10.3). The timer runs always; each tick no-ops
   // unless LUNA_PROACTIVE=1 (re-read per tick, so the kill switch toggles

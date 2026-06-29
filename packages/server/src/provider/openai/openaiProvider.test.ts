@@ -111,4 +111,75 @@ describe('OpenAIProvider (v0.23.1, injected fetcher)', () => {
     expect(captured).not.toContain('"tools"');
     expect(p.capabilities.toolUse).toBe(false);
   });
+
+  // ── v0.23.4 hardening ──
+  test('buffered path forces a tool_use stop when tool_calls present but finish_reason is stop', async () => {
+    setOpenAIFetcher(async () => ({
+      choices: [
+        {
+          message: { content: null, tool_calls: [{ id: 'c1', function: { name: 'f', arguments: '{}' } }] },
+          finish_reason: 'stop',
+        },
+      ],
+    }));
+    const events: ProviderEvent[] = [];
+    for await (const e of new OpenAIProvider({ apiKey: 'k' }).chatStream(chatReq())) events.push(e);
+    const stop = events.find((e) => e.kind === 'message_stop');
+    if (stop?.kind === 'message_stop') {
+      expect(stop.stopReason).toBe('tool_use'); // not end_turn → runTurn dispatches (no orphan)
+      expect(stop.toolUses).toEqual([{ id: 'c1', name: 'f', input: {} }]);
+    }
+  });
+
+  test('tool_choice:"required" is sent when tools are present', async () => {
+    let body = '';
+    setOpenAIFetcher(async (a) => {
+      body = JSON.stringify(a.body);
+      return { choices: [{ message: { content: 'x' }, finish_reason: 'stop' }] };
+    });
+    for await (const _ of new OpenAIProvider({ apiKey: 'k' }).chatStream(chatReq())) void _;
+    expect(body).toContain('"tool_choice":"required"');
+  });
+
+  test('complete() sends reasoning_effort:low for a reasoning model', async () => {
+    let body = '';
+    setOpenAIFetcher(async (a) => {
+      body = JSON.stringify(a.body);
+      return { choices: [{ message: { content: 'sum' }, finish_reason: 'stop' }] };
+    });
+    const p = new OpenAIProvider({ apiKey: 'k', entry: { id: 'o3', protocol: 'openai', reasoning: true } });
+    await p.complete({ system: 's', messages: [{ role: 'user', content: 'hi' }] });
+    expect(body).toContain('"reasoning_effort":"low"');
+  });
+
+  test('chatUrl uses LUNA_OPENAI_BASE_URL and never falls back to the Anthropic host', async () => {
+    const savedOpenAI = Bun.env['LUNA_OPENAI_BASE_URL'];
+    const savedAnthropic = Bun.env['ANTHROPIC_BASE_URL'];
+    try {
+      Bun.env['ANTHROPIC_BASE_URL'] = 'https://api.anthropic.com';
+      Bun.env['LUNA_OPENAI_BASE_URL'] = 'https://gw.example/v1';
+      let url = '';
+      setOpenAIFetcher(async (a) => {
+        url = a.url;
+        return { choices: [{ message: { content: 'x' }, finish_reason: 'stop' }] };
+      });
+      await new OpenAIProvider({ apiKey: 'k' }).complete({ system: 's', messages: [] });
+      expect(url).toBe('https://gw.example/v1/chat/completions');
+
+      delete Bun.env['LUNA_OPENAI_BASE_URL']; // unset → OpenAI's own default, NOT the Anthropic host
+      let url2 = '';
+      setOpenAIFetcher(async (a) => {
+        url2 = a.url;
+        return { choices: [{ message: { content: 'x' }, finish_reason: 'stop' }] };
+      });
+      await new OpenAIProvider({ apiKey: 'k' }).complete({ system: 's', messages: [] });
+      expect(url2).toBe('https://api.openai.com/v1/chat/completions');
+      expect(url2).not.toContain('anthropic');
+    } finally {
+      if (savedOpenAI === undefined) delete Bun.env['LUNA_OPENAI_BASE_URL'];
+      else Bun.env['LUNA_OPENAI_BASE_URL'] = savedOpenAI;
+      if (savedAnthropic === undefined) delete Bun.env['ANTHROPIC_BASE_URL'];
+      else Bun.env['ANTHROPIC_BASE_URL'] = savedAnthropic;
+    }
+  });
 });

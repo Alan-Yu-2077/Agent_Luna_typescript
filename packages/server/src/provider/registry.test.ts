@@ -43,4 +43,8 @@ describe('resolveModel (v0.23.3 model registry)', () => {
     Bun.env['LUNA_MODELS_JSON'] = JSON.stringify([{ id: 'x', protocol: 'bogus' }]);
     expect(resolveModel('gpt-4o').protocol).toBe('openai'); // bad entry shape → ignored
   });
+  test('an empty/blank id in LUNA_MODELS_JSON is rejected — no silent catch-all (v0.23.4)', () => {
+    Bun.env['LUNA_MODELS_JSON'] = JSON.stringify([{ id: '', protocol: 'openai' }]);
+    expect(resolveModel('claude-opus-4-8').protocol).toBe('anthropic'); // not hijacked onto openai
+  });
 });

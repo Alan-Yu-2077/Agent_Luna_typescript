@@ -9,7 +9,9 @@ import type {
 } from './types';
 
 const MODEL = Bun.env['LUNA_MODEL'] ?? 'claude-opus-4-8';
-const MAX_TOKENS = Number(Bun.env['LUNA_MAX_TOKENS'] ?? 8192);
+// NaN-guarded: a mistyped LUNA_MAX_TOKENS must not serialize to null and 400 every turn.
+const RAW_MAX = Number(Bun.env['LUNA_MAX_TOKENS']);
+const MAX_TOKENS = Number.isFinite(RAW_MAX) && RAW_MAX > 0 ? RAW_MAX : 8192;
 
 // The yunwu gateway wraps tool arguments it failed to map upstream as
 // {"_noargs": "<raw args text>"} (observed 2026-06-12 on `remember` while its

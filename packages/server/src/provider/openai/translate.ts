@@ -83,7 +83,14 @@ export function messagesToOpenAI(messages: Anthropic.MessageParam[]): OAChatMess
     for (const b of m.content) {
       if (b.type === 'text') text += b.text;
       else if (b.type === 'tool_result') {
-        out.push({ role: 'tool', tool_call_id: b.tool_use_id, content: toolResultText(b.content) });
+        // OpenAI's `tool` message has no per-result error flag — prefix so the model still learns
+        // the tool failed (Anthropic carries is_error structurally).
+        const body = toolResultText(b.content);
+        out.push({
+          role: 'tool',
+          tool_call_id: b.tool_use_id,
+          content: b.is_error ? `[tool error] ${body}` : body,
+        });
       }
     }
     if (text.length > 0) out.push({ role: 'user', content: text });
@@ -213,7 +220,7 @@ const StreamChunk = z.object({
             tool_calls: z
               .array(
                 z.object({
-                  index: z.number(),
+                  index: z.number().default(0), // some gateways omit it on a single-tool stream
                   id: z.string().optional(),
                   function: z
                     .object({ name: z.string().optional(), arguments: z.string().optional() })
@@ -228,12 +235,26 @@ const StreamChunk = z.object({
     )
     .optional(),
   usage: z.object({ prompt_tokens: z.number(), completion_tokens: z.number() }).partial().optional(),
+  // a streaming error frame (HTTP 200 + an in-band error) — modeled so it's detectable, not
+  // swallowed. Accept both the canonical object shape and a bare string (non-conformant gateways).
+  error: z.union([z.string(), z.record(z.string(), z.unknown())]).optional(),
 });
 
 export type OAStreamChunk = z.infer<typeof StreamChunk>;
 
-export function parseStreamChunk(json: unknown): OAStreamChunk {
-  return StreamChunk.parse(json);
+// Tolerant chunk parse: a slightly-off but harmless chunk should NOT crash a turn that has already
+// streamed text. Returns null on a shape mismatch so the caller skips it and keeps going.
+export function parseStreamChunkSafe(json: unknown): OAStreamChunk | null {
+  const r = StreamChunk.safeParse(json);
+  return r.success ? r.data : null;
+}
+
+// A human-readable message if a chunk is an error frame (rate-limit/quota/server error on a 200).
+export function streamErrorMessage(chunk: OAStreamChunk): string | null {
+  if (chunk.error == null) return null;
+  if (typeof chunk.error === 'string') return chunk.error.length > 0 ? chunk.error : 'openai stream error';
+  const m = chunk.error['message'];
+  return typeof m === 'string' && m.length > 0 ? m : 'openai stream error';
 }
 
 // Pure SSE framing: pull complete `data:` payloads out of a text buffer, returning the unconsumed
@@ -261,6 +282,8 @@ export function mapStopReason(finish: string | null | undefined): string {
   if (finish === 'tool_calls') return 'tool_use';
   if (finish === 'length') return 'max_tokens';
   if (finish === 'stop') return 'end_turn';
+  // `content_filter` (and any other reason) passes through verbatim, not masked as a clean end_turn,
+  // so a blocked completion is visible downstream rather than looking like a normal stop.
   return finish ?? 'end_turn';
 }
 
