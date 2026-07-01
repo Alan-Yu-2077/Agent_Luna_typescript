@@ -10,7 +10,7 @@ import { messageRegistry } from '../tools/registry';
 import { getSession, resetSessions } from '../turn/session';
 import { TraceStore } from '../trace/store';
 import { setTraceStore } from '../trace/instrument';
-import { runProactiveTurn } from './proactiveTurn';
+import { resetProactiveOpenersForTests, runProactiveTurn } from './proactiveTurn';
 
 function msgRound(calls: { id: string; input: unknown }[]): ProviderEvent {
   const toolUses = calls.map((c) => ({ id: c.id, name: 'message', input: c.input }));
@@ -136,5 +136,60 @@ describe('runProactiveTurn', () => {
     expect(corrected).toBe(true);
     expect(events.find((e) => e.type === 'turn.result')).toBeTruthy();
     delete Bun.env['LUNA_INTEGRITY_GUARD'];
+  });
+});
+
+function userText(req: { messages: Anthropic.MessageParam[] }): string {
+  return req.messages
+    .filter((m) => m.role === 'user')
+    .flatMap((m) => (Array.isArray(m.content) ? m.content : []))
+    .filter((b) => (b as { type: string }).type === 'text')
+    .map((b) => (b as { text: string }).text)
+    .join('\n');
+}
+
+describe('runProactiveTurn — ladder scenario framing (v0.24.0)', () => {
+  test('a scenario framing carries the scenario body + the companion constraint, not the old intent directive', async () => {
+    const provider = new MockProvider([[endRound]]);
+    await runProactiveTurn({
+      session: getSession('default'),
+      cycleId: 'c1',
+      provider,
+      registry: messageRegistry,
+      emit: () => {},
+      scenario: 'renudge',
+    });
+    const t = userText(provider.requests[0]!);
+    expect(t).toContain('LIGHTER'); // the renudge restraint body
+    expect(t).toContain('check up on him'); // COMPANION_OPENER_CONSTRAINT
+    expect(t).toContain('在吗'); // a named banned opener
+    expect(t).not.toContain('You woke on your own'); // NOT the old `spontaneous` intent directive
+  });
+
+  test('anti-repeat: a spoken opener is fed back into the next scenario framing', async () => {
+    resetProactiveOpenersForTests();
+    await runProactiveTurn({
+      session: getSession('default'),
+      cycleId: 'c1',
+      provider: new MockProvider([
+        [msgRound([{ id: 'm1', input: { text: 'the window looks orange tonight', is_final: true } }])],
+        [endRound],
+      ]),
+      registry: messageRegistry,
+      emit: () => {},
+      scenario: 'idle_nudge',
+    });
+    const provider2 = new MockProvider([[endRound]]);
+    await runProactiveTurn({
+      session: getSession('default'),
+      cycleId: 'c2',
+      provider: provider2,
+      registry: messageRegistry,
+      emit: () => {},
+      scenario: 'idle_nudge',
+    });
+    const t = userText(provider2.requests[0]!);
+    expect(t).toContain("Don't reopen"); // the anti-repeat clause is present
+    expect(t).toContain('the window looks orange tonight'); // and quotes her prior opener
   });
 });

@@ -1,4 +1,5 @@
 import { getMemoryDb } from '../memory/sessionStore';
+import type { ProactiveScenario } from './ladder';
 
 // The cadence governor (Initiative 5, v0.10.2). The mechanical rail around the
 // wake judgment: quotas, cooldowns, quiet hours, deep-absence — the cheap
@@ -113,6 +114,66 @@ export function commitProactive(c: Cadence, nowMs: number): Cadence {
 // cheaply without exhausting the 5/day cap.
 export function commitProactiveSilent(c: Cadence, nowMs: number): Cadence {
   return { ...c, lastProactiveMs: nowMs };
+}
+
+// v0.24.0 (Initiative 17): the ladder's SPOKE commit (port of proactive.py commit_emission
+// :322-342). Bumps the daily quota (rolling on a new local day, like commitProactive) + stamps
+// the cooldown anchor, then advances the phase per the fired scenario: idle_nudge/renudge →
+// nudged (+nudgesSent); leave_message → dormant; ambient stays put. A model-emitted
+// follow_up:false forces dormant (a future "this is enough" override; null = keep the mechanical
+// phase). A SILENT ladder consideration uses commitProactiveSilent instead — no quota, no phase
+// advance (a silent draft doesn't burn a nudge, matching Python's note_attempt).
+export function commitScenario(
+  c: Cadence,
+  scenario: ProactiveScenario,
+  nowMs: number,
+  followUp: boolean | null = null,
+  // The effective phase/nudgesSent the evaluator computed this tick (after user-reset /
+  // dormant-recovery / engaged→idle_watch). MUST be advanced from, not from the stale persisted
+  // cadence — otherwise a reset's nudgesSent=0 is dropped and she skips the whole renudge tier.
+  effective?: { phase: ProactivePhase; nudgesSent: number },
+): Cadence {
+  const today = dateKey(nowMs);
+  const sameDay = c.quotaDate === today;
+  const baseNudges = effective?.nudgesSent ?? c.nudgesSent;
+  let phase: ProactivePhase = effective?.phase ?? c.phase;
+  let nudgesSent = baseNudges;
+  if (scenario === 'idle_nudge' || scenario === 'renudge') {
+    nudgesSent = baseNudges + 1;
+    phase = 'nudged';
+  } else if (scenario === 'leave_message') {
+    phase = 'dormant';
+  }
+  // ambient stays in its (effective) phase.
+  if (followUp === false) phase = 'dormant';
+  return {
+    ...c,
+    quotaUsed: sameDay ? c.quotaUsed + 1 : 1,
+    quotaDate: today,
+    lastProactiveMs: nowMs,
+    phase,
+    nudgesSent,
+  };
+}
+
+// v0.24.0 (Initiative 17): a ladder scenario was offered but the model stayed silent
+// (drafting-as-decision). Stamp the cooldown anchor (a real consideration happened) + persist the
+// evaluator's phase transition so a dormant→engaged recovery or engaged→idle_watch survives — but do
+// NOT bump the quota or consume a nudge (Python note_attempt :344-347 leaves nudges_sent untouched).
+export function commitLadderSilent(
+  c: Cadence,
+  phase: ProactivePhase,
+  nudgesSent: number,
+  nowMs: number,
+): Cadence {
+  return { ...c, lastProactiveMs: nowMs, phase, nudgesSent };
+}
+
+// v0.24.0: the ladder computed a phase transition (reset / recovery / engaged→idle_watch / sleeping)
+// but nothing fired this tick. Persist ONLY the phase/nudges — NEVER touch lastProactiveMs, or the
+// recovery/idle clock would re-arm every tick and never elapse (the DORMANT-lockout bug).
+export function commitLadderPhase(c: Cadence, phase: ProactivePhase, nudgesSent: number): Cadence {
+  return { ...c, phase, nudgesSent };
 }
 
 // v0.22.1 (Initiative 15): the configured local hours for the scheduledWindow detector

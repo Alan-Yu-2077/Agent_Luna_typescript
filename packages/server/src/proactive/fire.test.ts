@@ -10,7 +10,7 @@ import type { ProviderEvent } from '../provider/types';
 import { messageRegistry } from '../tools/registry';
 import { getSession, resetSessions, type Session } from '../turn/session';
 import { resetDreamStateForTests } from '../dream/dreamState';
-import { loadCadence } from './cadence';
+import { loadCadence, saveCadence } from './cadence';
 import {
   maybeFireProactive,
   resetProactiveFireStateForTests,
@@ -46,6 +46,7 @@ afterEach(() => {
   delete Bun.env['LUNA_PROACTIVE_QUIET_HOURS'];
   delete Bun.env['LUNA_PROACTIVE_MIN_INTERVAL_MS'];
   delete Bun.env['LUNA_PROACTIVE_DEBOUNCE_MS'];
+  delete Bun.env['LUNA_PROACTIVE_LADDER'];
   setProactiveDetectorForTests(null);
   resetProactiveFireStateForTests();
   db.close(false);
@@ -196,5 +197,75 @@ describe('maybeFireProactive (the detector funnel)', () => {
     expect((await fire(base + 10_000)).fired).toBe(false); // same key, 10s later → debounced
     nextKey = 'after_night';
     expect((await fire(base + 20_000)).fired).toBe(true); // a different key → passes
+  });
+});
+
+describe('maybeFireProactive — ladder path (LUNA_PROACTIVE_LADDER=1, v0.24.0)', () => {
+  beforeEach(() => {
+    Bun.env['LUNA_PROACTIVE_LADDER'] = '1';
+    for (const k of ['LUNA_PROACTIVE_IDLE_THRESHOLD_MS', 'LUNA_PROACTIVE_NUDGE_PROB']) {
+      delete Bun.env[k];
+    }
+  });
+  afterEach(() => delete Bun.env['LUNA_PROACTIVE_LADDER']);
+
+  test('a long idle silence fires via the ladder WITHOUT consulting any detector', async () => {
+    let detectorCalls = 0;
+    setProactiveDetectorForTests(() => {
+      detectorCalls += 1;
+      return null;
+    });
+    const s = getSession('default');
+    s.lastUserMs = Date.now() - 15 * 60_000; // 15m > 10m idle threshold → idle_nudge
+    const o = opts(s, new MockProvider([[endRound]]));
+    const out = await maybeFireProactive(o);
+    expect(out.fired).toBe(true);
+    expect(out.trigger).toBeNull(); // ladder path carries no detector trigger
+    expect(detectorCalls).toBe(0); // the detector registry is never consulted
+    expect(loadCadence('default').lastProactiveMs).toBeGreaterThan(0);
+  });
+
+  test('a silence too short for any ladder scenario → no fire (and no detector)', async () => {
+    let detectorCalls = 0;
+    setProactiveDetectorForTests(() => {
+      detectorCalls += 1;
+      return { intent: 'spontaneous', seed: 's', debounceKey: 'after_night' };
+    });
+    const s = getSession('default');
+    s.lastUserMs = Date.now() - 90_000; // 90s: past the 60s floor but under the 120s ambient min
+    const o = opts(s, new MockProvider([[endRound]]));
+    expect((await maybeFireProactive(o)).fired).toBe(false);
+    expect(detectorCalls).toBe(0);
+    expect(o.provider.requests.length).toBe(0);
+  });
+
+  test('a SILENT idle_nudge persists idle_watch, so the next tick re-offers (climb survives silence)', async () => {
+    const s = getSession('default');
+    const t0 = Date.now();
+    s.lastUserMs = t0 - 15 * 60_000; // 15m idle → idle_nudge
+    // first tick: fires idle_nudge; MockProvider ends without a message → silent → persist idle_watch
+    await maybeFireProactive(opts(s, new MockProvider([[endRound]]), t0));
+    expect(loadCadence('default').phase).toBe('idle_watch');
+    // second tick just past the 300s cooldown but well under the 600s idle threshold: still offers
+    const t1 = t0 + 6 * 60_000;
+    expect((await maybeFireProactive(opts(s, new MockProvider([[endRound]]), t1))).fired).toBe(true);
+  });
+
+  test('dormant recovers after the cool-down: a silent recovery persists idle_watch, no lockout', async () => {
+    const s = getSession('default');
+    const t0 = Date.now();
+    saveCadence('default', {
+      phase: 'dormant',
+      quotaUsed: 0,
+      quotaDate: '',
+      lastProactiveMs: t0 - 2 * 3_600_000, // her last outreach 2h ago
+      nudgesSent: 3,
+      slotsUsed: 0,
+      slotsDate: '',
+    });
+    s.lastUserMs = t0 - 3 * 3_600_000; // user quiet longer than that (no user-reset)
+    const out = await maybeFireProactive(opts(s, new MockProvider([[endRound]]), t0));
+    expect(out.fired).toBe(true); // recovered → offered idle_nudge
+    expect(loadCadence('default').phase).toBe('idle_watch'); // recovery persisted, NOT stuck dormant
   });
 });

@@ -8,14 +8,18 @@ import { runDreamCycle } from '../dream/cycle';
 import { runProactiveTurn } from './proactiveTurn';
 import { evaluateDetectors, type DetectorCtx, type ProactiveTrigger } from './detectors';
 import {
+  commitLadderPhase,
+  commitLadderSilent,
   commitProactive,
   commitProactiveSilent,
+  commitScenario,
   loadCadence,
   markSlotConsumed,
   passesAntiSpam,
   proactiveEnabled,
   saveCadence,
 } from './cadence';
+import { evaluateLadder, ladderEnabled } from './ladder';
 
 // v0.22.2 (Initiative 15): the universal proactive entry point + the REAL single-turn
 // lock. Before this, every proactive path (scheduler tick, continuation, dev fire) ran
@@ -122,6 +126,48 @@ export async function maybeFireProactive(opts: MaybeFireOpts): Promise<FireOutco
     if (!passesAntiSpam(cadence, { lastUserMs: session.lastUserMs, nowMs, nowHour }).ok) {
       return NO_FIRE;
     }
+
+    // v0.24.0 (Initiative 17): the silence-ladder path (behind LUNA_PROACTIVE_LADDER). Replaces
+    // the detector registry as the wake decision, reusing the SAME lock + rail + turn + cadence
+    // commit funnel. The ladder needs no debounce (the phase machine + backoff self-space it).
+    if (ladderEnabled()) {
+      const decision = evaluateLadder({ session, cadence, nowMs, nowHour });
+      if (!decision.scenario) {
+        // Nothing fired, but persist the phase transition the evaluator computed (reset /
+        // dormant-recovery / engaged→idle_watch / sleeping) so it isn't discarded — WITHOUT stamping
+        // lastProactiveMs (no outreach happened), or the recovery/idle clock would re-arm and never
+        // elapse. Only write when it actually changed, to avoid a per-tick DB churn.
+        if (decision.phase !== cadence.phase || decision.nudgesSent !== cadence.nudgesSent) {
+          saveCadence(session.id, commitLadderPhase(cadence, decision.phase, decision.nudgesSent));
+        }
+        return NO_FIRE;
+      }
+      const { spoke } = await runProactiveTurn({
+        session,
+        cycleId: `${session.id}:${nowMs}`,
+        provider: opts.provider,
+        registry: opts.registry,
+        emit: opts.emit,
+        scenario: decision.scenario,
+      });
+      // Spoke → advance the phase from the effective base + consume the daily quota; silent → stamp
+      // the cooldown anchor + persist the transition (no quota, no nudge burned — Python note_attempt).
+      const next = spoke
+        ? commitScenario(cadence, decision.scenario, nowMs, null, {
+            phase: decision.phase,
+            nudgesSent: decision.nudgesSent,
+          })
+        : commitLadderSilent(cadence, decision.phase, decision.nudgesSent, nowMs);
+      saveCadence(session.id, next);
+      if (session.pendingDream !== null) {
+        session.pendingDream = null;
+        void runDreamCycle({ sessionId: session.id, llm: opts.dreamLlm, emit: opts.emit }).catch(
+          () => {},
+        );
+      }
+      return { fired: true, spoke, trigger: null };
+    }
+
     const trigger = detectProactive({ session, cadence, nowMs, nowHour });
     if (!trigger) return NO_FIRE;
     if (isDebounced(session.id, trigger.debounceKey, nowMs)) return NO_FIRE;

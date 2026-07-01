@@ -5,8 +5,11 @@ import { migrate } from '../sql';
 import { setMemoryDb } from '../memory/sessionStore';
 import {
   type Cadence,
+  commitLadderPhase,
+  commitLadderSilent,
   commitProactive,
   commitProactiveSilent,
+  commitScenario,
   dateKey,
   isSlotConsumed,
   loadCadence,
@@ -90,7 +93,75 @@ describe('passesAntiSpam (v0.22.0 detector gate — anti-spam subset only)', () 
   });
 });
 
+describe('commitScenario (ladder emission, v0.24.0)', () => {
+  test('idle_nudge → nudged + nudgesSent++, quota bumped, time stamped', () => {
+    const c = commitScenario({ ...base, phase: 'engaged', nudgesSent: 0 }, 'idle_nudge', NOW);
+    expect(c.phase).toBe('nudged');
+    expect(c.nudgesSent).toBe(1);
+    expect(c.quotaUsed).toBe(1);
+    expect(c.lastProactiveMs).toBe(NOW);
+  });
+
+  test('renudge → nudged + nudgesSent++ (escalation continues)', () => {
+    const c = commitScenario({ ...base, phase: 'nudged', nudgesSent: 1 }, 'renudge', NOW);
+    expect(c.phase).toBe('nudged');
+    expect(c.nudgesSent).toBe(2);
+  });
+
+  test('leave_message → dormant (winds down)', () => {
+    const c = commitScenario({ ...base, phase: 'nudged', nudgesSent: 3 }, 'leave_message', NOW);
+    expect(c.phase).toBe('dormant');
+  });
+
+  test('ambient stays in the current phase but still consumes quota', () => {
+    const c = commitScenario({ ...base, phase: 'engaged' }, 'ambient', NOW);
+    expect(c.phase).toBe('engaged');
+    expect(c.nudgesSent).toBe(0);
+    expect(c.quotaUsed).toBe(1);
+  });
+
+  test('follow_up:false forces dormant regardless of the mechanical phase', () => {
+    const c = commitScenario({ ...base, phase: 'engaged' }, 'idle_nudge', NOW, false);
+    expect(c.phase).toBe('dormant');
+  });
+
+  test('quota rolls over on a new local day', () => {
+    const c = commitScenario({ ...base, quotaDate: '2000-01-01', quotaUsed: 4 }, 'idle_nudge', NOW);
+    expect(c.quotaUsed).toBe(1);
+    expect(c.quotaDate).toBe(TODAY);
+  });
+
+  test('advances from the EFFECTIVE base, not the stale cadence (the user-reset carry-over fix)', () => {
+    // stale cadence says nudgesSent 2; the evaluator reset it to 0 this tick → commit must use 0
+    const c = commitScenario({ ...base, phase: 'nudged', nudgesSent: 2 }, 'idle_nudge', NOW, null, {
+      phase: 'idle_watch',
+      nudgesSent: 0,
+    });
+    expect(c.nudgesSent).toBe(1); // 0 + 1, NOT 2 + 1 = 3
+    expect(c.phase).toBe('nudged');
+  });
+});
+
+describe('ladder silent/null commits (v0.24.0)', () => {
+  test('commitLadderSilent stamps the cooldown + persists the phase, but no quota/nudge', () => {
+    const c = commitLadderSilent({ ...base, quotaUsed: 2, nudgesSent: 1 }, 'idle_watch', 1, NOW);
+    expect(c.phase).toBe('idle_watch');
+    expect(c.lastProactiveMs).toBe(NOW);
+    expect(c.quotaUsed).toBe(2); // NOT bumped
+    expect(c.nudgesSent).toBe(1); // NOT bumped
+  });
+
+  test('commitLadderPhase persists the phase WITHOUT stamping lastProactiveMs (no clock re-arm)', () => {
+    const c = commitLadderPhase({ ...base, lastProactiveMs: 12_345, phase: 'dormant' }, 'engaged', 0);
+    expect(c.phase).toBe('engaged');
+    expect(c.lastProactiveMs).toBe(12_345); // unchanged — the recovery clock keeps accruing
+  });
+});
+
 describe('scheduled slots (v0.22.1)', () => {
+  // beforeEach too (not just afterEach): the dev .env may set LUNA_PROACTIVE_SLOTS, and bun
+  // auto-loads it — without clearing it first, the "unset → empty" assertion sees the .env value.
+  beforeEach(() => delete Bun.env['LUNA_PROACTIVE_SLOTS']);
   afterEach(() => delete Bun.env['LUNA_PROACTIVE_SLOTS']);
   test('scheduledSlots parses LUNA_PROACTIVE_SLOTS; unset → empty', () => {
     expect(scheduledSlots()).toEqual([]);
