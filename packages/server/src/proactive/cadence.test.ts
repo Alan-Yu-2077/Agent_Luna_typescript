@@ -11,13 +11,10 @@ import {
   commitProactiveSilent,
   commitScenario,
   dateKey,
-  isSlotConsumed,
   loadCadence,
-  markSlotConsumed,
   passesAntiSpam,
   recordUserActivity,
   saveCadence,
-  scheduledSlots,
 } from './cadence';
 
 const NOW = 1_700_000_000_000; // fixed 2023-11-14T22:13:20Z
@@ -29,8 +26,6 @@ const base: Cadence = {
   quotaDate: '',
   lastProactiveMs: 0,
   nudgesSent: 0,
-  slotsUsed: 0,
-  slotsDate: '',
 };
 
 const ctx = (over: Partial<{ lastUserMs: number; nowMs: number; nowHour: number }> = {}) => ({
@@ -158,33 +153,6 @@ describe('ladder silent/null commits (v0.24.0)', () => {
   });
 });
 
-describe('scheduled slots (v0.22.1)', () => {
-  // beforeEach too (not just afterEach): the dev .env may set LUNA_PROACTIVE_SLOTS, and bun
-  // auto-loads it — without clearing it first, the "unset → empty" assertion sees the .env value.
-  beforeEach(() => delete Bun.env['LUNA_PROACTIVE_SLOTS']);
-  afterEach(() => delete Bun.env['LUNA_PROACTIVE_SLOTS']);
-  test('scheduledSlots parses LUNA_PROACTIVE_SLOTS; unset → empty', () => {
-    expect(scheduledSlots()).toEqual([]);
-    Bun.env['LUNA_PROACTIVE_SLOTS'] = '11, 20';
-    expect(scheduledSlots()).toEqual([11, 20]);
-    Bun.env['LUNA_PROACTIVE_SLOTS'] = '11,99,xx,5';
-    expect(scheduledSlots()).toEqual([11, 5]); // out-of-range / non-numeric dropped
-  });
-  test('markSlotConsumed sets the hour bit; isSlotConsumed reads it; resets on a new day', () => {
-    expect(isSlotConsumed(base, 11, NOW)).toBe(false);
-    const c = markSlotConsumed(base, 11, NOW);
-    expect(isSlotConsumed(c, 11, NOW)).toBe(true);
-    expect(isSlotConsumed(c, 20, NOW)).toBe(false); // a different slot is untouched
-    const c2 = markSlotConsumed(c, 20, NOW);
-    expect(isSlotConsumed(c2, 11, NOW)).toBe(true); // both bits set same day
-    expect(isSlotConsumed(c2, 20, NOW)).toBe(true);
-    // a new day clears the mask
-    const nextDay = NOW + 24 * 3600_000;
-    expect(isSlotConsumed(c2, 11, nextDay)).toBe(false);
-    expect(isSlotConsumed(markSlotConsumed(c2, 11, nextDay), 20, nextDay)).toBe(false);
-  });
-});
-
 describe('cadence persistence (restart-survival)', () => {
   let db: Database;
   beforeEach(() => {
@@ -201,7 +169,7 @@ describe('cadence persistence (restart-survival)', () => {
     expect(loadCadence('nope')).toEqual(base);
   });
   test('save then load round-trips (upsert when no prior row)', () => {
-    const c: Cadence = { phase: 'dormant', quotaUsed: 3, quotaDate: TODAY, lastProactiveMs: NOW, nudgesSent: 2, slotsUsed: 0, slotsDate: '' };
+    const c: Cadence = { phase: 'dormant', quotaUsed: 3, quotaDate: TODAY, lastProactiveMs: NOW, nudgesSent: 2 };
     saveCadence('s1', c);
     expect(loadCadence('s1')).toEqual(c);
   });

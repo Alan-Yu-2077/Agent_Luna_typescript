@@ -36,8 +36,10 @@ function numFloat(env: string, fallback: number): number {
   return Number.isFinite(v) && v >= 0 ? v : fallback;
 }
 
+// v0.24.1 (Initiative 17): default ON — the ladder is now THE proactive wake decision (the detector
+// registry was deleted). `LUNA_PROACTIVE_LADDER=0` is the escape hatch (no proactive openings).
 export function ladderEnabled(): boolean {
-  return Bun.env['LUNA_PROACTIVE_LADDER'] === '1';
+  return Bun.env['LUNA_PROACTIVE_LADDER'] !== '0';
 }
 
 // proactive.py:56 RENUDGE_BACKOFF — each successive re-nudge waits longer, so she backs off

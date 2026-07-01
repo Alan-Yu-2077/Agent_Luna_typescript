@@ -27,8 +27,6 @@ const baseCadence: Cadence = {
   quotaDate: '',
   lastProactiveMs: 0,
   nudgesSent: 0,
-  slotsUsed: 0,
-  slotsDate: '',
 };
 
 let db: Database;

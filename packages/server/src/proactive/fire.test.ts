@@ -14,7 +14,6 @@ import { loadCadence, saveCadence } from './cadence';
 import {
   maybeFireProactive,
   resetProactiveFireStateForTests,
-  setProactiveDetectorForTests,
   withProactiveLock,
   type MaybeFireOpts,
 } from './fire';
@@ -47,14 +46,14 @@ afterEach(() => {
   delete Bun.env['LUNA_PROACTIVE_MIN_INTERVAL_MS'];
   delete Bun.env['LUNA_PROACTIVE_DEBOUNCE_MS'];
   delete Bun.env['LUNA_PROACTIVE_LADDER'];
-  setProactiveDetectorForTests(null);
   resetProactiveFireStateForTests();
   db.close(false);
 });
 
-// past the 60s idle floor so passesAntiSpam allows the funnel
+// a 15m silence — past the 60s idle floor AND the 10m ladder idle-threshold, so the ladder fires a
+// deterministic idle_nudge (nudge_prob defaults to 1.0).
 function idle(s: Session): void {
-  s.lastUserMs = Date.now() - 5 * 60_000;
+  s.lastUserMs = Date.now() - 15 * 60_000;
 }
 
 function opts(
@@ -124,9 +123,8 @@ describe('withProactiveLock (the single-turn lock primitive)', () => {
   });
 });
 
-describe('maybeFireProactive (the detector funnel)', () => {
-  test('a trigger + idle → fires and stamps the cadence cooldown', async () => {
-    setProactiveDetectorForTests(() => ({ intent: 'spontaneous', seed: 's', debounceKey: 'after_night' }));
+describe('maybeFireProactive — ladder funnel (rail behaviors, v0.24.1)', () => {
+  test('a long idle silence → fires and stamps the cadence cooldown', async () => {
     const s = getSession('default');
     idle(s);
     const o = opts(s, new MockProvider([[endRound]]));
@@ -137,33 +135,34 @@ describe('maybeFireProactive (the detector funnel)', () => {
     expect(loadCadence('default').lastProactiveMs).toBeGreaterThan(0);
   });
 
-  test('no trigger → no fire', async () => {
-    setProactiveDetectorForTests(() => null);
+  test('a short silence → no fire', async () => {
     const s = getSession('default');
-    idle(s);
+    s.lastUserMs = Date.now() - 90_000; // 90s: past the 60s floor, under the 120s ambient min
     const o = opts(s, new MockProvider([[endRound]]));
     expect((await maybeFireProactive(o)).fired).toBe(false);
     expect(o.provider.requests.length).toBe(0);
   });
 
-  test('anti-spam (cooldown) blocks the funnel before the detector runs', async () => {
-    let detectCalls = 0;
-    setProactiveDetectorForTests(() => {
-      detectCalls += 1;
-      return { intent: 'spontaneous', seed: 's', debounceKey: 'after_night' };
-    });
+  test('LUNA_PROACTIVE_LADDER=0 → no proactive opening even on a long idle', async () => {
+    Bun.env['LUNA_PROACTIVE_LADDER'] = '0';
     const s = getSession('default');
     idle(s);
-    await maybeFireProactive(opts(s, new MockProvider([[endRound]]))); // first fire stamps cooldown
-    const callsAfterFirst = detectCalls;
-    const o = opts(s, new MockProvider([[endRound]])); // immediate second — within 5m cooldown
+    const o = opts(s, new MockProvider([[endRound]]));
     expect((await maybeFireProactive(o)).fired).toBe(false);
     expect(o.provider.requests.length).toBe(0);
-    expect(detectCalls).toBe(callsAfterFirst); // detector NOT consulted — anti-spam short-circuits
+    delete Bun.env['LUNA_PROACTIVE_LADDER'];
+  });
+
+  test('anti-spam cooldown blocks a second fire right after the first', async () => {
+    const s = getSession('default');
+    idle(s);
+    await maybeFireProactive(opts(s, new MockProvider([[endRound]]))); // first stamps the cooldown
+    const o = opts(s, new MockProvider([[endRound]])); // immediate second, within the 5m cooldown
+    expect((await maybeFireProactive(o)).fired).toBe(false);
+    expect(o.provider.requests.length).toBe(0);
   });
 
   test('two concurrent funnel calls never double-fire (the lock)', async () => {
-    setProactiveDetectorForTests(() => ({ intent: 'spontaneous', seed: 's', debounceKey: 'after_night' }));
     const s = getSession('default');
     idle(s);
     const a = opts(s, new MockProvider([[endRound]]));
@@ -174,7 +173,6 @@ describe('maybeFireProactive (the detector funnel)', () => {
   });
 
   test('no-op while a reactive turn is active', async () => {
-    setProactiveDetectorForTests(() => ({ intent: 'spontaneous', seed: 's', debounceKey: 'after_night' }));
     const s = getSession('default');
     idle(s);
     s.activeTurn = 'busy';
@@ -183,62 +181,9 @@ describe('maybeFireProactive (the detector funnel)', () => {
     expect(o.provider.requests.length).toBe(0);
     s.activeTurn = null;
   });
-
-  test('debounce: the same trigger key within the window is skipped; a different key passes', async () => {
-    Bun.env['LUNA_PROACTIVE_MIN_INTERVAL_MS'] = '1'; // take the cadence cooldown out of the picture
-    const s = getSession('default');
-    s.lastUserMs = Date.now() - 60 * 60_000; // well past the idle floor
-    let nextKey = 'weather:rain:mild';
-    setProactiveDetectorForTests(() => ({ intent: 'spontaneous', seed: 's', debounceKey: nextKey }));
-    const base = Date.now();
-    const fire = (nowMs: number) => maybeFireProactive(opts(s, new MockProvider([[endRound]]), nowMs));
-
-    expect((await fire(base)).fired).toBe(true); // first: fires, stamps debounce[weather:rain:mild]
-    expect((await fire(base + 10_000)).fired).toBe(false); // same key, 10s later → debounced
-    nextKey = 'after_night';
-    expect((await fire(base + 20_000)).fired).toBe(true); // a different key → passes
-  });
 });
 
-describe('maybeFireProactive — ladder path (LUNA_PROACTIVE_LADDER=1, v0.24.0)', () => {
-  beforeEach(() => {
-    Bun.env['LUNA_PROACTIVE_LADDER'] = '1';
-    for (const k of ['LUNA_PROACTIVE_IDLE_THRESHOLD_MS', 'LUNA_PROACTIVE_NUDGE_PROB']) {
-      delete Bun.env[k];
-    }
-  });
-  afterEach(() => delete Bun.env['LUNA_PROACTIVE_LADDER']);
-
-  test('a long idle silence fires via the ladder WITHOUT consulting any detector', async () => {
-    let detectorCalls = 0;
-    setProactiveDetectorForTests(() => {
-      detectorCalls += 1;
-      return null;
-    });
-    const s = getSession('default');
-    s.lastUserMs = Date.now() - 15 * 60_000; // 15m > 10m idle threshold → idle_nudge
-    const o = opts(s, new MockProvider([[endRound]]));
-    const out = await maybeFireProactive(o);
-    expect(out.fired).toBe(true);
-    expect(out.trigger).toBeNull(); // ladder path carries no detector trigger
-    expect(detectorCalls).toBe(0); // the detector registry is never consulted
-    expect(loadCadence('default').lastProactiveMs).toBeGreaterThan(0);
-  });
-
-  test('a silence too short for any ladder scenario → no fire (and no detector)', async () => {
-    let detectorCalls = 0;
-    setProactiveDetectorForTests(() => {
-      detectorCalls += 1;
-      return { intent: 'spontaneous', seed: 's', debounceKey: 'after_night' };
-    });
-    const s = getSession('default');
-    s.lastUserMs = Date.now() - 90_000; // 90s: past the 60s floor but under the 120s ambient min
-    const o = opts(s, new MockProvider([[endRound]]));
-    expect((await maybeFireProactive(o)).fired).toBe(false);
-    expect(detectorCalls).toBe(0);
-    expect(o.provider.requests.length).toBe(0);
-  });
-
+describe('maybeFireProactive — ladder climb + recovery (v0.24.0)', () => {
   test('a SILENT idle_nudge persists idle_watch, so the next tick re-offers (climb survives silence)', async () => {
     const s = getSession('default');
     const t0 = Date.now();
@@ -260,8 +205,6 @@ describe('maybeFireProactive — ladder path (LUNA_PROACTIVE_LADDER=1, v0.24.0)'
       quotaDate: '',
       lastProactiveMs: t0 - 2 * 3_600_000, // her last outreach 2h ago
       nudgesSent: 3,
-      slotsUsed: 0,
-      slotsDate: '',
     });
     s.lastUserMs = t0 - 3 * 3_600_000; // user quiet longer than that (no user-reset)
     const out = await maybeFireProactive(opts(s, new MockProvider([[endRound]]), t0));

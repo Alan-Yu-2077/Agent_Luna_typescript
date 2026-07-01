@@ -12,14 +12,9 @@ import { getSession, resetSessions } from '../turn/session';
 import { resetDreamStateForTests } from '../dream/dreamState';
 import { TraceStore } from '../trace/store';
 import { setTraceStore } from '../trace/instrument';
-import { dateKey, loadCadence } from './cadence';
+import { loadCadence } from './cadence';
 import { resetProactiveFireStateForTests } from './fire';
-import {
-  fireProactiveForActiveSessions,
-  runTick,
-  setProactiveDetectorForTests,
-  type SchedulerDeps,
-} from './scheduler';
+import { fireProactiveForActiveSessions, runTick, type SchedulerDeps } from './scheduler';
 
 const endRound: ProviderEvent = {
   kind: 'message_stop',
@@ -53,7 +48,6 @@ afterEach(() => {
   delete Bun.env['LUNA_PROACTIVE'];
   delete Bun.env['LUNA_PROACTIVE_QUIET_HOURS'];
   delete Bun.env['LUNA_TRACE'];
-  setProactiveDetectorForTests(null); // restore the real detector
   db.close(false);
 });
 
@@ -72,50 +66,35 @@ function makeDeps(_unused: string, turnRounds: ProviderEvent[][]) {
   return { deps, gate, turnProvider, events };
 }
 
-// ─── the deterministic detector path (the only path since v0.22.3) ───────────────
-describe('proactive scheduler — detector path (default)', () => {
-  // force a detector on/off so the tick is clock-independent
-  const triggerOn = () =>
-    setProactiveDetectorForTests(() => ({
-      intent: 'spontaneous' as const,
-      seed: 'after-a-night context',
-      debounceKey: 'after_night',
-    }));
-  const triggerSlot = () =>
-    setProactiveDetectorForTests(() => ({
-      intent: 'spontaneous' as const,
-      seed: 'scheduled context',
-      debounceKey: 'slot:11',
-    }));
-  const triggerOff = () => setProactiveDetectorForTests(() => null);
-  // register the session + put it past the small idle floor (so passesAntiSpam allows it)
+// ─── the silence-ladder path (the only path since v0.24.1) ───────────────
+describe('proactive scheduler — ladder path (default)', () => {
+  // a 15m silence → past the idle floor AND the 10m ladder threshold → a deterministic idle_nudge
   const idle = () => {
-    getSession('default').lastUserMs = Date.now() - 5 * 60_000;
+    getSession('default').lastUserMs = Date.now() - 15 * 60_000;
   };
 
-  test('disabled (LUNA_PROACTIVE=0) → no-op even if a detector would fire', async () => {
+  test('disabled (LUNA_PROACTIVE=0) → no-op even on a long idle', async () => {
     Bun.env['LUNA_PROACTIVE'] = '0';
-    triggerOn();
+    idle();
     const { deps, gate, turnProvider } = makeDeps('', [[endRound]]);
     await runTick(deps);
     expect(gate.completeRequests.length).toBe(0);
     expect(turnProvider.requests.length).toBe(0);
   });
 
-  test('no detector fires → no turn, and NO LLM gate call (zero idle polling)', async () => {
-    triggerOff();
+  test('a short silence → no turn, and NO LLM gate call (zero idle polling)', async () => {
+    getSession('default').lastUserMs = Date.now() - 90_000; // 90s → no ladder scenario
     const { deps, gate, turnProvider } = makeDeps('', [[endRound]]);
     await runTick(deps);
     expect(gate.completeRequests.length).toBe(0); // the whole point: no per-tick LLM
     expect(turnProvider.requests.length).toBe(0);
   });
 
-  test('a trigger + a SILENT turn fires, no gate call, stamps cooldown, quota stays 0', async () => {
-    triggerOn();
+  test('an idle silence + a SILENT turn fires, no gate call, stamps cooldown, quota stays 0', async () => {
     idle();
     const { deps, gate, turnProvider, events } = makeDeps('', [[endRound]]); // silent
     await runTick(deps);
-    expect(gate.completeRequests.length).toBe(0); // detector path never calls the LLM gate
+    expect(gate.completeRequests.length).toBe(0); // the ladder never calls an LLM gate
     expect(turnProvider.requests.length).toBeGreaterThanOrEqual(1);
     expect(events.some((e) => e.type === 'proactive.started')).toBe(true);
     const c = loadCadence('default');
@@ -123,16 +102,15 @@ describe('proactive scheduler — detector path (default)', () => {
     expect(c.lastProactiveMs).toBeGreaterThan(0); // ...but the cooldown anchor is stamped
   });
 
-  test('a > 18h deep-absence gap still fires (NOT swallowed by deep_absence)', async () => {
-    triggerOn();
+  test('a >18h absence → sleeping, no proactive (she waits for the user — pure-Python parity)', async () => {
     getSession('default').lastUserMs = Date.now() - 20 * 60 * 60_000; // 20h ago
     const { deps, turnProvider } = makeDeps('', [[endRound]]);
     await runTick(deps);
-    expect(turnProvider.requests.length).toBeGreaterThanOrEqual(1); // the HIGH fix
+    expect(turnProvider.requests.length).toBe(0); // long-absence → sleeping, not a nudge
+    expect(loadCadence('default').phase).toBe('sleeping');
   });
 
   test('cooldown blocks a second tick right after a fire', async () => {
-    triggerOn();
     idle();
     await runTick(makeDeps('', [[endRound]]).deps);
     expect(loadCadence('default').lastProactiveMs).toBeGreaterThan(0);
@@ -142,9 +120,9 @@ describe('proactive scheduler — detector path (default)', () => {
   });
 
   test('an active user turn is never overlapped', async () => {
-    triggerOn();
     const s = getSession('default');
     s.activeTurn = 'busy-turn';
+    idle();
     const { deps, turnProvider } = makeDeps('', [[endRound]]);
     await runTick(deps);
     expect(turnProvider.requests.length).toBe(0);
@@ -152,18 +130,15 @@ describe('proactive scheduler — detector path (default)', () => {
   });
 
   test('concurrent ticks: the reentrancy guard prevents a second back-to-back fire', async () => {
-    triggerOn();
     idle();
     const a = makeDeps('', [[endRound]]);
     const b = makeDeps('', [[endRound]]);
     await Promise.all([runTick(a.deps), runTick(b.deps)]);
-    expect(a.turnProvider.requests.length).toBeGreaterThanOrEqual(1);
-    expect(b.turnProvider.requests.length).toBe(0); // B saw `ticking` and returned
+    expect(a.turnProvider.requests.length + b.turnProvider.requests.length).toBe(1); // exactly one
     expect(loadCadence('default').lastProactiveMs).toBeGreaterThan(0);
   });
 
   test('dream auto-trigger: a proactive turn that calls enter_dream starts a dream', async () => {
-    triggerOn();
     const enterDream: ProviderEvent = {
       kind: 'message_stop',
       stopReason: 'tool_use',
@@ -187,25 +162,8 @@ describe('proactive scheduler — detector path (default)', () => {
     expect(turnProvider.requests.length).toBeGreaterThanOrEqual(1);
   });
 
-  test('a scheduled-slot trigger marks the slot consumed for the day (v0.22.1)', async () => {
-    triggerSlot(); // debounceKey 'slot:11'
-    idle();
-    await runTick(makeDeps('', [[endRound]]).deps);
-    const c = loadCadence('default');
-    expect(c.slotsUsed).not.toBe(0); // the current hour's slot bit is set
-    expect(c.slotsDate).toBe(dateKey(Date.now()));
-  });
-
-  test('a non-slot trigger (after-night) does NOT mark any slot', async () => {
-    triggerOn(); // debounceKey 'after_night'
-    idle();
-    await runTick(makeDeps('', [[endRound]]).deps);
-    expect(loadCadence('default').slotsUsed).toBe(0);
-  });
-
   // v0.22.2: the weather event hook reuses the SAME funnel + lock as the heartbeat.
-  test('fireProactiveForActiveSessions runs the detector funnel for active sessions', async () => {
-    triggerOn();
+  test('fireProactiveForActiveSessions runs the funnel for active sessions', async () => {
     idle();
     const { deps, turnProvider } = makeDeps('', [[endRound]]);
     await fireProactiveForActiveSessions(deps);
@@ -214,9 +172,9 @@ describe('proactive scheduler — detector path (default)', () => {
   });
 
   test('the hook is a no-op while a user turn is active (shared single-turn lock)', async () => {
-    triggerOn();
     const s = getSession('default');
     s.activeTurn = 'busy-turn';
+    idle();
     const { deps, turnProvider } = makeDeps('', [[endRound]]);
     await fireProactiveForActiveSessions(deps);
     expect(turnProvider.requests.length).toBe(0);

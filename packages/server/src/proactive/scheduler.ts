@@ -7,17 +7,13 @@ import { isDreaming } from '../dream/dreamState';
 import { maybeFireProactive } from './fire';
 import { proactiveEnabled } from './cadence';
 
-// v0.22.2 (Initiative 15): the detector seam lives in fire.ts (with the funnel that consumes
-// it). Re-export so existing callers/tests keep importing it from the scheduler.
-export { setProactiveDetectorForTests } from './fire';
-
 // The proactive heartbeat (Initiative 5, v0.10.3) — a single server-side timer that, on each
-// tick, runs the deterministic detector funnel per session and fires a proactive turn when a
-// detector matches. This is where the loop becomes AUTONOMOUS. Pure backend, no UI-liveness
-// dependency (Python v0.45.0 lesson). Everything stays behind LUNA_PROACTIVE; the cadence
-// governor (v0.10.2) + the single-turn lock (v0.22.2) bound what fires. v0.22.3 deleted the
-// legacy per-tick LLM wake-gate — the detector path (v0.22.0–v0.22.2) fully covers the
-// openings, so there is no speculative LLM call on the heartbeat anymore.
+// tick, runs the proactive funnel per session and fires a proactive turn when the wake decision
+// says so. This is where the loop becomes AUTONOMOUS. Pure backend, no UI-liveness dependency
+// (Python v0.45.0 lesson). Everything stays behind LUNA_PROACTIVE; the cadence governor (v0.10.2)
+// + the single-turn lock (v0.22.2) bound what fires. v0.24.1 (Initiative 17) made the silence
+// ladder the wake decision (the detector registry was deleted); there is no speculative LLM call
+// on the heartbeat.
 
 export type SchedulerDeps = {
   provider: Provider;

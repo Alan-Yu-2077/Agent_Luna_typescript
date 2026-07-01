@@ -16,10 +16,6 @@ export type Cadence = {
   quotaDate: string; // YYYY-MM-DD (UTC); quota resets when this rolls over
   lastProactiveMs: number; // 0 = never fired
   nudgesSent: number;
-  // v0.22.1 (Initiative 15): per-day scheduled-slot bitmask — bit `h` = the slot for
-  // local hour h already fired today; reset when slotsDate rolls over.
-  slotsUsed: number;
-  slotsDate: string;
 };
 
 const DEFAULT_CADENCE: Cadence = {
@@ -28,8 +24,6 @@ const DEFAULT_CADENCE: Cadence = {
   quotaDate: '',
   lastProactiveMs: 0,
   nudgesSent: 0,
-  slotsUsed: 0,
-  slotsDate: '',
 };
 
 function num(env: string, fallback: number): number {
@@ -176,43 +170,21 @@ export function commitLadderPhase(c: Cadence, phase: ProactivePhase, nudgesSent:
   return { ...c, phase, nudgesSent };
 }
 
-// v0.22.1 (Initiative 15): the configured local hours for the scheduledWindow detector
-// (LUNA_PROACTIVE_SLOTS, e.g. '11,20'). Unset/empty → no scheduled floor.
-export function scheduledSlots(): number[] {
-  const raw = (Bun.env['LUNA_PROACTIVE_SLOTS'] ?? '').trim();
-  if (raw === '') return []; // unset/empty = no scheduled floor (NOT hour 0)
-  return raw
-    .split(',')
-    .map((s) => Number(s.trim()))
-    .filter((n) => Number.isInteger(n) && n >= 0 && n <= 23);
-}
-
-// Has the slot for `hour` already fired today? (bit `hour` of the per-day mask)
-export function isSlotConsumed(c: Cadence, hour: number, nowMs: number): boolean {
-  return c.slotsDate === dateKey(nowMs) && (c.slotsUsed & (1 << hour)) !== 0;
-}
-
-// Mark `hour`'s slot fired for today (rolling the mask over on a new local day).
-export function markSlotConsumed(c: Cadence, hour: number, nowMs: number): Cadence {
-  const today = dateKey(nowMs);
-  const sameDay = c.slotsDate === today;
-  return { ...c, slotsDate: today, slotsUsed: (sameDay ? c.slotsUsed : 0) | (1 << hour) };
-}
-
-// User spoke → reset the cadence to engaged (Python: any user message resets
-// phase + nudges).
+// User spoke → reset the cadence to engaged (Python: any user message resets phase + nudges).
+// v0.24.0+ the ladder also derives this read-time (lastUserMs > lastProactiveMs), so this stays a
+// utility; the scheduled-slot machinery (v0.22.1) was deleted with the detector registry in v0.24.1.
 export function recordUserActivity(c: Cadence): Cadence {
   return { ...c, phase: 'engaged', nudgesSent: 0 };
 }
 
+// The `proactive_slots_used`/`proactive_slots_date` columns (migration 0013) are left in the schema
+// as vestigial (both NOT NULL DEFAULT), but no longer read or written since v0.24.1.
 type Row = {
   proactive_phase: string;
   proactive_quota_used: number;
   proactive_quota_date: string;
   proactive_last_ms: number;
   proactive_nudges: number;
-  proactive_slots_used: number;
-  proactive_slots_date: string;
 };
 
 const PHASES: ReadonlySet<string> = new Set([
@@ -228,7 +200,7 @@ export function loadCadence(sessionId: string): Cadence {
   if (!db) return { ...DEFAULT_CADENCE };
   const row = db
     .prepare(
-      'SELECT proactive_phase, proactive_quota_used, proactive_quota_date, proactive_last_ms, proactive_nudges, proactive_slots_used, proactive_slots_date FROM sessions WHERE id = ?',
+      'SELECT proactive_phase, proactive_quota_used, proactive_quota_date, proactive_last_ms, proactive_nudges FROM sessions WHERE id = ?',
     )
     .get(sessionId) as Row | null;
   if (!row) return { ...DEFAULT_CADENCE };
@@ -238,8 +210,6 @@ export function loadCadence(sessionId: string): Cadence {
     quotaDate: row.proactive_quota_date,
     lastProactiveMs: row.proactive_last_ms,
     nudgesSent: row.proactive_nudges,
-    slotsUsed: row.proactive_slots_used,
-    slotsDate: row.proactive_slots_date,
   };
 }
 
@@ -248,31 +218,12 @@ export function saveCadence(sessionId: string, c: Cadence): void {
   if (!db) return;
   const changes = db
     .prepare(
-      'UPDATE sessions SET proactive_phase=?, proactive_quota_used=?, proactive_quota_date=?, proactive_last_ms=?, proactive_nudges=?, proactive_slots_used=?, proactive_slots_date=? WHERE id=?',
+      'UPDATE sessions SET proactive_phase=?, proactive_quota_used=?, proactive_quota_date=?, proactive_last_ms=?, proactive_nudges=? WHERE id=?',
     )
-    .run(
-      c.phase,
-      c.quotaUsed,
-      c.quotaDate,
-      c.lastProactiveMs,
-      c.nudgesSent,
-      c.slotsUsed,
-      c.slotsDate,
-      sessionId,
-    ).changes;
+    .run(c.phase, c.quotaUsed, c.quotaDate, c.lastProactiveMs, c.nudgesSent, sessionId).changes;
   if (changes === 0) {
     db.prepare(
-      'INSERT INTO sessions (id, updated_ms, proactive_phase, proactive_quota_used, proactive_quota_date, proactive_last_ms, proactive_nudges, proactive_slots_used, proactive_slots_date) VALUES (?,?,?,?,?,?,?,?,?)',
-    ).run(
-      sessionId,
-      Date.now(),
-      c.phase,
-      c.quotaUsed,
-      c.quotaDate,
-      c.lastProactiveMs,
-      c.nudgesSent,
-      c.slotsUsed,
-      c.slotsDate,
-    );
+      'INSERT INTO sessions (id, updated_ms, proactive_phase, proactive_quota_used, proactive_quota_date, proactive_last_ms, proactive_nudges) VALUES (?,?,?,?,?,?,?)',
+    ).run(sessionId, Date.now(), c.phase, c.quotaUsed, c.quotaDate, c.lastProactiveMs, c.nudgesSent);
   }
 }
