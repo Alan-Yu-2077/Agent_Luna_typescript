@@ -8,6 +8,7 @@ import { weatherNoteFor, weatherProactiveEnabled } from '../turn/weatherContext'
 import { getSnapshot } from '../tools/web/weather/snapshot';
 import { getMemoryDb, listRecentL2 } from '../memory/sessionStore';
 import type { ProactiveScenario } from './ladder';
+import { loadStyle, styleEnabled } from './style';
 
 // The proactive framing — a USER-role stage direction (never system: the
 // v0.27.1 hoisting lesson). She woke on her own; acting via tools is the point,
@@ -104,14 +105,21 @@ export function resetProactiveOpenersForTests(): void {
   recentOpeners.clear();
 }
 
-// The ladder-path framing: the scenario body + the companion constraint + anti-repeat. Silence is
-// native (calling no message tool = staying quiet), so there is no Python-style SILENT sentinel.
+// v0.24.2: her own recorded proactive voice (set via set_proactive_style), injected into the framing.
+function voiceNotesClause(): string {
+  if (!styleEnabled()) return '';
+  const notes = loadStyle().voiceNotes;
+  return notes ? `\n- Your own proactive voice: ${notes}` : '';
+}
+
+// The ladder-path framing: the scenario body + the companion constraint + voice notes + anti-repeat.
+// Silence is native (calling no message tool = staying quiet), so there is no Python SILENT sentinel.
 function scenarioFraming(scenario: ProactiveScenario, session: Session): string {
   return (
     '[System proactive trigger · this is NOT a user message · you are opening on your own]\n' +
     'This one is initiated by you, not a reply.\n\n' +
     `${SCENARIO_BODIES[scenario]}\n\n` +
-    `${COMPANION_OPENER_CONSTRAINT}${antiRepeatClause(session.id)}\n\n` +
+    `${COMPANION_OPENER_CONSTRAINT}${voiceNotesClause()}${antiRepeatClause(session.id)}\n\n` +
     'Ground rule: only open if you have a real reason — never talk just to talk. If nothing feels ' +
     'genuinely worth saying right now, do nothing at all (call no tool, send no message); a silent ' +
     'tick is completely fine.'

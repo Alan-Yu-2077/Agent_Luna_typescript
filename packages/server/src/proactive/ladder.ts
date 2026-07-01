@@ -1,5 +1,6 @@
 import type { Session } from '../turn/session';
 import type { Cadence, ProactivePhase } from './cadence';
+import { effectiveCadence } from './style';
 
 // v0.24.0 (Initiative 17): the silence-driven escalation ladder — Alan's original
 // Python proactive design (`runtime/proactive.py` evaluate()) restored as the proactive
@@ -28,12 +29,6 @@ export type LadderCtx = {
 function num(env: string, fallback: number): number {
   const v = Number(Bun.env[env]);
   return Number.isFinite(v) && v > 0 ? v : fallback;
-}
-function numFloat(env: string, fallback: number): number {
-  const raw = Bun.env[env];
-  if (raw === undefined || raw === '') return fallback;
-  const v = Number(raw);
-  return Number.isFinite(v) && v >= 0 ? v : fallback;
 }
 
 // v0.24.1 (Initiative 17): default ON — the ladder is now THE proactive wake decision (the detector
@@ -67,9 +62,12 @@ export function evaluateLadder(ctx: LadderCtx, rng: () => number = Math.random):
 
   const idleThresholdMs = num('LUNA_PROACTIVE_IDLE_THRESHOLD_MS', 600_000); // 10m — deliberately > ambientMin so ambient is reachable
   const ambientMinMs = num('LUNA_PROACTIVE_AMBIENT_MIN_MS', 120_000); // 2m
-  const ambientProb = numFloat('LUNA_PROACTIVE_AMBIENT_PROB', 0.12);
-  const nudgeProb = numFloat('LUNA_PROACTIVE_NUDGE_PROB', 1.0);
-  const renudgeBaseMs = num('LUNA_PROACTIVE_RENUDGE_BASE_MS', 300_000); // 5m
+  // v0.24.2: the probabilities + renudge spacing come from the effective cadence (activeness lever
+  // clamped inside the operator floor/ceiling; balanced === the raw knobs).
+  const eff = effectiveCadence();
+  const ambientProb = eff.ambientProb;
+  const nudgeProb = eff.nudgeProb;
+  const renudgeBaseMs = eff.renudgeBaseMs;
   const maxNudges = num('LUNA_PROACTIVE_MAX_NUDGES', 3);
   const dormantRecoveryMs = num('LUNA_PROACTIVE_DORMANT_RECOVERY_MS', 3_600_000); // 1h
   const longAbsenceMs = num('LUNA_PROACTIVE_LONG_ABSENCE_MS', 64_800_000); // 18h

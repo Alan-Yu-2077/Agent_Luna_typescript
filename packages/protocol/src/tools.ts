@@ -34,6 +34,10 @@ export const ToolName = z.enum([
   // (Open-Meteo, no key). Read-only; default ON since v0.21.2 but gated on a
   // configured LUNA_LAT_LON (dormant until set).
   'weather',
+  // Initiative 17 (v0.24.2) — Luna tunes her OWN proactive outreach style
+  // (activeness aloof/balanced/clingy + voice notes), clamped inside the
+  // operator's mechanical floor/ceiling. Reversible self-setting; default ON.
+  'set_proactive_style',
 ]);
 export type ToolName = z.infer<typeof ToolName>;
 

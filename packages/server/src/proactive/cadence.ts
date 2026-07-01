@@ -1,4 +1,5 @@
 import { getMemoryDb } from '../memory/sessionStore';
+import { effectiveCadence } from './style';
 import type { ProactiveScenario } from './ladder';
 
 // The cadence governor (Initiative 5, v0.10.2). The mechanical rail around the
@@ -77,11 +78,15 @@ export function passesAntiSpam(c: Cadence, x: WakeContext): { ok: boolean; reaso
   if (userGap < num('LUNA_PROACTIVE_IDLE_FLOOR_MS', 60_000)) {
     return { ok: false, reason: 'mid_conversation' };
   }
+  // v0.24.2: the cooldown + quota come from the effective cadence (the activeness lever scaled
+  // inside the operator floor/ceiling; balanced === the raw knobs, so behaviour is unchanged until
+  // Luna moves her activeness via set_proactive_style).
+  const eff = effectiveCadence();
   const sinceProactive = c.lastProactiveMs > 0 ? x.nowMs - c.lastProactiveMs : Infinity;
-  if (sinceProactive < num('LUNA_PROACTIVE_MIN_INTERVAL_MS', 300_000)) {
+  if (sinceProactive < eff.minIntervalMs) {
     return { ok: false, reason: 'cooldown' };
   }
-  if (c.quotaDate === dateKey(x.nowMs) && c.quotaUsed >= num('LUNA_PROACTIVE_DAILY_QUOTA', 5)) {
+  if (c.quotaDate === dateKey(x.nowMs) && c.quotaUsed >= eff.dailyQuota) {
     return { ok: false, reason: 'quota_exhausted' };
   }
   return { ok: true, reason: 'ok' };

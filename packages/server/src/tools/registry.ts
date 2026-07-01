@@ -24,6 +24,7 @@ import { writeFileTool } from './builtin/write_file';
 import { webSearchTool } from './web/web_search';
 import { webFetchTool } from './web/web_fetch';
 import { weatherTool } from './builtin/weather';
+import { setProactiveStyleTool } from './builtin/proactiveStyle';
 import { resolveLocation } from '../turn/temporalContext';
 
 // Partial: `message` is mounted conditionally (LUNA_MESSAGE_TOOL), so a
@@ -45,6 +46,9 @@ export const builtinRegistry: ToolRegistry = {
   // the plan/todo spine (Initiative 8, v0.15.3) — cheap, safe, session-scoped.
   // Ships on always (owner: "plan ships on"); no flag.
   plan: planTool,
+  // Luna's self-tuning proactive style (Initiative 17, v0.24.2) — reversible,
+  // safety-clamped self-setting. Ships on always.
+  set_proactive_style: setProactiveStyleTool,
 };
 
 // Code-write tools (Initiative 8, v0.15.1) — edit / multi_edit / write_file.
