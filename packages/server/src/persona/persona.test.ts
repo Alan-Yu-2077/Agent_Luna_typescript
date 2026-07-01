@@ -108,6 +108,15 @@ describe('humanity splitters', () => {
     expect(block).toContain(String(MAX_SENTENCES));
     expect(block).toContain(String(MAX_CLAUSE_CHARS));
   });
+
+  test('humanity block bans the assistant-filler closer tic (v0.23.5)', () => {
+    const block = renderHumanityBlock();
+    // the exact leaked phrase + the "a reply can just end" permission must be present
+    expect(block).toContain("What's on your mind?");
+    expect(block).toContain('Still here');
+    expect(block).toContain('can simply end');
+    expect(block.toLowerCase()).toContain('engagement bait');
+  });
 });
 
 describe('wake scene block', () => {
