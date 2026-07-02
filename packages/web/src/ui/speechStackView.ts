@@ -20,6 +20,7 @@ export type SpeechStackOptions = {
   fadeMs?: number; // the fade-out transition before DOM removal (must match the CSS)
   maxVisible?: number; // overflow cap — the oldest fast-fades past this
   schedule?: StackScheduler;
+  rng?: () => number; // injected for deterministic tests (drives the per-bubble position jitter)
 };
 
 type StackBubble = { el: HTMLElement; cancel: (() => void) | null };
@@ -31,12 +32,14 @@ export class SpeechStackView implements BubbleView {
   private readonly fadeMs: number;
   private readonly maxVisible: number;
   private readonly schedule: StackScheduler;
+  private readonly rng: () => number;
 
   constructor(host: HTMLElement, opts: SpeechStackOptions = {}) {
     this.ttlMs = opts.ttlMs ?? 10_000;
     this.fadeMs = opts.fadeMs ?? 600;
     this.maxVisible = opts.maxVisible ?? 4;
     this.schedule = opts.schedule ?? realScheduler;
+    this.rng = opts.rng ?? Math.random;
     const doc = host.ownerDocument;
     this.container = doc.createElement('div');
     this.container.className = 'speech-stack';
@@ -44,12 +47,18 @@ export class SpeechStackView implements BubbleView {
   }
 
   // A completed reply → a new bubble at the bottom; the older ones sit above it (DOM order).
+  // The newest carries `.latest` (the comic tail pointing at her); the previous newest loses it
+  // AT THIS MOMENT — the CSS transition animates its tail away as it becomes history. Each bubble
+  // lands with a small random offset near the head (漫画感 — not a fixed slot).
   finalize(_id: string, text: string): void {
     const t = text.trim();
     if (!t) return;
+    this.live[this.live.length - 1]?.el.classList.remove('latest');
     const el = this.container.ownerDocument.createElement('div');
-    el.className = 'speech-bubble';
+    el.className = 'speech-bubble latest';
     el.textContent = t;
+    el.style.marginRight = `${Math.round(this.rng() * 34)}px`;
+    el.style.marginTop = `${Math.round(2 + this.rng() * 8)}px`;
     this.container.appendChild(el);
     const bubble: StackBubble = { el, cancel: null };
     this.live.push(bubble);
@@ -77,6 +86,7 @@ export class SpeechStackView implements BubbleView {
     this.live.splice(i, 1);
     b.cancel?.();
     b.cancel = null;
+    b.el.classList.remove('latest'); // a departing bubble drops its tail too
     b.el.classList.add('fading');
     this.schedule(() => b.el.remove(), this.fadeMs);
   }

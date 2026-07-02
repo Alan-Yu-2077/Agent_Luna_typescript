@@ -29,7 +29,14 @@ const DREAM_MIN_MS = 1500;
 async function boot(): Promise<void> {
   const root = document.getElementById('app');
   if (!root) return;
-  if (localStorage.getItem('luna:reduce-motion') === '1') root.classList.add('reduce-motion');
+  // v0.25.2 review fix: the class also honors OS-level prefers-reduced-motion (CSS @media overrides
+  // already did; JS consumers of the class must see the same truth).
+  if (
+    localStorage.getItem('luna:reduce-motion') === '1' ||
+    matchMedia('(prefers-reduced-motion: reduce)').matches
+  ) {
+    root.classList.add('reduce-motion');
+  }
 
   const refs = buildLayout(root);
   const windowView = new CuteBubbleView(refs.chatLog, refs.scrollPill);
@@ -168,10 +175,16 @@ async function boot(): Promise<void> {
   // resized region (v0.25.2 turns that re-fit into a glide). In collapsed mode Luna's replies mirror
   // to the beside-model speech stack via the RouterBubbleView's live `() => isCollapsed`.
   const applyCollapsed = (): void => {
-    root.classList.toggle('collapsed', isCollapsed);
-    refs.collapseBtn.textContent = isCollapsed ? '⌃' : '⌄';
-    refs.collapseBtn.setAttribute('aria-label', isCollapsed ? 'Expand chat' : 'Collapse chat');
-    globalThis.dispatchEvent(new Event('resize'));
+    const mutate = (): void => {
+      root.classList.toggle('collapsed', isCollapsed);
+      refs.collapseBtn.textContent = isCollapsed ? '⌃' : '⌄';
+      refs.collapseBtn.setAttribute('aria-label', isCollapsed ? 'Expand chat' : 'Collapse chat');
+      globalThis.dispatchEvent(new Event('resize'));
+    };
+    // v0.25.2: with a real Live2D sink, the layout change rides a FLIP glide (she slides to her new
+    // home instead of snapping); the console/no-WebGL fallback just applies it.
+    if (live2d.glideLayout) live2d.glideLayout(mutate);
+    else mutate();
   };
   refs.collapseBtn.addEventListener('click', () => {
     isCollapsed = !isCollapsed;

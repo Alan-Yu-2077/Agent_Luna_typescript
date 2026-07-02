@@ -2,6 +2,7 @@ import type { Live2DSink, Live2DState } from '../sinks';
 import { createLive2DRuntime, webglAvailable, type Live2DRuntime } from './cubismRuntime';
 import { ModelDriver, type Live2DModelLike } from './modelDriver';
 import { FaceVm } from './faceVm';
+import { createGlide } from './glide';
 import { DEFAULT_IDLE_PROFILE, IDLE_PROFILE_IDS, type IdleProfileId } from './faceData';
 
 // The real Live2DSink: loads yumi via pixi-live2d-display, drives her through a
@@ -38,6 +39,14 @@ function saveZoom(z: number): void {
 }
 function gazeFollowEnabled(): boolean {
   return localStorage.getItem(GAZE_KEY) !== '0';
+}
+// v0.25.2 review fix: honor OS-level prefers-reduced-motion too — every CSS animation carries the
+// @media override, and the JS glide must match that contract, not just the app toggle.
+function reducedMotion(): boolean {
+  return (
+    localStorage.getItem('luna:reduce-motion') === '1' ||
+    (typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches)
+  );
 }
 function loadIdleProfile(): IdleProfileId {
   try {
@@ -109,6 +118,16 @@ export async function createPixiLive2DSink(
     const baseScale = (hostH * 0.92) / model.height;
     model.scale.set(baseScale * zoom);
     driver.setBase((hostW - model.width) / 2, (hostH - model.height) / 2);
+    // v0.25.2 review fix: re-clamp the persisted drag against the CURRENT host dims (the pointermove
+    // clamp only ran at drag time — a drag saved in full-width collapsed mode could strand her
+    // entirely off-canvas after expand shrinks the host; persisted, so she stayed gone on reload).
+    const healedDx = clampOffset(off.dx, hostW * 0.5);
+    const healedDy = clampOffset(off.dy, hostH * 0.5);
+    if (healedDx !== off.dx || healedDy !== off.dy) {
+      off.dx = healedDx;
+      off.dy = healedDy;
+      saveOffset(off);
+    }
     driver.setPositionOffset(off.dx, off.dy);
   };
   fit();
@@ -140,11 +159,44 @@ export async function createPixiLive2DSink(
   const internal = model.internalModel as unknown as {
     on(event: 'afterMotionUpdate' | 'beforeModelUpdate', cb: () => void): void;
   };
+  // v0.25.2: the layout glide — a transient mode-offset easing to 0 on the model's own update beat
+  // (ONE animation system; a competing CSS/rAF tween would fight fit()'s snaps). `modeX` mirrors the
+  // driver's current mode offset so a mid-glide retarget stays visually continuous.
+  const glide = createGlide();
+  let modeX = 0;
+  const setMode = (x: number): void => {
+    modeX = x;
+    driver.setModeOffset(x, 0);
+  };
+
+  // v0.25.2 (Alan's design review): the speech-bubble stack anchors beside the model's HEAD, so the
+  // sink publishes the head position (same HEAD_FRAC anchor the gaze uses) as CSS vars on the host —
+  // fit/drag/zoom/glide all keep the bubbles tracking her face. Change-guarded to avoid style thrash.
+  let lastHeadKey = '';
+  const updateHeadAnchor = (): void => {
+    const x = Math.round(Math.max(170, model.x + model.width / 2));
+    const y = Math.round(model.y + model.height * HEAD_FRAC);
+    // The lateral clearance the bubbles keep from the head CENTER — past the hair, so a bubble
+    // never covers her (Alan: 气泡不能挡住模型). Scales with the model (zoom/viewport).
+    const gap = Math.round(model.width * 0.26);
+    const key = `${x}:${y}:${gap}`;
+    if (key === lastHeadKey) return;
+    lastHeadKey = key;
+    host.style.setProperty('--luna-head-x', `${x}px`);
+    host.style.setProperty('--luna-head-y', `${y}px`);
+    host.style.setProperty('--luna-head-gap', `${gap}px`);
+  };
+
   // The head/body pose is physics-input, so it must be written BEFORE physics runs
   // ('afterMotionUpdate'); the rest (brows/eyes/mouth) is written at
   // 'beforeModelUpdate' (after the built-in eyeBlink/focus) so FaceVm wins there.
   internal.on('afterMotionUpdate', () => faceVm.flushPose());
-  internal.on('beforeModelUpdate', () => faceVm.tick(performance.now()));
+  internal.on('beforeModelUpdate', () => {
+    faceVm.tick(performance.now());
+    const g = glide.step(performance.now());
+    if (g !== null) setMode(g);
+    updateHeadAnchor();
+  });
 
   // ?dev: expose the model + faceVm so live params can be measured from the console.
   if (typeof location !== 'undefined' && location.search.includes('dev')) {
@@ -242,6 +294,26 @@ export async function createPixiLive2DSink(
     setState: (state: Live2DState) => faceVm.setState(state),
     setMouth: (frame) => faceVm.setMouth(frame),
     clear: () => faceVm.clear(),
+    // v0.25.2: FLIP-style layout glide. Capture the model's screen-space x, run the layout change
+    // (the caller toggles `.collapsed` + dispatches `resize`, which snaps fit() to the new center),
+    // then set the mode offset so she APPEARS unmoved and ease it to 0 — she glides to her new home.
+    // `+ modeX` keeps a mid-glide retarget continuous (the stale offset cancels out of the rect
+    // math). Reduce-motion → snap (offset 0 immediately).
+    glideLayout: (mutate: () => void) => {
+      const beforeX = canvas.getBoundingClientRect().left + model.x;
+      mutate();
+      const afterX = canvas.getBoundingClientRect().left + model.x;
+      const delta = beforeX - afterX + modeX;
+      if (reducedMotion()) {
+        // review fix: CANCEL any in-flight tween — else its next step() yanks her off the snap.
+        glide.stop();
+        setMode(0);
+        return;
+      }
+      glide.start(delta, performance.now());
+      const g = glide.step(performance.now());
+      setMode(g ?? 0);
+    },
     setGazeFollow: (on) => {
       try {
         localStorage.setItem(GAZE_KEY, on ? '1' : '0');

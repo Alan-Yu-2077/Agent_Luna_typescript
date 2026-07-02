@@ -21,6 +21,12 @@ export class ModelDriver {
   private readonly valid: Set<string>;
   private baseX = 0;
   private baseY = 0;
+  private dragX = 0;
+  private dragY = 0;
+  // v0.25.2: the glide channel — a transient layout-transition offset, SEPARATE from the user's
+  // persisted drag so a glide never clobbers (or gets clobbered by) the saved drag offset.
+  private modeX = 0;
+  private modeY = 0;
 
   constructor(private readonly model: Live2DModelLike) {
     this.core = model.internalModel.coreModel;
@@ -47,13 +53,25 @@ export class ModelDriver {
     return this.model.height;
   }
 
+  private apply(): void {
+    this.model.position.set(this.baseX + this.dragX + this.modeX, this.baseY + this.dragY + this.modeY);
+  }
+
   setBase(x: number, y: number): void {
     this.baseX = x;
     this.baseY = y;
-    this.model.position.set(x, y);
+    this.apply();
   }
 
   setPositionOffset(dx: number, dy: number): void {
-    this.model.position.set(this.baseX + dx, this.baseY + dy);
+    this.dragX = dx;
+    this.dragY = dy;
+    this.apply();
+  }
+
+  setModeOffset(mx: number, my: number): void {
+    this.modeX = mx;
+    this.modeY = my;
+    this.apply();
   }
 }

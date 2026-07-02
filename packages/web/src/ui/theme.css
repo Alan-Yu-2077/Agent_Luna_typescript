@@ -306,23 +306,26 @@ body {
 .reduce-motion .boot-moon, .reduce-motion .boot-spinner i { animation: none; }
 
 /* v0.25.0 (Initiative 18): the beside-model speech-bubble stack (collapsed companion mode).
-   Bottom-anchored column inside .model-stage: newest bubble at the bottom, older ones pushed up;
-   pointer-events:none so it never blocks the model's drag/gaze. */
+   v0.25.2 (Alan's design review): anchored beside the model's HEAD — the sink publishes the head
+   position as --luna-head-x/--luna-head-y CSS vars (tracking drag/zoom/glide). The stack's BOTTOM
+   sits at head height to the left of her face: the newest bubble appears at her head, older ones
+   are pushed UP above it. pointer-events:none so it never blocks the model's drag/gaze. */
 .speech-stack {
   position: absolute;
-  left: 14px;
-  bottom: 92px;
+  left: 8px;
+  right: calc(100% - var(--luna-head-x, 60%) + var(--luna-head-gap, 90px));
+  bottom: calc(100% - var(--luna-head-y, 30%));
   display: flex;
   flex-direction: column;
+  align-items: flex-end;
   justify-content: flex-end;
-  gap: 8px;
-  max-width: 62%;
   z-index: 4;
   pointer-events: none;
 }
 .speech-bubble {
-  align-self: flex-start;
-  max-width: 100%;
+  position: relative;
+  align-self: flex-end;
+  max-width: min(340px, 100%);
   background: var(--inner);
   color: var(--ink);
   border: 1px solid var(--lavender);
@@ -336,6 +339,28 @@ body {
   transition: opacity 0.5s ease, transform 0.5s ease;
   animation: speech-rise 0.28s ease;
 }
+/* The comic tail pointing at her face (bubbles sit LEFT of the head, so it pokes RIGHT). Present on
+   every bubble but visible only on .latest — removing the class the moment a bubble becomes history
+   TRANSITIONS the tail away (shrink + fade), turning it into a plain bubble. */
+.speech-bubble::after {
+  content: '';
+  position: absolute;
+  right: -6px;
+  bottom: 13px;
+  width: 12px;
+  height: 12px;
+  background: var(--inner);
+  border-top: 1px solid var(--lavender);
+  border-right: 1px solid var(--lavender);
+  border-radius: 2px;
+  transform: rotate(45deg) scale(0.3);
+  opacity: 0;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+.speech-bubble.latest::after {
+  opacity: 1;
+  transform: rotate(45deg) scale(1);
+}
 .speech-bubble.fading {
   opacity: 0;
   transform: translateY(-6px);
@@ -344,9 +369,11 @@ body {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
-.reduce-motion .speech-bubble { animation: none; transition: none; }
+.reduce-motion .speech-bubble,
+.reduce-motion .speech-bubble::after { animation: none; transition: none; }
 @media (prefers-reduced-motion: reduce) {
-  .speech-bubble { animation: none; transition: none; }
+  .speech-bubble,
+  .speech-bubble::after { animation: none; transition: none; }
 }
 
 /* v0.25.1 (Initiative 18): collapsed companion mode — the chat window folds into a floating bottom

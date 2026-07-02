@@ -1,5 +1,6 @@
 import type { ExpressionKey } from '@luna/protocol';
 import type { Live2DState, LipSyncFrame } from '../sinks';
+import { clamp01, easeInOutSine, lerp } from './ease';
 import {
   FACE_STATE_KEYS,
   FACE_VM_DEFAULT_STATE,
@@ -640,12 +641,3 @@ function sampleTrack(kfs: Keyframe[], progress: number): number {
   return kfs[kfs.length - 1]?.value ?? 0;
 }
 
-function easeInOutSine(t: number): number {
-  return -(Math.cos(Math.PI * t) - 1) / 2;
-}
-function lerp(a: number, b: number, t: number): number {
-  return a + (b - a) * t;
-}
-function clamp01(v: number): number {
-  return Math.max(0, Math.min(1, v));
-}

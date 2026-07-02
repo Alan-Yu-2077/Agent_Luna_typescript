@@ -31,6 +31,9 @@ export interface Live2DSink {
   setIdleProfile?(id: string): void;
   // the available idle profiles, ordered, with display labels
   listIdleProfiles?(): ReadonlyArray<{ id: string; label: string }>;
+  // v0.25.2: run a layout change and GLIDE the model between its before/after positions (FLIP on
+  // the pixi ticker; reduce-motion snaps). Callers without a real sink just run `mutate()`.
+  glideLayout?(mutate: () => void): void;
 }
 
 export interface AudioSink {

@@ -5,14 +5,23 @@ import { SpeechStackView, type StackScheduler } from './speechStackView';
 class FakeEl {
   className = '';
   textContent = '';
+  style: Record<string, string> = {};
   children: FakeEl[] = [];
   parent: FakeEl | null = null;
-  private classes = new Set<string>();
+  // className is the single source of truth (the real code mixes `className =` and classList.*)
   classList = {
     add: (c: string): void => {
-      this.classes.add(c);
+      const s = new Set(this.className.split(' ').filter(Boolean));
+      s.add(c);
+      this.className = [...s].join(' ');
     },
-    contains: (c: string): boolean => this.classes.has(c),
+    remove: (c: string): void => {
+      this.className = this.className
+        .split(' ')
+        .filter((x) => x && x !== c)
+        .join(' ');
+    },
+    contains: (c: string): boolean => this.className.split(' ').includes(c),
   };
   ownerDocument = { createElement: (_tag: string): FakeEl => new FakeEl() };
   appendChild(c: FakeEl): FakeEl {
@@ -122,5 +131,40 @@ describe('SpeechStackView (v0.25.0)', () => {
     view.append('m1', 'streaming…');
     view.renderHistory([{ userText: 'u', assistantText: 'a', tMs: 1 }]);
     expect(container.children.length).toBe(0);
+  });
+
+  // ── comic-tail + jitter (Alan's design review) ──
+  test('the newest bubble carries .latest (the tail); the previous loses it the moment it becomes history', () => {
+    const { view, container } = stackOf();
+    view.finalize('m1', 'first');
+    expect(container.children[0]!.classList.contains('latest')).toBe(true);
+    view.finalize('m2', 'second');
+    expect(container.children[0]!.classList.contains('latest')).toBe(false); // tail dropped
+    expect(container.children[1]!.classList.contains('latest')).toBe(true); // newest has it
+  });
+
+  test('a fading bubble drops its tail too', () => {
+    const { view, container } = stackOf();
+    view.finalize('m1', 'only');
+    view.clearAll();
+    expect(container.children[0]!.classList.contains('latest')).toBe(false);
+    expect(container.children[0]!.classList.contains('fading')).toBe(true);
+  });
+
+  test('each bubble lands with a bounded random offset near the head (injected rng)', () => {
+    const host = new FakeEl();
+    const { schedule } = manualScheduler();
+    let calls = 0;
+    const rng = (): number => {
+      calls += 1;
+      return 0.5;
+    };
+    // WHY as unknown: FakeEl is a minimal DOM stand-in (bun test has no DOM).
+    const view = new SpeechStackView(host as unknown as HTMLElement, { schedule, rng });
+    view.finalize('m1', 'hi');
+    const el = host.children[0]!.children[0]!;
+    expect(el.style['marginRight']).toBe('17px'); // 0.5 × 34
+    expect(el.style['marginTop']).toBe('6px'); // 2 + 0.5 × 8
+    expect(calls).toBe(2);
   });
 });
