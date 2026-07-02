@@ -45,5 +45,6 @@ LUNA_WEB_SEARCH_PROVIDER=
 LUNA_WEB_SEARCH_API_KEY=
 
 # Pet mode: 1 = a transparent, always-on-top Luna floating over the desktop (region click-through).
+# Initial default only — the in-app settings toggle ("Desktop pet") wins once used (settings.json).
 LUNA_PET_MODE=
 `;

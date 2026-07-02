@@ -7,4 +7,9 @@ contextBridge.exposeInMainWorld('lunaPet', {
   setIgnore: (ignore: boolean): void => {
     ipcRenderer.send('luna:set-ignore-mouse', ignore === true);
   },
+  // v0.27.0: the settings-panel pet toggle — the shell persists the choice and rebuilds the window
+  // (transparent/frame are creation-time-only options).
+  setPetMode: (on: boolean): void => {
+    ipcRenderer.send('luna:set-pet-mode', on === true);
+  },
 });

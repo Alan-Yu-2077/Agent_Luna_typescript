@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { defaultDistDir, startWebHost, WEB_PORT } from './serve';
 import { ENV_TEMPLATE, parseEnvFile } from './envfile';
+import { readShellSettings, writeShellSettings } from './shellSettings';
 import { createSupervisor, waitForPort, type Supervisor } from './supervisor';
 
 // v0.26.1 (Initiative 19): the single-machine app. The shell OWNS the whole runtime: it reads the
@@ -14,8 +15,9 @@ import { createSupervisor, waitForPort, type Supervisor } from './supervisor';
 // The desktop app's own server port — deliberately NOT 8787, so a dev instance and the app coexist.
 const SERVER_PORT = Number(process.env['LUNA_DESKTOP_WS_PORT'] ?? 8790);
 const SMOKE = process.env['LUNA_SMOKE'] === '1';
-// v0.26.2: pet mode — transparent, frameless, always-on-top, region click-through. Toggled by
-// LUNA_PET_MODE=1 in luna.env (or the env); the windowed mode stays the default + the fallback.
+// v0.26.2: pet mode — transparent, frameless, always-on-top, region click-through. v0.27.0: the
+// settings-panel toggle (persisted in settings.json) is the authority once used; LUNA_PET_MODE in
+// luna.env / the env is only the initial default. Windowed mode stays the fallback.
 let petMode = process.env['LUNA_PET_MODE'] === '1';
 
 type Paths = {
@@ -86,6 +88,7 @@ function sidecarEnv(p: Paths, userEnv: Record<string, string>): Record<string, s
 }
 
 let supervisor: Supervisor | null = null;
+let paths: Paths | null = null;
 
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -116,6 +119,20 @@ function createWindow(): BrowserWindow {
 ipcMain.on('luna:set-ignore-mouse', (event, ignore: unknown) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   win?.setIgnoreMouseEvents(ignore === true, { forward: true });
+});
+
+// v0.27.0: pet mode toggled from the settings panel. transparent/frame are immutable after window
+// creation, so the flip is: persist the choice, build the replacement window, THEN close the old
+// one — closing first would fire window-all-closed and take the sidecar (and the app) down.
+ipcMain.on('luna:set-pet-mode', (_event, on: unknown) => {
+  const next = on === true;
+  if (next === petMode || !paths) return;
+  petMode = next;
+  writeShellSettings(paths.userData, { petMode: next });
+  const fresh = createWindow();
+  for (const w of BrowserWindow.getAllWindows()) {
+    if (w !== fresh) w.close();
+  }
 });
 
 async function smokeProbe(win: BrowserWindow): Promise<void> {
@@ -153,8 +170,11 @@ async function smokeProbe(win: BrowserWindow): Promise<void> {
 
 void app.whenReady().then(async () => {
   const p = resolvePaths();
+  paths = p;
   const userEnv = ensureUserConfig(p);
   if (userEnv['LUNA_PET_MODE'] === '1') petMode = true;
+  const shell = readShellSettings(p.userData);
+  if (typeof shell.petMode === 'boolean') petMode = shell.petMode;
   startWebHost(p.webDist);
   supervisor = createSupervisor({
     command: p.serverBin,

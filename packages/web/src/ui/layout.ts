@@ -25,6 +25,7 @@ export type LayoutRefs = {
   motionToggle: HTMLInputElement;
   gazeToggle: HTMLInputElement;
   idleSelect: HTMLSelectElement;
+  petToggle: HTMLInputElement;
 };
 
 type Motif = { ch: string; top: string; left: string; size: string; op?: string };
@@ -120,6 +121,10 @@ export function buildLayout(root: HTMLElement): LayoutRefs {
     IDLE_PROFILES,
     localStorage.getItem('luna:idle-profile') ?? DEFAULT_IDLE_PROFILE,
   );
+  // Desktop-shell only: app.ts hides the row when no lunaPet bridge exists (plain browser) and
+  // sets checked from the actual mode (?pet=1) — layout stays pure DOM.
+  const petToggle = toggleRow(settingsPanel, 'Desktop pet', false);
+  petToggle.closest('label')?.classList.add('pet-mode-row');
   add(settingsPanel, 'div', 'hint', 'Voice / model changes need a refresh · scroll to zoom · double-click to reset');
 
   const motifLayer = add(stage, 'div', 'motif-layer');
@@ -203,5 +208,6 @@ export function buildLayout(root: HTMLElement): LayoutRefs {
     statusBadge, chatLog, input, sendBtn, collapseBtn, dreamBtn, modelStage,
     moodPip, scrollPill, dreamOverlay, dreamWakeBtn, dreamCaption,
     settingsBtn, settingsPanel, ttsToggle, live2dToggle, motionToggle, gazeToggle, idleSelect,
+    petToggle,
   };
 }

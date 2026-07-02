@@ -203,7 +203,11 @@ async function boot(): Promise<void> {
   // and drive region click-through: over her body / the bar / the buttons the window takes the
   // mouse; everywhere else the desktop does (the shell's setIgnoreMouseEvents via the preload
   // bridge — macOS has no per-pixel pass-through).
-  if (new URLSearchParams(location.search).has('pet')) {
+  const bridge = (
+    globalThis as { lunaPet?: { setIgnore(ignore: boolean): void; setPetMode?(on: boolean): void } }
+  ).lunaPet;
+  const isPet = new URLSearchParams(location.search).has('pet');
+  if (isPet) {
     document.body.classList.add('pet');
     root.classList.add('pet');
     if (!isCollapsed) {
@@ -215,7 +219,6 @@ async function boot(): Promise<void> {
       }
       applyCollapsed();
     }
-    const bridge = (globalThis as { lunaPet?: { setIgnore(ignore: boolean): void } }).lunaPet;
     if (bridge) {
       let lastIgnore: boolean | null = null;
       window.addEventListener('pointermove', (e) => {
@@ -273,6 +276,16 @@ async function boot(): Promise<void> {
     localStorage.setItem('luna:idle-profile', refs.idleSelect.value);
     live2d.setIdleProfile?.(refs.idleSelect.value);
   });
+  // v0.27.0: pet mode is a SHELL choice (window recreation), not a page style — the row only
+  // exists inside the desktop app; a plain browser (no bridge) never shows it.
+  const setPetMode = bridge?.setPetMode;
+  const petRow = refs.petToggle.closest('label');
+  if (setPetMode) {
+    refs.petToggle.checked = isPet;
+    refs.petToggle.addEventListener('change', () => setPetMode(refs.petToggle.checked));
+  } else if (petRow instanceof HTMLElement) {
+    petRow.style.display = 'none';
+  }
 
   if (location.search.includes('dev')) {
     const g = globalThis as unknown as { lunaLive2D?: Live2DSink; lunaAudio?: AudioSink };
