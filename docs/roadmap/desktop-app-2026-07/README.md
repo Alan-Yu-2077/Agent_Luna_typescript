@@ -1,6 +1,6 @@
 # Initiative 19 — Desktop app (Luna lives on your screen)
 
-> **Status: ✅ SHIPPED 2026-07-02** (v0.26.0 `f7bf3a0` · v0.26.1 `1ac2e09` · v0.26.2 `ae291fc`). Version
+> **Status: ✅ SHIPPED 2026-07-02** (v0.26.0 `f7bf3a0` · v0.26.1 `1ac2e09` · v0.26.2 `d8e867d`). Version
 > range: **v0.26.0 – v0.26.2** (3 versions). Branch: `feat/weather-perception`. Master index:
 > [`../README.md`](../README.md).
 > **Recommended shell: Electron (v1), for engine certainty.** Tauri v2 deferred as a footprint
