@@ -1,6 +1,6 @@
 # Initiative 17 — Proactive parity restore (the silence ladder)
 
-> **Status: 📋 PLANNED.** Priority: **next** (first initiative after Initiative 16 ✅).
+> **Status: ✅ SHIPPED 2026-07-02** (v0.24.0 `69753c3` · v0.24.1 `5f58ef8` · v0.24.2 `31bf808`).
 > Version range: **v0.24.0 – v0.24.2** (3 versions). Branch: `feat/weather-perception`.
 > Master index: [`../README.md`](../README.md).
 
@@ -147,9 +147,9 @@ v0.58.0.2 (outbox TTL). What we port and what we deliberately drop:
 
 | Plan | Version | Theme | Risk | Depends | Status |
 |---|---|---|---|---|---|
-| [v0.24.0](v0.24.0-silence-ladder-core.md) | v0.24.0 | Silence-driven escalation ladder + 4 scenario framings + companion constraint + `follow_up` meta + anti-repeat — behind `LUNA_PROACTIVE_LADDER` (default off, coexists with detectors) | High | nothing | 📋 PLANNED |
-| [v0.24.1](v0.24.1-retire-detectors.md) | v0.24.1 | Flip `LUNA_PROACTIVE_LADDER` default on; delete the 5 detectors + slot machinery + `LUNA_PROACTIVE_SLOTS`; migration to retire the slot columns; amend LD #15 | Medium | v0.24.0 | 📋 PLANNED |
-| [v0.24.2](v0.24.2-style-self-tuning.md) | v0.24.2 | `set_proactive_style` tool + activeness (aloof/balanced/clingy) lever + voice-notes/exemplars persistence, clamped inside operator floor/ceiling — initiative close | Low | v0.24.1 | 📋 PLANNED |
+| [v0.24.0](v0.24.0-silence-ladder-core.md) | v0.24.0 | Silence-driven escalation ladder + 4 scenario framings + companion constraint + `follow_up` meta + anti-repeat — behind `LUNA_PROACTIVE_LADDER` (default off, coexists with detectors) | High | nothing | ✅ shipped |
+| [v0.24.1](v0.24.1-retire-detectors.md) | v0.24.1 | Flip `LUNA_PROACTIVE_LADDER` default on; delete the 5 detectors + slot machinery + `LUNA_PROACTIVE_SLOTS`; migration to retire the slot columns; amend LD #15 | Medium | v0.24.0 | ✅ shipped |
+| [v0.24.2](v0.24.2-style-self-tuning.md) | v0.24.2 | `set_proactive_style` tool + activeness (aloof/balanced/clingy) lever + voice-notes/exemplars persistence, clamped inside operator floor/ceiling — initiative close | Low | v0.24.1 | ✅ shipped |
 
 ## Acceptance criteria for the whole initiative
 

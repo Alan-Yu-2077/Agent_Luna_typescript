@@ -1,6 +1,6 @@
 # Initiative 18 — Collapsible companion UI (bubble stack + model glide)
 
-> **Status: 📋 PLANNED.** Priority: after Initiative 17 (proactive parity). Version range:
+> **Status: ✅ SHIPPED 2026-07-02** (v0.25.0 `3dc26c1` · v0.25.1 `d05b028` · v0.25.2 `8120361`). Version range:
 > **v0.25.0 – v0.25.2** (3 versions). Branch: `feat/weather-perception`. Master index:
 > [`../README.md`](../README.md).
 > **Hard constraint: `packages/web` ONLY. Zero `packages/server` change, zero `packages/protocol`
@@ -134,9 +134,9 @@ Grounded in a 6-agent deep read of `packages/web` + an adversarial zero-backend 
 
 | Plan | Version | Theme | Risk | Depends | Status |
 |---|---|---|---|---|---|
-| [v0.25.0](v0.25.0-speech-bubble-stack.md) | v0.25.0 | Beside-model **speech-bubble stack** (`SpeechStackView` `BubbleView` impl: newest-bottom, push-up, speech-gated ~10s fade) + a `RouterBubbleView` over `deps.view` keyed on a live flag; barge-in fast-fade. Testable standalone via a toggle (no collapse UI yet) | High | nothing | 📋 PLANNED |
-| [v0.25.1](v0.25.1-collapse-morph.md) | v0.25.1 | **Collapse/expand mode**: client `.collapsed` state + button + localStorage; window↔bottom-bar CSS morph; input/`send()` reuse + echo handling; flip routes replies to the stack + hides the window; mobile-breakpoint reconciliation; reduce-motion | Medium | v0.25.0 | 📋 PLANNED |
-| [v0.25.2](v0.25.2-model-glide.md) | v0.25.2 | **Model glide** center↔right on collapse/expand — pixi-ticker rAF tween on a dedicated mode-offset (exported `easeInOutSine`/`lerp`), coexisting with the persisted drag offset; reduce-motion snap; polish + initiative close | Medium | v0.25.1 | 📋 PLANNED |
+| [v0.25.0](v0.25.0-speech-bubble-stack.md) | v0.25.0 | Beside-model **speech-bubble stack** (`SpeechStackView` `BubbleView` impl: newest-bottom, push-up, speech-gated ~10s fade) + a `RouterBubbleView` over `deps.view` keyed on a live flag; barge-in fast-fade. Testable standalone via a toggle (no collapse UI yet) | High | nothing | ✅ shipped |
+| [v0.25.1](v0.25.1-collapse-morph.md) | v0.25.1 | **Collapse/expand mode**: client `.collapsed` state + button + localStorage; window↔bottom-bar CSS morph; input/`send()` reuse + echo handling; flip routes replies to the stack + hides the window; mobile-breakpoint reconciliation; reduce-motion | Medium | v0.25.0 | ✅ shipped |
+| [v0.25.2](v0.25.2-model-glide.md) | v0.25.2 | **Model glide** center↔right on collapse/expand — pixi-ticker rAF tween on a dedicated mode-offset (exported `easeInOutSine`/`lerp`), coexisting with the persisted drag offset; reduce-motion snap; polish + initiative close | Medium | v0.25.1 | ✅ shipped |
 
 ## Acceptance criteria for the whole initiative
 
