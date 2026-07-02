@@ -69,12 +69,11 @@ async function boot(): Promise<void> {
   }
 
   // v0.25.0 (Initiative 18): the beside-model speech stack + a router that mirrors Luna's replies to
-  // it in collapsed companion mode. The collapse UI doesn't exist until v0.25.1, so the mode is
-  // driven here by a localStorage toggle (`luna:bubble-stack`) for standalone verification; v0.25.1
-  // repoints `collapsed` at the real collapse state.
+  // it in collapsed companion mode. v0.25.1: `collapsed` now reads the real collapse state (persisted
+  // in localStorage, toggled by the header collapse button + applied as a `.collapsed` class).
   const speechStack = new SpeechStackView(refs.modelStage);
-  const collapsed = (): boolean => localStorage.getItem('luna:bubble-stack') === '1';
-  const view = new RouterBubbleView(windowView, speechStack, collapsed);
+  let isCollapsed = localStorage.getItem('luna:collapsed') === '1';
+  const view = new RouterBubbleView(windowView, speechStack, () => isCollapsed);
 
   let audio: AudioSink = noopAudioSink;
   if (localStorage.getItem('luna:tts') !== '0') {
@@ -163,6 +162,27 @@ async function boot(): Promise<void> {
     refs.input.value = '';
   }
   refs.sendBtn.addEventListener('click', send);
+
+  // v0.25.1: collapse ↔ expand. Toggles a `.collapsed` class on the root (theme.css morphs the chat
+  // window into a bottom input bar) + persists the choice; a resize re-fits the model into the
+  // resized region (v0.25.2 turns that re-fit into a glide). In collapsed mode Luna's replies mirror
+  // to the beside-model speech stack via the RouterBubbleView's live `() => isCollapsed`.
+  const applyCollapsed = (): void => {
+    root.classList.toggle('collapsed', isCollapsed);
+    refs.collapseBtn.textContent = isCollapsed ? '⌃' : '⌄';
+    refs.collapseBtn.setAttribute('aria-label', isCollapsed ? 'Expand chat' : 'Collapse chat');
+    globalThis.dispatchEvent(new Event('resize'));
+  };
+  refs.collapseBtn.addEventListener('click', () => {
+    isCollapsed = !isCollapsed;
+    try {
+      localStorage.setItem('luna:collapsed', isCollapsed ? '1' : '0');
+    } catch {
+      /* storage unavailable — fine */
+    }
+    applyCollapsed();
+  });
+  applyCollapsed(); // boot in the persisted collapse state
   refs.input.addEventListener('keydown', (e) => {
     // Don't send mid-IME-composition: the Enter that commits a Chinese pinyin
     // candidate must select the candidate, not dispatch a half-composed message.

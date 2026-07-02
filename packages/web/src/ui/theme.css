@@ -348,3 +348,64 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .speech-bubble { animation: none; transition: none; }
 }
+
+/* v0.25.1 (Initiative 18): collapsed companion mode — the chat window folds into a floating bottom
+   input bar; the chat-panel leaves the flex flow so .model-stage (flex:1) grows to full width and
+   the model re-centers (via the resize dispatch; v0.25.2 makes that a glide). */
+.collapse-btn {
+  flex: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--ink-soft);
+  font-size: 17px;
+  line-height: 1;
+  padding: 4px 7px;
+  border-radius: 999px;
+}
+.collapse-btn:hover {
+  color: var(--ink);
+  background: rgba(185, 212, 239, 0.35);
+}
+.luna-app.collapsed .chat-panel {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  flex: none;
+  width: min(560px, 92vw);
+  padding: 0;
+  background: none;
+  box-shadow: none;
+  z-index: 6;
+}
+.luna-app.collapsed .chat-header,
+.luna-app.collapsed .chat-log,
+.luna-app.collapsed .scroll-pill,
+.luna-app.collapsed .chat-panel .puff {
+  display: none;
+}
+/* collapsed + narrow: let the model fill the freed column instead of the 210px mobile band */
+@media (max-width: 720px) {
+  .luna-app.collapsed .model-stage {
+    flex: 1 1 auto;
+  }
+}
+.luna-app.collapsed .chat-input-row {
+  margin: 0;
+  background: var(--inner);
+  border: 1px solid var(--inner-border);
+  border-radius: 999px;
+  padding: 8px 10px;
+  box-shadow: 0 8px 26px rgba(39, 73, 107, 0.2);
+  animation: bar-rise 0.34s ease;
+}
+@keyframes bar-rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+/* reduce-motion sits on the SAME root element as .luna-app — a compound selector, never a descendant */
+.luna-app.reduce-motion.collapsed .chat-input-row { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .luna-app.collapsed .chat-input-row { animation: none; }
+}

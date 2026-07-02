@@ -10,6 +10,7 @@ export type LayoutRefs = {
   chatLog: HTMLElement;
   input: HTMLInputElement;
   sendBtn: HTMLButtonElement;
+  collapseBtn: HTMLButtonElement;
   dreamBtn: HTMLButtonElement;
   modelStage: HTMLElement;
   moodPip: HTMLElement;
@@ -91,7 +92,10 @@ function selectRow(
 
 export function buildLayout(root: HTMLElement): LayoutRefs {
   const doc = root.ownerDocument;
-  root.className = 'luna-app';
+  // classList.add, NOT `className =`: boot adds `reduce-motion` to the root BEFORE buildLayout runs,
+  // and a plain assignment silently wiped it (pre-existing bug — persisted reduce-motion never
+  // applied on boot; the settings toggle only re-added it live).
+  root.classList.add('luna-app');
   while (root.firstChild) root.removeChild(root.firstChild);
 
   add(root, 'div', 'lace-top');
@@ -140,6 +144,14 @@ export function buildLayout(root: HTMLElement): LayoutRefs {
   panel.appendChild(scrollPill);
 
   const inputRow = add(panel, 'div', 'chat-input-row');
+  // v0.25.1 (Initiative 18): collapse ↔ expand toggle. Lives in the input-row (NOT the header) so it
+  // stays reachable in collapsed mode, where the header/log are hidden and only this row remains.
+  const collapseBtn = doc.createElement('button');
+  collapseBtn.className = 'collapse-btn';
+  collapseBtn.type = 'button';
+  collapseBtn.setAttribute('aria-label', 'Collapse chat');
+  collapseBtn.textContent = '⌄';
+  inputRow.appendChild(collapseBtn);
   const input = doc.createElement('input');
   input.className = 'chat-input';
   input.type = 'text';
@@ -188,7 +200,7 @@ export function buildLayout(root: HTMLElement): LayoutRefs {
   dreamOverlay.appendChild(dreamWakeBtn);
 
   return {
-    statusBadge, chatLog, input, sendBtn, dreamBtn, modelStage,
+    statusBadge, chatLog, input, sendBtn, collapseBtn, dreamBtn, modelStage,
     moodPip, scrollPill, dreamOverlay, dreamWakeBtn, dreamCaption,
     settingsBtn, settingsPanel, ttsToggle, live2dToggle, motionToggle, gazeToggle, idleSelect,
   };
