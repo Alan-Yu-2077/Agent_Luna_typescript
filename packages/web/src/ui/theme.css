@@ -304,3 +304,47 @@ body {
 }
 .boot-skip:hover { background: rgba(143, 183, 255, 0.45); }
 .reduce-motion .boot-moon, .reduce-motion .boot-spinner i { animation: none; }
+
+/* v0.25.0 (Initiative 18): the beside-model speech-bubble stack (collapsed companion mode).
+   Bottom-anchored column inside .model-stage: newest bubble at the bottom, older ones pushed up;
+   pointer-events:none so it never blocks the model's drag/gaze. */
+.speech-stack {
+  position: absolute;
+  left: 14px;
+  bottom: 92px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 8px;
+  max-width: 62%;
+  z-index: 4;
+  pointer-events: none;
+}
+.speech-bubble {
+  align-self: flex-start;
+  max-width: 100%;
+  background: var(--inner);
+  color: var(--ink);
+  border: 1px solid var(--lavender);
+  border-radius: 14px;
+  padding: 8px 12px;
+  font-size: 14px;
+  line-height: 1.45;
+  box-shadow: 0 3px 12px rgba(71, 48, 117, 0.16);
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+  animation: speech-rise 0.28s ease;
+}
+.speech-bubble.fading {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+@keyframes speech-rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.reduce-motion .speech-bubble { animation: none; transition: none; }
+@media (prefers-reduced-motion: reduce) {
+  .speech-bubble { animation: none; transition: none; }
+}

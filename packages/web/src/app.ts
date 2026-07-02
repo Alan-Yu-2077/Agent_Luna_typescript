@@ -4,6 +4,8 @@ import { LunaWsClient, type WsStatus } from './wsClient';
 import { lastGeoFix, requestGeolocation } from './geo';
 import { consoleLive2DSink, noopAudioSink, type AudioSink, type Live2DSink, type Live2DState } from './sinks';
 import { CuteBubbleView } from './ui/cuteBubbleView';
+import { SpeechStackView } from './ui/speechStackView';
+import { RouterBubbleView } from './ui/routerBubbleView';
 import { buildLayout } from './ui/layout';
 import { startTimestampRefresh } from './ui/time';
 import { moodOf } from './ui/mood';
@@ -30,7 +32,7 @@ async function boot(): Promise<void> {
   if (localStorage.getItem('luna:reduce-motion') === '1') root.classList.add('reduce-motion');
 
   const refs = buildLayout(root);
-  const view = new CuteBubbleView(refs.chatLog, refs.scrollPill);
+  const windowView = new CuteBubbleView(refs.chatLog, refs.scrollPill);
 
   // Boot gate: when voice is on, block the UI until GPT-SoVITS has warmed its
   // (~5GB) model. Skippable, and degrades fast (no block) if no sidecar is up.
@@ -66,12 +68,30 @@ async function boot(): Promise<void> {
     }
   }
 
+  // v0.25.0 (Initiative 18): the beside-model speech stack + a router that mirrors Luna's replies to
+  // it in collapsed companion mode. The collapse UI doesn't exist until v0.25.1, so the mode is
+  // driven here by a localStorage toggle (`luna:bubble-stack`) for standalone verification; v0.25.1
+  // repoints `collapsed` at the real collapse state.
+  const speechStack = new SpeechStackView(refs.modelStage);
+  const collapsed = (): boolean => localStorage.getItem('luna:bubble-stack') === '1';
+  const view = new RouterBubbleView(windowView, speechStack, collapsed);
+
   let audio: AudioSink = noopAudioSink;
   if (localStorage.getItem('luna:tts') !== '0') {
     audio = new WebAudioSink({ onMouth: (frame) => live2d.setMouth(frame) });
   }
+  // Speech-gate the stack: when Luna actually begins speaking a reply, restart the newest bubble's
+  // life so its ~10s aligns with the utterance (playback is serialized, so emit ≠ speak time).
+  const speechGatedAudio: AudioSink = {
+    speak: (text, voice, onStart) =>
+      audio.speak(text, voice, () => {
+        speechStack.noteSpeechStart();
+        onStart?.();
+      }),
+    stop: () => audio.stop(),
+  };
 
-  const controller = createController({ view, live2d, audio });
+  const controller = createController({ view, live2d, audio: speechGatedAudio });
 
   let dreaming = false;
   let dreamShownAt = 0;
@@ -110,6 +130,8 @@ async function boot(): Promise<void> {
       // instead of this open-only show that the first tool/message used to kill.
       if (e.type === 'dream.status') setDream(e.is_dreaming);
       if (e.type === 'dream.step') refs.dreamCaption.textContent = e.detail || e.step;
+      // barge-in: a new user turn clears the beside-model stack (the window keeps the full log).
+      if (e.type === 'turn.started') speechStack.clearAll();
       if (e.type === 'tool.finished' && e.result.kind === 'ok') {
         const parsed = MessageDelivery.safeParse(e.result.data);
         if (parsed.success && parsed.data.expression) updateMood(parsed.data.expression);
@@ -136,7 +158,7 @@ async function boot(): Promise<void> {
   function send(): void {
     const text = refs.input.value.trim();
     if (!text || dreaming) return;
-    view.userMessage(text);
+    windowView.userMessage(text);
     client.send({ type: 'chat.send', text });
     refs.input.value = '';
   }
