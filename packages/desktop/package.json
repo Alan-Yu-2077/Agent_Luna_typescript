@@ -1,0 +1,15 @@
+{
+  "name": "@luna/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Electron shell for Luna (Initiative 19) — serves the packages/web production build over a pinned loopback origin",
+  "main": "dist/main.cjs",
+  "scripts": {
+    "build": "bun build src/main.ts --target=node --format=cjs --external=electron --outfile=dist/main.cjs && bun build src/smoke.ts --target=node --format=cjs --external=electron --outfile=dist/smoke.cjs",
+    "start": "bun run build && electron .",
+    "smoke": "bun run build && electron dist/smoke.cjs"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0"
+  }
+}

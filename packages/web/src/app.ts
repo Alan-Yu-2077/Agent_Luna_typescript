@@ -1,6 +1,7 @@
 import { MessageDelivery } from '@luna/protocol';
 import { createController } from './controller';
 import { LunaWsClient, type WsStatus } from './wsClient';
+import { resolveWsUrl } from './wsUrl';
 import { lastGeoFix, requestGeolocation } from './geo';
 import { consoleLive2DSink, noopAudioSink, type AudioSink, type Live2DSink, type Live2DState } from './sinks';
 import { CuteBubbleView } from './ui/cuteBubbleView';
@@ -19,11 +20,10 @@ import { createBootGate, warmUpTts } from './ui/bootGate';
 // placeholder + silence if WebGL/audio are unavailable; chat works regardless.
 
 const STATUS_TEXT: Record<WsStatus, string> = { connecting: 'Connecting…', open: 'Online', closed: 'Reconnecting…' };
-// Backend WS port: default 8787, overridable via `?ws=<port>` so an isolated dev
-// instance (separate worktree) can point its web at a separate server without
-// touching the stable instance. Persists across reloads (the query stays in the URL).
-const WS_PORT = new URLSearchParams(location.search).get('ws') ?? '8787';
-const WS_URL = `ws://${location.hostname}:${WS_PORT}`;
+// Backend WS endpoint: fixed 127.0.0.1 + `?ws=<port>` override (isolated dev: `:5273/?ws=8888`).
+// v0.26.0: no longer derived from location.hostname — a desktop shell's origin must not decide
+// where the local server lives.
+const WS_URL = resolveWsUrl(location.search);
 const DREAM_MIN_MS = 1500;
 
 async function boot(): Promise<void> {

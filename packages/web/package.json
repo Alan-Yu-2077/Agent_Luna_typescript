@@ -7,6 +7,10 @@
   "exports": {
     ".": "./src/index.ts"
   },
+  "scripts": {
+    "build": "bun build ./index.html --production --outdir=dist && bun run build:assets",
+    "build:assets": "cp public/live2dcubismcore.min.js dist/ && cp -R public/models dist/models"
+  },
   "dependencies": {
     "@luna/protocol": "workspace:*",
     "pixi-live2d-display": "0.5.0-beta",
