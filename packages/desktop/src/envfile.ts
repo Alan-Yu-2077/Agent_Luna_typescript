@@ -39,6 +39,11 @@ LUNA_EMBEDDING_BASE_URL=
 LUNA_WEATHER_PROVIDER=
 LUNA_WEATHER_API_KEY=
 LUNA_WEATHER_API_HOST=
+# Weather location (lat,lon) — the desktop webview has no browser GPS, so set this for weather.
+LUNA_LAT_LON=
 LUNA_WEB_SEARCH_PROVIDER=
 LUNA_WEB_SEARCH_API_KEY=
+
+# Pet mode: 1 = a transparent, always-on-top Luna floating over the desktop (region click-through).
+LUNA_PET_MODE=
 `;

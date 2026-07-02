@@ -179,12 +179,20 @@ export async function createPixiLive2DSink(
     // The lateral clearance the bubbles keep from the head CENTER — past the hair, so a bubble
     // never covers her (Alan: 气泡不能挡住模型). Scales with the model (zoom/viewport).
     const gap = Math.round(model.width * 0.26);
-    const key = `${x}:${y}:${gap}`;
+    // v0.26.2: the model's host-relative bbox — pet mode's click-through hit-test reads these to
+    // keep the cursor interactive over her body and pass-through everywhere else.
+    const left = Math.round(model.x);
+    const top = Math.round(model.y);
+    const key = `${x}:${y}:${gap}:${left}:${top}:${Math.round(model.width)}`;
     if (key === lastHeadKey) return;
     lastHeadKey = key;
     host.style.setProperty('--luna-head-x', `${x}px`);
     host.style.setProperty('--luna-head-y', `${y}px`);
     host.style.setProperty('--luna-head-gap', `${gap}px`);
+    host.style.setProperty('--luna-model-left', `${left}px`);
+    host.style.setProperty('--luna-model-top', `${top}px`);
+    host.style.setProperty('--luna-model-width', `${Math.round(model.width)}px`);
+    host.style.setProperty('--luna-model-height', `${Math.round(model.height)}px`);
   };
 
   // The head/body pose is physics-input, so it must be written BEFORE physics runs

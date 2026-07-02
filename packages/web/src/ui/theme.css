@@ -436,3 +436,14 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .luna-app.collapsed .chat-input-row { animation: none; }
 }
+
+/* v0.26.2 (Initiative 19): pet mode — the desktop shell's transparent window. Only Luna, her
+   bubbles, and the pill bar exist; the room (stripes/lace/motifs/status) disappears so the
+   desktop shows through. */
+body.pet { background: none; }
+.luna-app.pet .lace-top,
+.luna-app.pet .lace-bottom,
+.luna-app.pet .motif-layer,
+.luna-app.pet .status-badge {
+  display: none;
+}

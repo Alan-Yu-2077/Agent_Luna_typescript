@@ -2,6 +2,7 @@ import { MessageDelivery } from '@luna/protocol';
 import { createController } from './controller';
 import { LunaWsClient, type WsStatus } from './wsClient';
 import { resolveWsUrl } from './wsUrl';
+import { isInteractivePoint, modelRectFromVars } from './ui/petHitTest';
 import { lastGeoFix, requestGeolocation } from './geo';
 import { consoleLive2DSink, noopAudioSink, type AudioSink, type Live2DSink, type Live2DState } from './sinks';
 import { CuteBubbleView } from './ui/cuteBubbleView';
@@ -196,6 +197,51 @@ async function boot(): Promise<void> {
     applyCollapsed();
   });
   applyCollapsed(); // boot in the persisted collapse state
+
+  // v0.26.2 (Initiative 19): pet mode — the desktop shell's transparent always-on-top window loads
+  // with ?pet=1. Strip the room (stripes/lace/motifs go transparent), force the companion layout,
+  // and drive region click-through: over her body / the bar / the buttons the window takes the
+  // mouse; everywhere else the desktop does (the shell's setIgnoreMouseEvents via the preload
+  // bridge — macOS has no per-pixel pass-through).
+  if (new URLSearchParams(location.search).has('pet')) {
+    document.body.classList.add('pet');
+    root.classList.add('pet');
+    if (!isCollapsed) {
+      isCollapsed = true;
+      try {
+        localStorage.setItem('luna:collapsed', '1');
+      } catch {
+        /* storage unavailable — fine */
+      }
+      applyCollapsed();
+    }
+    const bridge = (globalThis as { lunaPet?: { setIgnore(ignore: boolean): void } }).lunaPet;
+    if (bridge) {
+      let lastIgnore: boolean | null = null;
+      window.addEventListener('pointermove', (e) => {
+        const stage = refs.modelStage;
+        const modelRect = modelRectFromVars(stage.getBoundingClientRect(), {
+          left: stage.style.getPropertyValue('--luna-model-left'),
+          top: stage.style.getPropertyValue('--luna-model-top'),
+          width: stage.style.getPropertyValue('--luna-model-width'),
+          height: stage.style.getPropertyValue('--luna-model-height'),
+        });
+        const ignore = !isInteractivePoint(e.clientX, e.clientY, [
+          modelRect,
+          refs.input.parentElement?.getBoundingClientRect() ?? null,
+          refs.dreamBtn.getBoundingClientRect(),
+          refs.settingsBtn.getBoundingClientRect(),
+          refs.settingsPanel.classList.contains('on')
+            ? refs.settingsPanel.getBoundingClientRect()
+            : null,
+        ]);
+        if (ignore !== lastIgnore) {
+          bridge.setIgnore(ignore);
+          lastIgnore = ignore;
+        }
+      });
+    }
+  }
   refs.input.addEventListener('keydown', (e) => {
     // Don't send mid-IME-composition: the Enter that commits a Chinese pinyin
     // candidate must select the candidate, not dispatch a half-composed message.

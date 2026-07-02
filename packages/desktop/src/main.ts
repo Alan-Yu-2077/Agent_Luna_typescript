@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain } from 'electron';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { defaultDistDir, startWebHost, WEB_PORT } from './serve';
@@ -14,6 +14,9 @@ import { createSupervisor, waitForPort, type Supervisor } from './supervisor';
 // The desktop app's own server port — deliberately NOT 8787, so a dev instance and the app coexist.
 const SERVER_PORT = Number(process.env['LUNA_DESKTOP_WS_PORT'] ?? 8790);
 const SMOKE = process.env['LUNA_SMOKE'] === '1';
+// v0.26.2: pet mode — transparent, frameless, always-on-top, region click-through. Toggled by
+// LUNA_PET_MODE=1 in luna.env (or the env); the windowed mode stays the default + the fallback.
+let petMode = process.env['LUNA_PET_MODE'] === '1';
 
 type Paths = {
   userData: string;
@@ -86,10 +89,13 @@ let supervisor: Supervisor | null = null;
 
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
-    width: 1280,
-    height: 860,
+    width: petMode ? 560 : 1280,
+    height: petMode ? 900 : 860,
     show: !SMOKE,
+    // Pet mode: she floats over the desktop — transparent, frameless, shadowless, always on top.
+    ...(petMode ? { transparent: true, frame: false, hasShadow: false, alwaysOnTop: true } : {}),
     webPreferences: {
+      preload: join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
       // A companion must keep animating when covered/hidden — the pet failure mode reproduced live
@@ -97,9 +103,20 @@ function createWindow(): BrowserWindow {
       backgroundThrottling: false,
     },
   });
-  void win.loadURL(`http://127.0.0.1:${WEB_PORT}/?ws=${SERVER_PORT}`);
+  if (petMode) {
+    win.setAlwaysOnTop(true, 'floating');
+    // Start pass-through; the renderer's hit-test (petHitTest.ts) opts the window back in whenever
+    // the cursor is over her body / the bar. forward:true keeps mousemove flowing while ignoring.
+    win.setIgnoreMouseEvents(true, { forward: true });
+  }
+  void win.loadURL(`http://127.0.0.1:${WEB_PORT}/?ws=${SERVER_PORT}${petMode ? '&pet=1' : ''}`);
   return win;
 }
+
+ipcMain.on('luna:set-ignore-mouse', (event, ignore: unknown) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  win?.setIgnoreMouseEvents(ignore === true, { forward: true });
+});
 
 async function smokeProbe(win: BrowserWindow): Promise<void> {
   await new Promise((r) => setTimeout(r, 6000));
@@ -108,11 +125,27 @@ async function smokeProbe(win: BrowserWindow): Promise<void> {
       canvas: !!document.querySelector('.model-stage canvas'),
       headX: document.querySelector('.model-stage')?.style.getPropertyValue('--luna-head-x') || null,
       wsStatus: document.querySelector('.status-badge')?.dataset.status || null,
+      pet: document.body.classList.contains('pet'),
+      bodyBgImage: getComputedStyle(document.body).backgroundImage,
+      collapsed: !!document.querySelector('.luna-app.collapsed'),
     })`,
   )) as string;
-  const p = JSON.parse(probe) as { canvas: boolean; headX: string | null; wsStatus: string | null };
+  const p = JSON.parse(probe) as {
+    canvas: boolean;
+    headX: string | null;
+    wsStatus: string | null;
+    pet: boolean;
+    bodyBgImage: string;
+  };
+  const shotPath = process.env['LUNA_SMOKE_OUT'];
+  if (shotPath) {
+    const shot = await win.webContents.capturePage();
+    writeFileSync(shotPath, shot.toPNG());
+  }
   // The packaged go/no-go: rendering alive AND the WS actually connected to the spawned sidecar.
-  const ok = p.canvas && p.headX !== null && p.wsStatus === 'open';
+  // In pet mode additionally: the pet class landed and the striped room is gone (transparent body).
+  const petOk = !petMode || (p.pet && p.bodyBgImage === 'none');
+  const ok = p.canvas && p.headX !== null && p.wsStatus === 'open' && petOk;
   console.log(JSON.stringify({ ok, ...p }));
   supervisor?.stop();
   app.exit(ok ? 0 : 1);
@@ -121,6 +154,7 @@ async function smokeProbe(win: BrowserWindow): Promise<void> {
 void app.whenReady().then(async () => {
   const p = resolvePaths();
   const userEnv = ensureUserConfig(p);
+  if (userEnv['LUNA_PET_MODE'] === '1') petMode = true;
   startWebHost(p.webDist);
   supervisor = createSupervisor({
     command: p.serverBin,

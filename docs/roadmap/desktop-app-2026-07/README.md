@@ -1,6 +1,6 @@
 # Initiative 19 — Desktop app (Luna lives on your screen)
 
-> **Status: 📋 PLANNED.** Priority: after Initiatives 17 (proactive) + 18 (collapsible UI). Version
+> **Status: ✅ SHIPPED 2026-07-02** (v0.26.0 `f7bf3a0` · v0.26.1 `1ac2e09` · v0.26.2 `ae291fc`). Version
 > range: **v0.26.0 – v0.26.2** (3 versions). Branch: `feat/weather-perception`. Master index:
 > [`../README.md`](../README.md).
 > **Recommended shell: Electron (v1), for engine certainty.** Tauri v2 deferred as a footprint
@@ -134,9 +134,9 @@ an adversarial "will Live2D drive in a webview" verifier (2026-07-01).
 
 | Plan | Version | Theme | Risk | Depends | Status |
 |---|---|---|---|---|---|
-| [v0.26.0](v0.26.0-port-foundation-smoke.md) | v0.26.0 | Port foundation + Electron rendering smoke test: static build, fixed loopback-origin serve, config-driven WS URL, plain Electron window that proves **yumi renders + drives + WS connects** (server still hand-started) | High | nothing | 📋 PLANNED |
-| [v0.26.1](v0.26.1-single-machine-app.md) | v0.26.1 | Single-machine app: `bun build --compile` server + static/TTS-proxy sidecars, Electron supervises them (kill-on-quit), SQLite + secrets in **app-data**, electron-builder packaging + signing; amend the Frontend LD | High | v0.26.0 | 📋 PLANNED |
-| [v0.26.2](v0.26.2-desktop-pet-window.md) | v0.26.2 | Desktop-pet window: transparent + always-on-top + frameless, **background-throttling off**, click-through hit-testing, geo shim, premultiplied-alpha + packaged-transparency verification; **Initiative 19 close** | Medium | v0.26.1 | 📋 PLANNED |
+| [v0.26.0](v0.26.0-port-foundation-smoke.md) | v0.26.0 | Port foundation + Electron rendering smoke test: static build, fixed loopback-origin serve, config-driven WS URL, plain Electron window that proves **yumi renders + drives + WS connects** (server still hand-started) | High | nothing | ✅ shipped |
+| [v0.26.1](v0.26.1-single-machine-app.md) | v0.26.1 | Single-machine app: `bun build --compile` server + static/TTS-proxy sidecars, Electron supervises them (kill-on-quit), SQLite + secrets in **app-data**, electron-builder packaging + signing; amend the Frontend LD | High | v0.26.0 | ✅ shipped |
+| [v0.26.2](v0.26.2-desktop-pet-window.md) | v0.26.2 | Desktop-pet window: transparent + always-on-top + frameless, **background-throttling off**, click-through hit-testing, geo shim, premultiplied-alpha + packaged-transparency verification; **Initiative 19 close** | Medium | v0.26.1 | ✅ shipped |
 
 ## Acceptance criteria for the whole initiative
 

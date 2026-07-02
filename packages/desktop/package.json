@@ -5,7 +5,7 @@
   "description": "Electron shell for Luna (Initiative 19) — spawns the compiled luna-server sidecar and serves the packages/web production build over a pinned loopback origin",
   "main": "dist/main.cjs",
   "scripts": {
-    "build": "bun build src/main.ts --target=node --format=cjs --external=electron --outfile=dist/main.cjs && bun build src/smoke.ts --target=node --format=cjs --external=electron --outfile=dist/smoke.cjs",
+    "build": "bun build src/main.ts --target=node --format=cjs --external=electron --outfile=dist/main.cjs && bun build src/preload.ts --target=node --format=cjs --external=electron --outfile=dist/preload.cjs && bun build src/smoke.ts --target=node --format=cjs --external=electron --outfile=dist/smoke.cjs",
     "compile:server": "bun build --compile ../server/src/main.ts --outfile bin/luna-server",
     "start": "bun run build && electron .",
     "smoke": "bun run build && electron dist/smoke.cjs",
@@ -22,7 +22,7 @@
     "directories": {
       "output": "release"
     },
-    "files": ["dist/main.cjs", "package.json"],
+    "files": ["dist/main.cjs", "dist/preload.cjs", "package.json"],
     "extraResources": [
       { "from": "bin/luna-server", "to": "luna-server" },
       { "from": "../server/src/migrations", "to": "migrations" },
