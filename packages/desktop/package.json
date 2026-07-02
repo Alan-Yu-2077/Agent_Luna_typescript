@@ -2,14 +2,36 @@
   "name": "@luna/desktop",
   "version": "0.1.0",
   "private": true,
-  "description": "Electron shell for Luna (Initiative 19) — serves the packages/web production build over a pinned loopback origin",
+  "description": "Electron shell for Luna (Initiative 19) — spawns the compiled luna-server sidecar and serves the packages/web production build over a pinned loopback origin",
   "main": "dist/main.cjs",
   "scripts": {
     "build": "bun build src/main.ts --target=node --format=cjs --external=electron --outfile=dist/main.cjs && bun build src/smoke.ts --target=node --format=cjs --external=electron --outfile=dist/smoke.cjs",
+    "compile:server": "bun build --compile ../server/src/main.ts --outfile bin/luna-server",
     "start": "bun run build && electron .",
-    "smoke": "bun run build && electron dist/smoke.cjs"
+    "smoke": "bun run build && electron dist/smoke.cjs",
+    "pack": "bun run build && electron-builder --dir",
+    "smoke:packaged": "LUNA_SMOKE=1 release/mac-arm64/Luna.app/Contents/MacOS/Luna"
   },
   "devDependencies": {
-    "electron": "^33.0.0"
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "dev.alan.luna",
+    "productName": "Luna",
+    "directories": {
+      "output": "release"
+    },
+    "files": ["dist/main.cjs", "package.json"],
+    "extraResources": [
+      { "from": "bin/luna-server", "to": "luna-server" },
+      { "from": "../server/src/migrations", "to": "migrations" },
+      { "from": "../server/persona", "to": "persona" },
+      { "from": "../web/dist", "to": "web" }
+    ],
+    "mac": {
+      "target": [{ "target": "dir", "arch": ["arm64"] }],
+      "identity": null
+    }
   }
 }

@@ -1,14 +1,13 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { getMemoryDb } from '../memory/sessionStore';
 import { resetSessions } from '../turn/session';
+import { lazyHtml } from '../devHtml';
 
 // Developer data IDE (the TS analog of the Python project's `.workspace`). A
 // VSCode-style read view over every SQLite table, plus dev-only write actions:
 // one-click reset, row delete, and cell edit. Local dev tool — gated by
 // LUNA_VIEWER like the trace viewer; mutating routes require POST.
 
-const INDEX_HTML = readFileSync(join(import.meta.dir, 'index.html'), 'utf8');
+const indexHtml = lazyHtml(import.meta.dir, 'index.html');
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -120,7 +119,7 @@ export async function workspaceHandler(req: Request): Promise<Response | null> {
   if (!path.startsWith('/_workspace')) return null;
 
   if (path === '/_workspace' && req.method === 'GET') {
-    return new Response(INDEX_HTML, { headers: { 'content-type': 'text/html' } });
+    return new Response(indexHtml(), { headers: { 'content-type': 'text/html' } });
   }
   if (path === '/_workspace/api/all' && req.method === 'GET') {
     const raw = Number(url.searchParams.get('limit') ?? 100);

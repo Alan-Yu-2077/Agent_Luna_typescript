@@ -8,3 +8,5 @@ bun.lockb
 .DS_Store
 *.tsbuildinfo
 *.sqlite*
+packages/desktop/bin/
+packages/desktop/release/

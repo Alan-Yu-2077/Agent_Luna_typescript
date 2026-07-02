@@ -1,7 +1,6 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { lazyHtml } from '../devHtml';
 
-const CHAT_HTML = readFileSync(join(import.meta.dir, 'devchat.html'), 'utf8');
+const chatHtml = lazyHtml(import.meta.dir, 'devchat.html');
 
 // Dev-only chat page over the existing WS protocol. Returns null for non-/_chat
 // paths so the caller falls through to the WS upgrade (same shape as the trace
@@ -9,7 +8,7 @@ const CHAT_HTML = readFileSync(join(import.meta.dir, 'devchat.html'), 'utf8');
 export function devChatHandler(req: Request): Response | null {
   const url = new URL(req.url);
   if (url.pathname === '/_chat') {
-    return new Response(CHAT_HTML, { headers: { 'content-type': 'text/html' } });
+    return new Response(chatHtml(), { headers: { 'content-type': 'text/html' } });
   }
   return null;
 }

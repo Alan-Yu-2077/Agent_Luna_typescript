@@ -1,8 +1,7 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import type { TraceStore } from './store';
+import { lazyHtml } from '../devHtml';
 
-const INDEX_HTML = readFileSync(join(import.meta.dir, 'viewer', 'index.html'), 'utf8');
+const indexHtml = lazyHtml(import.meta.dir, 'viewer', 'index.html');
 
 function json(data: unknown): Response {
   return new Response(JSON.stringify(data), {
@@ -17,7 +16,7 @@ export function traceViewerHandler(req: Request, store: TraceStore): Response | 
   const path = url.pathname;
 
   if (path === '/_trace') {
-    return new Response(INDEX_HTML, { headers: { 'content-type': 'text/html' } });
+    return new Response(indexHtml(), { headers: { 'content-type': 'text/html' } });
   }
   if (path === '/_trace/api/turns') {
     const limit = Number(url.searchParams.get('limit') ?? 50);

@@ -48,7 +48,9 @@ initCustomSqlite();
 const db = openDb(
   Bun.env['LUNA_DB_PATH'] ?? join(import.meta.dir, '..', '..', '..', 'luna.sqlite'),
 );
-const version = migrate(db, join(import.meta.dir, 'migrations'));
+// v0.26.1: overridable for the compiled sidecar — a `bun build --compile` binary has a virtual
+// import.meta.dir, so the desktop supervisor ships migrations as resources and points here.
+const version = migrate(db, Bun.env['LUNA_MIGRATIONS_DIR'] ?? join(import.meta.dir, 'migrations'));
 const traceStore = new TraceStore(db);
 setTraceStore(traceStore);
 if (Bun.env['LUNA_PERSIST'] !== '0') {
