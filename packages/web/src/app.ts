@@ -2,7 +2,6 @@ import { MessageDelivery } from '@luna/protocol';
 import { createController } from './controller';
 import { LunaWsClient, type WsStatus } from './wsClient';
 import { resolveWsUrl } from './wsUrl';
-import { isInteractivePoint, modelRectFromVars } from './ui/petHitTest';
 import { lastGeoFix, requestGeolocation } from './geo';
 import { consoleLive2DSink, noopAudioSink, type AudioSink, type Live2DSink, type Live2DState } from './sinks';
 import { CuteBubbleView } from './ui/cuteBubbleView';
@@ -240,31 +239,10 @@ async function boot(): Promise<void> {
       }
       applyCollapsed();
     }
-    if (bridge) {
-      let lastIgnore: boolean | null = null;
-      window.addEventListener('pointermove', (e) => {
-        const stage = refs.modelStage;
-        const modelRect = modelRectFromVars(stage.getBoundingClientRect(), {
-          left: stage.style.getPropertyValue('--luna-model-left'),
-          top: stage.style.getPropertyValue('--luna-model-top'),
-          width: stage.style.getPropertyValue('--luna-model-width'),
-          height: stage.style.getPropertyValue('--luna-model-height'),
-        });
-        const ignore = !isInteractivePoint(e.clientX, e.clientY, [
-          modelRect,
-          refs.input.parentElement?.getBoundingClientRect() ?? null,
-          refs.dreamBtn.getBoundingClientRect(),
-          refs.settingsBtn.getBoundingClientRect(),
-          refs.settingsPanel.classList.contains('on')
-            ? refs.settingsPanel.getBoundingClientRect()
-            : null,
-        ]);
-        if (ignore !== lastIgnore) {
-          bridge.setIgnore(ignore);
-          lastIgnore = ignore;
-        }
-      });
-    }
+    // v0.28.2: the per-pixel click-through hit-test is retired. The pet window now takes the mouse
+    // normally — her body is a `-webkit-app-region: drag` handle (move) and the window edges resize;
+    // the controls opt out with `no-drag` (theme.css). petHitTest.ts + lunaPet.setIgnore stay for a
+    // possible future hybrid, but nothing drives them here.
   }
   refs.input.addEventListener('keydown', (e) => {
     // Don't send mid-IME-composition: the Enter that commits a Chinese pinyin

@@ -5,6 +5,7 @@ import { defaultDistDir, startWebHost, WEB_PORT } from './serve';
 import { ENV_TEMPLATE, parseEnvFile } from './envfile';
 import { readShellSettings, writeShellSettings } from './shellSettings';
 import { classifyProbe, mergeEnvFile, needsOnboarding, type ProbeVerdict } from './onboarding';
+import { petWindowOptions } from './petWindow';
 import { createSupervisor, waitForPort, type Supervisor } from './supervisor';
 
 // v0.26.1 (Initiative 19): the single-machine app. The shell OWNS the whole runtime: it reads the
@@ -91,8 +92,9 @@ function createWindow(mode: 'app' | 'setup' = 'app'): BrowserWindow {
     width: usePet ? 560 : 1280,
     height: usePet ? 900 : 860,
     show: !SMOKE,
-    // Pet mode: she floats over the desktop — transparent, frameless, shadowless, always on top.
-    ...(usePet ? { transparent: true, frame: false, hasShadow: false, alwaysOnTop: true } : {}),
+    // Pet mode: she floats over the desktop — transparent/frameless/always-on-top, and (v0.28.2)
+    // RESIZABLE with a min size so the whole pet scales by dragging the window edge.
+    ...(usePet ? petWindowOptions() : {}),
     webPreferences: {
       // NOT join(__dirname, ...): bun inlines __dirname as the SOURCE dir (packages/desktop/src)
       // at compile time, but preload.cjs ships in dist/ (and in app.asar/dist/ when packaged) — so
@@ -113,9 +115,11 @@ function createWindow(mode: 'app' | 'setup' = 'app'): BrowserWindow {
   });
   if (usePet) {
     win.setAlwaysOnTop(true, 'floating');
-    // Start pass-through; the renderer's hit-test (petHitTest.ts) opts the window back in whenever
-    // the cursor is over her body / the bar. forward:true keeps mousemove flowing while ignoring.
-    win.setIgnoreMouseEvents(true, { forward: true });
+    // v0.28.2: NO per-pixel click-through anymore. The window takes the mouse normally — her body is
+    // a `-webkit-app-region: drag` handle (move the pet), the bar/buttons are `no-drag` (clickable),
+    // and the window edges resize (resizable:true). This trades the v0.26.2 "click through her
+    // transparent margins to the desktop" nicety for real move/resize — the thing actually asked for.
+    // petHitTest.ts + luna:set-ignore-mouse are kept intact for a possible future hybrid.
   }
   const url =
     mode === 'setup'
@@ -216,6 +220,9 @@ async function smokeProbe(win: BrowserWindow): Promise<void> {
         bridgeSetPetMode: typeof window.lunaPet?.setPetMode,
         petRowVisible: petInput ? getComputedStyle(petInput.closest('label')).display !== 'none' : false,
         serverRows: document.querySelectorAll('.server-settings .setting-row').length,
+        // v0.28.2: her body is a window-drag region; the input bar opts back out.
+        modelDrag: getComputedStyle(document.querySelector('.model-stage')).getPropertyValue('-webkit-app-region'),
+        barNoDrag: getComputedStyle(document.querySelector('.chat-input-row')).getPropertyValue('-webkit-app-region'),
       });
     })()`,
   )) as string;
@@ -228,6 +235,8 @@ async function smokeProbe(win: BrowserWindow): Promise<void> {
     bridgeSetPetMode: string;
     petRowVisible: boolean;
     serverRows: number;
+    modelDrag: string;
+    barNoDrag: string;
   };
   const shotPath = process.env['LUNA_SMOKE_OUT'];
   if (shotPath) {
@@ -236,8 +245,11 @@ async function smokeProbe(win: BrowserWindow): Promise<void> {
     writeFileSync(shotPath, shot.toPNG());
   }
   // The packaged go/no-go: rendering alive AND the WS actually connected to the spawned sidecar.
-  // In pet mode additionally: the pet class landed and the striped room is gone (transparent body).
-  const petOk = !petMode || (p.pet && p.bodyBgImage === 'none');
+  // In pet mode additionally: the pet class landed, the striped room is gone (transparent body),
+  // the window is RESIZABLE, and her body is a drag region while the bar is not (v0.28.2).
+  const petWindowOk =
+    !petMode || (win.isResizable() && p.modelDrag === 'drag' && p.barNoDrag !== 'drag');
+  const petOk = !petMode || (p.pet && p.bodyBgImage === 'none' && petWindowOk);
   // v0.27.2: the preload bridge must be live (setPetMode exposed → the pet toggle row renders).
   // This is exactly the check that would have caught the __dirname preload-path bug earlier.
   const bridgeOk = p.bridgeSetPetMode === 'function' && p.petRowVisible;

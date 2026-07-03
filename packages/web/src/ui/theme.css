@@ -488,3 +488,17 @@ body.pet { background: none; }
 }
 .setup-btn.ghost { background: #eef3f9; color: var(--ink-soft); }
 .setup-btn:disabled { opacity: 0.55; cursor: default; }
+
+/* v0.28.2: pet window is movable + resizable — her body is a window-drag handle; the interactive
+   controls opt out so they stay clickable/typable. (Only meaningful inside the Electron pet window;
+   -webkit-app-region is inert in a plain browser.) */
+.luna-app.pet .model-stage { -webkit-app-region: drag; }
+.luna-app.pet .chat-input-row,
+.luna-app.pet .settings-btn,
+.luna-app.pet .settings-panel,
+.luna-app.pet .dream-btn,
+.luna-app.pet .collapse-btn,
+.luna-app.pet .scroll-pill,
+.luna-app.pet .mood-pip {
+  -webkit-app-region: no-drag;
+}
