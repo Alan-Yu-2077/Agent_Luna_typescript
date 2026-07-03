@@ -12,6 +12,17 @@ contextBridge.exposeInMainWorld('lunaPet', {
   setPetMode: (on: boolean): void => {
     ipcRenderer.send('luna:set-pet-mode', on === true);
   },
+  // v0.28.6: manual window drag — pointerdown on her body starts it, dx/dy are TOTAL screen-space
+  // deltas from the start. Replaces -webkit-app-region (which ate every click inside the pet).
+  dragStart: (): void => {
+    ipcRenderer.send('luna:pet-drag-start');
+  },
+  dragMove: (dx: number, dy: number): void => {
+    ipcRenderer.send('luna:pet-drag-move', dx, dy);
+  },
+  dragEnd: (): void => {
+    ipcRenderer.send('luna:pet-drag-end');
+  },
 });
 
 // v0.28.0: the first-run setup bridge. The renderer collects base URL + key + model; the SHELL

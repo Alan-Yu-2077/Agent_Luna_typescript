@@ -489,16 +489,6 @@ body.pet { background: none; }
 .setup-btn.ghost { background: #eef3f9; color: var(--ink-soft); }
 .setup-btn:disabled { opacity: 0.55; cursor: default; }
 
-/* v0.28.2: pet window is movable + resizable — her body is a window-drag handle; the interactive
-   controls opt out so they stay clickable/typable. (Only meaningful inside the Electron pet window;
-   -webkit-app-region is inert in a plain browser.) */
-.luna-app.pet .model-stage { -webkit-app-region: drag; }
-.luna-app.pet .chat-input-row,
-.luna-app.pet .settings-btn,
-.luna-app.pet .settings-panel,
-.luna-app.pet .dream-btn,
-.luna-app.pet .collapse-btn,
-.luna-app.pet .scroll-pill,
-.luna-app.pet .mood-pip {
-  -webkit-app-region: no-drag;
-}
+/* v0.28.6: NO -webkit-app-region rules — on transparent frameless windows the drag region ate
+   every mousedown before the DOM saw it (nothing inside the pet was clickable). Window-move is
+   now manual: app.ts pointer-drags her body via the lunaPet.drag* bridge; clicks stay ordinary. */

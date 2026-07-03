@@ -2,6 +2,7 @@ import { MessageDelivery } from '@luna/protocol';
 import { createController } from './controller';
 import { LunaWsClient, type WsStatus } from './wsClient';
 import { resolveWsUrl } from './wsUrl';
+import { isInteractivePoint, modelRectFromVars } from './ui/petHitTest';
 import { lastGeoFix, requestGeolocation } from './geo';
 import { consoleLive2DSink, noopAudioSink, type AudioSink, type Live2DSink, type Live2DState } from './sinks';
 import { CuteBubbleView } from './ui/cuteBubbleView';
@@ -225,7 +226,15 @@ async function boot(): Promise<void> {
   // mouse; everywhere else the desktop does (the shell's setIgnoreMouseEvents via the preload
   // bridge — macOS has no per-pixel pass-through).
   const bridge = (
-    globalThis as { lunaPet?: { setIgnore(ignore: boolean): void; setPetMode?(on: boolean): void } }
+    globalThis as {
+      lunaPet?: {
+        setIgnore(ignore: boolean): void;
+        setPetMode?(on: boolean): void;
+        dragStart?(): void;
+        dragMove?(dx: number, dy: number): void;
+        dragEnd?(): void;
+      };
+    }
   ).lunaPet;
   if (isPet) {
     document.body.classList.add('pet');
@@ -239,10 +248,37 @@ async function boot(): Promise<void> {
       }
       applyCollapsed();
     }
-    // v0.28.2: the per-pixel click-through hit-test is retired. The pet window now takes the mouse
-    // normally — her body is a `-webkit-app-region: drag` handle (move) and the window edges resize;
-    // the controls opt out with `no-drag` (theme.css). petHitTest.ts + lunaPet.setIgnore stay for a
-    // possible future hybrid, but nothing drives them here.
+    // v0.28.6: manual window drag replaces `-webkit-app-region: drag` (which swallowed every
+    // mousedown before the DOM saw it — nothing inside the pet was clickable). A pointerdown ON HER
+    // BODY (the sink-published bbox) starts a drag; movement streams TOTAL screen-space deltas to
+    // the shell, which moves the window. Buttons/input/panel receive ordinary DOM clicks — nothing
+    // intercepts them. Click-vs-drag is unambiguous: her body drags, everything else clicks.
+    if (bridge?.dragStart) {
+      let drag: { sx: number; sy: number } | null = null;
+      refs.modelStage.addEventListener('pointerdown', (e) => {
+        if (e.button !== 0) return;
+        const stage = refs.modelStage;
+        const rect = modelRectFromVars(stage.getBoundingClientRect(), {
+          left: stage.style.getPropertyValue('--luna-model-left'),
+          top: stage.style.getPropertyValue('--luna-model-top'),
+          width: stage.style.getPropertyValue('--luna-model-width'),
+          height: stage.style.getPropertyValue('--luna-model-height'),
+        });
+        if (!rect || !isInteractivePoint(e.clientX, e.clientY, [rect])) return;
+        drag = { sx: e.screenX, sy: e.screenY };
+        bridge.dragStart?.();
+      });
+      window.addEventListener('pointermove', (e) => {
+        if (drag) bridge.dragMove?.(e.screenX - drag.sx, e.screenY - drag.sy);
+      });
+      const endDrag = (): void => {
+        if (!drag) return;
+        drag = null;
+        bridge.dragEnd?.();
+      };
+      window.addEventListener('pointerup', endDrag);
+      window.addEventListener('pointercancel', endDrag);
+    }
   }
   refs.input.addEventListener('keydown', (e) => {
     // Don't send mid-IME-composition: the Enter that commits a Chinese pinyin

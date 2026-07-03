@@ -5,6 +5,7 @@ import { defaultDistDir, startWebHost, WEB_PORT } from './serve';
 import { ENV_TEMPLATE, parseEnvFile } from './envfile';
 import { readShellSettings, writeShellSettings } from './shellSettings';
 import { classifyProbe, mergeEnvFile, needsOnboarding, type ProbeVerdict } from './onboarding';
+import { createPetDrag, type PetDrag } from './petDrag';
 import { petWindowOptions } from './petWindow';
 import { createSupervisor, waitForPort, type Supervisor } from './supervisor';
 
@@ -138,6 +139,31 @@ ipcMain.on('luna:set-ignore-mouse', (event, ignore: unknown) => {
   win?.setIgnoreMouseEvents(ignore === true, { forward: true });
 });
 
+// v0.28.6: manual pet-window drag (replaces `-webkit-app-region: drag`, which swallowed every
+// mousedown before the DOM saw it — nothing inside the pet was clickable). The renderer decides
+// what a drag is (pointerdown on her body + movement) and streams TOTAL deltas from the drag
+// start; the shell moves the window. Ordinary clicks never enter this path.
+let petDrag: PetDrag | null = null;
+ipcMain.on('luna:pet-drag-start', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win) return;
+  petDrag = createPetDrag({
+    getPosition: () => {
+      const [x, y] = win.getPosition();
+      return [x ?? 0, y ?? 0];
+    },
+    setPosition: (x, y) => win.setPosition(x, y),
+  });
+  petDrag.begin();
+});
+ipcMain.on('luna:pet-drag-move', (_event, dx: unknown, dy: unknown) => {
+  if (typeof dx === 'number' && typeof dy === 'number') petDrag?.move(dx, dy);
+});
+ipcMain.on('luna:pet-drag-end', () => {
+  petDrag?.end();
+  petDrag = null;
+});
+
 // v0.27.0: pet mode toggled from the settings panel. transparent/frame are immutable after window
 // creation, so the flip is: persist the choice, build the replacement window, THEN close the old
 // one — closing first would fire window-all-closed and take the sidecar (and the app) down.
@@ -230,9 +256,10 @@ async function smokeProbe(win: BrowserWindow): Promise<void> {
         bridgeSetPetMode: typeof window.lunaPet?.setPetMode,
         petRowVisible: petInput ? getComputedStyle(petInput.closest('label')).display !== 'none' : false,
         serverRows: document.querySelectorAll('.server-settings .setting-row').length,
-        // v0.28.2: her body is a window-drag region; the input bar opts back out.
-        modelDrag: getComputedStyle(document.querySelector('.model-stage')).getPropertyValue('-webkit-app-region'),
-        barNoDrag: getComputedStyle(document.querySelector('.chat-input-row')).getPropertyValue('-webkit-app-region'),
+        // v0.28.6: manual drag bridge (replaced -webkit-app-region, which ate every click) — the
+        // pet go/no-go asserts the drag surface exists AND no drag region hijacks the DOM.
+        bridgeDrag: typeof window.lunaPet?.dragStart,
+        noAppRegion: getComputedStyle(document.querySelector('.model-stage')).getPropertyValue('-webkit-app-region') !== 'drag',
       });
     })()`,
   )) as string;
@@ -245,8 +272,8 @@ async function smokeProbe(win: BrowserWindow): Promise<void> {
     bridgeSetPetMode: string;
     petRowVisible: boolean;
     serverRows: number;
-    modelDrag: string;
-    barNoDrag: string;
+    bridgeDrag: string;
+    noAppRegion: boolean;
   };
   const shotPath = process.env['LUNA_SMOKE_OUT'];
   if (shotPath) {
@@ -258,7 +285,7 @@ async function smokeProbe(win: BrowserWindow): Promise<void> {
   // In pet mode additionally: the pet class landed, the striped room is gone (transparent body),
   // the window is RESIZABLE, and her body is a drag region while the bar is not (v0.28.2).
   const petWindowOk =
-    !petMode || (win.isResizable() && p.modelDrag === 'drag' && p.barNoDrag === 'no-drag');
+    !petMode || (win.isResizable() && p.bridgeDrag === 'function' && p.noAppRegion);
   const petOk = !petMode || (p.pet && p.bodyBgImage === 'none' && petWindowOk);
   // v0.27.2: the preload bridge must be live (setPetMode exposed → the pet toggle row renders).
   // This is exactly the check that would have caught the __dirname preload-path bug earlier.
