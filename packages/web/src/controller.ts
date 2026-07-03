@@ -1,4 +1,4 @@
-import { MessageDelivery, assertNever, type ServerEvent } from '@luna/protocol';
+import { MessageDelivery, assertNever, type ServerEvent, type Setting } from '@luna/protocol';
 import type { BubbleView } from './bubbles';
 import type { AudioSink, Live2DSink } from './sinks';
 
@@ -14,6 +14,8 @@ export type ControllerDeps = {
   view: BubbleView;
   live2d: Live2DSink;
   audio: AudioSink;
+  // v0.27.1: server-driven settings panel — pushed on connect + after every accepted set.
+  onSettings?: (settings: Setting[]) => void;
 };
 
 // synthetic bubble id for text-mode (LUNA_MESSAGE_TOOL=0) reply.token streaming
@@ -48,6 +50,10 @@ export function createController(deps: ControllerDeps): { handle: (e: ServerEven
   function handle(e: ServerEvent): void {
     switch (e.type) {
       case 'pong':
+        return;
+
+      case 'settings.state':
+        deps.onSettings?.(e.settings);
         return;
 
       case 'history':

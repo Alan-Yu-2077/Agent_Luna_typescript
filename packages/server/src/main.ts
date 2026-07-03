@@ -36,6 +36,7 @@ import { bootReconcile, isDreaming } from './dream/dreamState';
 import { runDreamCycle } from './dream/cycle';
 import { setOnWeatherRefresh, startWeatherRefresh } from './tools/web/weather/snapshot';
 import { activeSessionIds, preloadSessions } from './turn/session';
+import { initSettings } from './settings/store';
 
 const port = Number(process.env['LUNA_PORT'] ?? 8787);
 
@@ -57,6 +58,10 @@ if (Bun.env['LUNA_PERSIST'] !== '0') {
   setMemoryDb(db);
 }
 bootReconcile();
+// v0.27.1: overlay UI-pinned settings onto Bun.env BEFORE any provider/tool-registry
+// construction below — that's what makes a pinned restart-required flag (LUNA_MODEL,
+// LUNA_WEB_SEARCH...) actually take effect on the next boot.
+initSettings(Bun.env['LUNA_PERSIST'] !== '0' ? db : null);
 // v0.21.6: warm persisted sessions into the in-memory map so the proactive
 // scheduler considers them right after a restart (activeSessionIds() reads the
 // in-memory map) — without this, proactive stayed dead until the next chat.

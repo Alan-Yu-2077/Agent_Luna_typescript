@@ -374,3 +374,42 @@ describe('frontend controller — web citations (v0.18.2)', () => {
     expect(h.calls.filter((c) => c[1] === 'source').length).toBe(0);
   });
 });
+
+describe('frontend controller — settings.state (v0.27.1)', () => {
+  test('settings.state routes to onSettings; absent callback is a no-op', () => {
+    const seen: string[][] = [];
+    const h = harness();
+    const noopView: BubbleView = {
+      open: () => {},
+      append: () => {},
+      finalize: () => {},
+      discard: () => {},
+      chip: () => {},
+      setThinking: () => {},
+    };
+    const withCb = createController({
+      view: noopView,
+      live2d: { setExpression: () => {}, setState: () => {}, setMouth: () => {}, clear: () => {} },
+      audio: { speak: async () => {}, stop: () => {} },
+      onSettings: (s) => seen.push(s.map((x) => `${x.key}=${x.value}:${x.source}`)),
+    });
+    const state = {
+      type: 'settings.state' as const,
+      settings: [
+        {
+          key: 'proactive.enabled',
+          label: 'Proactive messages',
+          hint: '',
+          category: 'Companion',
+          kind: 'boolean' as const,
+          value: '1',
+          source: 'default' as const,
+          restart_required: false,
+        },
+      ],
+    };
+    withCb.handle(state);
+    expect(seen).toEqual([['proactive.enabled=1:default']]);
+    h.handle(state); // no onSettings dep — must not throw
+  });
+});

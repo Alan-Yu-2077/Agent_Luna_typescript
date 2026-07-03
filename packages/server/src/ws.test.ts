@@ -1,11 +1,15 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import type { Server } from 'bun';
 import type Anthropic from '@anthropic-ai/sdk';
+import { Database } from 'bun:sqlite';
+import { join } from 'node:path';
 import { handleClose, handleMessage, handleOpen, setRuntime, type WSData } from './ws';
 import { MockProvider } from './provider/mock';
 import type { ProviderEvent } from './provider/types';
 import { builtinRegistry, messageRegistry } from './tools/registry';
 import { getSession, resetSessions } from './turn/session';
+import { migrate } from './sql';
+import { initSettings, setSetting } from './settings/store';
 
 let server: Server<WSData>;
 let url: string;
@@ -42,8 +46,11 @@ function roundTrip(payload: string, timeoutMs = 200): Promise<string> {
       ws.send(payload);
     });
     ws.addEventListener('message', (e) => {
-      clearTimeout(timer);
       const data = typeof e.data === 'string' ? e.data : '';
+      // v0.27.1: every connect is greeted with a settings.state push — not the response
+      // these round-trip helpers are waiting for.
+      if (data.includes('"settings.state"')) return;
+      clearTimeout(timer);
       ws.close();
       resolve(data);
     });
@@ -70,6 +77,9 @@ function collectUntil(
     ws.addEventListener('open', () => ws.send(payload));
     ws.addEventListener('message', (e) => {
       const data = typeof e.data === 'string' ? JSON.parse(e.data) : null;
+      if (data && typeof data === 'object' && 'type' in data && data.type === 'settings.state') {
+        return; // connect-greeting push (v0.27.1), not part of the collected exchange
+      }
       events.push(data);
       if (data && typeof data === 'object' && 'type' in data && finalTypes.has((data as { type: string }).type)) {
         clearTimeout(timer);
@@ -279,5 +289,96 @@ describe('proactive.fire (WS gating)', () => {
     expect(types.at(-1)).toBe('proactive.finished');
     const finished = events.at(-1) as { spoke: boolean };
     expect(finished.spoke).toBe(false);
+  });
+});
+
+describe('settings over the wire (v0.27.1)', () => {
+  test('every connect is greeted with a settings.state push', async () => {
+    const first = await new Promise<string>((resolve, reject) => {
+      const ws = new WebSocket(url);
+      const timer = setTimeout(() => reject(new Error('no greeting')), 300);
+      ws.addEventListener('message', (e) => {
+        clearTimeout(timer);
+        ws.close();
+        resolve(typeof e.data === 'string' ? e.data : '');
+      });
+    });
+    const event = JSON.parse(first) as { type: string; settings: Array<{ key: string }> };
+    expect(event.type).toBe('settings.state');
+    expect(event.settings.length).toBeGreaterThan(0);
+  });
+
+  test('settings.set → broadcast settings.state with the pin; invalid → error + heal frame', async () => {
+    const prev = Bun.env['LUNA_PROACTIVE'];
+    const mem = new Database(':memory:', { strict: true });
+    migrate(mem, join(import.meta.dir, 'migrations'));
+    initSettings(mem);
+    try {
+      const ok = await collectUntil(
+        JSON.stringify({ type: 'settings.set', key: 'proactive.enabled', value: '0' }),
+        new Set(['__none__']),
+        300,
+      ).catch(() => null);
+      // broadcast frames are filtered by collectUntil; read the raw exchange instead
+      const frames = await new Promise<unknown[]>((resolve, reject) => {
+        const ws = new WebSocket(url);
+        const seen: unknown[] = [];
+        const timer = setTimeout(() => {
+          ws.close();
+          resolve(seen);
+        }, 250);
+        ws.addEventListener('open', () =>
+          ws.send(JSON.stringify({ type: 'settings.set', key: 'proactive.enabled', value: '0' })),
+        );
+        ws.addEventListener('message', (e) => {
+          seen.push(JSON.parse(typeof e.data === 'string' ? e.data : 'null'));
+        });
+        ws.addEventListener('error', () => {
+          clearTimeout(timer);
+          reject(new Error('ws error'));
+        });
+      });
+      expect(ok).toBeNull();
+      const states = frames.filter(
+        (f): f is { type: string; settings: Array<{ key: string; value: string; source: string }> } =>
+          typeof f === 'object' && f !== null && (f as { type?: string }).type === 'settings.state',
+      );
+      // greeting + post-set broadcast
+      expect(states.length).toBeGreaterThanOrEqual(2);
+      const last = states.at(-1);
+      const pin = last?.settings.find((s) => s.key === 'proactive.enabled');
+      expect(pin).toMatchObject({ value: '0', source: 'user' });
+      expect(Bun.env['LUNA_PROACTIVE']).toBe('0');
+
+      const rejected = await new Promise<unknown[]>((resolve) => {
+        const ws = new WebSocket(url);
+        const seen: unknown[] = [];
+        setTimeout(() => {
+          ws.close();
+          resolve(seen);
+        }, 250);
+        ws.addEventListener('open', () =>
+          ws.send(JSON.stringify({ type: 'settings.set', key: 'selfcont.probability', value: '9' })),
+        );
+        ws.addEventListener('message', (e) => {
+          seen.push(JSON.parse(typeof e.data === 'string' ? e.data : 'null'));
+        });
+      });
+      const types = rejected.map((f) => (f as { type: string }).type);
+      expect(types).toContain('error');
+      // greeting state + heal state after the rejection
+      expect(types.filter((t) => t === 'settings.state').length).toBeGreaterThanOrEqual(2);
+      const err = rejected.find((f) => (f as { type: string }).type === 'error') as {
+        code: string;
+      };
+      expect(err.code).toBe('settings_invalid');
+    } finally {
+      setSetting('proactive.enabled', null);
+      if (prev === undefined) delete Bun.env['LUNA_PROACTIVE'];
+      else Bun.env['LUNA_PROACTIVE'] = prev;
+      const scratch = new Database(':memory:', { strict: true });
+      migrate(scratch, join(import.meta.dir, 'migrations'));
+      initSettings(scratch);
+    }
   });
 });

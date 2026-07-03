@@ -9,6 +9,7 @@ import { CuteBubbleView } from './ui/cuteBubbleView';
 import { SpeechStackView } from './ui/speechStackView';
 import { RouterBubbleView } from './ui/routerBubbleView';
 import { buildLayout } from './ui/layout';
+import { renderServerSettings } from './ui/settingsView';
 import { startTimestampRefresh } from './ui/time';
 import { moodOf } from './ui/mood';
 import { createPixiLive2DSink } from './live2d/pixiLive2DSink';
@@ -98,7 +99,17 @@ async function boot(): Promise<void> {
     stop: () => audio.stop(),
   };
 
-  const controller = createController({ view, live2d, audio: speechGatedAudio });
+  const controller = createController({
+    view,
+    live2d,
+    audio: speechGatedAudio,
+    // `client` is declared below; settings.state only arrives over the socket, so this
+    // closure never runs before the client exists.
+    onSettings: (settings) =>
+      renderServerSettings(refs.serverSettings, settings, (key, value) =>
+        client.send({ type: 'settings.set', key, value }),
+      ),
+  });
 
   let dreaming = false;
   let dreamShownAt = 0;

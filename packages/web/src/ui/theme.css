@@ -239,6 +239,17 @@ body {
 .settings-panel.on { display: flex; }
 .settings-panel label { display: flex; align-items: center; justify-content: space-between; gap: 10px; cursor: pointer; }
 .settings-panel .hint { font-size: 11px; color: var(--muted); }
+/* v0.27.1: the server-driven section — grows with the registry, so it scrolls, the panel doesn't */
+.server-settings { display: flex; flex-direction: column; gap: 8px; max-height: 46vh; overflow-y: auto; margin-top: 2px; padding-top: 6px; border-top: 1px dashed rgba(90, 120, 160, 0.25); }
+.server-settings:empty { display: none; }
+.settings-section { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-top: 4px; }
+.setting-row span:first-child { display: flex; align-items: center; gap: 6px; }
+.setting-control { display: flex; align-items: center; gap: 6px; }
+.setting-input { width: 108px; font-size: 12px; padding: 3px 6px; border: 1px solid rgba(90, 120, 160, 0.35); border-radius: 8px; color: var(--ink); background: #fff; }
+.setting-input[type='number'] { width: 64px; }
+.setting-badge { font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; color: #b0802a; background: #fdf3dd; border-radius: 6px; padding: 1px 5px; }
+.setting-reset { border: none; background: none; cursor: pointer; color: var(--muted); font-size: 13px; padding: 0 2px; }
+.setting-reset:hover { color: var(--ink); }
 
 @media (prefers-reduced-motion: reduce) {
   .model-placeholder, .dream-overlay .moon, .dream-stars span, .thinking i, .card.proactive { animation: none; }

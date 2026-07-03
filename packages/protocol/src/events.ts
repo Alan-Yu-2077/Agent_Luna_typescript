@@ -49,6 +49,17 @@ export const ClientGeoEvent = z.object({
   lon: z.number().min(-180).max(180),
 });
 
+// Operator settings (v0.27.1): the settings panel edits a server-side whitelist of env-backed
+// switches. Values ride the wire in env-string form ('1'/'0' for booleans) — the registry on the
+// server is the single authority for kind/validation/labels; the web renders what it's told.
+// value:null = reset (clear the user pin, fall back to env/default). Secrets are never on this
+// surface — keys stay in .env / luna.env.
+export const SettingsSetEvent = z.object({
+  type: z.literal('settings.set'),
+  key: z.string().min(1).max(64),
+  value: z.string().max(256).nullable(),
+});
+
 export const ClientEvent = z.discriminatedUnion('type', [
   PingEvent,
   DevDispatchToolEvent,
@@ -57,6 +68,7 @@ export const ClientEvent = z.discriminatedUnion('type', [
   DreamWakeEvent,
   ProactiveFireEvent,
   ClientGeoEvent,
+  SettingsSetEvent,
 ]);
 export type ClientEvent = z.infer<typeof ClientEvent>;
 
@@ -187,9 +199,38 @@ export const HistoryEvent = z.object({
   turns: z.array(HistoryTurn),
 });
 
+// The server-driven settings panel (v0.27.1): pushed once on connect and re-broadcast after every
+// accepted settings.set, so all clients converge without a request event. `source` says where the
+// effective value comes from — 'user' (panel-pinned, resettable), 'env' (.env/luna.env), 'default'.
+export const SettingKind = z.enum(['boolean', 'number', 'text']);
+export type SettingKind = z.infer<typeof SettingKind>;
+
+export const SettingSource = z.enum(['user', 'env', 'default']);
+export type SettingSource = z.infer<typeof SettingSource>;
+
+export const Setting = z.object({
+  key: z.string(),
+  label: z.string(),
+  hint: z.string(),
+  category: z.string(),
+  kind: SettingKind,
+  value: z.string(),
+  source: SettingSource,
+  restart_required: z.boolean(),
+  min: z.number().optional(),
+  max: z.number().optional(),
+});
+export type Setting = z.infer<typeof Setting>;
+
+export const SettingsStateEvent = z.object({
+  type: z.literal('settings.state'),
+  settings: z.array(Setting),
+});
+
 export const ServerEvent = z.discriminatedUnion('type', [
   PongEvent,
   HistoryEvent,
+  SettingsStateEvent,
   ErrorEvent,
   ToolStartedEvent,
   ToolProgressEvent,

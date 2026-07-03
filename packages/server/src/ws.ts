@@ -16,6 +16,7 @@ import { proactiveEnabled } from './proactive/cadence';
 import { maybeFireProactive, withProactiveLock } from './proactive/fire';
 import { maybeScheduleContinuation } from './proactive/continuation';
 import { dreamStatus, isDreaming, wake } from './dream/dreamState';
+import { setSetting, settingsState } from './settings/store';
 import { runDreamCycle } from './dream/cycle';
 import type { DreamLLM } from './dream/llm';
 
@@ -96,6 +97,9 @@ export function handleOpen(ws: ServerWebSocket<WSData>): void {
     .filter((t) => t.user_text !== '' || t.assistant_text !== '')
     .slice(-300);
   if (turns.length > 0) outbound(ws, { type: 'history', turns });
+  // v0.27.1: the settings panel is server-driven — push the full state on connect (and after
+  // every accepted settings.set via broadcast); there is deliberately no settings.get event.
+  outbound(ws, { type: 'settings.state', settings: settingsState() });
   console.log(`[ws] open ${ws.remoteAddress} session=${ws.data.sessionId} history=${turns.length}`);
   maybeFireOnReconnect(ws.data.sessionId);
 }
@@ -348,6 +352,19 @@ export function handleMessage(
       ).catch((e) => {
         console.error('[ws] proactive.fire failed:', e);
       });
+      return;
+    }
+    case 'settings.set': {
+      // v0.27.1: the settings panel writes a whitelisted, validated switch. On success every
+      // client converges via broadcast; on rejection only the sender gets the error PLUS a
+      // fresh state so its optimistic control flips back.
+      const result = setSetting(event.key, event.value);
+      if (result.ok) {
+        broadcast({ type: 'settings.state', settings: settingsState() });
+      } else {
+        outbound(ws, { type: 'error', code: 'settings_invalid', message: result.error });
+        outbound(ws, { type: 'settings.state', settings: settingsState() });
+      }
       return;
     }
     default:
