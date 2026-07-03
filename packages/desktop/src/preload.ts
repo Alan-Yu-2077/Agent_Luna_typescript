@@ -13,3 +13,16 @@ contextBridge.exposeInMainWorld('lunaPet', {
     ipcRenderer.send('luna:set-pet-mode', on === true);
   },
 });
+
+// v0.28.0: the first-run setup bridge. The renderer collects base URL + key + model; the SHELL
+// tests + writes them to luna.env and restarts the sidecar. The key rides one direction only — the
+// verdict coming back carries {ok, error?}, never the key. Its presence also tells the renderer it
+// is inside the desktop shell (a plain browser has no lunaSetup).
+type SetupFields = { baseUrl: string; apiKey: string; model: string };
+type SetupVerdict = { ok: boolean; error?: string };
+contextBridge.exposeInMainWorld('lunaSetup', {
+  probe: (fields: SetupFields): Promise<SetupVerdict> =>
+    ipcRenderer.invoke('luna:onboarding-probe', fields),
+  submit: (fields: SetupFields): Promise<SetupVerdict> =>
+    ipcRenderer.invoke('luna:onboarding-submit', fields),
+});

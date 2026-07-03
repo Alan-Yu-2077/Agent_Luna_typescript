@@ -458,3 +458,33 @@ body.pet { background: none; }
 .luna-app.pet .status-badge {
   display: none;
 }
+
+/* v0.28.0: first-run setup screen (desktop shell, ?setup=1) */
+.luna-app.setup {
+  display: flex; align-items: center; justify-content: center; min-height: 100vh;
+  background: repeating-linear-gradient(90deg, #e4eef9 0, #e4eef9 16px, #f5f9fd 16px, #f5f9fd 32px);
+}
+.setup-card {
+  display: flex; flex-direction: column; gap: 12px; width: min(420px, 92vw);
+  background: #fff; border-radius: 18px; padding: 26px 28px; color: var(--ink);
+  box-shadow: 0 8px 30px rgba(90, 120, 160, 0.22);
+}
+.setup-title { font-size: 20px; font-weight: 700; color: var(--ink); }
+.setup-sub { font-size: 12px; color: var(--muted); margin-top: -6px; margin-bottom: 4px; }
+.setup-field { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--ink-soft); }
+.setup-field input {
+  font: inherit; font-size: 13px; color: var(--ink); padding: 9px 11px; border-radius: 10px;
+  border: 1px solid rgba(90, 120, 160, 0.3); outline: none; background: #fff;
+}
+.setup-field input:focus { border-color: #7fa8d8; }
+.setup-status { font-size: 12px; min-height: 16px; }
+.setup-status[data-kind='error'] { color: #c9556b; }
+.setup-status[data-kind='ok'] { color: #4a9b6e; }
+.setup-status[data-kind='info'] { color: var(--muted); }
+.setup-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 6px; }
+.setup-btn {
+  font: inherit; font-size: 13px; font-weight: 600; padding: 9px 18px; border-radius: 11px;
+  border: none; cursor: pointer; background: #7fa8d8; color: #fff;
+}
+.setup-btn.ghost { background: #eef3f9; color: var(--ink-soft); }
+.setup-btn:disabled { opacity: 0.55; cursor: default; }

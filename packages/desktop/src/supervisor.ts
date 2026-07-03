@@ -26,6 +26,10 @@ export type SupervisorOpts = {
 export type Supervisor = {
   start(): void;
   stop(): void; // kill the child + disarm restarts (the quit path)
+  // v0.28.0: re-spawn against a fresh env (onboarding wrote new keys). Kills the current child,
+  // re-arms the crash-restart budget, and starts with the new env — so applying keys needs no
+  // full app relaunch. A no-op if already stopped.
+  restart(env: Record<string, string>): void;
   running(): boolean;
 };
 
@@ -40,12 +44,17 @@ export function createSupervisor(opts: SupervisorOpts): Supervisor {
   let child: SpawnedChild | null = null;
   let restarts = 0;
   let stopped = false;
+  let currentEnv = opts.env; // mutable so restart() can re-spawn against a fresh env (v0.28.0)
 
   const start = (): void => {
     if (stopped || child) return;
-    child = doSpawn(opts.command, opts.args ?? [], opts.env);
+    const c = doSpawn(opts.command, opts.args ?? [], currentEnv);
+    child = c;
     opts.onEvent?.('started');
-    child.on('exit', () => {
+    c.on('exit', () => {
+      // A restart kills the old child then spawns a new one; the OLD child's (async) exit must not
+      // wipe the new `child` or trigger an auto-restart. Identity-guard: only the current child acts.
+      if (child !== c) return;
       child = null;
       if (stopped) return;
       opts.onEvent?.('exited');
@@ -65,6 +74,15 @@ export function createSupervisor(opts: SupervisorOpts): Supervisor {
       stopped = true;
       child?.kill();
       child = null;
+    },
+    restart(env: Record<string, string>) {
+      currentEnv = env;
+      restarts = 0; // fresh crash budget for the new child
+      stopped = false; // re-arm (covers the first-run case where the sidecar was never started)
+      const old = child;
+      child = null; // detach first: `old`'s exit handler sees child !== old → no-op
+      old?.kill();
+      start();
     },
     running: () => child !== null,
   };

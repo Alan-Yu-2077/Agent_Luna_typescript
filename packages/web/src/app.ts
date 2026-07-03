@@ -10,6 +10,7 @@ import { SpeechStackView } from './ui/speechStackView';
 import { RouterBubbleView } from './ui/routerBubbleView';
 import { buildLayout } from './ui/layout';
 import { renderServerSettings } from './ui/settingsView';
+import { mountSetupView } from './ui/setupView';
 import { startTimestampRefresh } from './ui/time';
 import { moodOf } from './ui/mood';
 import { createPixiLive2DSink } from './live2d/pixiLive2DSink';
@@ -31,6 +32,12 @@ const DREAM_MIN_MS = 1500;
 async function boot(): Promise<void> {
   const root = document.getElementById('app');
   if (!root) return;
+  // v0.28.0: first-run setup screen (desktop shell loads ?setup=1). Mount the form and stop — no
+  // WS, no Live2D, no boot gate until the shell has keys and swaps this window for the app.
+  if (new URLSearchParams(location.search).has('setup')) {
+    mountSetupView(root);
+    return;
+  }
   // v0.25.2 review fix: the class also honors OS-level prefers-reduced-motion (CSS @media overrides
   // already did; JS consumers of the class must see the same truth).
   if (

@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { defaultDistDir, startWebHost, WEB_PORT } from './serve';
 import { ENV_TEMPLATE, parseEnvFile } from './envfile';
 import { readShellSettings, writeShellSettings } from './shellSettings';
+import { classifyProbe, mergeEnvFile, needsOnboarding, type ProbeVerdict } from './onboarding';
 import { createSupervisor, waitForPort, type Supervisor } from './supervisor';
 
 // v0.26.1 (Initiative 19): the single-machine app. The shell OWNS the whole runtime: it reads the
@@ -50,20 +51,12 @@ function resolvePaths(): Paths {
   };
 }
 
-// First run: write the key template and point the user at it. The app still boots (yumi renders);
-// turns fail until the keys are filled — no secret ever ships in the bundle.
+// First run: write the key template so luna.env documents every field for power users. v0.28.0:
+// the blocking "go edit a file, then restart" dialog is gone — the setup screen (below) collects
+// the keys instead. The app still boots either way; no secret ever ships in the bundle.
 function ensureUserConfig(p: Paths): Record<string, string> {
   mkdirSync(p.userData, { recursive: true });
-  if (!existsSync(p.envFile)) {
-    writeFileSync(p.envFile, ENV_TEMPLATE);
-    if (!SMOKE) {
-      dialog.showMessageBoxSync({
-        type: 'info',
-        message: 'Welcome to Luna',
-        detail: `First run: fill in your API keys, then restart Luna.\n\n${p.envFile}`,
-      });
-    }
-  }
+  if (!existsSync(p.envFile)) writeFileSync(p.envFile, ENV_TEMPLATE);
   return parseEnvFile(readFileSync(p.envFile, 'utf8'));
 }
 
@@ -90,13 +83,16 @@ function sidecarEnv(p: Paths, userEnv: Record<string, string>): Record<string, s
 let supervisor: Supervisor | null = null;
 let paths: Paths | null = null;
 
-function createWindow(): BrowserWindow {
+function createWindow(mode: 'app' | 'setup' = 'app'): BrowserWindow {
+  // The setup screen is always a normal window (a transparent/frameless pet window makes no sense
+  // for a form) — pet framing only applies to the actual app.
+  const usePet = petMode && mode !== 'setup';
   const win = new BrowserWindow({
-    width: petMode ? 560 : 1280,
-    height: petMode ? 900 : 860,
+    width: usePet ? 560 : 1280,
+    height: usePet ? 900 : 860,
     show: !SMOKE,
     // Pet mode: she floats over the desktop — transparent, frameless, shadowless, always on top.
-    ...(petMode ? { transparent: true, frame: false, hasShadow: false, alwaysOnTop: true } : {}),
+    ...(usePet ? { transparent: true, frame: false, hasShadow: false, alwaysOnTop: true } : {}),
     webPreferences: {
       // NOT join(__dirname, ...): bun inlines __dirname as the SOURCE dir (packages/desktop/src)
       // at compile time, but preload.cjs ships in dist/ (and in app.asar/dist/ when packaged) — so
@@ -115,13 +111,17 @@ function createWindow(): BrowserWindow {
   win.webContents.on('preload-error', (_e, path, error) => {
     console.error(`[luna-desktop] PRELOAD ERROR at ${path}: ${error.message}`);
   });
-  if (petMode) {
+  if (usePet) {
     win.setAlwaysOnTop(true, 'floating');
     // Start pass-through; the renderer's hit-test (petHitTest.ts) opts the window back in whenever
     // the cursor is over her body / the bar. forward:true keeps mousemove flowing while ignoring.
     win.setIgnoreMouseEvents(true, { forward: true });
   }
-  void win.loadURL(`http://127.0.0.1:${WEB_PORT}/?ws=${SERVER_PORT}${petMode ? '&pet=1' : ''}`);
+  const url =
+    mode === 'setup'
+      ? `http://127.0.0.1:${WEB_PORT}/?setup=1`
+      : `http://127.0.0.1:${WEB_PORT}/?ws=${SERVER_PORT}${usePet ? '&pet=1' : ''}`;
+  void win.loadURL(url);
   return win;
 }
 
@@ -142,6 +142,59 @@ ipcMain.on('luna:set-pet-mode', (_event, on: unknown) => {
   for (const w of BrowserWindow.getAllWindows()) {
     if (w !== fresh) w.close();
   }
+});
+
+// v0.28.0: the first-run setup screen. The renderer collects base URL + key + model and the SHELL
+// (not the renderer, not the sidecar) tests + writes them — the key rides one IPC direction and is
+// never returned. The probe is a minimal authenticated request to the Anthropic-protocol endpoint
+// (the Claude happy path); classifyProbe turns the outcome into a user-facing verdict.
+async function probeConnection(baseUrl: string, apiKey: string, model: string): Promise<ProbeVerdict> {
+  const url = `${baseUrl.replace(/\/+$/, '')}/v1/messages`;
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({ model, max_tokens: 1, messages: [{ role: 'user', content: 'hi' }] }),
+    });
+    return classifyProbe(res.status);
+  } catch {
+    return classifyProbe(null); // DNS / connect failure → bad URL
+  }
+}
+
+type OnboardingFields = { baseUrl?: unknown; apiKey?: unknown; model?: unknown };
+const asStr = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
+
+ipcMain.handle('luna:onboarding-probe', async (_event, raw: OnboardingFields) => {
+  return probeConnection(asStr(raw?.baseUrl), asStr(raw?.apiKey), asStr(raw?.model));
+});
+
+ipcMain.handle('luna:onboarding-submit', async (_event, raw: OnboardingFields): Promise<ProbeVerdict> => {
+  if (!paths) return { ok: false, error: 'Not ready — try again in a moment.' };
+  const baseUrl = asStr(raw?.baseUrl);
+  const apiKey = asStr(raw?.apiKey);
+  const model = asStr(raw?.model);
+  // Test first — a bad key never gets persisted.
+  const verdict = await probeConnection(baseUrl, apiKey, model);
+  if (!verdict.ok) return verdict;
+  const merged = mergeEnvFile(readFileSync(paths.envFile, 'utf8'), {
+    ANTHROPIC_BASE_URL: baseUrl,
+    ANTHROPIC_API_KEY: apiKey,
+    LUNA_MODEL: model,
+  });
+  writeFileSync(paths.envFile, merged);
+  // Apply the keys live: re-spawn the sidecar against the new env (it may never have started).
+  supervisor?.restart(sidecarEnv(paths, parseEnvFile(merged)));
+  const up = await waitForPort(SERVER_PORT);
+  if (!up) return { ok: false, error: 'Saved, but the server did not start. Check the logs.' };
+  // Swap the setup window for the real app window (createWindow reads the resolved petMode).
+  const fresh = createWindow('app');
+  for (const w of BrowserWindow.getAllWindows()) if (w !== fresh) w.close();
+  return { ok: true };
 });
 
 async function smokeProbe(win: BrowserWindow): Promise<void> {
@@ -207,6 +260,20 @@ void app.whenReady().then(async () => {
     env: sidecarEnv(p, userEnv),
     onEvent: (e) => console.log(`[luna-desktop] sidecar: ${e}`),
   });
+
+  // v0.28.0: first run with no real key → show the setup screen instead of the app, and DON'T spawn
+  // the sidecar yet (the submit handler starts it once real keys land). SMOKE + LUNA_SKIP_ONBOARDING
+  // bypass the gate (the smoke's placeholder key must reach the app, not the form).
+  const onboard =
+    needsOnboarding(userEnv) && !SMOKE && process.env['LUNA_SKIP_ONBOARDING'] !== '1';
+  if (onboard) {
+    createWindow('setup');
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) createWindow('setup');
+    });
+    return;
+  }
+
   supervisor.start();
   const up = await waitForPort(SERVER_PORT);
   if (!up && !SMOKE) {
