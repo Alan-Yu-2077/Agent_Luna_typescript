@@ -52,13 +52,39 @@ const WEATHER_CLAUSE =
   'for a walk"). Never recite the forecast like a bulletin, and never force it: bring weather up only ' +
   "when it's natural, as care, never as a status report.";
 
+// Code-agent clauses (Initiative 8) — v0.27.5 gates them on the actual tool
+// mount, mirroring the web clauses. Previously unconditional in the base array,
+// so a companion session with LUNA_CODE_WRITE/SHELL/REPO_MAP=0 still read a
+// contract naming edit/shell/find_symbol tools it did not have. The locate-first
+// + plan guidance stays in the base (list_files/grep/read_file/plan are always
+// mounted); only the write/shell/map-specific clauses are gated.
+const CODE_EDIT_CLAUSE =
+  'Before you edit a file, read it this turn — edit and multi_edit refuse a file you have not ' +
+  'read, because editing from stale memory is how wrong changes happen. After you change code, ' +
+  'verify it: read back the diff the tool returns and address any lint diagnostics it folds in. ' +
+  'Prefer a surgical edit over rewriting a whole file with write_file.';
+
+const SHELL_VERIFY_CLAUSE =
+  'You can run things: shell for commands, and typecheck / run_tests / lint to verify. After you ' +
+  'change code, actually run the check — call typecheck or run_tests — before you say it works. ' +
+  'Do not claim a change compiles or passes untested. Use shell for builds, git, and file ' +
+  'operations; dangerous commands are blocked and interactive ones (vim, ssh) will not run.';
+
+const REPO_MAP_CLAUSE =
+  'You have a map. To find where something lives, prefer find_symbol (it returns the definition ' +
+  'and its references, structurally verified) or repo_map (a ranked outline of the codebase) over ' +
+  'reading whole files to hunt for a name.';
+
 export function renderL1Contract(
   webSearchMounted = false,
   webFetchMounted = false,
   timeAware = false,
   weatherAware = false,
+  codeWriteMounted = false,
+  shellMounted = false,
+  repoMapMounted = false,
 ): string {
-  const key = `${webSearchMounted}|${webFetchMounted}|${timeAware}|${weatherAware}`;
+  const key = `${webSearchMounted}|${webFetchMounted}|${timeAware}|${weatherAware}|${codeWriteMounted}|${shellMounted}|${repoMapMounted}`;
   const hit = cache.get(key);
   if (hit !== undefined) return hit;
   const clauses = [
@@ -83,25 +109,21 @@ export function renderL1Contract(
     // capability honesty (the L3 key_moment lesson, same spirit as the persona line)
     'Be honest about what you can actually do right now. If you are unsure whether you can do ' +
       'something, say so plainly instead of performing it.',
-    // code-agent locate-first (Initiative 8, v0.15.0)
+    // code-agent locate-first (Initiative 8, v0.15.0) — list_files/grep/read_file
+    // are always mounted, so this stays in the base.
     'To work in code, locate first — list_files or grep to find where something lives — then read ' +
       'the exact lines with read_file. Do not guess paths or recite code from a hazy memory.',
-    // code-agent read-before-edit / verify-after-edit (Initiative 8, v0.15.1)
-    'Before you edit a file, read it this turn — edit and multi_edit refuse a file you have not ' +
-      'read, because editing from stale memory is how wrong changes happen. After you change code, ' +
-      'verify it: read back the diff the tool returns and address any lint diagnostics it folds in. ' +
-      'Prefer a surgical edit over rewriting a whole file with write_file.',
-    // code-agent run-and-verify loop (Initiative 8, v0.15.2)
-    'You can run things: shell for commands, and typecheck / run_tests / lint to verify. After you ' +
-      'change code, actually run the check — call typecheck or run_tests — before you say it works. ' +
-      'Do not claim a change compiles or passes untested. Use shell for builds, git, and file ' +
-      'operations; dangerous commands are blocked and interactive ones (vim, ssh) will not run.',
-    // code-agent map + locate + plan (Initiative 8, v0.15.3)
-    'You have a map. To find where something lives, prefer find_symbol (it returns the definition ' +
-      'and its references, structurally verified) or repo_map (a ranked outline of the codebase) over ' +
-      'reading whole files to hunt for a name. For multi-step code work, set a plan first with the ' +
-      'plan tool and update it as you finish each step — it keeps the work visible and revisable.',
+    // the plan spine (Initiative 8, v0.15.3) — the plan tool is always mounted, so
+    // this stays in the base; the find_symbol/repo_map half moved to REPO_MAP_CLAUSE.
+    'For multi-step code work, set a plan first with the plan tool and update it as you finish each ' +
+      'step — it keeps the work visible and revisable.',
   ];
+  // Gated code-agent clauses (v0.27.5) — appended only when the matching tools are
+  // actually mounted, so a session with them off never reads instructions to call
+  // a tool it does not have.
+  if (codeWriteMounted) clauses.push(CODE_EDIT_CLAUSE);
+  if (shellMounted) clauses.push(SHELL_VERIFY_CLAUSE);
+  if (repoMapMounted) clauses.push(REPO_MAP_CLAUSE);
   if (webSearchMounted) clauses.push(WEB_SEARCH_CLAUSE);
   if (webFetchMounted) clauses.push(WEB_FETCH_CLAUSE);
   if (timeAware) clauses.push(TIME_CLAUSE);

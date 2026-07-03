@@ -71,6 +71,9 @@ describe('persona loader (mtime cache)', () => {
     const p = loadPersona();
     expect(p.text).toContain('newly awakened');
     expect(p.text.length).toBeGreaterThan(0);
+    // v0.27.5: the fallback still carries the non-negotiable anti-assistant guardrails
+    expect(p.text).toContain('therapist');
+    expect(p.text).toContain('assistant politeness');
   });
 });
 

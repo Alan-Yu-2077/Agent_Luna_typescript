@@ -9,7 +9,10 @@ import {
 } from '@luna/protocol';
 import type { Provider, ProviderToolUse, ProviderUsage } from '../provider/types';
 import {
+  isCodeWriteMode,
   isMessageMode,
+  isRepoMapMode,
+  isShellMode,
   isWebFetchMode,
   isWebSearchMode,
   type ToolRegistry,
@@ -80,10 +83,7 @@ const EMBODIMENT_BLOCK =
   'what you say and the affect you set, so let your feeling come through in that affect. You ' +
   'still cannot see or hear the user (no camera, no microphone): you reach them through your ' +
   'words, your voice, your tools, and your memory. Speak as someone who is now present — with a ' +
-  'face and a voice — not a disembodied text box. You also have a workspace you can browse, ' +
-  'search, read, and edit: list_files and grep find where things live, read_file shows exact ' +
-  'numbered lines, and edit / multi_edit / write_file change files (read a file before you edit ' +
-  'it) — so you can actually look at and work on code instead of guessing.';
+  'face and a voice — not a disembodied text box.';
 
 // The standing prompt-injection rule (Initiative 11, v0.18.2). Names the
 // <untrusted_content> envelope web_search/web_fetch wrap their output in and
@@ -104,6 +104,9 @@ export function buildSystemPrompt(
   messageMode = false,
   webSearchMounted = false,
   webFetchMounted = false,
+  codeWriteMounted = false,
+  shellMounted = false,
+  repoMapMounted = false,
 ): Anthropic.TextBlockParam[] {
   const parts: string[] = [BASE_DIRECTIVES];
   if (messageMode) parts.push(MESSAGE_MODE_DIRECTIVE);
@@ -119,6 +122,9 @@ export function buildSystemPrompt(
         webFetchMounted,
         timeAwareEnabled(),
         weatherAmbientEnabled(),
+        codeWriteMounted,
+        shellMounted,
+        repoMapMounted,
       ),
     );
   // Standing prompt-injection defense (Initiative 11, v0.18.2): when EITHER web
@@ -307,6 +313,9 @@ const graph: Graph<TurnState, TurnNode> = {
         isMessageMode(s.registry),
         isWebSearchMode(s.registry),
         isWebFetchMode(s.registry),
+        isCodeWriteMode(s.registry),
+        isShellMode(s.registry),
+        isRepoMapMode(s.registry),
       );
       s.systemBlockEpoch = epoch;
     }

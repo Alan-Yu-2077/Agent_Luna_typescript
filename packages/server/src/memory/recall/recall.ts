@@ -240,13 +240,30 @@ export async function retrieve(
 // is presentation only. Flag off → byte-identical to before.
 export function renderRecallBlock(hits: Hit[], nowMs = Date.now()): string | null {
   if (hits.length === 0) return null;
-  const clip = (t: string): string => t.replace(/\n+/g, ' / ').slice(0, 300);
+  // v0.27.5: neutralize any literal <memory>/</memory> in stored text so a
+  // retrieved line can't close the fence early (then the rest of the block +
+  // the user message would read as un-fenced top-level content). Collapse
+  // newlines, then clip.
+  const clip = (t: string): string =>
+    t
+      .replace(/\n+/g, ' / ')
+      .replace(/<\/?memory\s*>/gi, (m) => m.replace(/[<>]/g, ''))
+      .slice(0, 300);
+  // v0.27.5: a shared "you were handed this, you didn't recall it" framing —
+  // honors the persona's told-vs-remembered seam (default.md Memory Condition),
+  // so injected memory isn't presented as firsthand recollection.
+  const LEAD =
+    'From your memory — surfaced by the system from past conversations and notes; ' +
+    'real context, but you were handed it, not recalling it fresh';
   // Default ON since v0.19.2; LUNA_RECALL_TIME_LABELS=0 opts out.
   if (Bun.env['LUNA_RECALL_TIME_LABELS'] === '0') {
     const lines = hits.map((h) => `- ${clip(h.text)}`);
-    return `<memory>\nThings you might be remembering right now (from past conversations and notes):\n${lines.join('\n')}\n</memory>`;
+    return `<memory>\n${LEAD}:\n${lines.join('\n')}\n</memory>`;
   }
   const ordered = [...hits].sort((a, b) => a.t_ms - b.t_ms); // oldest → newest for display
   const lines = ordered.map((h) => `- [${relativeLabel(h.t_ms, nowMs)}] ${clip(h.text)}`);
-  return `<memory>\nThings you might be recalling (each tagged with when it happened — trust these, don't recompute):\n${lines.join('\n')}\n</memory>`;
+  // The trust clause is scoped to the [bracket] TIME LABEL (TS-computed), not the
+  // recalled content — she should still correct a past error, just not recompute
+  // the timing.
+  return `<memory>\n${LEAD}. Each [bracket] tag is when it happened — trust the timing, don't recompute it:\n${lines.join('\n')}\n</memory>`;
 }

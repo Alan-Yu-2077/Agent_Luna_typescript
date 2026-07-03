@@ -232,6 +232,22 @@ export function withWeather(base: ToolRegistry): ToolRegistry {
   return weatherEnabled() ? { ...base, ...weatherTools } : { ...base };
 }
 
+// Registry-derived mount checks (mirror isWebSearchMode): the L1 code-agent
+// clauses key off whether the code-write / shell / repo-map tools are actually
+// mounted, never an env read — so a session that turned them off never reads a
+// contract telling it to call a tool that isn't there (v0.27.5).
+export function isCodeWriteMode(registry: ToolRegistry): boolean {
+  return registry.edit !== undefined;
+}
+
+export function isShellMode(registry: ToolRegistry): boolean {
+  return registry.shell !== undefined;
+}
+
+export function isRepoMapMode(registry: ToolRegistry): boolean {
+  return registry.repo_map !== undefined;
+}
+
 // The LD #9 everything-as-tool surface. Mode selection happens once at boot
 // (main.ts reads LUNA_MESSAGE_TOOL); everywhere else derives the mode from
 // the registry itself — single source of truth, no env reads in the turn loop.

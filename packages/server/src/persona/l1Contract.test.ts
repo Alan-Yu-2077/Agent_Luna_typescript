@@ -31,11 +31,32 @@ describe('renderL1Contract', () => {
     expect(c).toContain('honest about what you can actually do'); // capability honesty
   });
 
-  test('states the v0.15.3 map/locate/plan clause', () => {
-    const c = renderL1Contract();
-    expect(c).toContain('find_symbol');
-    expect(c).toContain('repo_map');
-    expect(c).toContain('set a plan first');
+  test('base keeps locate-first + plan; the map clause is gated on repo_map mount (v0.27.5)', () => {
+    const base = renderL1Contract();
+    expect(base).toContain('locate first'); // list_files/grep/read_file always mounted
+    expect(base).toContain('set a plan first'); // plan always mounted
+    expect(base).not.toContain('find_symbol'); // gated off with no repo_map
+    expect(base).not.toContain('repo_map');
+    const withMap = renderL1Contract(false, false, false, false, false, false, true);
+    expect(withMap).toContain('find_symbol');
+    expect(withMap).toContain('repo_map');
+  });
+
+  test('code-write + shell clauses are gated on their own mounts (v0.27.5)', () => {
+    const off = renderL1Contract();
+    expect(off).not.toContain('edit and multi_edit refuse'); // read-before-edit clause
+    expect(off).not.toContain('typecheck or run_tests'); // run-and-verify clause
+
+    const codeWrite = renderL1Contract(false, false, false, false, true, false, false);
+    expect(codeWrite).toContain('edit and multi_edit refuse');
+    expect(codeWrite).not.toContain('typecheck or run_tests'); // shell still off
+
+    const shell = renderL1Contract(false, false, false, false, false, true, false);
+    expect(shell).toContain('typecheck or run_tests');
+    expect(shell).not.toContain('edit and multi_edit refuse'); // code-write still off
+
+    // per-variant byte-stable (cache invariant)
+    expect(renderL1Contract(false, false, false, false, true, false, false)).toBe(codeWrite);
   });
 
   test('web clause is gated on web_search being mounted (v0.18.0)', () => {
