@@ -1,0 +1,3 @@
+
+# bun build scratch files
+*.bun-build
