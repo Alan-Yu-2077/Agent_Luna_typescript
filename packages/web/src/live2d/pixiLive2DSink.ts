@@ -3,6 +3,7 @@ import { createLive2DRuntime, webglAvailable, type Live2DRuntime } from './cubis
 import { ModelDriver, type Live2DModelLike } from './modelDriver';
 import { FaceVm } from './faceVm';
 import { createGlide } from './glide';
+import { petFraming } from './petFraming';
 import { DEFAULT_IDLE_PROFILE, IDLE_PROFILE_IDS, type IdleProfileId } from './faceData';
 
 // The real Live2DSink: loads yumi via pixi-live2d-display, drives her through a
@@ -84,8 +85,12 @@ function clampOffset(v: number, max: number): number {
 
 export async function createPixiLive2DSink(
   host: HTMLElement,
-  modelUrl = '/models/yumi/yumi.model3.json',
+  opts: { pet?: boolean; modelUrl?: string } = {},
 ): Promise<Live2DSink | null> {
+  const modelUrl = opts.modelUrl ?? '/models/yumi/yumi.model3.json';
+  // v0.28.1: pet mode fixes the model as a half-body portrait — no drag, no scroll-zoom (v0.28.2
+  // hands move/resize to the WINDOW instead). Windowed mode keeps full-body + drag + zoom.
+  const pet = opts.pet === true;
   if (!webglAvailable()) return null;
 
   let runtime: Live2DRuntime;
@@ -115,6 +120,15 @@ export async function createPixiLive2DSink(
     const hostH = host.clientHeight || 600;
     const hostW = host.clientWidth || 400;
     model.scale.set(1); // measure natural size first
+    if (pet) {
+      // Fixed half-body portrait, derived from the LIVE host dims so it re-fits on window resize
+      // (v0.28.2). No persisted drag/zoom — the model is inert in pet mode.
+      const f = petFraming(hostW, hostH, model.width, model.height);
+      model.scale.set(f.scale);
+      driver.setBase(f.baseX, f.baseY);
+      driver.setPositionOffset(0, 0);
+      return;
+    }
     const baseScale = (hostH * 0.92) / model.height;
     model.scale.set(baseScale * zoom);
     driver.setBase((hostW - model.width) / 2, (hostH - model.height) / 2);
@@ -220,9 +234,12 @@ export async function createPixiLive2DSink(
 
   // WHY as unknown as: app.view is pixi's ICanvas union; we drive it as a DOM canvas.
   const canvas = app.view as unknown as HTMLCanvasElement;
-  canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;touch-action:none;cursor:grab;';
+  // pet: the model is inert (window-drag takes over in v0.28.2) → no grab cursor.
+  const cursor = pet ? 'default' : 'grab';
+  canvas.style.cssText = `position:absolute;inset:0;width:100%;height:100%;touch-action:none;cursor:${cursor};`;
   let drag: { id: number; x: number; y: number } | null = null;
   canvas.addEventListener('pointerdown', (e) => {
+    if (pet) return; // pet mode: no model drag
     drag = { id: e.pointerId, x: e.clientX, y: e.clientY };
     try {
       canvas.setPointerCapture(e.pointerId);
@@ -276,10 +293,12 @@ export async function createPixiLive2DSink(
     );
   });
 
-  // Wheel = zoom (persisted multiplier on the fit scale, clamped).
+  // Wheel = zoom (persisted multiplier on the fit scale, clamped). Disabled in pet mode — the
+  // portrait is fixed; v0.28.2 scales the whole pet by resizing the WINDOW.
   canvas.addEventListener(
     'wheel',
     (e) => {
+      if (pet) return;
       e.preventDefault();
       zoom = clampZoom(zoom * (e.deltaY > 0 ? 0.92 : 1.08));
       saveZoom(zoom);
@@ -287,8 +306,9 @@ export async function createPixiLive2DSink(
     },
     { passive: false },
   );
-  // Double-click recenters AND resets zoom.
+  // Double-click recenters AND resets zoom (windowed only).
   canvas.addEventListener('dblclick', () => {
+    if (pet) return;
     off.dx = 0;
     off.dy = 0;
     zoom = 1;

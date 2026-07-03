@@ -75,9 +75,13 @@ async function boot(): Promise<void> {
     });
   }
 
+  // v0.28.1: pet mode fixes the model as a half-body portrait (no drag/zoom) — the sink needs to
+  // know at creation time. Computed once here; the pet-interaction block below reuses it.
+  const isPet = new URLSearchParams(location.search).has('pet');
+
   let live2d: Live2DSink = consoleLive2DSink;
   if (localStorage.getItem('luna:live2d') !== '0') {
-    const sink = await createPixiLive2DSink(refs.modelStage);
+    const sink = await createPixiLive2DSink(refs.modelStage, { pet: isPet });
     if (sink) {
       live2d = sink;
       refs.modelStage.querySelector('.model-placeholder')?.remove();
@@ -224,7 +228,6 @@ async function boot(): Promise<void> {
   const bridge = (
     globalThis as { lunaPet?: { setIgnore(ignore: boolean): void; setPetMode?(on: boolean): void } }
   ).lunaPet;
-  const isPet = new URLSearchParams(location.search).has('pet');
   if (isPet) {
     document.body.classList.add('pet');
     root.classList.add('pet');
