@@ -831,7 +831,12 @@ export async function runTurn(opts: RunTurnOptions): Promise<TurnState> {
         appendL2({
           sessionId: opts.session.id,
           turnId: opts.turnId,
-          userText: opts.userText,
+          // Proactive turns have NO real user message — `opts.userText` is the internal stage
+          // direction (the "[System proactive trigger …]" priming prompt). Persisting it as
+          // user_text rendered it as a phantom user bubble in the chat log (the HistoryEvent
+          // contract is "a proactive turn has empty user_text"). Store empty for proactive; the
+          // directive still lives in raw_json (rawContent) for context reconstruction.
+          userText: opts.proactiveTurn ? '' : opts.userText,
           // The canonical reply, NOT state.text. In message mode state.text holds a
           // stray top-level text leak (the model narrating OUTSIDE the message tool)
           // until finalize overwrites it with the message-tool text — but on an

@@ -136,4 +136,47 @@ describe('runTurn persistence resilience', () => {
     expect(rows[0]!.assistant_text).toBe('Good catch — that was today.'); // the message reply
     expect(rows[0]!.assistant_text).not.toContain('answer for user question'); // NOT the leak
   });
+
+  // Regression: a proactive turn's userText is the internal stage direction (the
+  // "[System proactive trigger …]" priming prompt), NOT a real user message. It must
+  // persist as EMPTY user_text or it renders as a phantom user bubble in the chat log.
+  test('proactive turn persists empty user_text, not the priming directive', async () => {
+    const session = getSession('r4');
+    const provider = new MockProvider([
+      [
+        {
+          kind: 'message_stop',
+          stopReason: 'tool_use',
+          toolUses: [
+            { id: 'p1', name: 'message', input: { text: 'Morning Alan — sun is out.', is_final: true } },
+          ],
+          assistantContent: [
+            {
+              type: 'tool_use',
+              id: 'p1',
+              name: 'message',
+              input: { text: 'Morning Alan — sun is out.', is_final: true },
+            },
+          ] as unknown as Anthropic.ContentBlock[],
+          usage: { input_tokens: 1, output_tokens: 1 },
+        },
+      ],
+    ]);
+
+    await runTurn({
+      session,
+      turnId: 'proactive:r4:1',
+      userText: '[System proactive trigger · this is NOT a user message · you are opening on your own]',
+      provider,
+      registry: messageRegistry,
+      emit: () => {},
+      proactiveTurn: true,
+    });
+
+    const rows = listL2('r4');
+    expect(rows.length).toBe(1);
+    expect(rows[0]!.assistant_text).toBe('Morning Alan — sun is out.');
+    expect(rows[0]!.user_text).toBe(''); // NOT the priming directive
+    expect(rows[0]!.user_text).not.toContain('System proactive trigger');
+  });
 });
