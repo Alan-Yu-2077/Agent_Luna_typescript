@@ -333,6 +333,28 @@ describe('dream cycle', () => {
     expect(auditCount()).toBe(audit1 + 1);
   });
 
+  test('5c. persona_update: the string "null"/"None" is coerced to no-change, not written (v0.27.4)', async () => {
+    seedDialogue('default', [['I trust you with this', 'that means a lot']]);
+    const BASE_SELF =
+      "I'm steadier than I was, and I've stopped performing cleverness — I just try to be present now.";
+    let personaText = JSON.stringify({ self_state: BASE_SELF, relationship_status: null });
+    const { llm } = scriptedLlm({ persona: () => personaText });
+    const auditCount = () =>
+      (db.prepare('SELECT COUNT(*) c FROM core_memory_audit').get() as { c: number }).c;
+
+    await runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
+    expect(getCore().self_state).toBe(BASE_SELF);
+    const audit1 = auditCount();
+
+    // a literal-minded model emits the STRING "null" (or "None") to mean unchanged;
+    // it must NOT overwrite the still-true self_state with the word "null".
+    personaText = JSON.stringify({ self_state: 'null', relationship_status: 'None' });
+    expect(wake().ok).toBe(true);
+    await runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
+    expect(getCore().self_state).toBe(BASE_SELF); // unchanged
+    expect(auditCount()).toBe(audit1); // no commit
+  });
+
   test('6. key cascade falls back; prompts carry no <<< delimiters', async () => {
     const primary = new MockProvider([]);
     primary.completeResponder = () => {

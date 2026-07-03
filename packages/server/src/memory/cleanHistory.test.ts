@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 import type Anthropic from '@anthropic-ai/sdk';
-import { collapseOldToolResults, stripThinking } from './cleanHistory';
+import {
+  collapseOldToolResults,
+  stripCorrectiveDirectives,
+  stripThinking,
+} from './cleanHistory';
 
 function asMsgs(m: unknown[]): Anthropic.MessageParam[] {
   return m as Anthropic.MessageParam[];
@@ -99,5 +103,87 @@ describe('collapseOldToolResults', () => {
     const before = JSON.stringify(msgs);
     collapseOldToolResults(msgs, 2);
     expect(JSON.stringify(msgs)).toBe(before);
+  });
+});
+
+describe('stripCorrectiveDirectives', () => {
+  const rolesOf = (m: Anthropic.MessageParam[]): string[] => m.map((x) => x.role);
+  const noConsecutiveSameRole = (m: Anthropic.MessageParam[]): boolean =>
+    m.every((x, i) => i === 0 || x.role !== m[i - 1]!.role);
+
+  test('removes the directive and coalesces the flanking assistant turns, preserving tool pairing', () => {
+    const dir: Anthropic.MessageParam = {
+      role: 'user',
+      content: [{ type: 'text', text: '(Stage direction: you said you would look something up…)' }],
+    };
+    const msgs = asMsgs([
+      { role: 'user', content: [{ type: 'text', text: 'q' }] }, // 0
+      { role: 'assistant', content: [{ type: 'text', text: 'let me check that' }] }, // 1 end_turn round
+      dir, // 2 corrective (to be stripped)
+      {
+        role: 'assistant',
+        content: [
+          { type: 'tool_use', id: 'tu1', name: 'recall', input: {} },
+          { type: 'text', text: 'found it' },
+        ],
+      }, // 3 retry round
+      { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'tu1', content: 'hit' }] }, // 4
+    ]);
+    stripCorrectiveDirectives(msgs, new Set([dir]));
+
+    expect(msgs.length).toBe(3);
+    expect(rolesOf(msgs)).toEqual(['user', 'assistant', 'user']);
+    expect(noConsecutiveSameRole(msgs)).toBe(true);
+    // no fabricated user directive survives
+    expect(JSON.stringify(msgs)).not.toContain('Stage direction');
+    // the two assistant turns merged in order, keeping the tool_use
+    const merged = msgs[1]!.content as Anthropic.ContentBlock[];
+    expect(merged.map((b) => b.type)).toEqual(['text', 'tool_use', 'text']);
+    // tool_use tu1 still precedes its tool_result tu1
+    const result = (msgs[2]!.content as unknown[])[0] as { tool_use_id: string };
+    expect(result.tool_use_id).toBe('tu1');
+  });
+
+  test('empty directive set is a no-op', () => {
+    const msgs = asMsgs([
+      { role: 'user', content: [{ type: 'text', text: 'q' }] },
+      { role: 'assistant', content: [{ type: 'text', text: 'a' }] },
+    ]);
+    const before = JSON.stringify(msgs);
+    stripCorrectiveDirectives(msgs, new Set());
+    expect(JSON.stringify(msgs)).toBe(before);
+  });
+
+  test('two directives across two corrections both go, coalescing all three assistants', () => {
+    const d1: Anthropic.MessageParam = { role: 'user', content: [{ type: 'text', text: 'DIR1' }] };
+    const d2: Anthropic.MessageParam = { role: 'user', content: [{ type: 'text', text: 'DIR2' }] };
+    const msgs = asMsgs([
+      { role: 'user', content: [{ type: 'text', text: 'q' }] },
+      { role: 'assistant', content: [{ type: 'text', text: 'A' }] },
+      d1,
+      { role: 'assistant', content: [{ type: 'text', text: 'B' }] },
+      d2,
+      { role: 'assistant', content: [{ type: 'text', text: 'C' }] },
+    ]);
+    stripCorrectiveDirectives(msgs, new Set([d1, d2]));
+
+    expect(rolesOf(msgs)).toEqual(['user', 'assistant']);
+    const merged = (msgs[1]!.content as Anthropic.ContentBlock[])
+      .map((b) => (b.type === 'text' ? b.text : ''))
+      .join('');
+    expect(merged).toBe('ABC');
+  });
+
+  test('only touches [from, end): a same-named directive object before `from` is left alone', () => {
+    const dir: Anthropic.MessageParam = { role: 'user', content: [{ type: 'text', text: 'DIR' }] };
+    const msgs = asMsgs([
+      dir, // 0 — before `from`, must survive
+      { role: 'assistant', content: [{ type: 'text', text: 'prev' }] },
+      { role: 'user', content: [{ type: 'text', text: 'q' }] },
+      { role: 'assistant', content: [{ type: 'text', text: 'a' }] },
+    ]);
+    stripCorrectiveDirectives(msgs, new Set([dir]), 2);
+    expect(msgs.length).toBe(4);
+    expect(msgs[0]).toBe(dir);
   });
 });

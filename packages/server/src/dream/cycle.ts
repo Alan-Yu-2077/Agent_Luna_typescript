@@ -45,6 +45,17 @@ function personaFieldChanged(next: string, prev: string): boolean {
   return a !== b && similarityRatio(a, b) < PERSONA_REWRITE_SIMILARITY;
 }
 
+// v0.27.4: a literal-minded model can emit the STRING "null"/"none" (or empty)
+// to mean "unchanged" instead of the JSON literal null. PersonaPatch types the
+// field as a nullable string, so that sentinel would validate and overwrite a
+// still-true self_state/relationship with the word "null". Coerce it back to
+// null (= no change) before the change check — belt to the prompt's suspenders.
+function normPersonaField(v: string | null): string | null {
+  if (v == null) return null;
+  const t = v.trim();
+  return t === '' || t.toLowerCase() === 'null' || t.toLowerCase() === 'none' ? null : v;
+}
+
 export type DreamNode =
   | 'rate_salience'
   | 'refine_semantic'
@@ -217,14 +228,13 @@ const dreamGraph: Graph<DreamCycleState, DreamNode> = {
       // Drop a field the model re-emitted with no substantive change (it tends to
       // re-write near-identical prose instead of returning null) so a stable identity
       // stops churning the audit log + cache epoch every dream (v0.21.7).
-      if (patch.self_state && personaFieldChanged(patch.self_state, core.self_state)) {
-        update.self_state = patch.self_state;
+      const nextSelf = normPersonaField(patch.self_state);
+      const nextRel = normPersonaField(patch.relationship_status);
+      if (nextSelf && personaFieldChanged(nextSelf, core.self_state)) {
+        update.self_state = nextSelf;
       }
-      if (
-        patch.relationship_status &&
-        personaFieldChanged(patch.relationship_status, core.relationship_status)
-      ) {
-        update.relationship_status = patch.relationship_status;
+      if (nextRel && personaFieldChanged(nextRel, core.relationship_status)) {
+        update.relationship_status = nextRel;
       }
       if (Object.keys(update).length === 0) return ['skipped', 'persona unchanged'];
       updateCore(update, 'dream');

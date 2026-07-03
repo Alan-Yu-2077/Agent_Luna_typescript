@@ -8,8 +8,11 @@ import { getMemoryDb } from './sessionStore';
 
 export type DiaryRow = { kind: string; period_key: string; text: string; generated_ms: number };
 
+// Default ON since v0.27.4 (the roadmap's "default off → on after validation"),
+// matching every sibling perception/memory switch's !== '0' idiom;
+// LUNA_DIARY_INJECT=0 is the off switch.
 export function diaryInjectEnabled(): boolean {
-  return Bun.env['LUNA_DIARY_INJECT'] === '1';
+  return Bun.env['LUNA_DIARY_INJECT'] !== '0';
 }
 
 // Per-entry truncation for the standing digest (a few hundred tokens total),

@@ -35,8 +35,14 @@ describe('renderDiaryDigest (v0.17.1)', () => {
     expect(renderDiaryDigest()).toBe('');
   });
 
-  test('off by default: LUNA_DIARY_INJECT unset → empty even with diaries', () => {
+  test('on by default: LUNA_DIARY_INJECT unset + diaries → digest present (v0.27.4)', () => {
     delete Bun.env['LUNA_DIARY_INJECT'];
+    insertDiary('day', '2026-06-15', 'a calm day', 1000);
+    expect(renderDiaryDigest()).toContain('[day 2026-06-15] a calm day');
+  });
+
+  test('off switch: LUNA_DIARY_INJECT=0 → empty even with diaries', () => {
+    Bun.env['LUNA_DIARY_INJECT'] = '0';
     insertDiary('day', '2026-06-15', 'a calm day', 1000);
     expect(renderDiaryDigest()).toBe('');
   });

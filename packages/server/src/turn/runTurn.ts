@@ -32,7 +32,7 @@ import { buildTimeBlock, resolveTz, timeAwareEnabled } from './temporalContext';
 import { buildWeatherBlock, weatherAmbientEnabled } from './weatherContext';
 import { getSnapshot } from '../tools/web/weather/snapshot';
 import { memoryEpoch } from '../memory/epoch';
-import { cleanHistoryEnabled, stripThinking } from '../memory/cleanHistory';
+import { cleanHistoryEnabled, stripThinking, stripCorrectiveDirectives } from '../memory/cleanHistory';
 import { WAKE_SCENE_BLOCK } from '../persona/scene';
 import { detectDefection, runDefectionAudit } from './integrity/defectionAudit';
 import {
@@ -190,6 +190,10 @@ export type TurnState = {
   // judges only bubbles delivered SINCE then, so a corrected promise isn't
   // re-flagged from the already-shown bubble.
   correctionWatermark: number;
+  // v0.27.4: the corrective stage-direction messages pushed this turn (by
+  // reference). They ride history for the in-turn retry, then are stripped in
+  // finalize before persistence so they never enter durable/rebuilt history.
+  directiveMessages: Set<Anthropic.MessageParam>;
   // this is a proactive turn (Initiative 5): she woke on her own, the "user
   // text" is an internal stage direction, and a silent outcome (no message) is
   // legitimate — the empty-reply guard must not fire.
@@ -668,7 +672,9 @@ function dedupeCitations(citations: Citation[]): Citation[] {
 }
 
 function pushDirective(s: TurnState, text: string): void {
-  s.session.history.push({ role: 'user', content: [{ type: 'text', text }] });
+  const msg: Anthropic.MessageParam = { role: 'user', content: [{ type: 'text', text }] };
+  s.session.history.push(msg);
+  s.directiveMessages.add(msg);
 }
 
 function emitGuardDecision(
@@ -765,6 +771,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<TurnState> {
     toolNamesThisTurn: [],
     correctionUsed: new Set(),
     correctionWatermark: 0,
+    directiveMessages: new Set(),
     proactiveTurn: opts.proactiveTurn ?? false,
     citations: [],
     signal: opts.signal,
@@ -828,6 +835,11 @@ export async function runTurn(opts: RunTurnOptions): Promise<TurnState> {
         // loadSession rebuilds from. Safe here (the turn is done; no in-flight
         // signed-thinking continuity to preserve).
         if (cleanHistoryEnabled()) stripThinking(opts.session.history, historyStart);
+        // v0.27.4: corrective stage-directions were pushed as user-role messages so
+        // the in-turn retry could see them; drop them before this turn becomes
+        // durable so no later turn's window re-reads a fabricated "user" scolding.
+        // Correctness, not the token diet — independent of LUNA_CLEAN_HISTORY.
+        stripCorrectiveDirectives(opts.session.history, state.directiveMessages, historyStart);
         appendL2({
           sessionId: opts.session.id,
           turnId: opts.turnId,
