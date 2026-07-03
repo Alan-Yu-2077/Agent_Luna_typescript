@@ -47,6 +47,20 @@ import {
 
 export const MAX_TOOL_ITERATIONS = 8;
 
+// v0.28.5 (the 390K-token-incident lesson: the bill was the only alarm): a LOUD per-request cost
+// tripwire. Fires per ROUND (each round re-sends the whole context, so one huge request — not the
+// summed turn — is the anomaly signal). Default 80K input tokens ≈ 2× the healthy post-fix ceiling;
+// `LUNA_COST_WARN_INPUT_TOKENS=0` disables.
+export function warnIfExpensiveRound(inputTokens: number, turnId: string): void {
+  const warnAt = Number(Bun.env['LUNA_COST_WARN_INPUT_TOKENS'] ?? 80_000);
+  if (warnAt > 0 && inputTokens > warnAt) {
+    console.warn(
+      `[cost] ⚠️ one request sent ${inputTokens} input tokens (threshold ${warnAt}) — ` +
+        `turn ${turnId}. The context window may be growing; check /_trace usage and the L1 fold.`,
+    );
+  }
+}
+
 // v0.27.6: the primacy slot carries identity texture + the one precedence line
 // for the stacked blocks below (the generic "use the tools" nudge moved into the
 // L1 contract, where the rest of the tool discipline lives).
@@ -384,6 +398,7 @@ const graph: Graph<TurnState, TurnNode> = {
           s.pendingToolUses = ev.toolUses;
           s.usage.input_tokens += ev.usage.input_tokens;
           s.usage.output_tokens += ev.usage.output_tokens;
+          warnIfExpensiveRound(ev.usage.input_tokens, s.turnId);
           s.session.history.push({ role: 'assistant', content: ev.assistantContent });
           break;
       }
@@ -759,6 +774,9 @@ export async function runTurn(opts: RunTurnOptions): Promise<TurnState> {
         session_id: opts.session.id,
         t_ms: Date.now(),
         server_event_type: e.type,
+        // v0.28.5: turn.result carries the turn's real token totals — record them so cost
+        // regressions are visible in /_trace instead of only on the monthly bill.
+        ...(e.type === 'turn.result' ? { payload: { usage: e.usage } } : {}),
       });
     }
     opts.emit(e);
