@@ -83,6 +83,10 @@ function sidecarEnv(p: Paths, userEnv: Record<string, string>): Record<string, s
 
 let supervisor: Supervisor | null = null;
 let paths: Paths | null = null;
+// v0.28.3: serialize onboarding submits — ipcMain.handle does NOT serialize concurrent awaits, so a
+// double-invoke (DevTools, or a fast double-click that beats setBusy) could double-restart the
+// sidecar + build two app windows. The renderer disables its buttons; this is the belt.
+let onboardingInFlight = false;
 
 function createWindow(mode: 'app' | 'setup' = 'app'): BrowserWindow {
   // The setup screen is always a normal window (a transparent/frameless pet window makes no sense
@@ -179,26 +183,32 @@ ipcMain.handle('luna:onboarding-probe', async (_event, raw: OnboardingFields) =>
 
 ipcMain.handle('luna:onboarding-submit', async (_event, raw: OnboardingFields): Promise<ProbeVerdict> => {
   if (!paths) return { ok: false, error: 'Not ready — try again in a moment.' };
-  const baseUrl = asStr(raw?.baseUrl);
-  const apiKey = asStr(raw?.apiKey);
-  const model = asStr(raw?.model);
-  // Test first — a bad key never gets persisted.
-  const verdict = await probeConnection(baseUrl, apiKey, model);
-  if (!verdict.ok) return verdict;
-  const merged = mergeEnvFile(readFileSync(paths.envFile, 'utf8'), {
-    ANTHROPIC_BASE_URL: baseUrl,
-    ANTHROPIC_API_KEY: apiKey,
-    LUNA_MODEL: model,
-  });
-  writeFileSync(paths.envFile, merged);
-  // Apply the keys live: re-spawn the sidecar against the new env (it may never have started).
-  supervisor?.restart(sidecarEnv(paths, parseEnvFile(merged)));
-  const up = await waitForPort(SERVER_PORT);
-  if (!up) return { ok: false, error: 'Saved, but the server did not start. Check the logs.' };
-  // Swap the setup window for the real app window (createWindow reads the resolved petMode).
-  const fresh = createWindow('app');
-  for (const w of BrowserWindow.getAllWindows()) if (w !== fresh) w.close();
-  return { ok: true };
+  if (onboardingInFlight) return { ok: false, error: 'Setup already in progress…' };
+  onboardingInFlight = true;
+  try {
+    const baseUrl = asStr(raw?.baseUrl);
+    const apiKey = asStr(raw?.apiKey);
+    const model = asStr(raw?.model);
+    // Test first — a bad key never gets persisted.
+    const verdict = await probeConnection(baseUrl, apiKey, model);
+    if (!verdict.ok) return verdict;
+    const merged = mergeEnvFile(readFileSync(paths.envFile, 'utf8'), {
+      ANTHROPIC_BASE_URL: baseUrl,
+      ANTHROPIC_API_KEY: apiKey,
+      LUNA_MODEL: model,
+    });
+    writeFileSync(paths.envFile, merged);
+    // Apply the keys live: re-spawn the sidecar against the new env (it may never have started).
+    supervisor?.restart(sidecarEnv(paths, parseEnvFile(merged)));
+    const up = await waitForPort(SERVER_PORT);
+    if (!up) return { ok: false, error: 'Saved, but the server did not start. Check the logs.' };
+    // Swap the setup window for the real app window (createWindow reads the resolved petMode).
+    const fresh = createWindow('app');
+    for (const w of BrowserWindow.getAllWindows()) if (w !== fresh) w.close();
+    return { ok: true };
+  } finally {
+    onboardingInFlight = false;
+  }
 });
 
 async function smokeProbe(win: BrowserWindow): Promise<void> {
@@ -248,7 +258,7 @@ async function smokeProbe(win: BrowserWindow): Promise<void> {
   // In pet mode additionally: the pet class landed, the striped room is gone (transparent body),
   // the window is RESIZABLE, and her body is a drag region while the bar is not (v0.28.2).
   const petWindowOk =
-    !petMode || (win.isResizable() && p.modelDrag === 'drag' && p.barNoDrag !== 'drag');
+    !petMode || (win.isResizable() && p.modelDrag === 'drag' && p.barNoDrag === 'no-drag');
   const petOk = !petMode || (p.pet && p.bodyBgImage === 'none' && petWindowOk);
   // v0.27.2: the preload bridge must be live (setPetMode exposed → the pet toggle row renders).
   // This is exactly the check that would have caught the __dirname preload-path bug earlier.

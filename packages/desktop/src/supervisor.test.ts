@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { createSupervisor, type SpawnedChild, type SpawnFn } from './supervisor';
 
-type FakeChild = SpawnedChild & { exit: () => void; killed: boolean };
+type FakeChild = SpawnedChild & { exit: () => void; error: () => void; killed: boolean };
 
 function fakeSpawner(): { spawnFn: SpawnFn; children: FakeChild[]; envs: Record<string, string>[] } {
   const children: FakeChild[] = [];
@@ -9,11 +9,13 @@ function fakeSpawner(): { spawnFn: SpawnFn; children: FakeChild[]; envs: Record<
   const spawnFn: SpawnFn = (_cmd, _args, env) => {
     envs.push(env);
     let onExit: (() => void) | null = null;
+    let onError: (() => void) | null = null;
     const child: FakeChild = {
       pid: children.length + 1,
       killed: false,
       on: ((event: string, cb: () => void) => {
         if (event === 'exit') onExit = cb;
+        if (event === 'error') onError = cb;
         return child;
       }) as FakeChild['on'],
       kill: (() => {
@@ -21,6 +23,7 @@ function fakeSpawner(): { spawnFn: SpawnFn; children: FakeChild[]; envs: Record<
         return true;
       }) as FakeChild['kill'],
       exit: () => onExit?.(),
+      error: () => onError?.(),
     };
     children.push(child);
     return child;
@@ -100,6 +103,18 @@ describe('createSupervisor (v0.26.1)', () => {
     s.restart({ ANTHROPIC_API_KEY: 'k' }); // never called start()
     expect(children.length).toBe(1);
     expect(envs[0]).toEqual({ ANTHROPIC_API_KEY: 'k' });
+    expect(s.running()).toBe(true);
+  });
+
+  test('a spawn error (ENOENT) clears the child so a later restart() recovers (v0.28.3)', () => {
+    const { spawnFn, children } = fakeSpawner();
+    const s = createSupervisor({ command: 'missing', env: {}, spawnFn });
+    s.start();
+    children[0]!.error(); // ENOENT-style spawn failure — must NOT leave the child wedged
+    expect(s.running()).toBe(false);
+    // recovery: restart with real keys spawns anew (would be blocked if child stayed set)
+    s.restart({ ANTHROPIC_API_KEY: 'k' });
+    expect(children.length).toBe(2);
     expect(s.running()).toBe(true);
   });
 

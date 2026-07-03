@@ -19,6 +19,12 @@ export function petFraming(
   naturalW: number,
   naturalH: number,
 ): Framing {
+  // Defensive: a model that failed to measure (0 dims) would make scale NaN/Infinity and break
+  // model.scale.set()/setBase(). Live2DModel.from() validates dims, so this is latent — but a pure
+  // helper should never emit NaN. Fall back to an untouched, centered model.
+  if (!(naturalW > 0) || !(naturalH > 0) || !(hostW > 0) || !(hostH > 0)) {
+    return { scale: 1, baseX: 0, baseY: 0 };
+  }
   const fullBodyScale = (hostH * 0.92) / naturalH; // the windowed height-fit
   const scale = fullBodyScale * PET_ZOOM;
   const scaledW = naturalW * scale;

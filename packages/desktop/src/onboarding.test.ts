@@ -62,6 +62,17 @@ describe('mergeEnvFile', () => {
     expect(parseEnvFile(second)['ANTHROPIC_API_KEY']).toBe('sk-2');
     expect(second.split('\n').filter((l) => l.startsWith('ANTHROPIC_API_KEY=')).length).toBe(1);
   });
+
+  test('a value with an embedded newline cannot inject a second KEY= line (v0.28.3 review)', () => {
+    const merged = mergeEnvFile('ANTHROPIC_API_KEY=\n', {
+      ANTHROPIC_API_KEY: 'sk-abc\nLUNA_WEB_SEARCH_API_KEY=stolen',
+    });
+    const parsed = parseEnvFile(merged);
+    // the newline is stripped → the payload can't become its own key; the whole thing stays one value
+    expect(parsed['LUNA_WEB_SEARCH_API_KEY']).toBeUndefined();
+    expect(merged).not.toContain('\nLUNA_WEB_SEARCH_API_KEY=stolen');
+    expect(merged.split('\n').filter((l) => l.startsWith('ANTHROPIC_API_KEY=')).length).toBe(1);
+  });
 });
 
 describe('classifyProbe', () => {
@@ -85,5 +96,38 @@ describe('classifyProbe', () => {
   test('other non-2xx (5xx/429) → surfaced, not ok', () => {
     expect(classifyProbe(500).ok).toBe(false);
     expect(classifyProbe(429).ok).toBe(false);
+  });
+});
+
+
+describe('bug scenario: baseUrl with = characters', () => {
+  test('complete end-to-end: merge, write, read back URL with query params', () => {
+    // Simulate the exact scenario from the bug claim
+    const baseUrl = 'https://x.com?a=1&b=2';
+    const apiKey = 'sk-valid';
+    const model = 'claude-opus-4-8';
+    
+    // Step 1: probeConnection succeeds (mocked as passed above)
+    // Step 2: mergeEnvFile is called with unescaped URL
+    const template = `# Luna desktop configuration
+ANTHROPIC_API_KEY=
+ANTHROPIC_BASE_URL=
+LUNA_MODEL=claude-sonnet-4-6
+`;
+    
+    const merged = mergeEnvFile(template, {
+      ANTHROPIC_BASE_URL: baseUrl,
+      ANTHROPIC_API_KEY: apiKey,
+      LUNA_MODEL: model,
+    });
+    
+    // Step 3: file is written (simulated by the merged string)
+    // Step 4: sidecarEnv calls parseEnvFile to read the merged content
+    const parsed = parseEnvFile(merged);
+    
+    // Verify the file is NOT corrupted — values must parse exactly
+    expect(parsed['ANTHROPIC_BASE_URL']).toBe(baseUrl);
+    expect(parsed['ANTHROPIC_API_KEY']).toBe(apiKey);
+    expect(parsed['LUNA_MODEL']).toBe(model);
   });
 });

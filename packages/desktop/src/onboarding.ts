@@ -15,9 +15,17 @@ export function needsOnboarding(userEnv: Record<string, string>): boolean {
 // (uncommented) KEY= line in place, append a KEY=value for a missing one, and leave every other
 // line — comments, blanks, unrelated keys — exactly as it was. A re-run must never clobber the
 // weather/embedding/pet keys a power user already set by hand.
+// Strip CR/LF (and other control chars) from a value before it becomes a KEY=value line — an
+// embedded newline would otherwise write a SECOND line that parseEnvFile reads as an injected key
+// (v0.28.3 review: a model/URL field pasted with a newline could smuggle in arbitrary env). A real
+// key/URL/model id never contains a control char, so stripping is non-destructive.
+function sanitizeValue(v: string): string {
+  return v.replace(/[\x00-\x1f\x7f]/g, ''); // strip C0 control chars + DEL (a newline would inject a KEY= line)
+}
+
 export function mergeEnvFile(existing: string, fields: Record<string, string>): string {
   const lines = existing.split('\n');
-  const remaining = new Map(Object.entries(fields));
+  const remaining = new Map(Object.entries(fields).map(([k, v]) => [k, sanitizeValue(v)]));
   const out = lines.map((line) => {
     const eq = line.indexOf('=');
     if (eq <= 0 || line.trimStart().startsWith('#')) return line;

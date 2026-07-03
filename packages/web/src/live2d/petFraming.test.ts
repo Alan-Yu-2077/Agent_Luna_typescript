@@ -31,4 +31,12 @@ describe('petFraming', () => {
     const large = petFraming(800, 1280, W, H);
     expect(large.scale).toBeGreaterThan(small.scale);
   });
+
+  test('degenerate inputs (0 dims) return a safe fallback, never NaN/Infinity (v0.28.3 review)', () => {
+    for (const f of [petFraming(375, 812, 0, 0), petFraming(375, 812, 900, 0), petFraming(0, 0, 900, 2000)]) {
+      expect(Number.isFinite(f.scale)).toBe(true);
+      expect(Number.isFinite(f.baseX)).toBe(true);
+      expect(Number.isFinite(f.baseY)).toBe(true);
+    }
+  });
 });

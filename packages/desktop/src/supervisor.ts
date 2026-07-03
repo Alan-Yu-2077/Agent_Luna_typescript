@@ -9,7 +9,7 @@ import { connect } from 'node:net';
 
 export type SpawnedChild = {
   pid?: number | undefined;
-  on(event: 'exit', cb: () => void): unknown;
+  on(event: 'exit' | 'error', cb: () => void): unknown;
   kill(): unknown;
 };
 export type SpawnFn = (cmd: string, args: string[], env: Record<string, string>) => SpawnedChild;
@@ -51,6 +51,15 @@ export function createSupervisor(opts: SupervisorOpts): Supervisor {
     const c = doSpawn(opts.command, opts.args ?? [], currentEnv);
     child = c;
     opts.onEvent?.('started');
+    // A spawn failure (ENOENT/EACCES — missing/unexecutable binary) emits 'error', not 'exit'.
+    // Without a listener Node re-throws it as uncaught AND the child ref stays set, wedging start()
+    // (its `child` guard early-returns forever). Clear the ref so a later start()/restart() recovers;
+    // no auto-restart — a missing binary won't fix itself, and restart() re-arms when keys change.
+    c.on('error', () => {
+      if (child !== c) return;
+      child = null;
+      opts.onEvent?.('exited');
+    });
     c.on('exit', () => {
       // A restart kills the old child then spawns a new one; the OLD child's (async) exit must not
       // wipe the new `child` or trigger an auto-restart. Identity-guard: only the current child acts.
