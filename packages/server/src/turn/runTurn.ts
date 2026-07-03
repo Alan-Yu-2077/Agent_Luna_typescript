@@ -20,7 +20,7 @@ import {
 import { dispatchToolCalls } from '../tools/dispatcher';
 import { runGraph, type Graph, type TransitionHook, type TurnNode, type NodeName } from './graph';
 import { JsonTextStream } from './jsonTextStream';
-import type { Session } from './session';
+import { markActivity, type Session } from './session';
 import { trace, flushTrace, traceEnabled } from '../trace/instrument';
 import { appendL2, listRecentL2, persistSession } from '../memory/sessionStore';
 import { buildActiveContext, maybeFold } from '../memory/l1Window';
@@ -867,6 +867,12 @@ export async function runTurn(opts: RunTurnOptions): Promise<TurnState> {
         ? state.messageTexts.join('\n').trim()
         : state.text.trim();
       if (realReply.length > 0) {
+        // Initiative 21 (v0.29.0): she just said something in the channel — bump the
+        // single silence idle-timer. This is the one choke point every reply-producing
+        // turn (reactive / continuation / proactive) passes, so the silence gap counts
+        // from her last word, not the user's earlier message. An empty/failed turn falls
+        // to the else branch below and does NOT mark activity (it said nothing).
+        markActivity(opts.session, Date.now());
         // v0.16.3: strip thinking from this now-completed turn before it becomes
         // durable history — both the in-memory window and the L2 raw_json that
         // loadSession rebuilds from. Safe here (the turn is done; no in-flight

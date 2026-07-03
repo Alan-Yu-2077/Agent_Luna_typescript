@@ -59,7 +59,11 @@ function quietHours(): Set<number> {
   );
 }
 
-export type WakeContext = { lastUserMs: number; nowMs: number; nowHour: number };
+// Initiative 21 (v0.29.1): the anti-spam idle floor measures from the single activity
+// idle-timer (lastActivityMs) — the old lastUserMs anchor was retired, so it's gone from
+// here. A long reactive turn no longer pre-elapses the floor (lastUserMs was stamped at
+// turn START; lastActivityMs is stamped when she finishes replying).
+export type WakeContext = { lastActivityMs: number; nowMs: number; nowHour: number };
 
 // v0.22.0 (Initiative 15): the anti-spam rail that gates the deterministic detector path —
 // quiet hours + a small idle floor + cooldown + daily quota. Deliberately does NOT apply a
@@ -70,12 +74,13 @@ export type WakeContext = { lastUserMs: number; nowMs: number; nowHour: number }
 export function passesAntiSpam(c: Cadence, x: WakeContext): { ok: boolean; reason: string } {
   if (!proactiveEnabled()) return { ok: false, reason: 'disabled' };
   if (quietHours().has(x.nowHour)) return { ok: false, reason: 'quiet_hours' };
-  // v0.22.1: a small idle floor — don't reach in during a live exchange (an event-hook
-  // detector could otherwise fire seconds after the user's last message). Much smaller
-  // than the old 10m `too_soon` gate (which is intentionally NOT here — detectors, not
-  // an idle window, decide WHEN to consider).
-  const userGap = x.lastUserMs > 0 ? x.nowMs - x.lastUserMs : Infinity;
-  if (userGap < num('LUNA_PROACTIVE_IDLE_FLOOR_MS', 60_000)) {
+  // v0.22.1: a small idle floor — don't reach in during a live exchange. v0.29.0/.1: measured
+  // from the silence idle-timer (last activity of ANY kind), not lastUserMs — a reactive turn
+  // lasting longer than the floor used to leave it already-elapsed the instant she finished
+  // (lastUserMs is stamped at turn START), killing the "don't reach in mid-exchange" guard right
+  // when it's needed. The activity anchor is stamped when she finishes replying.
+  const idleGap = x.lastActivityMs > 0 ? x.nowMs - x.lastActivityMs : Infinity;
+  if (idleGap < num('LUNA_PROACTIVE_IDLE_FLOOR_MS', 60_000)) {
     return { ok: false, reason: 'mid_conversation' };
   }
   // v0.24.2: the cooldown + quota come from the effective cadence (the activeness lever scaled

@@ -1,8 +1,9 @@
 # Initiative 21 — Proactive silence as an idle-timer (silence-trigger redesign)
 
-> **Status: PLANNED.** Priority: **high** (a live-exposed, user-reported bug — Luna interrupts
-> active conversations). Version range: **v0.29.0 – v0.29.1**. Follows Initiative 17 (the silence
-> ladder). Master index: [`../README.md`](../README.md).
+> **Status: ✅ SHIPPED 2026-07-03** (v0.29.0 + v0.29.1, branch `feat/initiative-21-silence-timer`).
+> Priority: **high** (a live-exposed, user-reported bug — Luna interrupts active conversations).
+> Version range: **v0.29.0 – v0.29.1**. Follows Initiative 17 (the silence ladder). Master index:
+> [`../README.md`](../README.md).
 
 ## The idea
 
@@ -127,8 +128,8 @@ spacing clock stays.
 
 | Plan | Version | Theme | Risk | Depends | Status |
 |---|---|---|---|---|---|
-| 1/2 | v0.29.0 | Silence idle-timer core — `lastActivityMs` bumped by all conversation activity; ladder + anti-spam floor read it; behind `LUNA_PROACTIVE_SILENCE_TIMER` (default on, `=0` = old anchor) | Medium | Init 17 shipped | PLANNED |
-| 2/2 | v0.29.1 | Tune the amplifiers (ambientMin 120→300s, ambientProb 0.12→~0.06) + retire the old user-only anchor path + remove the flag | Low | v0.29.0 | PLANNED |
+| 1/2 | v0.29.0 | Silence idle-timer core — `lastActivityMs` bumped by all conversation activity; ladder + anti-spam floor read it; behind `LUNA_PROACTIVE_SILENCE_TIMER` (default on, `=0` = old anchor) | Medium | Init 17 shipped | ✅ SHIPPED |
+| 2/2 | v0.29.1 | Tune the amplifiers (ambientMin 120→300s, ambientProb 0.12→0.06) + retire the old user-only anchor path + remove the flag | Low | v0.29.0 | ✅ SHIPPED |
 
 ## Acceptance criteria for the whole initiative
 

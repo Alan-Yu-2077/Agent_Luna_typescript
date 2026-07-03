@@ -9,7 +9,13 @@ import {
   persistSession,
   setMemoryDb,
 } from '../memory/sessionStore';
-import { activeSessionIds, getSession, preloadSessions, resetSessions } from './session';
+import {
+  activeSessionIds,
+  getSession,
+  markActivity,
+  preloadSessions,
+  resetSessions,
+} from './session';
 
 let db: Database;
 
@@ -58,5 +64,33 @@ describe('preloadSessions (v0.21.6 — proactive survives a restart)', () => {
     resetSessions();
     preloadSessions();
     expect(activeSessionIds()).toEqual([]);
+  });
+});
+
+describe('markActivity + lastActivityMs (Initiative 21, v0.29.0)', () => {
+  test('preload seeds lastActivityMs from the last L2 turn of ANY kind (incl. proactive)', () => {
+    const ins = db.prepare(
+      'INSERT INTO l2_turns (session_id, turn_id, t_ms, user_text, assistant_text, raw_json, content_hash) VALUES (?,?,?,?,?,?,?)',
+    );
+    ins.run('default', 'default:turn:1', 1000, 'hi', 'hey', '[]', 'h');
+    ins.run('default', 'proactive:default:x', 2000, '', 'thinking of you', '[]', 'h');
+    persistSession('default', [], 1);
+
+    resetSessions();
+    preloadSessions();
+    const s = getSession('default');
+    // The escalation-reset anchor ignores her proactive turn...
+    expect(s.lastUserMs).toBe(1000);
+    // ...but the silence idle-timer counts her proactive reply as activity (the last thing said).
+    expect(s.lastActivityMs).toBe(2000);
+  });
+
+  test('markActivity is monotonic — never rewinds the clock', () => {
+    const s = getSession('default');
+    s.lastActivityMs = 5000;
+    markActivity(s, 4000); // an out-of-order (earlier) stamp is ignored
+    expect(s.lastActivityMs).toBe(5000);
+    markActivity(s, 6000); // a later stamp advances it
+    expect(s.lastActivityMs).toBe(6000);
   });
 });

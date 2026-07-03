@@ -28,12 +28,19 @@ const base: Cadence = {
   nudgesSent: 0,
 };
 
-const ctx = (over: Partial<{ lastUserMs: number; nowMs: number; nowHour: number }> = {}) => ({
-  lastUserMs: NOW - 20 * 60_000, // 20 min gap
-  nowMs: NOW,
-  nowHour: 14, // 2pm
-  ...over,
-});
+const ctx = (
+  over: Partial<{ lastUserMs: number; lastActivityMs: number; nowMs: number; nowHour: number }> = {},
+) => {
+  const lastUserMs = over.lastUserMs ?? NOW - 20 * 60_000; // 20 min gap
+  return {
+    lastUserMs,
+    // v0.29.0: the idle floor reads the activity anchor. Mirror lastUserMs by default so the
+    // single-anchor tests below are unchanged; the split-anchor case sets it explicitly.
+    lastActivityMs: over.lastActivityMs ?? lastUserMs,
+    nowMs: over.nowMs ?? NOW,
+    nowHour: over.nowHour ?? 14, // 2pm
+  };
+};
 
 describe('cadence transitions', () => {
   test('commitProactive bumps quota same-day, resets on rollover, stamps time', () => {
@@ -85,6 +92,14 @@ describe('passesAntiSpam (v0.22.0 detector gate — anti-spam subset only)', () 
   });
   test('normal → ok', () => {
     expect(passesAntiSpam(base, ctx()).ok).toBe(true);
+  });
+
+  // v0.29.0/.1: a long reactive turn — the user spoke 65s ago (turn start), but Luna's reply only
+  // finished 5s ago. The floor measures from her reply (activity), not the user's message, or the
+  // "don't reach in mid-exchange" guard is dead the instant she finishes a slow turn.
+  test('long reply: the idle floor reads the activity anchor, not the old user message', () => {
+    const c = ctx({ lastUserMs: NOW - 65_000, lastActivityMs: NOW - 5_000 });
+    expect(passesAntiSpam(base, c).reason).toBe('mid_conversation');
   });
 });
 

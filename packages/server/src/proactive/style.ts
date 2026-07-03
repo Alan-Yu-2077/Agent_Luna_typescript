@@ -56,7 +56,9 @@ export function resolveEffectiveCadence(style: ProactiveStyle): EffectiveCadence
   const baseQuota = num('LUNA_PROACTIVE_DAILY_QUOTA', 5);
   const quotaCeiling = num('LUNA_PROACTIVE_DAILY_QUOTA_CEILING', 6);
   const baseNudgeProb = numFloat('LUNA_PROACTIVE_NUDGE_PROB', 1.0);
-  const baseAmbientProb = numFloat('LUNA_PROACTIVE_AMBIENT_PROB', 0.12);
+  // v0.29.1: 0.12 → 0.06. `engaged` re-rolls this every ~60s tick while in the ambient band, so
+  // 0.12 compounded to ~85% over ~15 min of silence; 0.06 keeps a genuine lull comfortably quiet.
+  const baseAmbientProb = numFloat('LUNA_PROACTIVE_AMBIENT_PROB', 0.06);
   return {
     minIntervalMs: Math.max(floorInterval, Math.round(baseInterval * m.cooldown)),
     renudgeBaseMs: Math.max(floorInterval, Math.round(baseRenudge * m.cooldown)),

@@ -44,9 +44,13 @@ afterEach(() => {
 
 const always = (v: number) => (): number => v;
 
-function sess(lastUserMs: number): Session {
+function sess(lastUserMs: number, lastActivityMs: number = lastUserMs): Session {
   const s = getSession('default');
   s.lastUserMs = lastUserMs;
+  // v0.29.0: the silence gap now reads lastActivityMs. Default it to lastUserMs so the
+  // single-anchor tests keep their meaning ("silence since T"); the reported-bug test
+  // sets a later activity time to model her reply landing after the user's message.
+  s.lastActivityMs = lastActivityMs;
   return s;
 }
 
@@ -66,8 +70,8 @@ describe('evaluateLadder (silence phase machine, v0.24.0)', () => {
   });
 
   test('engaged + ambient band + rng<prob → ambient; rng≥prob → null', () => {
-    expect(ladder({}, NOW - 180_000, always(0))).toBe('ambient'); // 3m, the 12% roll hits
-    expect(ladder({}, NOW - 180_000, always(0.99))).toBeNull(); // roll misses
+    expect(ladder({}, NOW - 360_000, always(0))).toBe('ambient'); // 6m (≥5m min, <10m thresh), roll hits
+    expect(ladder({}, NOW - 360_000, always(0.99))).toBeNull(); // roll misses
   });
 
   test('effective_gap = min(userGap, sinceProactive): a recent self-outreach suppresses a nudge', () => {
@@ -147,5 +151,61 @@ describe('evaluateLadder (silence phase machine, v0.24.0)', () => {
     const d = decide({}, NOW - 70_000_000);
     expect(d.scenario).toBeNull();
     expect(d.phase).toBe('sleeping');
+  });
+});
+
+// Initiative 21 (v0.29.0): silence reads the activity idle-timer, not the user-only anchor.
+describe('evaluateLadder — silence idle-timer (v0.29.0)', () => {
+  const evalWith = (session: Session, rng = always(0)): string | null =>
+    evaluateLadder({ session, cadence: { ...baseCadence }, nowMs: NOW, nowHour: 14 }, rng).scenario;
+
+  test('the reported bug: she does NOT ambient into a conversation she just replied to', () => {
+    // user spoke 120s ago, her reply finished 30s ago. silenceGap = 30s < ambientMin (5m) → quiet.
+    // (Pre-v0.29.0 the gap would count the 120s-old user msg and she'd interrupt.)
+    expect(evalWith(sess(NOW - 120_000, NOW - 30_000))).toBeNull();
+  });
+
+  test('ambient is not eligible until the silence gap reaches ambientMin (5m)', () => {
+    // v0.29.1 default 300s: a 4m lull is still too short to call silence, even with rng 0.
+    expect(evalWith(sess(NOW - 240_000))).toBeNull(); // 4m < 5m → quiet
+    expect(evalWith(sess(NOW - 360_000))).toBe('ambient'); // 6m ≥ 5m → eligible, roll hits
+  });
+
+  test('her recent reply also suppresses an idle_nudge the stale user gap would trigger', () => {
+    // user quiet 11m (would idle_nudge on the old anchor) but she replied 40s ago → silenceGap 40s → quiet
+    expect(evalWith(sess(NOW - 700_000, NOW - 40_000))).toBeNull();
+  });
+
+  test('a genuine silence (activity anchor old) still escalates normally', () => {
+    // no reply since the user's 11m-ago message → activity == user → idle_nudge, unchanged
+    expect(evalWith(sess(NOW - 700_000))).toBe('idle_nudge');
+  });
+
+  test('bounded ambient rate: a 15-min silence stays comfortably quiet (v0.29.1 defaults)', () => {
+    // Walk 60s ticks; count the AMBIENT-eligible ones by firing with rng 0 (always hits). The band
+    // is [ambientMin 5m, idleThreshold 10m) → 5 ticks (300..540s); 600s+ escalates to idle_nudge.
+    let eligible = 0;
+    for (let gapMs = 0; gapMs <= 15 * 60_000; gapMs += 60_000) {
+      if (evalWith(sess(NOW - gapMs)) === 'ambient') eligible += 1;
+    }
+    expect(eligible).toBe(5);
+    // Cumulative P(≥1 ambient) over those 5 independent rolls at ambientProb 0.06 — was ~0.64 at the
+    // old 0.12 / 8-tick (2m..10m) defaults; now comfortably bounded.
+    expect(1 - Math.pow(1 - 0.06, eligible)).toBeLessThan(0.3);
+  });
+
+  test('the escalation reset still keys on the USER anchor, not activity', () => {
+    // her ambient reply bumped activity 40s ago, but the user last spoke 700s ago (after her prior
+    // nudge 800s ago) → the user-reset fires (nudged→engaged) and, at an 11m user gap, idle_nudge
+    const s = sess(NOW - 700_000, NOW - 40_000);
+    const d = evaluateLadder(
+      { session: s, cadence: { ...baseCadence, phase: 'nudged', nudgesSent: 2, lastProactiveMs: NOW - 800_000 }, nowMs: NOW, nowHour: 14 },
+      always(0),
+    );
+    // activity is recent (40s) so the silence gap is short → she stays quiet THIS tick, but the
+    // phase must have reset off the user anchor (not carried the stale nudged/2).
+    expect(d.phase).toBe('engaged');
+    expect(d.nudgesSent).toBe(0);
+    expect(d.scenario).toBeNull(); // 40s silence < ambientMin → nothing fires, correctly
   });
 });
