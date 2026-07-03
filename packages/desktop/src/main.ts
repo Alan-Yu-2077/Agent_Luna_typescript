@@ -8,6 +8,7 @@ import { classifyProbe, mergeEnvFile, needsOnboarding, type ProbeVerdict } from 
 import { createPetDrag, type PetDrag } from './petDrag';
 import { petWindowOptions } from './petWindow';
 import { createSupervisor, waitForPort, type Supervisor } from './supervisor';
+import { resolveTtsConfig, ttsProxyScript, type TtsConfig } from './tts';
 
 // v0.26.1 (Initiative 19): the single-machine app. The shell OWNS the whole runtime: it reads the
 // user's keys from app-data (never the bundle), spawns the compiled luna-server sidecar against an
@@ -84,6 +85,35 @@ function sidecarEnv(p: Paths, userEnv: Record<string, string>): Record<string, s
 
 let supervisor: Supervisor | null = null;
 let paths: Paths | null = null;
+// v0.28.7: the local GPT-SoVITS proxy, spawned as a second supervised sidecar when the module is
+// present. Non-critical — a missing proxy just means muted, so we never block the app on it.
+let ttsSupervisor: Supervisor | null = null;
+let ttsCfg: TtsConfig | null = null;
+let ttsProxyPath = '';
+
+// Bun inlines __dirname as the SOURCE dir (packages/desktop/src) at compile time (see the preload
+// note below), so the repo root — where scripts/ and the sibling Agent_Luna/TTS live — is three up.
+// In a packaged app these paths don't exist; resolveTtsConfig's availability probe degrades to muted.
+const REPO_ROOT = join(__dirname, '..', '..', '..');
+
+// Spawn the TTS proxy via Electron-as-node (ELECTRON_RUN_AS_NODE) so we don't depend on `bun` being
+// on PATH in a packaged app — tts-proxy.cjs is plain CJS. Idempotent + guarded; a no-op under SMOKE
+// (the smoke must exit fast and never load a 5GB model) or when the proxy/module isn't present.
+function maybeStartTts(): void {
+  if (SMOKE || ttsSupervisor || !ttsCfg?.available || !existsSync(ttsProxyPath)) return;
+  ttsSupervisor = createSupervisor({
+    command: process.execPath,
+    args: [ttsProxyPath],
+    env: {
+      ...(process.env as Record<string, string>),
+      ELECTRON_RUN_AS_NODE: '1',
+      LUNA_TTS_DIR: ttsCfg.dir,
+      LUNA_TTS_PORT: String(ttsCfg.port),
+    },
+    onEvent: (e) => console.log(`[luna-desktop] tts: ${e}`),
+  });
+  ttsSupervisor.start();
+}
 // v0.28.3: serialize onboarding submits — ipcMain.handle does NOT serialize concurrent awaits, so a
 // double-invoke (DevTools, or a fast double-click that beats setBusy) could double-restart the
 // sidecar + build two app windows. The renderer disables its buttons; this is the belt.
@@ -226,6 +256,7 @@ ipcMain.handle('luna:onboarding-submit', async (_event, raw: OnboardingFields): 
     writeFileSync(paths.envFile, merged);
     // Apply the keys live: re-spawn the sidecar against the new env (it may never have started).
     supervisor?.restart(sidecarEnv(paths, parseEnvFile(merged)));
+    maybeStartTts();
     const up = await waitForPort(SERVER_PORT);
     if (!up) return { ok: false, error: 'Saved, but the server did not start. Check the logs.' };
     // Swap the setup window for the real app window (createWindow reads the resolved petMode).
@@ -293,6 +324,7 @@ async function smokeProbe(win: BrowserWindow): Promise<void> {
   const ok = p.canvas && p.headX !== null && p.wsStatus === 'open' && petOk && bridgeOk;
   console.log(JSON.stringify({ ok, ...p }));
   supervisor?.stop();
+  ttsSupervisor?.stop();
   app.exit(ok ? 0 : 1);
 }
 
@@ -303,7 +335,9 @@ void app.whenReady().then(async () => {
   if (userEnv['LUNA_PET_MODE'] === '1') petMode = true;
   const shell = readShellSettings(p.userData);
   if (typeof shell.petMode === 'boolean') petMode = shell.petMode;
-  startWebHost(p.webDist);
+  ttsCfg = resolveTtsConfig(process.env, REPO_ROOT);
+  ttsProxyPath = ttsProxyScript(REPO_ROOT);
+  startWebHost(p.webDist, WEB_PORT, ttsCfg.available ? ttsCfg.upstream : undefined);
   supervisor = createSupervisor({
     command: p.serverBin,
     env: sidecarEnv(p, userEnv),
@@ -324,6 +358,7 @@ void app.whenReady().then(async () => {
   }
 
   supervisor.start();
+  maybeStartTts();
   const up = await waitForPort(SERVER_PORT);
   if (!up && !SMOKE) {
     dialog.showMessageBoxSync({
@@ -339,9 +374,14 @@ void app.whenReady().then(async () => {
   });
 });
 
-// Kill the sidecar on every exit path — an orphan would hold the port + the DB lock.
-app.on('before-quit', () => supervisor?.stop());
+// Kill the sidecars on every exit path — an orphan luna-server would hold the port + the DB lock,
+// an orphan TTS proxy would hold its port + the GPT-SoVITS backend.
+app.on('before-quit', () => {
+  supervisor?.stop();
+  ttsSupervisor?.stop();
+});
 app.on('window-all-closed', () => {
   supervisor?.stop();
+  ttsSupervisor?.stop();
   app.quit();
 });
