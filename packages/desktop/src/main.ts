@@ -9,6 +9,7 @@ import { createPetDrag, type PetDrag } from './petDrag';
 import { petWindowOptions } from './petWindow';
 import { createSupervisor, waitForPort, type Supervisor } from './supervisor';
 import { resolveTtsConfig, ttsProxyScript, type TtsConfig } from './tts';
+import { resolveSidecarDb, shouldAttach } from './backend';
 
 // v0.26.1 (Initiative 19): the single-machine app. The shell OWNS the whole runtime: it reads the
 // user's keys from app-data (never the bundle), spawns the compiled luna-server sidecar against an
@@ -16,9 +17,13 @@ import { resolveTtsConfig, ttsProxyScript, type TtsConfig } from './tts';
 // opens the window — and kills the sidecar on quit. LUNA_SMOKE=1 runs the same flow headless
 // (hidden window + DOM probe + exit code) so the packaged app is verifiable without a desktop.
 
-// The desktop app's own server port — deliberately NOT 8787, so a dev instance and the app coexist.
-const SERVER_PORT = Number(process.env['LUNA_DESKTOP_WS_PORT'] ?? 8790);
 const SMOKE = process.env['LUNA_SMOKE'] === '1';
+// v0.28.8: the app UNIFIES with the web backend. The canonical WS port is SHARED with `bun run dev`
+// (8787), so the desktop window and the browser tab are the same Luna on the same DB. On boot the
+// app probes this port: if a backend is already up it ATTACHES (no second sidecar, no second DB);
+// only when nothing is listening does it spawn its own, now against the shared repo DB. The packaged
+// SMOKE keeps its own port (8790) so a verification run never collides with a live dev server.
+const SERVER_PORT = Number(process.env['LUNA_DESKTOP_WS_PORT'] ?? (SMOKE ? 8790 : 8787));
 // v0.26.2: pet mode — transparent, frameless, always-on-top, region click-through. v0.27.0: the
 // settings-panel toggle (persisted in settings.json) is the authority once used; LUNA_PET_MODE in
 // luna.env / the env is only the initial default. Windowed mode stays the fallback.
@@ -27,6 +32,10 @@ let petMode = process.env['LUNA_PET_MODE'] === '1';
 type Paths = {
   userData: string;
   db: string;
+  // v0.28.8: the shared repo DB (<repoRoot>/luna.sqlite) — the one Luna the web backend uses. On a
+  // build==run machine this resolves (inlined __dirname three-up); a distributed build falls back to
+  // the app-data `db` (see resolveSidecarDb).
+  sharedDb: string;
   envFile: string;
   serverBin: string;
   migrationsDir: string;
@@ -42,6 +51,9 @@ function resolvePaths(): Paths {
   return {
     userData,
     db: join(userData, 'luna.sqlite'),
+    // <repoRoot>/luna.sqlite — same file the server defaults to (server/src/main.ts). __dirname is
+    // inlined at build as packages/desktop/src, so three up is the repo root.
+    sharedDb: join(__dirname, '..', '..', '..', 'luna.sqlite'),
     envFile: join(userData, 'luna.env'),
     serverBin: app.isPackaged ? join(res, 'luna-server') : join(res, 'bin', 'luna-server'),
     migrationsDir: app.isPackaged
@@ -69,7 +81,9 @@ function sidecarEnv(p: Paths, userEnv: Record<string, string>): Record<string, s
     ...(process.env as Record<string, string>),
     ...userEnv,
     LUNA_PORT: String(SERVER_PORT),
-    LUNA_DB_PATH: p.db,
+    // v0.28.8: spawn against the SHARED repo DB (one Luna) — falls back to app-data under SMOKE or a
+    // distributed build. When we ATTACH to a running backend instead, this sidecar never starts.
+    LUNA_DB_PATH: resolveSidecarDb({ sharedDb: p.sharedDb, userDb: p.db, smoke: SMOKE }),
     LUNA_MIGRATIONS_DIR: p.migrationsDir,
     LUNA_PERSONA_PATH: p.personaFile,
   };
@@ -343,6 +357,21 @@ void app.whenReady().then(async () => {
     env: sidecarEnv(p, userEnv),
     onEvent: (e) => console.log(`[luna-desktop] sidecar: ${e}`),
   });
+
+  // v0.28.8: is a backend already listening on the canonical port (e.g. `bun run dev`)? If so, ATTACH
+  // — our window becomes another client of that one Luna. We spawn no sidecar and no TTS proxy
+  // (dev-all owns it), and skip onboarding (the running server already holds the keys); the static
+  // host above still serves our own frontend and forwards TTS to the existing proxy. The renderer
+  // connects to `?ws=${SERVER_PORT}` either way, so both paths land on the same backend + DB.
+  const attached = shouldAttach({ portListening: await waitForPort(SERVER_PORT, 800), smoke: SMOKE });
+  if (attached) {
+    console.log(`[luna-desktop] attaching to existing backend on 127.0.0.1:${SERVER_PORT}`);
+    createWindow();
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    });
+    return;
+  }
 
   // v0.28.0: first run with no real key → show the setup screen instead of the app, and DON'T spawn
   // the sidecar yet (the submit handler starts it once real keys land). SMOKE + LUNA_SKIP_ONBOARDING
