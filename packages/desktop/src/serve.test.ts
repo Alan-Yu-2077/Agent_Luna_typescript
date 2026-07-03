@@ -25,8 +25,14 @@ function mkDist(): string {
 }
 
 // A stand-in for scripts/tts-proxy.cjs: /health returns JSON, /speak echoes its body as audio bytes.
+// /api/admin is a sibling endpoint OUTSIDE the /api/gpt-sovits/ subtree — a successful path-traversal
+// escape would reach it, so the guard test asserts it stays unreachable.
 function startFakeTts(): Server {
   return createServer((req, res) => {
+    if (req.url === '/api/admin') {
+      res.writeHead(200).end('SECRET');
+      return;
+    }
     if (req.url === '/api/gpt-sovits/health') {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ status: 'ready' }));
@@ -88,5 +94,17 @@ describe('startWebHost TTS forwarding (v0.28.7)', () => {
     expect(await index.text()).toContain('luna');
     const escape = await fetch(`http://127.0.0.1:${web}/../../etc/passwd`);
     expect(escape.status).toBe(404);
+  });
+
+  it('blocks an encoded ..%2f traversal out of the /api/gpt-sovits/ subtree', async () => {
+    const ttsPort = await portOf(startFakeTts());
+    const web = await portOf(startWebHost(mkDist(), 0, `http://127.0.0.1:${ttsPort}`));
+    // Decodes to /api/gpt-sovits/../admin → would resolve to the sibling /api/admin on the upstream.
+    const res = await fetch(`http://127.0.0.1:${web}/api/gpt-sovits/..%2fadmin`);
+    expect(res.status).toBe(400);
+    expect(await res.text()).not.toBe('SECRET');
+    // The legit route under the subtree still forwards.
+    const ok = await fetch(`http://127.0.0.1:${web}/api/gpt-sovits/health`);
+    expect(ok.status).toBe(200);
   });
 });

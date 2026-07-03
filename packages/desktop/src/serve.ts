@@ -33,7 +33,17 @@ export function startWebHost(distDir: string, port = WEB_PORT, ttsUpstream?: str
         res.writeHead(502).end('tts upstream not configured');
         return;
       }
-      void forwardTts(req, res, `${ttsUpstream}${pathname}${url.search}`);
+      // Build the target from the DECODED pathname so URL normalization collapses `..` segments,
+      // then re-check the result still sits under /api/gpt-sovits/. A raw startsWith on the decoded
+      // path is bypassable: `/api/gpt-sovits/..%2fadmin` passes it, yet fetch would resolve the `..`
+      // and escape the subtree. Query is forwarded verbatim.
+      const target = new URL(pathname, ttsUpstream);
+      target.search = url.search;
+      if (!target.pathname.startsWith('/api/gpt-sovits/')) {
+        res.writeHead(400).end('bad tts path');
+        return;
+      }
+      void forwardTts(req, res, target.toString());
       return;
     }
     const file = resolve(root, '.' + (pathname === '/' ? '/index.html' : pathname));
@@ -54,7 +64,7 @@ export function startWebHost(distDir: string, port = WEB_PORT, ttsUpstream?: str
 
 // Forward a /api/gpt-sovits/* request to the local proxy. Buffers the body both ways — audio is a
 // few hundred KB and this is a single local user, so streaming plumbing buys nothing. A dead/absent
-// proxy → 502, which the boot gate + webAudioSink already treat as "no voice, stay muted".
+// or stalled proxy → 502, which the boot gate + webAudioSink already treat as "no voice, stay muted".
 async function forwardTts(req: IncomingMessage, res: ServerResponse, target: string): Promise<void> {
   try {
     const init: RequestInit = { method: req.method };
@@ -62,6 +72,10 @@ async function forwardTts(req: IncomingMessage, res: ServerResponse, target: str
       init.body = await readBody(req);
       init.headers = { 'content-type': req.headers['content-type'] ?? 'application/json' };
     }
+    // Bound the upstream wait — server.requestTimeout does NOT abort an in-flight fetch, so a proxy
+    // that accepts then never responds would hang the handler forever. 600s covers the cold model
+    // load; a timeout aborts → the catch below answers 502.
+    init.signal = AbortSignal.timeout(600_000);
     const upstream = await fetch(target, init);
     const body = Buffer.from(await upstream.arrayBuffer());
     res.writeHead(upstream.status, {
