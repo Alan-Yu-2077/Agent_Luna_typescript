@@ -1,5 +1,6 @@
 import type { Session } from '../turn/session';
 import type { Cadence, ProactivePhase } from './cadence';
+import { silenceTimerEnabled } from './cadence';
 import { effectiveCadence } from './style';
 
 // v0.24.0 (Initiative 17): the silence-driven escalation ladder — Alan's original
@@ -8,8 +9,12 @@ import { effectiveCadence } from './style';
 // `maybeFireProactive` consults this instead of the detector registry (which v0.24.1 deletes).
 //
 // One signal drives everything: effective_gap = how long since ANYONE last spoke in the
-// channel — the user OR Luna's own last outreach — so she never nudges into a silence she
-// just broke. The phase machine climbs a restraint ladder:
+// channel. Initiative 21 (v0.29.0) makes that honest: silenceGap reads the single activity
+// idle-timer (session.lastActivityMs — bumped by every user message AND every Luna reply),
+// min'd with sinceProactive so she never nudges into a silence she just broke. Before v0.29.0
+// the gap counted only the user + her PROACTIVE outreach, so her ordinary reactive replies
+// advanced nothing and she interrupted a live conversation seconds after answering. The phase
+// machine climbs a restraint ladder:
 //   engaged → (quiet a while) idle_nudge → (no reply) renudge×N on exponential backoff →
 //   leave_message → dormant → (auto-recover after a cool-down of genuine silence) engaged.
 // The anti-spam rail (cadence.passesAntiSpam) already enforced quiet-hours + the idle floor +
@@ -72,10 +77,14 @@ export function evaluateLadder(ctx: LadderCtx, rng: () => number = Math.random):
   const dormantRecoveryMs = num('LUNA_PROACTIVE_DORMANT_RECOVERY_MS', 3_600_000); // 1h
   const longAbsenceMs = num('LUNA_PROACTIVE_LONG_ABSENCE_MS', 64_800_000); // 18h
 
-  const userGap = session.lastUserMs > 0 ? nowMs - session.lastUserMs : Infinity;
+  // v0.29.0: silence = time since the last thing said in the channel (activity idle-timer).
+  // The flag-off path restores the pre-v0.29.0 user-only anchor for A/B; v0.29.1 deletes it.
+  const silenceAnchorMs = silenceTimerEnabled() ? session.lastActivityMs : session.lastUserMs;
+  const silenceGap = silenceAnchorMs > 0 ? nowMs - silenceAnchorMs : Infinity;
   const sinceProactive = cadence.lastProactiveMs > 0 ? nowMs - cadence.lastProactiveMs : Infinity;
-  // effective_gap (proactive.py:277-281): count her own outreach too.
-  const effectiveGap = Math.min(userGap, sinceProactive);
+  // effective_gap (proactive.py:277-281): min'd with her own outreach so a recent proactive
+  // still spaces the next one even if the activity timer was bumped by that same outreach.
+  const effectiveGap = Math.min(silenceGap, sinceProactive);
 
   let phase: ProactivePhase = cadence.phase;
   let nudgesSent = cadence.nudgesSent;

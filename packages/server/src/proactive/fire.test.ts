@@ -53,7 +53,9 @@ afterEach(() => {
 // a 15m silence — past the 60s idle floor AND the 10m ladder idle-threshold, so the ladder fires a
 // deterministic idle_nudge (nudge_prob defaults to 1.0).
 function idle(s: Session): void {
-  s.lastUserMs = Date.now() - 15 * 60_000;
+  const t = Date.now() - 15 * 60_000;
+  s.lastUserMs = t;
+  s.lastActivityMs = t; // v0.29.0: the silence gap reads the activity anchor
 }
 
 function opts(
@@ -137,7 +139,7 @@ describe('maybeFireProactive — ladder funnel (rail behaviors, v0.24.1)', () =>
 
   test('a short silence → no fire', async () => {
     const s = getSession('default');
-    s.lastUserMs = Date.now() - 90_000; // 90s: past the 60s floor, under the 120s ambient min
+    s.lastActivityMs = s.lastUserMs = Date.now() - 90_000; // 90s: past the 60s floor, under the 120s ambient min
     const o = opts(s, new MockProvider([[endRound]]));
     expect((await maybeFireProactive(o)).fired).toBe(false);
     expect(o.provider.requests.length).toBe(0);
@@ -187,7 +189,7 @@ describe('maybeFireProactive — ladder climb + recovery (v0.24.0)', () => {
   test('a SILENT idle_nudge persists idle_watch, so the next tick re-offers (climb survives silence)', async () => {
     const s = getSession('default');
     const t0 = Date.now();
-    s.lastUserMs = t0 - 15 * 60_000; // 15m idle → idle_nudge
+    s.lastActivityMs = s.lastUserMs = t0 - 15 * 60_000; // 15m idle → idle_nudge
     // first tick: fires idle_nudge; MockProvider ends without a message → silent → persist idle_watch
     await maybeFireProactive(opts(s, new MockProvider([[endRound]]), t0));
     expect(loadCadence('default').phase).toBe('idle_watch');
@@ -206,7 +208,7 @@ describe('maybeFireProactive — ladder climb + recovery (v0.24.0)', () => {
       lastProactiveMs: t0 - 2 * 3_600_000, // her last outreach 2h ago
       nudgesSent: 3,
     });
-    s.lastUserMs = t0 - 3 * 3_600_000; // user quiet longer than that (no user-reset)
+    s.lastActivityMs = s.lastUserMs = t0 - 3 * 3_600_000; // user quiet longer than that (no user-reset)
     const out = await maybeFireProactive(opts(s, new MockProvider([[endRound]]), t0));
     expect(out.fired).toBe(true); // recovered → offered idle_nudge
     expect(loadCadence('default').phase).toBe('idle_watch'); // recovery persisted, NOT stuck dormant

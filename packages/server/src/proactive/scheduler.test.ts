@@ -70,7 +70,10 @@ function makeDeps(_unused: string, turnRounds: ProviderEvent[][]) {
 describe('proactive scheduler — ladder path (default)', () => {
   // a 15m silence → past the idle floor AND the 10m ladder threshold → a deterministic idle_nudge
   const idle = () => {
-    getSession('default').lastUserMs = Date.now() - 15 * 60_000;
+    const t = Date.now() - 15 * 60_000;
+    const s = getSession('default');
+    s.lastUserMs = t;
+    s.lastActivityMs = t; // v0.29.0: the silence gap reads the activity anchor
   };
 
   test('disabled (LUNA_PROACTIVE=0) → no-op even on a long idle', async () => {
@@ -83,7 +86,10 @@ describe('proactive scheduler — ladder path (default)', () => {
   });
 
   test('a short silence → no turn, and NO LLM gate call (zero idle polling)', async () => {
-    getSession('default').lastUserMs = Date.now() - 90_000; // 90s → no ladder scenario
+    {
+      const s = getSession('default');
+      s.lastActivityMs = s.lastUserMs = Date.now() - 90_000; // 90s → no ladder scenario
+    }
     const { deps, gate, turnProvider } = makeDeps('', [[endRound]]);
     await runTick(deps);
     expect(gate.completeRequests.length).toBe(0); // the whole point: no per-tick LLM
@@ -103,7 +109,10 @@ describe('proactive scheduler — ladder path (default)', () => {
   });
 
   test('a >18h absence → sleeping, no proactive (she waits for the user — pure-Python parity)', async () => {
-    getSession('default').lastUserMs = Date.now() - 20 * 60 * 60_000; // 20h ago
+    {
+      const s = getSession('default');
+      s.lastActivityMs = s.lastUserMs = Date.now() - 20 * 60 * 60_000; // 20h ago
+    }
     const { deps, turnProvider } = makeDeps('', [[endRound]]);
     await runTick(deps);
     expect(turnProvider.requests.length).toBe(0); // long-absence → sleeping, not a nudge

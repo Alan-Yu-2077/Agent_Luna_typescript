@@ -1,6 +1,6 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import { Mutex } from '../tools/mutex';
-import { lastUserTurnMs, listSessionIds, loadSession } from '../memory/sessionStore';
+import { lastUserTurnMs, listRecentL2, listSessionIds, loadSession } from '../memory/sessionStore';
 
 // A single todo item on the session's plan spine (Initiative 8, v0.15.3). The
 // plan is the visible, revisable scaffold for multi-step code work — set/update/
@@ -30,9 +30,18 @@ export type Session = {
   // block. Deliberately NOT persisted: a restart genuinely is a fresh wake.
   wakePending: boolean;
   // wall-clock of the last USER turn (not proactive — her own activity is lull
-  // anchoring, tracked via cadence). Drives the proactive idle gap. Init to
-  // boot time so she never proactive-fires until a fresh idle gap elapses.
+  // anchoring, tracked via cadence). Init to boot time so she never
+  // proactive-fires until a fresh idle gap elapses. Since Initiative 21 (v0.29.0)
+  // this drives ONLY the escalation reset (a user reply → engaged); the silence
+  // gap itself reads lastActivityMs.
   lastUserMs: number;
+  // wall-clock of the last conversation activity in the channel — a user message
+  // OR any Luna reply (reactive / continuation / proactive). The single silence
+  // idle-timer (Initiative 21, v0.29.0): silenceGap = now - lastActivityMs, bumped
+  // by markActivity() at every user message + every reply-producing turn finalize.
+  // Replaces the old lastUserMs-based gap so she stops interrupting a conversation
+  // seconds after she herself finished replying. Monotonic; never moves backwards.
+  lastActivityMs: number;
   // Wall-clock when this in-memory session was created (process boot / first
   // touch). NOT persisted — a restart is genuinely a new session, so "this
   // session: started Nm ago" resets per process (Initiative 12, v0.19.0).
@@ -58,6 +67,7 @@ export function getSession(id: string): Session {
       windowLowWater: persisted?.windowLowWater ?? 0,
       wakePending: true,
       lastUserMs: Date.now(),
+      lastActivityMs: Date.now(),
       sessionStartMs: Date.now(),
       mutex: new Mutex(),
     };
@@ -83,7 +93,19 @@ export function preloadSessions(): void {
     const s = getSession(id);
     const last = lastUserTurnMs(id);
     if (last != null) s.lastUserMs = last;
+    // Seed the silence idle-timer from the last L2 turn of ANY kind (the same source
+    // proactiveTurn.lastInteractionMs uses) so a restart doesn't reset the gap to boot
+    // time; fall back to the user anchor when there's no turn history.
+    const lastActivity = listRecentL2(id, 1)[0]?.t_ms ?? s.lastUserMs;
+    s.lastActivityMs = lastActivity;
   }
+}
+
+// The silence idle-timer bump (Initiative 21, v0.29.0). Monotonic — a clock only moves
+// forward, so an out-of-order stamp (e.g. the turn-start mark arriving after a later
+// finalize) never rewinds the gap.
+export function markActivity(s: Session, nowMs: number): void {
+  if (nowMs > s.lastActivityMs) s.lastActivityMs = nowMs;
 }
 
 export function resetSessions(): void {

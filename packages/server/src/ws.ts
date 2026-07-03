@@ -7,7 +7,7 @@ import { outbound } from './outbound';
 import { dispatchToolCalls } from './tools/dispatcher';
 import { builtinRegistry, type ToolRegistry } from './tools/registry';
 import type { Provider } from './provider/types';
-import { getSession, type Session } from './turn/session';
+import { getSession, markActivity, type Session } from './turn/session';
 import { listL2 } from './memory/sessionStore';
 import { runTurn } from './turn/runTurn';
 import { afterANightOpening } from './turn/temporalContext';
@@ -230,7 +230,9 @@ export function handleMessage(
         });
         return;
       }
-      session.lastUserMs = Date.now(); // resets the proactive idle gap
+      const userNowMs = Date.now();
+      session.lastUserMs = userNowMs; // the escalation-reset anchor (user reply → engaged)
+      markActivity(session, userNowMs); // a user message is conversation activity → bump the silence timer
       const { provider, registry } = runtime; // narrowed by the guard above
       const turnId = event.turn_id ?? `${session.id}:turn:${session.turnSeq}`;
       const emit = safeEmit(ws);

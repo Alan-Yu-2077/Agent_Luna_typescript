@@ -37,6 +37,16 @@ export function proactiveEnabled(): boolean {
   return Bun.env['LUNA_PROACTIVE'] !== '0';
 }
 
+// Initiative 21 (v0.29.0): the silence signal reads the single activity idle-timer
+// (session.lastActivityMs) instead of the old user-only anchor. Default ON;
+// LUNA_PROACTIVE_SILENCE_TIMER=0 restores the pre-v0.29.0 lastUserMs gap for A/B.
+// Lives here (not ladder.ts) so both the ladder and this anti-spam rail can read it
+// without a runtime import cycle (ladder.ts already imports from cadence.ts). Removed
+// in v0.29.1 once the idle-timer is the only path.
+export function silenceTimerEnabled(): boolean {
+  return Bun.env['LUNA_PROACTIVE_SILENCE_TIMER'] !== '0';
+}
+
 // C3 (v0.16.0): the daily quota rolls over on the LOCAL date, the same clock as
 // quiet-hours (`getHours()`). Previously this used UTC (`toISOString`), so for a
 // non-UTC user the "daily" quota reset at a confusing local time. One clock now.
@@ -59,7 +69,14 @@ function quietHours(): Set<number> {
   );
 }
 
-export type WakeContext = { lastUserMs: number; nowMs: number; nowHour: number };
+export type WakeContext = {
+  lastUserMs: number;
+  // Initiative 21 (v0.29.0): the silence idle-timer anchor. The idle floor measures from
+  // this (when the timer is on) so a long reactive turn no longer pre-elapses the floor.
+  lastActivityMs: number;
+  nowMs: number;
+  nowHour: number;
+};
 
 // v0.22.0 (Initiative 15): the anti-spam rail that gates the deterministic detector path —
 // quiet hours + a small idle floor + cooldown + daily quota. Deliberately does NOT apply a
@@ -70,12 +87,14 @@ export type WakeContext = { lastUserMs: number; nowMs: number; nowHour: number }
 export function passesAntiSpam(c: Cadence, x: WakeContext): { ok: boolean; reason: string } {
   if (!proactiveEnabled()) return { ok: false, reason: 'disabled' };
   if (quietHours().has(x.nowHour)) return { ok: false, reason: 'quiet_hours' };
-  // v0.22.1: a small idle floor — don't reach in during a live exchange (an event-hook
-  // detector could otherwise fire seconds after the user's last message). Much smaller
-  // than the old 10m `too_soon` gate (which is intentionally NOT here — detectors, not
-  // an idle window, decide WHEN to consider).
-  const userGap = x.lastUserMs > 0 ? x.nowMs - x.lastUserMs : Infinity;
-  if (userGap < num('LUNA_PROACTIVE_IDLE_FLOOR_MS', 60_000)) {
+  // v0.22.1: a small idle floor — don't reach in during a live exchange. v0.29.0: measure
+  // it from the silence idle-timer (last activity of ANY kind), not lastUserMs — a reactive
+  // turn lasting longer than the floor used to leave it already-elapsed the instant she
+  // finished (lastUserMs is stamped at turn START), killing the "don't reach in mid-exchange"
+  // guard right when it's needed. The activity anchor is stamped when she finishes replying.
+  const idleAnchorMs = silenceTimerEnabled() ? x.lastActivityMs : x.lastUserMs;
+  const idleGap = idleAnchorMs > 0 ? x.nowMs - idleAnchorMs : Infinity;
+  if (idleGap < num('LUNA_PROACTIVE_IDLE_FLOOR_MS', 60_000)) {
     return { ok: false, reason: 'mid_conversation' };
   }
   // v0.24.2: the cooldown + quota come from the effective cadence (the activeness lever scaled
