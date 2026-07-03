@@ -98,13 +98,22 @@ function createWindow(): BrowserWindow {
     // Pet mode: she floats over the desktop — transparent, frameless, shadowless, always on top.
     ...(petMode ? { transparent: true, frame: false, hasShadow: false, alwaysOnTop: true } : {}),
     webPreferences: {
-      preload: join(__dirname, 'preload.cjs'),
+      // NOT join(__dirname, ...): bun inlines __dirname as the SOURCE dir (packages/desktop/src)
+      // at compile time, but preload.cjs ships in dist/ (and in app.asar/dist/ when packaged) — so
+      // the __dirname path pointed at a nonexistent src/preload.cjs and the bridge SILENTLY never
+      // loaded (pet click-through + the pet toggle both dead). app.getAppPath() is the real bundle
+      // root in both dev (packages/desktop) and packaged (…/app.asar). The preload-error listener
+      // below turns any future miss back into a loud failure.
+      preload: join(app.getAppPath(), 'dist', 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
       // A companion must keep animating when covered/hidden — the pet failure mode reproduced live
       // during Initiative 18's preview (a hidden tab froze the pixi beat).
       backgroundThrottling: false,
     },
+  });
+  win.webContents.on('preload-error', (_e, path, error) => {
+    console.error(`[luna-desktop] PRELOAD ERROR at ${path}: ${error.message}`);
   });
   if (petMode) {
     win.setAlwaysOnTop(true, 'floating');
@@ -138,14 +147,24 @@ ipcMain.on('luna:set-pet-mode', (_event, on: unknown) => {
 async function smokeProbe(win: BrowserWindow): Promise<void> {
   await new Promise((r) => setTimeout(r, 6000));
   const probe = (await win.webContents.executeJavaScript(
-    `JSON.stringify({
-      canvas: !!document.querySelector('.model-stage canvas'),
-      headX: document.querySelector('.model-stage')?.style.getPropertyValue('--luna-head-x') || null,
-      wsStatus: document.querySelector('.status-badge')?.dataset.status || null,
-      pet: document.body.classList.contains('pet'),
-      bodyBgImage: getComputedStyle(document.body).backgroundImage,
-      collapsed: !!document.querySelector('.luna-app.collapsed'),
-    })`,
+    `(() => {
+      // v0.27.1: open the settings panel so we can assert the server-driven rows + the pet toggle
+      // actually rendered inside the packaged shell (the desktop-specific wiring a page probe misses).
+      document.querySelector('.settings-panel')?.classList.add('on');
+      const petInput = [...document.querySelectorAll('.settings-panel label')]
+        .find((l) => l.textContent.includes('Desktop pet'))?.querySelector('input');
+      return JSON.stringify({
+        canvas: !!document.querySelector('.model-stage canvas'),
+        headX: document.querySelector('.model-stage')?.style.getPropertyValue('--luna-head-x') || null,
+        wsStatus: document.querySelector('.status-badge')?.dataset.status || null,
+        pet: document.body.classList.contains('pet'),
+        bodyBgImage: getComputedStyle(document.body).backgroundImage,
+        collapsed: !!document.querySelector('.luna-app.collapsed'),
+        bridgeSetPetMode: typeof window.lunaPet?.setPetMode,
+        petRowVisible: petInput ? getComputedStyle(petInput.closest('label')).display !== 'none' : false,
+        serverRows: document.querySelectorAll('.server-settings .setting-row').length,
+      });
+    })()`,
   )) as string;
   const p = JSON.parse(probe) as {
     canvas: boolean;
@@ -153,16 +172,23 @@ async function smokeProbe(win: BrowserWindow): Promise<void> {
     wsStatus: string | null;
     pet: boolean;
     bodyBgImage: string;
+    bridgeSetPetMode: string;
+    petRowVisible: boolean;
+    serverRows: number;
   };
   const shotPath = process.env['LUNA_SMOKE_OUT'];
   if (shotPath) {
+    await new Promise((r) => setTimeout(r, 200)); // let the just-opened settings panel paint
     const shot = await win.webContents.capturePage();
     writeFileSync(shotPath, shot.toPNG());
   }
   // The packaged go/no-go: rendering alive AND the WS actually connected to the spawned sidecar.
   // In pet mode additionally: the pet class landed and the striped room is gone (transparent body).
   const petOk = !petMode || (p.pet && p.bodyBgImage === 'none');
-  const ok = p.canvas && p.headX !== null && p.wsStatus === 'open' && petOk;
+  // v0.27.2: the preload bridge must be live (setPetMode exposed → the pet toggle row renders).
+  // This is exactly the check that would have caught the __dirname preload-path bug earlier.
+  const bridgeOk = p.bridgeSetPetMode === 'function' && p.petRowVisible;
+  const ok = p.canvas && p.headX !== null && p.wsStatus === 'open' && petOk && bridgeOk;
   console.log(JSON.stringify({ ok, ...p }));
   supervisor?.stop();
   app.exit(ok ? 0 : 1);
