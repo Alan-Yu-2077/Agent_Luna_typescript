@@ -4,7 +4,7 @@ Forward development plan for the TypeScript rewrite. Each initiative is a folder
 self-contained version plans, executed one at a time. Version numbers reserve across initiatives so
 they never overlap.
 
-> **Main head: v0.27.3** (branch `feat/weather-perception`). **Initiatives 17 (silence ladder) + 18 (companion UI) + 19 (desktop app) ✅ SHIPPED 2026-07-02.** Since then, shipped ad hoc via `luna-ts-dev` (not roadmapped): **v0.27.0–v0.27.1 settings surface** (pet toggle + a server-driven, auto-rendering settings panel over 16 whitelisted env flags), **v0.27.2** (desktop preload `__dirname` fix — the pet bridge silently never loaded), **v0.27.3** (proactive priming directive no longer leaks into a phantom user bubble). **Initiative 20 — desktop first-run & pet ergonomics (v0.28.0–v0.28.2) 🟡 PLANNED** — a guided setup screen (writes `luna.env`, restarts the sidecar) + pet mode reworked so the *window* moves/resizes while the model is a fixed half-body. See [`desktop-onboarding-pet-2026-07/`](desktop-onboarding-pet-2026-07/). **Initiatives 8–12 all ✅ shipped + merged**: code-agent capability
+> **Main head: v0.28.3** (branch `mainline`). **Initiatives 17 (silence ladder) + 18 (companion UI) + 19 (desktop app) ✅ SHIPPED 2026-07-02.** Since then, shipped ad hoc via `luna-ts-dev` (not roadmapped): **v0.27.0–v0.27.1 settings surface** (pet toggle + a server-driven, auto-rendering settings panel over 16 whitelisted env flags), **v0.27.2** (desktop preload `__dirname` fix — the pet bridge silently never loaded), **v0.27.3** (proactive priming directive no longer leaks into a phantom user bubble). **Initiative 20 — desktop first-run & pet ergonomics (v0.28.0–v0.28.3) ✅ SHIPPED** — a guided setup screen (writes `luna.env`, restarts the sidecar) + pet mode reworked so the *window* moves/resizes while the model is a fixed half-body. See [`desktop-onboarding-pet-2026-07/`](desktop-onboarding-pet-2026-07/). **Initiatives 8–12 all ✅ shipped + merged**: code-agent capability
 > (v0.15.x), audit remediation (v0.16.x), memory-depth correction (v0.17.x), **web tools (Initiative 11,
 > v0.18.0–v0.18.3)** — `web_search` + a DNS-**pinned** SSRF-guarded `web_fetch` + the standing injection
 > defense + citations, default-on — and **time perception (Initiative 12, v0.19.0–v0.19.2)** — cache-safe
@@ -429,7 +429,7 @@ app (not an "Expandable Application"). Folder: [`desktop-app-2026-07/`](desktop-
 | v0.26.1 | [Single-machine app](desktop-app-2026-07/v0.26.1-single-machine-app.md) | High | `bun build --compile` server + static/TTS-proxy sidecars, Electron supervises (kill-on-quit), SQLite + secrets in **app-data**, electron-builder packaging + signing; amend the Frontend LD | ✅ |
 | v0.26.2 | [Desktop-pet window](desktop-app-2026-07/v0.26.2-desktop-pet-window.md) | Medium | transparent + always-on-top + frameless, **background-throttling off**, region click-through, geo shim, premultiplied-alpha + packaged-transparency verify; **Initiative 19 close** | ✅ |
 
-## Initiative 20 — Desktop first-run & pet ergonomics (v0.28.0 – v0.28.2) — 🟡 PLANNED
+## Initiative 20 — Desktop first-run & pet ergonomics (v0.28.0 – v0.28.3) — ✅ SHIPPED
 
 Two adoption blockers surfaced by real use: first run is a `luna.env` text-file chore, and pet mode can't be
 moved or resized (frameless + click-through leaves no title bar to drag and no visible edge to resize, while the
@@ -441,6 +441,6 @@ fills whatever size you pick. Shell + web-frontend UX only; no turn/memory/proac
 
 | Version | Plan | Risk | Theme | Status |
 |---|---|---|---|---|
-| v0.28.0 | [First-run onboarding](desktop-onboarding-pet-2026-07/v0.28.0-first-run-onboarding.md) | Medium | setup screen → `writeOnboarding` merges into `luna.env` → new `supervisor.restart()` applies keys live; shell-only key IPC (never `settings.*`); removes the blocking first-run dialog | 🟡 |
-| v0.28.1 | [Pet model fixed half-body](desktop-onboarding-pet-2026-07/v0.28.1-pet-half-body-fixed.md) | Low | `fit()` gains a pet branch (width-fit + top-anchor half-body); model drag + scroll-zoom disabled under `?pet=1`; pure web, windowed mode byte-unchanged | 🟡 |
-| v0.28.2 | [Pet window move + resize](desktop-onboarding-pet-2026-07/v0.28.2-pet-window-move-resize.md) | Medium | `resizable:true` + min-size, body = `-webkit-app-region: drag` (bar/buttons `no-drag`), reconcile click-through (recommend dropping per-pixel pass-through); model re-fits on resize for free; smoke asserts it | 🟡 |
+| v0.28.0 | [First-run onboarding](desktop-onboarding-pet-2026-07/v0.28.0-first-run-onboarding.md) | Medium | setup screen → `writeOnboarding` merges into `luna.env` → new `supervisor.restart()` applies keys live; shell-only key IPC (never `settings.*`); removes the blocking first-run dialog | ✅ |
+| v0.28.1 | [Pet model fixed half-body](desktop-onboarding-pet-2026-07/v0.28.1-pet-half-body-fixed.md) | Low | `fit()` gains a pet branch (width-fit + top-anchor half-body); model drag + scroll-zoom disabled under `?pet=1`; pure web, windowed mode byte-unchanged | ✅ |
+| v0.28.2 | [Pet window move + resize](desktop-onboarding-pet-2026-07/v0.28.2-pet-window-move-resize.md) | Medium | `resizable:true` + min-size, body = `-webkit-app-region: drag` (bar/buttons `no-drag`), reconcile click-through (recommend dropping per-pixel pass-through); model re-fits on resize for free; smoke asserts it | ✅ |
