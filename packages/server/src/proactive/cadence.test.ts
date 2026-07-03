@@ -94,21 +94,12 @@ describe('passesAntiSpam (v0.22.0 detector gate — anti-spam subset only)', () 
     expect(passesAntiSpam(base, ctx()).ok).toBe(true);
   });
 
-  // v0.29.0: a long reactive turn — the user spoke 65s ago (turn start), but Luna's reply only
-  // finished 5s ago. The floor must measure from her reply (activity), not the user's message,
-  // or the "don't reach in mid-exchange" guard is dead the instant she finishes a slow turn.
-  test('long reply: floor reads the activity anchor, not the old user message (timer on)', () => {
+  // v0.29.0/.1: a long reactive turn — the user spoke 65s ago (turn start), but Luna's reply only
+  // finished 5s ago. The floor measures from her reply (activity), not the user's message, or the
+  // "don't reach in mid-exchange" guard is dead the instant she finishes a slow turn.
+  test('long reply: the idle floor reads the activity anchor, not the old user message', () => {
     const c = ctx({ lastUserMs: NOW - 65_000, lastActivityMs: NOW - 5_000 });
     expect(passesAntiSpam(base, c).reason).toBe('mid_conversation');
-  });
-  test('long reply: with the timer OFF the old user anchor wrongly passes the floor', () => {
-    Bun.env['LUNA_PROACTIVE_SILENCE_TIMER'] = '0';
-    try {
-      const c = ctx({ lastUserMs: NOW - 65_000, lastActivityMs: NOW - 5_000 });
-      expect(passesAntiSpam(base, c).ok).toBe(true);
-    } finally {
-      delete Bun.env['LUNA_PROACTIVE_SILENCE_TIMER']; // never leak the flag to later tests
-    }
   });
 });
 

@@ -35,7 +35,7 @@ describe('resolveEffectiveCadence (activeness lever, v0.24.2)', () => {
     expect(c.renudgeBaseMs).toBe(300_000);
     expect(c.dailyQuota).toBe(5);
     expect(c.nudgeProb).toBe(1.0);
-    expect(c.ambientProb).toBeCloseTo(0.12);
+    expect(c.ambientProb).toBeCloseTo(0.06); // v0.29.1: 0.12 → 0.06
   });
 
   test('clingy raises eagerness but the quota stays clamped to the ceiling and prob to 1', () => {
@@ -43,7 +43,7 @@ describe('resolveEffectiveCadence (activeness lever, v0.24.2)', () => {
     expect(c.minIntervalMs).toBe(180_000); // 300k × 0.6
     expect(c.dailyQuota).toBe(6); // round(5×1.6)=8 → clamped to ceiling 6
     expect(c.nudgeProb).toBe(1.0); // 1.0×1.35 → clamped to 1
-    expect(c.ambientProb).toBeCloseTo(0.162); // 0.12×1.35
+    expect(c.ambientProb).toBeCloseTo(0.081); // v0.29.1: 0.06×1.35
   });
 
   test('aloof lowers eagerness', () => {

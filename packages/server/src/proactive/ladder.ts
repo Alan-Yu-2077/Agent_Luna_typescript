@@ -1,6 +1,5 @@
 import type { Session } from '../turn/session';
 import type { Cadence, ProactivePhase } from './cadence';
-import { silenceTimerEnabled } from './cadence';
 import { effectiveCadence } from './style';
 
 // v0.24.0 (Initiative 17): the silence-driven escalation ladder — Alan's original
@@ -66,7 +65,9 @@ export function evaluateLadder(ctx: LadderCtx, rng: () => number = Math.random):
   const { session, cadence, nowMs } = ctx;
 
   const idleThresholdMs = num('LUNA_PROACTIVE_IDLE_THRESHOLD_MS', 600_000); // 10m — deliberately > ambientMin so ambient is reachable
-  const ambientMinMs = num('LUNA_PROACTIVE_AMBIENT_MIN_MS', 120_000); // 2m
+  // v0.29.1: 2m → 5m. A 2-minute pause is not "silence" — with the honest activity timer (v0.29.0)
+  // a weightless ambient became eligible mid-exchange far too readily; a 5-minute lull is a real gap.
+  const ambientMinMs = num('LUNA_PROACTIVE_AMBIENT_MIN_MS', 300_000); // 5m
   // v0.24.2: the probabilities + renudge spacing come from the effective cadence (activeness lever
   // clamped inside the operator floor/ceiling; balanced === the raw knobs).
   const eff = effectiveCadence();
@@ -77,10 +78,9 @@ export function evaluateLadder(ctx: LadderCtx, rng: () => number = Math.random):
   const dormantRecoveryMs = num('LUNA_PROACTIVE_DORMANT_RECOVERY_MS', 3_600_000); // 1h
   const longAbsenceMs = num('LUNA_PROACTIVE_LONG_ABSENCE_MS', 64_800_000); // 18h
 
-  // v0.29.0: silence = time since the last thing said in the channel (activity idle-timer).
-  // The flag-off path restores the pre-v0.29.0 user-only anchor for A/B; v0.29.1 deletes it.
-  const silenceAnchorMs = silenceTimerEnabled() ? session.lastActivityMs : session.lastUserMs;
-  const silenceGap = silenceAnchorMs > 0 ? nowMs - silenceAnchorMs : Infinity;
+  // v0.29.0/.1: silence = time since the last thing said in the channel (the single activity
+  // idle-timer; the old user-only anchor + its flag were retired in v0.29.1).
+  const silenceGap = session.lastActivityMs > 0 ? nowMs - session.lastActivityMs : Infinity;
   const sinceProactive = cadence.lastProactiveMs > 0 ? nowMs - cadence.lastProactiveMs : Infinity;
   // effective_gap (proactive.py:277-281): min'd with her own outreach so a recent proactive
   // still spaces the next one even if the activity timer was bumped by that same outreach.

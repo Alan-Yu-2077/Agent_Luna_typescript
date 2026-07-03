@@ -81,14 +81,7 @@ export async function maybeFireProactive(opts: MaybeFireOpts): Promise<FireOutco
     const { session, nowMs, nowHour } = opts;
     if (!ladderEnabled()) return NO_FIRE;
     const cadence = loadCadence(session.id);
-    if (
-      !passesAntiSpam(cadence, {
-        lastUserMs: session.lastUserMs,
-        lastActivityMs: session.lastActivityMs,
-        nowMs,
-        nowHour,
-      }).ok
-    ) {
+    if (!passesAntiSpam(cadence, { lastActivityMs: session.lastActivityMs, nowMs, nowHour }).ok) {
       return NO_FIRE;
     }
 
