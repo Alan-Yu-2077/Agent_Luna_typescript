@@ -9,7 +9,7 @@ import { createPetDrag, type PetDrag } from './petDrag';
 import { petWindowOptions } from './petWindow';
 import { createSupervisor, waitForPort, type Supervisor } from './supervisor';
 import { resolveTtsConfig, ttsProxyScript, type TtsConfig } from './tts';
-import { resolveSidecarDb, shouldAttach } from './backend';
+import { resolveDevLauncher, resolveSidecarDb, shouldAttach } from './backend';
 
 // v0.26.1 (Initiative 19): the single-machine app. The shell OWNS the whole runtime: it reads the
 // user's keys from app-data (never the bundle), spawns the compiled luna-server sidecar against an
@@ -367,6 +367,40 @@ void app.whenReady().then(async () => {
   if (attached) {
     console.log(`[luna-desktop] attaching to existing backend on 127.0.0.1:${SERVER_PORT}`);
     createWindow();
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    });
+    return;
+  }
+
+  // v0.28.9: nothing is up — start the backend ourselves. On a source checkout with bun reachable,
+  // launch the WHOLE dev stack (`bun scripts/dev-all.ts` = server 8787 + web 5173 + tts 8788) so one
+  // click brings everything up and the browser shares this same Luna. dev-all owns TTS and reads the
+  // repo `.env` for keys, so we skip maybeStartTts + onboarding here; LUNA_PROACTIVE follows luna.env
+  // (dev-all defaults it off). SMOKE + no-bun/no-repo fall through to the self-contained sidecar.
+  const dev = SMOKE ? null : resolveDevLauncher({ repoRoot: REPO_ROOT, env: process.env });
+  if (dev) {
+    console.log(`[luna-desktop] launching full dev stack: ${dev.bun} ${dev.script}`);
+    supervisor = createSupervisor({
+      command: dev.bun,
+      args: [dev.script],
+      cwd: dev.cwd,
+      env: {
+        ...(process.env as Record<string, string>),
+        LUNA_PROACTIVE: userEnv['LUNA_PROACTIVE'] ?? '0',
+      },
+      onEvent: (e) => console.log(`[luna-desktop] dev-all: ${e}`),
+    });
+    supervisor.start();
+    const up = await waitForPort(SERVER_PORT);
+    if (!up) {
+      dialog.showMessageBoxSync({
+        type: 'warning',
+        message: 'Luna\'s dev stack did not start',
+        detail: `No response on 127.0.0.1:${SERVER_PORT}. Check that bun + the repo are present (or set LUNA_BUN_PATH in ${p.envFile}).`,
+      });
+    }
+    createWindow(); // dev never runs under SMOKE (see the guard above), so no smoke probe here
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();
     });

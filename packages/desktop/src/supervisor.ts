@@ -12,12 +12,20 @@ export type SpawnedChild = {
   on(event: 'exit' | 'error', cb: () => void): unknown;
   kill(): unknown;
 };
-export type SpawnFn = (cmd: string, args: string[], env: Record<string, string>) => SpawnedChild;
+export type SpawnFn = (
+  cmd: string,
+  args: string[],
+  env: Record<string, string>,
+  cwd?: string,
+) => SpawnedChild;
 
 export type SupervisorOpts = {
   command: string;
   args?: string[];
   env: Record<string, string>;
+  // v0.28.9: working directory for the child — the dev-all launcher (`bun scripts/dev-all.ts`) uses
+  // paths relative to the repo root, so it must run there. Omitted → the parent's cwd.
+  cwd?: string;
   maxRestarts?: number; // bounded — a config error must not crash-loop forever
   onEvent?: (e: 'started' | 'exited' | 'restarting' | 'gave-up') => void;
   spawnFn?: SpawnFn;
@@ -35,8 +43,8 @@ export type Supervisor = {
 
 // WHY as unknown as: bun-types' node:child_process shim doesn't surface EventEmitter's `on` on the
 // ChildProcess type; the runtime object satisfies SpawnedChild structurally.
-const defaultSpawn: SpawnFn = (cmd, args, env) =>
-  spawn(cmd, args, { env, stdio: ['ignore', 'inherit', 'inherit'] }) as unknown as SpawnedChild;
+const defaultSpawn: SpawnFn = (cmd, args, env, cwd) =>
+  spawn(cmd, args, { env, cwd, stdio: ['ignore', 'inherit', 'inherit'] }) as unknown as SpawnedChild;
 
 export function createSupervisor(opts: SupervisorOpts): Supervisor {
   const maxRestarts = opts.maxRestarts ?? 3;
@@ -48,7 +56,7 @@ export function createSupervisor(opts: SupervisorOpts): Supervisor {
 
   const start = (): void => {
     if (stopped || child) return;
-    const c = doSpawn(opts.command, opts.args ?? [], currentEnv);
+    const c = doSpawn(opts.command, opts.args ?? [], currentEnv, opts.cwd);
     child = c;
     opts.onEvent?.('started');
     // A spawn failure (ENOENT/EACCES — missing/unexecutable binary) emits 'error', not 'exit'.
