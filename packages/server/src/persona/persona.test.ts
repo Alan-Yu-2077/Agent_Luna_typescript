@@ -39,7 +39,8 @@ describe('persona loader (mtime cache)', () => {
   test('default path loads the repo persona file', () => {
     delete Bun.env['LUNA_PERSONA_PATH'];
     const p = loadPersona();
-    expect(p.text).toContain('Runtime Persona');
+    // v0.30.0: default.md restructured into the soul-file fixed-core sections
+    expect(p.text).toContain('Identity core');
     expect(p.text).toContain('newly awakened');
   });
 

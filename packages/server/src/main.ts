@@ -31,6 +31,7 @@ import { traceViewerHandler } from './trace/viewer';
 import { workspaceHandler } from './workspace/workspace';
 import { devChatHandler } from './devchat/devchat';
 import { setMemoryDb } from './memory/sessionStore';
+import { seedSoulOnBoot } from './memory/soulSeed';
 import { initCustomSqlite } from './memory/recall/vecRuntime';
 import { bootReconcile, isDreaming } from './dream/dreamState';
 import { runDreamCycle } from './dream/cycle';
@@ -57,6 +58,10 @@ setTraceStore(traceStore);
 if (Bun.env['LUNA_PERSIST'] !== '0') {
   setMemoryDb(db);
 }
+// Initiative 22 (v0.30.0, dark launch): seed the soul table's fixed core
+// (hash-gated) + one-time evolving migration from core_memory. Nothing reads
+// the soul yet — zero runtime behavior change this version.
+seedSoulOnBoot();
 bootReconcile();
 // v0.27.1: overlay UI-pinned settings onto Bun.env BEFORE any provider/tool-registry
 // construction below — that's what makes a pinned restart-required flag (LUNA_MODEL,
