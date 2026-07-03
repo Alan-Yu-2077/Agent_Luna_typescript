@@ -85,10 +85,12 @@ describe('weatherNoteFor', () => {
   test('null snapshot → null', () => {
     expect(weatherNoteFor(null)).toBeNull();
   });
-  test('names the condition and carries the care-not-forecast guardrail', () => {
+  test('names the condition and carries the only-if-natural guardrail', () => {
     const note = weatherNoteFor(snap());
     expect(note).toContain('overcast');
-    expect(note).toContain('never a forecast');
+    // v0.27.6: the "never a forecast / status report" rule moved to the cached
+    // WEATHER_CLAUSE (was duplicated); the note keeps the only-if-natural guardrail.
+    expect(note).toContain('if it feels natural');
   });
 });
 
@@ -113,9 +115,9 @@ describe('proactiveWeatherNote (the framing wire)', () => {
     return s;
   }
 
-  test('morning + overnight + a cached snapshot → the care-not-forecast note', () => {
+  test('morning + overnight + a cached snapshot → the weather-aware note', () => {
     setSnapshotForTests(snap());
-    expect(proactiveWeatherNote(nightSession(), MORNING)).toContain('never a forecast');
+    expect(proactiveWeatherNote(nightSession(), MORNING)).toContain('if it feels natural');
   });
   test('afternoon wake → no note', () => {
     setSnapshotForTests(snap());

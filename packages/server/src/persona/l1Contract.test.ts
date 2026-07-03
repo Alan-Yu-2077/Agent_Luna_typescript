@@ -127,7 +127,7 @@ describe('L1 contract in the system core (runTurn)', () => {
       const text = (sys[0] as { text: string }).text;
       expect(text.indexOf('How you think on a turn')).toBeGreaterThanOrEqual(0);
       expect(text.indexOf('How you think on a turn')).toBeLessThan(
-        text.indexOf('active runtime persona reference'),
+        text.indexOf('This is who you are'),
       );
     }
   });

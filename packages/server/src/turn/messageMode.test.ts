@@ -67,8 +67,8 @@ describe('message-tool mode (LUNA_MESSAGE_TOOL registry)', () => {
     await turn(p2, 'a', messageRegistry);
     const sysOff = JSON.stringify(p1.requests[0]?.system);
     const sysOn = JSON.stringify(p2.requests[0]?.system);
-    expect(sysOff).not.toContain('calling it IS speaking');
-    expect(sysOn).toContain('calling it IS speaking');
+    expect(sysOff).not.toContain('your only voice');
+    expect(sysOn).toContain('your only voice');
   });
 
   test('two message calls become bubbles; turn.result is their concatenation', async () => {

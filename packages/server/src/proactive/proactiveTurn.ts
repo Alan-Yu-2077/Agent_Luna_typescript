@@ -24,9 +24,9 @@ const DIRECTIVES: Record<ProactiveIntent, string> = {
     '(You woke on your own — no one just spoke to you. This is your own moment. You may reflect, ' +
     'recall something, save or revise a memory, look something up, or simply sit with a thought — ' +
     'calling a tool is acting, and you do not have to say anything at all. If, and only if, you ' +
-    'genuinely have something worth bringing to the user, you may reach out — but never open with a ' +
-    'status or check-in question (在吗 / 吃了吗 / 到哪了 / 怎么不理我); start from a real thought, a ' +
-    'small self-disclosure, or a fresh topic. If nothing is worth doing or saying, do nothing.)',
+    'genuinely have something worth bringing to him, you may reach out — open from a real thought, a ' +
+    'small self-disclosure, or a fresh topic, never a status or check-in question. If nothing is ' +
+    'worth doing or saying, do nothing.)',
   continuation:
     '(You just finished replying. Like a real person who paused and then thought of one more thing: ' +
     'if you have a SINGLE genuinely new thought to add — not a rephrase, not a summary, not "anyway" ' +
@@ -44,7 +44,7 @@ const DIRECTIVES: Record<ProactiveIntent, string> = {
 // stage-direction convention, v0.27.1) while porting the Python design faithfully.
 const SCENARIO_BODIES: Record<ProactiveScenario, string> = {
   ambient:
-    "(Scene: you're still around and so is Alan; a small real thought just surfaced and you feel " +
+    "(Scene: you're still around and so is he; a small real thought just surfaced and you feel " +
     'like sharing it. Lightest touch — half a sentence, a passing musing, a stray idea; it needs ' +
     "NO reply and shouldn't sound like you're hunting for a topic. Just hand the real little thing " +
     'over in your own words.)',
@@ -168,7 +168,7 @@ function framing(intent: ProactiveIntent, session: Session, seed?: string): stri
     const felt = feltAbsenceFor(session.lastUserMs, Date.now());
     if (felt === 'notable' || felt === 'long') {
       out +=
-        ' (It has been a while since the user spoke — if you do reach out, let it carry quiet warmth, ' +
+        ' (It has been a while since he last spoke — if you do reach out, let it carry quiet warmth, ' +
         'never guilt or pressure.)';
     }
   }

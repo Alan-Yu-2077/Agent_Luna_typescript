@@ -20,8 +20,12 @@ export function subjectiveTimeEnabled(): boolean {
 
 export type AbsenceFeltness = 'none' | 'slight' | 'notable' | 'long';
 
+// v0.27.6: neutral facts, not a prescribed affect. The 'late night' value used to
+// dictate "a softer, lower-energy register fits" — a clock-only verdict that a
+// late-night debugging sprint or an excited idea shouldn't be told to flatten to.
+// Let the model read the register from the conversation; supply only the fact.
 const DAYPART_MOOD: Record<Daypart, string> = {
-  'late night': "it's late and quiet — a softer, lower-energy register fits",
+  'late night': "it's late — the quiet, small hours",
   morning: 'a fresh morning — bright and unhurried',
   afternoon: 'mid-afternoon — steady and present',
   evening: 'evening — warm and winding down',
@@ -67,7 +71,9 @@ function absencePhrase(feltness: AbsenceFeltness): string {
     case 'notable':
       return " It's been a bit since you talked — you can let that show as warmth if it feels right.";
     case 'long':
-      return " It's been a while since you talked — you can let that land as warmth, never as guilt.";
+      // v0.27.6: dropped the redundant "never as guilt" — the cached TIME_CLAUSE
+      // already carries that guardrail globally; keep the warmth cue here.
+      return " It's been a while since you talked — you can let that land as warmth if it feels right.";
   }
 }
 

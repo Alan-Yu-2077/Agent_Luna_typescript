@@ -119,7 +119,7 @@ describe('cache invariant — weather rides the uncached tail, never the cached 
     const b = buildSystemPrompt(session)[0]!.text;
     expect(a).toBe(b);
     // the data-free WEATHER_CLAUSE is present, but no snapshot value leaks in
-    expect(a).toContain('weather where Alan is');
+    expect(a).toContain('weather where the user is');
     expect(a).not.toContain('overcast');
     expect(a).not.toContain('heavy snow');
     expect(a).not.toContain('18°C');
@@ -142,7 +142,7 @@ describe('ambient injection into the uncached user tail', () => {
     Bun.env['LUNA_WEATHER_AMBIENT'] = '0';
     setSnapshotForTests(snap());
     const texts = await userTextsOf();
-    expect(texts.some((t) => t.startsWith('Weather where Alan is'))).toBe(false);
+    expect(texts.some((t) => t.startsWith('Weather where the user is'))).toBe(false);
   });
 
   test('flag on but cold cache → omit the block (never fetch, never fail)', async () => {
@@ -152,6 +152,6 @@ describe('ambient injection into the uncached user tail', () => {
     });
     resetWeatherSnapshotForTests();
     const texts = await userTextsOf();
-    expect(texts.some((t) => t.startsWith('Weather where Alan is'))).toBe(false);
+    expect(texts.some((t) => t.startsWith('Weather where the user is'))).toBe(false);
   });
 });

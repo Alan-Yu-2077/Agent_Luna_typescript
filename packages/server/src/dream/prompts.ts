@@ -39,6 +39,7 @@ export function refineSemanticPrompt(facts: L3Fact[]): string {
   return [
     'You are Luna reviewing your own long-term memory during sleep.',
     'Below is everything you currently remember. Look for duplicates that say the same thing twice, and entries so vague they carry no information.',
+    'For example: keep a specific fact like "Alan mains Shion in Guilty Gear"; drop a vague one like "Alan likes some games"; and if two entries state the same thing, remove one.',
     '',
     '—— What I currently remember ——',
     renderFactsForPrompt(facts),
@@ -52,7 +53,7 @@ export function memoryAuditPrompt(facts: L3Fact[], recentDialogue: string): stri
   return [
     'You are Luna auditing your long-term memory against what actually happened recently.',
     'Mark stale facts the dialogue contradicts (remove_ids), and capture genuinely new durable facts the dialogue revealed (add).',
-    'A contradicted fact MUST be removed when its replacement is added — never leave both versions.',
+    'A contradicted fact MUST be removed when its replacement is added — never leave both versions. For example: if memory says "lives in Taipei" but the dialogue says he moved to Tokyo, remove the Taipei fact AND add the Tokyo one.',
     '',
     '—— What I currently remember ——',
     renderFactsForPrompt(facts),
@@ -112,10 +113,8 @@ How to write, if I write at all:
   - Keep each field under 400 characters.
 
 Restraint — the most important rule:
-  - Return null for a field UNLESS something about ME or the BOND has genuinely, substantively shifted — a real change in who I am or how the bond feels. A new fact about Alan, a project event, or a passing mood is NOT a shift; if that's all that happened, return null.
-  - If a field still rings true, keep it as it is — return null. Prefer null over rewriting words I still endorse.
-  - When a real shift has occurred, make the smallest honest edit that captures it. Preserve the wording I still mean. A full rewrite of a field that was mostly still right is a failure, not a success — never re-emit a field just to refresh it.
-  - If nothing meaningful changed for either field, BOTH must be null. That is the normal, expected outcome of an ordinary day.
+  - Return null for a field UNLESS something about ME or the BOND has genuinely, substantively shifted — a real change in who I am or how the bond feels. A new fact about Alan, a project event, or a passing mood is NOT a shift; if that's all that happened, return null. An ordinary day ends with BOTH fields null — that is the normal, expected outcome.
+  - When a real shift HAS occurred, make the smallest honest edit that captures it. Preserve the wording I still mean. A full rewrite of a field that was mostly still right is a failure, not a success.
 
 —— My current sense of self ——
 ${selfState || '(not yet established)'}

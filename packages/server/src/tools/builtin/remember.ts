@@ -50,7 +50,7 @@ const Output = z.object({
 export const rememberTool = defineTool({
   name: 'remember',
   description:
-    'Manage your long-term memory. action="add": store a durable fact about the user or your shared history (category: core_facts | preferences | key_moments | active_threads | project_context). action="forget": mark an outdated entry invalid by its id (it stays in history as "was once true"). action="update_self": revise your sense of self and/or the relationship (prose).',
+    'Manage your long-term memory. action="add": store a durable fact about the user or your shared history (pick its category). action="forget": mark an outdated entry invalid by its id (it stays in history as "was once true"). action="update_self": revise your sense of self and/or the relationship (prose).',
   input: Input,
   output: Output,
   concurrency: 'session-serial',

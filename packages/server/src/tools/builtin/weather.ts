@@ -38,8 +38,9 @@ export const weatherTool = defineTool({
   name: 'weather',
   description:
     'Get the current weather for the configured location: temperature, condition, and today’s ' +
-    'high / low and chance of rain. Use it when the user asks about the weather, or when it is ' +
-    'naturally relevant — never to recite a forecast unprompted.',
+    'high / low and chance of rain. Use it when the user asks, or when a concrete plan makes it ' +
+    'relevant — a passing sense of the weather is already in your context, so do not fetch just to ' +
+    'recite a forecast.',
   input: Input,
   output: Output,
   concurrency: 'safe-parallel',

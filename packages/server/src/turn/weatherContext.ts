@@ -33,7 +33,7 @@ export function buildWeatherBlock(s: WeatherSnapshot): string {
   const rain = s.precipChance > 0 ? `, ${s.precipChance}% chance of rain today` : '';
   const phase = s.isDay ? 'daytime' : 'night';
   return (
-    `Weather where Alan is (${s.label}): ${s.condition}, ${t}${u}${feels} — ` +
+    `Weather where the user is (${s.label}): ${s.condition}, ${t}${u}${feels} — ` +
     `today's high ${Math.round(s.high)}${u} / low ${Math.round(s.low)}${u}${rain}. Currently ${phase}.`
   );
 }
@@ -44,9 +44,11 @@ export function buildWeatherBlock(s: WeatherSnapshot): string {
 export function weatherNoteFor(snapshot: WeatherSnapshot | null): string | null {
   if (snapshot == null) return null;
   const u = snapshot.units === 'fahrenheit' ? '°F' : '°C';
+  // v0.27.6: de-hardcoded "Alan"; dropped the "never a forecast/status report"
+  // tail — the cached WEATHER_CLAUSE already owns that rule (was duplicated here).
   return (
-    ` (It's ${snapshot.condition} out (${Math.round(snapshot.temp)}${u}) where Alan is — if you do ` +
-    'reach out, a small weather-aware kindness can be a warm way in (note the cold, the rain, a fine ' +
-    'day), but only if it feels natural, never a forecast or a status report.)'
+    ` (It's ${snapshot.condition} out (${Math.round(snapshot.temp)}${u}) where the user is — if you ` +
+    'do reach out, a small weather-aware kindness can be a warm way in (note the cold, the rain, a ' +
+    'fine day), but only if it feels natural.)'
   );
 }

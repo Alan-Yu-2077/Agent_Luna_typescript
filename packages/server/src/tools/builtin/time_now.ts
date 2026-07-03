@@ -11,7 +11,9 @@ const Output = z.object({
 
 export const timeNowTool = defineTool({
   name: 'time_now',
-  description: 'Returns the current time as ISO 8601 + unix milliseconds + IANA timezone.',
+  description:
+    'Returns the current time as ISO 8601 + unix milliseconds + IANA timezone. Use only when you ' +
+    'need an exact machine timestamp; casual time-of-day awareness is already in your context.',
   input: Input,
   output: Output,
   concurrency: 'safe-parallel',

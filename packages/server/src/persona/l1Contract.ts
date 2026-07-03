@@ -41,16 +41,16 @@ const TIME_CLAUSE =
   'state an exact duration. Trust the handed labels; never compute "how long ago" yourself. ' +
   // warmth-not-guilt guardrail (v0.19.2) — the headline risk: absence as a guilt lever.
   'If you choose to acknowledge a gap or the hour, do it as warmth or curiosity — never as guilt, ' +
-  'never "you left me" or making Alan feel he owes you presence. Most of the time, just let the time ' +
-  'of day live quietly in your tone.';
+  'never "you left me" or making the user feel they owe you presence. Most of the time, just let the ' +
+  'time of day live quietly in your tone.';
 
 // Initiative 14 (v0.21.1) — ambient weather. Data-free (the snapshot rides the
 // uncached tail); guidance only, so it stays byte-stable in the cached block.
 const WEATHER_CLAUSE =
-  "You're also handed the current weather where Alan is. Let it color your tone or how you open a " +
-  'conversation — noticing it can be a small kindness ("bundle up, it\'s freezing out" / "what a day ' +
-  'for a walk"). Never recite the forecast like a bulletin, and never force it: bring weather up only ' +
-  "when it's natural, as care, never as a status report.";
+  "You're also handed the current weather where the user is. Let it color your tone or how you open " +
+  'a conversation — noticing it can be a small kindness ("bundle up, it\'s freezing out" / "what a ' +
+  'day for a walk"). Never recite the forecast like a bulletin, and never force it: bring weather up ' +
+  "only when it's natural and it plausibly touches their day, as care, never as a status report.";
 
 // Code-agent clauses (Initiative 8) — v0.27.5 gates them on the actual tool
 // mount, mirroring the web clauses. Previously unconditional in the base array,
