@@ -34,6 +34,52 @@ function msgCount(row: L2Row): number {
   return (JSON.parse(row.raw_json) as object[]).length;
 }
 
+// v0.28.4: the hard safety net's budgets. The fold is the intended bound, but ANY bookkeeping
+// drift used to stall it silently and the window then grew without limit — the 390K-token-turn
+// incident (~$1/turn on plain chat). These caps bound the verbatim tail NO MATTER WHAT upstream
+// state says; when they engage, folding is lagging and we log it. Cuts land on turn starts only.
+function tailMaxMsgs(): number {
+  return Number(Bun.env['LUNA_L1_TAIL_MAX_MSGS'] ?? 300);
+}
+function tailMaxChars(): number {
+  return Number(Bun.env['LUNA_L1_TAIL_MAX_CHARS'] ?? 120_000);
+}
+
+// A turn start is a plain user message (no tool_result blocks) — the only safe cut point: cutting
+// anywhere else can orphan a tool_result from its tool_use and the API rejects the request.
+function isTurnStart(m: Anthropic.MessageParam): boolean {
+  if (m.role !== 'user') return false;
+  if (typeof m.content === 'string') return true;
+  return Array.isArray(m.content) && !m.content.some((b) => b.type === 'tool_result');
+}
+
+// Bound the tail by message count AND serialized size, cutting at the EARLIEST turn start that
+// fits both budgets. If even the newest turn start is over budget (one monster turn), cut there
+// anyway — one oversized turn beats the whole history.
+export function hardTrimTail(
+  msgs: Anthropic.MessageParam[],
+  maxMsgs: number,
+  maxChars: number,
+): Anthropic.MessageParam[] {
+  let chars = 0;
+  let cut = -1; // earliest turn start within budget
+  let lastStart = -1; // newest turn start seen (fallback)
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    chars += JSON.stringify(msgs[i]!.content).length;
+    const over = msgs.length - i > maxMsgs || chars > maxChars;
+    if (over && cut !== -1) break;
+    if (isTurnStart(msgs[i]!)) {
+      if (lastStart === -1) lastStart = i;
+      if (over) break;
+      cut = i;
+    }
+  }
+  const at = cut !== -1 ? cut : lastStart;
+  if (at <= 0) return msgs;
+  console.warn(`[l1] hard trim engaged: dropped ${at} leading messages (fold is lagging)`);
+  return msgs.slice(at);
+}
+
 // The bounded view sent to the model: [structured-digest?] + verbatim tail.
 // session.history itself is never truncated — it is the in-memory mirror of the
 // L2 ground truth, and the fold only ever reads verbatim content.
@@ -42,12 +88,22 @@ export function buildActiveContext(session: Session): Anthropic.MessageParam[] {
   // the most-recent ones full + the tool_use records intact). Non-mutating.
   const clean = (msgs: Anthropic.MessageParam[]): Anthropic.MessageParam[] =>
     cleanHistoryEnabled() ? collapseOldToolResults(msgs) : msgs;
+  const bound = (msgs: Anthropic.MessageParam[]): Anthropic.MessageParam[] =>
+    hardTrimTail(msgs, tailMaxMsgs(), tailMaxChars());
 
-  if (!windowEnabled() || session.windowLowWater === 0) {
-    return clean(session.history);
+  if (!windowEnabled()) {
+    return clean(session.history); // explicit opt-out (LUNA_L1_WINDOW=0): genuinely unbounded
   }
-  const tail = session.history.slice(session.windowLowWater);
-  if (session.rollingSummary.length === 0) return clean(tail);
+  if (session.windowLowWater === 0) {
+    return bound(clean(session.history));
+  }
+  let tail = session.history.slice(session.windowLowWater);
+  // v0.28.4: a drifted low-water can land mid-turn (history edits shift message counts across
+  // restarts); a tail starting inside a tool_use/tool_result pair 400s. Align to the next turn
+  // start before sending.
+  const firstStart = tail.findIndex(isTurnStart);
+  if (firstStart > 0) tail = tail.slice(firstStart);
+  if (session.rollingSummary.length === 0) return bound(clean(tail));
   const summaryMsg: Anthropic.MessageParam = {
     role: 'user',
     content: [
@@ -57,7 +113,7 @@ export function buildActiveContext(session: Session): Anthropic.MessageParam[] {
       },
     ],
   };
-  return [summaryMsg, ...clean(tail)];
+  return [summaryMsg, ...bound(clean(tail))];
 }
 
 type FoldedTurn = { text: string; salient: boolean };
@@ -77,15 +133,24 @@ export function planFold(session: Session): FoldPlan | null {
   const rows = listL2(session.id);
   if (rows.length === 0) return null;
 
-  // Walk to the L2 row where the verbatim window currently begins (cumulative
-  // message count must equal windowLowWater, or the bookkeeping drifted — bail).
+  // Walk to the L2 row where the verbatim window currently begins. The watermark SHOULD land
+  // exactly on a row boundary — but history edits (e.g. v0.27.4's corrective-directive stripping)
+  // shift message counts across restarts, and the old `cum !== windowLowWater → bail` guard turned
+  // that one-off drift into a PERMANENTLY stalled fold: the window then grew unbounded (the
+  // 390K-token-turn incident). v0.28.4: heal instead — snap the fold base to the row boundary just
+  // crossed (≥ the stored watermark; the few messages in between stay in L2, recallable, but skip
+  // the digest once) and let the commit re-align window_low_water to a true boundary.
   let cum = 0;
   let foldedRows = 0;
   while (foldedRows < rows.length && cum < session.windowLowWater) {
     cum += msgCount(rows[foldedRows]!);
     foldedRows += 1;
   }
-  if (cum !== session.windowLowWater) return null;
+  if (cum !== session.windowLowWater) {
+    console.warn(
+      `[l1] fold watermark drifted (stored ${session.windowLowWater}, row boundary ${cum}) — healing`,
+    );
+  }
 
   const keep = recentTurns();
   const unfoldedTurns = rows.length - foldedRows;
@@ -93,7 +158,7 @@ export function planFold(session: Session): FoldPlan | null {
 
   const toFold = unfoldedTurns - keep; // bring the window back to RECENT_TURNS
   const anchor = anchorImportance();
-  let newLowWater = session.windowLowWater;
+  let newLowWater = cum; // the healed, row-aligned base (== stored watermark when no drift)
   const folded: FoldedTurn[] = [];
   for (let i = 0; i < toFold; i++) {
     const row = rows[foldedRows + i]!;
