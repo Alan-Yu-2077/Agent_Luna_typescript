@@ -22,6 +22,6 @@ export function petWindowOptions(): PetWindowOptions {
     resizable: true,
     maximizable: false,
     minWidth: 320,
-    minHeight: 480,
+    minHeight: 300, // landscape pet (default 640×480) — allow shrinking below the old portrait 480 floor
   };
 }

@@ -138,8 +138,10 @@ function createWindow(mode: 'app' | 'setup' = 'app'): BrowserWindow {
   // for a form) — pet framing only applies to the actual app.
   const usePet = petMode && mode !== 'setup';
   const win = new BrowserWindow({
-    width: usePet ? 560 : 1280,
-    height: usePet ? 900 : 860,
+    // Pet mode opens as a LANDSCAPE rectangle (Alan's chosen shape, ~4:3 — measured 641×480 off his
+    // hand-sized window), not the old tall portrait; he can still resize (petWindowOptions min).
+    width: usePet ? 640 : 1280,
+    height: usePet ? 480 : 860,
     show: !SMOKE,
     // Pet mode: she floats over the desktop — transparent/frameless/always-on-top, and (v0.28.2)
     // RESIZABLE with a min size so the whole pet scales by dragging the window edge.
