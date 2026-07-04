@@ -8,7 +8,7 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "build": "bun build ./index.html --production --outdir=dist && bun run build:assets",
+    "build": "rm -rf dist && bun build ./index.html --production --outdir=dist && bun run build:assets",
     "build:assets": "cp public/live2dcubismcore.min.js dist/ && cp -R public/models dist/models"
   },
   "dependencies": {
