@@ -337,33 +337,41 @@ body {
   position: relative;
   align-self: flex-end;
   max-width: min(340px, 100%);
-  background: var(--inner);
-  color: var(--ink);
-  border: 1px solid var(--lavender);
+  /* Design review (2026-07-04): light-blue-white to match Luna's --sky palette instead of the
+     off-brand --lavender it borrowed; frosted (semi-opaque white + blur) so it stays legible
+     overlaid on the model art. */
+  background: rgba(255, 255, 255, 0.82);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  color: var(--sky-text);
+  border: 1px solid var(--lace);
   border-radius: 14px;
   padding: 8px 12px;
   font-size: 14px;
   line-height: 1.45;
-  box-shadow: 0 3px 12px rgba(71, 48, 117, 0.16);
+  box-shadow: 0 6px 20px rgba(39, 73, 107, 0.18);
   opacity: 1;
   transform: translateY(0);
   transition: opacity 0.5s ease, transform 0.5s ease;
   animation: speech-rise 0.28s ease;
 }
-/* The comic tail pointing at her face (bubbles sit LEFT of the head, so it pokes RIGHT). Present on
-   every bubble but visible only on .latest — removing the class the moment a bubble becomes history
-   TRANSITIONS the tail away (shrink + fade), turning it into a plain bubble. */
+/* The comic tail pokes out of the bubble's bottom-RIGHT CORNER (toward her face), not the side.
+   Present on every bubble but visible only on .latest — removing the class the moment a bubble
+   becomes history TRANSITIONS the tail away (shrink + fade), turning it into a plain bubble. */
 .speech-bubble::after {
   content: '';
   position: absolute;
-  right: -6px;
-  bottom: 13px;
-  width: 12px;
-  height: 12px;
-  background: var(--inner);
-  border-top: 1px solid var(--lavender);
-  border-right: 1px solid var(--lavender);
-  border-radius: 2px;
+  right: -4px;
+  bottom: -4px;
+  width: 13px;
+  height: 13px;
+  background: rgba(255, 255, 255, 0.82);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border-right: 1px solid var(--lace);
+  border-bottom: 1px solid var(--lace);
+  border-radius: 0 0 3px 0;
+  transform-origin: center;
   transform: rotate(45deg) scale(0.3);
   opacity: 0;
   transition: opacity 0.25s ease, transform 0.25s ease;
