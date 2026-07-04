@@ -336,23 +336,26 @@ body {
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
-  max-width: 44%;
+  /* Design review 2026-07-04: let long-text bubbles grow WIDE. The outer edge is pinned at the
+     model-stage edge, so width comes from the head-facing edge reaching closer to her — a reduced
+     gap (× 0.6) + a high side cap. */
+  max-width: 62%;
 }
 /* left of the head → bubbles hug the head-facing (right) edge */
 .speech-zone.left {
   left: 8px;
-  right: calc(100% - var(--luna-head-x, 50%) + var(--luna-head-gap, 60px));
+  right: calc(100% - var(--luna-head-x, 50%) + var(--luna-head-gap, 60px) * 0.6);
   align-items: flex-end;
 }
 /* right of the head → bubbles hug the head-facing (left) edge */
 .speech-zone.right {
-  left: calc(var(--luna-head-x, 50%) + var(--luna-head-gap, 60px));
+  left: calc(var(--luna-head-x, 50%) + var(--luna-head-gap, 60px) * 0.6);
   right: 8px;
   align-items: flex-start;
 }
 .speech-bubble {
   position: relative;
-  max-width: 22em;
+  max-width: 38em;
   /* Design review (2026-07-04): light-blue-white to match Luna's --sky palette instead of the
      off-brand --lavender it borrowed; frosted (semi-opaque white + blur) so it stays legible
      overlaid on the model art. */
