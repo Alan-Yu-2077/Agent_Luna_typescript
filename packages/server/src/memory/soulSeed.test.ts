@@ -3,7 +3,6 @@ import { Database } from 'bun:sqlite';
 import { join } from 'node:path';
 import { migrate } from '../sql';
 import { setMemoryDb } from './sessionStore';
-import { updateCore } from './coreMemory';
 import { getSoul, seedFixedCore, updateEvolving } from './soulStore';
 import { cleanEvolvingBond, seedSoulOnBoot, stripLedger } from './soulSeed';
 import { getSession, resetSessions } from '../turn/session';
@@ -39,30 +38,19 @@ describe('seedSoulOnBoot', () => {
     expect(soul.fixed_text).toContain('Luna');
   });
 
-  test('one-time migration copies core_memory verbatim into the evolving section', () => {
-    updateCore(
-      { self_state: 'the call is the act', relationship_status: 'Alan ships what I name' },
-      'dream',
-    );
-    seedSoulOnBoot();
-    const soul = getSoul();
-    expect(soul.evolving_self).toBe('the call is the act');
-    expect(soul.evolving_bond).toBe('Alan ships what I name');
+  // v0.30.3: core_memory is retired by migration 0017 — the core→evolving copy moved into that SQL
+  // (a safety re-migrate), so seedSoulOnBoot no longer reads the table (it's gone by boot time).
+  test('core_memory + core_memory_audit are dropped after migrate()', () => {
+    const tables = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'core_memory%'")
+      .all() as { name: string }[];
+    expect(tables.length).toBe(0);
   });
 
-  test('idempotent: a second boot does not re-copy or duplicate the migration', () => {
-    updateCore({ self_state: 'v1 self', relationship_status: 'v1 bond' }, 'dream');
-    seedSoulOnBoot();
-    // Simulate the dream evolving the soul independently after migration.
-    updateCore({ self_state: 'v2 self (post-migration dream write)' }, 'dream');
-    seedSoulOnBoot(); // must NOT stomp the post-migration evolving state
-    const soul = getSoul();
-    expect(soul.evolving_self).toBe('v1 self');
-  });
-
-  test('safe when no core_memory content exists (fresh install)', () => {
+  test('safe on a fresh install (no core prose) — seeds the fixed core, evolving empty', () => {
     expect(() => seedSoulOnBoot()).not.toThrow();
     const soul = getSoul();
+    expect(soul.fixed_text.length).toBeGreaterThan(0);
     expect(soul.evolving_self).toBe('');
     expect(soul.evolving_bond).toBe('');
   });
@@ -121,15 +109,12 @@ describe('cleanEvolvingBond — one-time ledger purge (v0.30.2)', () => {
   });
 });
 
-describe('dark launch proof — nothing reads the soul table yet', () => {
-  test('buildSystemPrompt is byte-identical whether or not seedSoulOnBoot ran', () => {
-    // core_memory (still the render source in v0.30.0) is fixed BEFORE either
-    // snapshot, so the only variable between them is whether the soul table
-    // has been seeded — proving the seed has zero effect on the render.
-    updateCore({ self_state: 'alive prose', relationship_status: 'warm' }, 'dream');
-    const before = buildSystemPrompt(getSession('soul-dark-launch'))[0]!.text;
+describe('the soul is the rendered persona (v0.30.3)', () => {
+  test('after seeding, buildSystemPrompt carries the soul fixed core', () => {
     seedSoulOnBoot();
-    const after = buildSystemPrompt(getSession('soul-dark-launch'))[0]!.text;
-    expect(after).toBe(before);
+    const text = buildSystemPrompt(getSession('soul-render'))[0]!.text;
+    // the fixed core seeded from the persona file is what the persona block now renders
+    expect(text).toContain('Luna');
+    expect(text).not.toContain('## About yourself'); // retired core block
   });
 });

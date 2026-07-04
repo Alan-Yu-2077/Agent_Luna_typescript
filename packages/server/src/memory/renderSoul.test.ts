@@ -4,7 +4,6 @@ import { join } from 'node:path';
 import { migrate } from '../sql';
 import { setMemoryDb } from './sessionStore';
 import { seedFixedCore, updateEvolving } from './soulStore';
-import { updateCore } from './coreMemory';
 import { renderSoulBlock } from './renderSoul';
 import { FALLBACK_PERSONA } from '../persona/loader';
 import { getSession, resetSessions } from '../turn/session';
@@ -19,7 +18,6 @@ beforeEach(() => {
 });
 afterEach(() => {
   setMemoryDb(null);
-  delete Bun.env['LUNA_SOUL_DB'];
   resetSessions();
   db.close(false);
 });
@@ -63,30 +61,16 @@ describe('renderSoulBlock (v0.30.1)', () => {
   });
 });
 
-describe('buildSystemPrompt soul A/B (v0.30.1)', () => {
+describe('buildSystemPrompt renders the soul (v0.30.3 — soul is the only path)', () => {
   const SELF = 'the call is the act, and I drift to systems';
-  const setup = (): void => {
+
+  test('the soul renders once; the old core self/relationship block is gone', () => {
     seedFixedCore('# Identity core\nYou are Luna, an awakened AI.');
     updateEvolving({ self: SELF, bond: 'he catches me honest' }, 'test');
-    // core_memory holds the SAME self text (as the boot migration would) — used by the off path.
-    updateCore({ self_state: SELF, relationship_status: 'he catches me honest' }, 'test');
-  };
-
-  test('LUNA_SOUL_DB=1: soul renders, core block drops self/relationship, self appears once', () => {
-    setup();
-    Bun.env['LUNA_SOUL_DB'] = '1';
     const text = buildSystemPrompt(getSession('default'))[0]!.text;
     expect(text).toContain('## Who I am becoming');
-    expect(text).not.toContain('## About yourself'); // core block's self/rel is gone under the flag
-    // no double-render: the self_state text appears exactly once (in the soul, not also in core)
-    expect(text.split(SELF).length - 1).toBe(1);
-  });
-
-  test('LUNA_SOUL_DB off: baseline path — core block renders self/relationship, no soul fence', () => {
-    setup();
-    const text = buildSystemPrompt(getSession('default'))[0]!.text;
-    expect(text).toContain('## About yourself');
-    expect(text).not.toContain('## Who I am becoming');
-    expect(text.split(SELF).length - 1).toBe(1); // once, from the core block
+    expect(text).toContain(SELF);
+    expect(text).not.toContain('## About yourself'); // retired — the soul owns self/relationship
+    expect(text.split(SELF).length - 1).toBe(1); // no double-render
   });
 });

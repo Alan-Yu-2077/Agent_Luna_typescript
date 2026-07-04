@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { L3Category, L3Confidence } from '@luna/protocol';
 import { defineTool } from '../defineTool';
 import { addFact, forgetFact } from '../../memory/l3Store';
-import { updateCore } from '../../memory/coreMemory';
+import { updateEvolving } from '../../memory/soulStore';
 
 // Flat object on purpose, NOT z.discriminatedUnion: a root-level anyOf wire
 // schema (no top-level `properties`) makes the yunwu gateway treat the tool as
@@ -91,12 +91,12 @@ export const rememberTool = defineTool({
         return;
       }
       case 'update_self': {
-        const patch: { self_state?: string; relationship_status?: string } = {};
-        if (input.self_state !== undefined) patch.self_state = input.self_state;
-        if (input.relationship_status !== undefined) {
-          patch.relationship_status = input.relationship_status;
-        }
-        const result = updateCore(patch, 'tool');
+        // v0.30.3 (Initiative 22): self/relationship prose is the soul's evolving section now
+        // (core_memory retired). self_state → self, relationship_status → bond.
+        const patch: { self?: string; bond?: string } = {};
+        if (input.self_state !== undefined) patch.self = input.self_state;
+        if (input.relationship_status !== undefined) patch.bond = input.relationship_status;
+        const result = updateEvolving(patch, 'tool');
         if (!result) {
           yield {
             kind: 'err',

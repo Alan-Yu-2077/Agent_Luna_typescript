@@ -1,7 +1,5 @@
 import type { L3Category } from '@luna/protocol';
-import { getCore } from './coreMemory';
 import { listFacts } from './l3Store';
-import { soulDbEnabled } from './soulStore';
 
 // Render caps per category (Python's storage caps, applied at render time —
 // storage stays unbounded; dream's refine_semantic prunes).
@@ -33,21 +31,11 @@ const CATEGORY_ORDER: L3Category[] = [
 // this string must be byte-identical across turns unless memory actually
 // changed (the Anthropic prefix cache invalidates on any byte difference).
 // Never interpolate timestamps or per-turn values here.
+// v0.30.3 (Initiative 22): L3-only. The self_state / relationship prose moved to the soul
+// (renderSoulBlock); core_memory is retired. The function name is kept to avoid churning call
+// sites — it now renders solely the durable-fact list.
 export function renderCoreBlock(): string {
   const lines: string[] = [];
-
-  // v0.30.1 (Initiative 22): under LUNA_SOUL_DB the self_state / relationship prose is the soul's
-  // job (renderSoulBlock) — this block renders ONLY the L3 fact list to avoid a double-render.
-  // Off: unchanged (self/relationship prose + L3, byte-identical to v0.29.x).
-  if (!soulDbEnabled()) {
-    const core = getCore();
-    if (core.self_state.trim().length > 0) {
-      lines.push('## About yourself', core.self_state.trim(), '');
-    }
-    if (core.relationship_status.trim().length > 0) {
-      lines.push('## Your relationship with the user', core.relationship_status.trim(), '');
-    }
-  }
 
   const factLines: string[] = [];
   for (const category of CATEGORY_ORDER) {

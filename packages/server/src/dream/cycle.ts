@@ -2,8 +2,7 @@ import type { DreamStepStatus, ServerEvent } from '@luna/protocol';
 import { runGraph, type Graph } from '../turn/graph';
 import { getMemoryDb, listL2, listUnratedL2, setImportance } from '../memory/sessionStore';
 import { addFact, forgetFact, listFacts } from '../memory/l3Store';
-import { getCore, updateCore } from '../memory/coreMemory';
-import { getSoul, updateEvolving, soulDbEnabled, type EvolvingPatch } from '../memory/soulStore';
+import { getSoul, updateEvolving, type EvolvingPatch } from '../memory/soulStore';
 import { similarityRatio } from '../memory/similarity';
 import { maybeFold } from '../memory/l1Window';
 import { getSession } from '../turn/session';
@@ -37,7 +36,7 @@ const MAX_SALIENCE_PER_CYCLE = Number(Bun.env['LUNA_DREAM_MAX_SALIENCE_PER_CYCLE
 // v0.21.7: a persona field whose new prose is at least this similar to the current
 // value is treated as "no substantive change" and dropped — the prompt asks for null
 // when unchanged, but the model often re-emits a ~97%-identical rewrite anyway. The
-// updateCore no-op guard catches byte-identical re-emits; this catches cosmetic drift.
+// updateEvolving's no-op guard catches byte-identical re-emits; this catches cosmetic drift.
 const PERSONA_REWRITE_SIMILARITY = Number(Bun.env['LUNA_PERSONA_REWRITE_SIMILARITY'] ?? 0.95);
 
 function personaFieldChanged(next: string, prev: string): boolean {
@@ -217,14 +216,11 @@ const dreamGraph: Graph<DreamCycleState, DreamNode> = {
     runStep(s, 'persona_update', async () => {
       const dialogue = recentDialogue(s.sessionId, null);
       if (dialogue.length === 0) return ['skipped', 'no recent dialogue'];
-      // v0.30.2 (Initiative 22): under LUNA_SOUL_DB the dream authors the soul's EVOLVING section
-      // (self + bond) — and ONLY that section: there is no code path from here to soul.fixed_text,
-      // so the fixed core is unreachable to her (firewall, test-pinned). Off: the legacy
-      // core_memory path, unchanged.
-      const useSoul = soulDbEnabled();
-      const cur = useSoul
-        ? { self: getSoul().evolving_self, rel: getSoul().evolving_bond }
-        : { self: getCore().self_state, rel: getCore().relationship_status };
+      // v0.30.3 (Initiative 22): the dream authors the soul's EVOLVING section (self + bond) — and
+      // ONLY that section: there is no code path from here to soul.fixed_text, so the dev-authored
+      // fixed core is unreachable to her (firewall, test-pinned). core_memory is retired.
+      const soul = getSoul();
+      const cur = { self: soul.evolving_self, rel: soul.evolving_bond };
       const call = await dreamCall(s.llm, personaUpdatePrompt(cur.self, cur.rel, dialogue));
       if (!call.ok) return ['failed', `${call.failure}: ${call.detail}`];
       const patch = parseJsonBlock(PersonaPatch, call.text);
@@ -237,17 +233,10 @@ const dreamGraph: Graph<DreamCycleState, DreamNode> = {
       const doSelf = nextSelf != null && personaFieldChanged(nextSelf, cur.self);
       const doRel = nextRel != null && personaFieldChanged(nextRel, cur.rel);
       if (!doSelf && !doRel) return ['skipped', 'persona unchanged'];
-      if (useSoul) {
-        const patch2: EvolvingPatch = {};
-        if (doSelf) patch2.self = nextSelf ?? undefined;
-        if (doRel) patch2.bond = nextRel ?? undefined;
-        updateEvolving(patch2, 'dream');
-      } else {
-        const update: { self_state?: string; relationship_status?: string } = {};
-        if (doSelf) update.self_state = nextSelf ?? undefined;
-        if (doRel) update.relationship_status = nextRel ?? undefined;
-        updateCore(update, 'dream');
-      }
+      const patch2: EvolvingPatch = {};
+      if (doSelf) patch2.self = nextSelf ?? undefined;
+      if (doRel) patch2.bond = nextRel ?? undefined;
+      updateEvolving(patch2, 'dream');
       return ['ok', [doSelf ? 'self' : '', doRel ? 'bond' : ''].filter(Boolean).join('+')];
     }),
 

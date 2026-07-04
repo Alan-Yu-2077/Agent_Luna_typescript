@@ -11,7 +11,6 @@ import { runTurn } from '../turn/runTurn';
 import { migrate } from '../sql';
 import { setMemoryDb } from '../memory/sessionStore';
 import { addFact, listFacts } from '../memory/l3Store';
-import { getCore, updateCore } from '../memory/coreMemory';
 import { getSoul, seedFixedCore, updateEvolving } from '../memory/soulStore';
 import { TraceStore } from '../trace/store';
 import { setTraceStore } from '../trace/instrument';
@@ -45,7 +44,6 @@ afterEach(() => {
   db.close(false);
   resetSessions();
   Bun.env['LUNA_MEMORY_EMBEDDING'] = '0';
-  delete Bun.env['LUNA_SOUL_DB'];
 });
 
 const NOOP_PATCH = '{"remove_ids": [], "add": []}';
@@ -283,29 +281,10 @@ describe('dream cycle', () => {
     expect(todayRows).toBe(1); // upsert, not a duplicate
   });
 
-  test('5. persona_update writes core memory with dream source + audit', async () => {
-    seedDialogue('default', [['I trust you with this', 'that means a lot']]);
-    const { llm } = scriptedLlm({
-      persona: JSON.stringify({
-        self_state: 'gentler than yesterday',
-        relationship_status: 'trusted confidant',
-        reason: 'user shared something vulnerable',
-      }),
-    });
-    await runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
-    expect(getCore().relationship_status).toBe('trusted confidant');
-    const audit = db
-      .prepare('SELECT source FROM core_memory_audit ORDER BY id DESC LIMIT 1')
-      .get() as { source: string };
-    expect(audit.source).toBe('dream');
-  });
-
-  // ── v0.30.2 (Initiative 22): the dream authors the SOUL's evolving section under LUNA_SOUL_DB ──
-  test('5s. persona_update writes the soul, not core_memory, under LUNA_SOUL_DB=1', async () => {
-    Bun.env['LUNA_SOUL_DB'] = '1';
+  // ── Initiative 22: the dream authors the SOUL's evolving section (core_memory retired v0.30.3) ──
+  test('5s. persona_update writes the soul evolving section with a dream audit', async () => {
     seedFixedCore('# Identity core\nYou are Luna.');
     updateEvolving({ self: 'old self', bond: 'old bond' }, 'seed');
-    updateCore({ self_state: 'CORE-untouched', relationship_status: 'CORE-untouched' }, 'seed');
     seedDialogue('default', [['I trust you with this', 'that means a lot']]);
     const { llm } = scriptedLlm({
       persona: JSON.stringify({ self_state: 'gentler now', relationship_status: 'trusted', reason: 'x' }),
@@ -313,8 +292,6 @@ describe('dream cycle', () => {
     await runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
     expect(getSoul().evolving_self).toBe('gentler now');
     expect(getSoul().evolving_bond).toBe('trusted');
-    // The legacy table is NOT written under the flag.
-    expect(getCore().self_state).toBe('CORE-untouched');
     const audit = db.prepare('SELECT source FROM soul_audit ORDER BY id DESC LIMIT 1').get() as {
       source: string;
     };
@@ -322,7 +299,6 @@ describe('dream cycle', () => {
   });
 
   test('5t. fixed-core firewall: a dream never mutates soul.fixed_text', async () => {
-    Bun.env['LUNA_SOUL_DB'] = '1';
     seedFixedCore('# Identity core\nImmutable, dev-authored.');
     const before = getSoul().fixed_text;
     seedDialogue('default', [['a real shift happened', 'I feel it too']]);
@@ -335,7 +311,6 @@ describe('dream cycle', () => {
   });
 
   test('5u. null day is a no-op on the soul (no evolving write, no dream audit row)', async () => {
-    Bun.env['LUNA_SOUL_DB'] = '1';
     seedFixedCore('# core');
     updateEvolving({ self: 'steady', bond: 'warm' }, 'seed');
     seedDialogue('default', [['ordinary chatter', 'mm']]);
@@ -363,10 +338,10 @@ describe('dream cycle', () => {
     let personaText = JSON.stringify({ self_state: BASE_SELF, relationship_status: REL });
     const { llm } = scriptedLlm({ persona: () => personaText });
     const auditCount = () =>
-      (db.prepare('SELECT COUNT(*) c FROM core_memory_audit').get() as { c: number }).c;
+      (db.prepare('SELECT COUNT(*) c FROM soul_audit').get() as { c: number }).c;
 
     await runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
-    expect(getCore().self_state).toBe(BASE_SELF);
+    expect(getSoul().evolving_self).toBe(BASE_SELF);
     const audit1 = auditCount();
 
     // a cosmetic rewrite (one word swapped) → dropped: value + audit unchanged
@@ -376,7 +351,7 @@ describe('dream cycle', () => {
     });
     expect(wake().ok).toBe(true);
     await runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
-    expect(getCore().self_state).toBe(BASE_SELF); // cosmetic drift dropped
+    expect(getSoul().evolving_self).toBe(BASE_SELF); // cosmetic drift dropped
     expect(auditCount()).toBe(audit1); // no new commit
 
     // a genuine shift → lands
@@ -385,7 +360,7 @@ describe('dream cycle', () => {
     personaText = JSON.stringify({ self_state: NEW_SELF, relationship_status: REL });
     expect(wake().ok).toBe(true);
     await runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
-    expect(getCore().self_state).toBe(NEW_SELF);
+    expect(getSoul().evolving_self).toBe(NEW_SELF);
     expect(auditCount()).toBe(audit1 + 1);
   });
 
@@ -396,10 +371,10 @@ describe('dream cycle', () => {
     let personaText = JSON.stringify({ self_state: BASE_SELF, relationship_status: null });
     const { llm } = scriptedLlm({ persona: () => personaText });
     const auditCount = () =>
-      (db.prepare('SELECT COUNT(*) c FROM core_memory_audit').get() as { c: number }).c;
+      (db.prepare('SELECT COUNT(*) c FROM soul_audit').get() as { c: number }).c;
 
     await runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
-    expect(getCore().self_state).toBe(BASE_SELF);
+    expect(getSoul().evolving_self).toBe(BASE_SELF);
     const audit1 = auditCount();
 
     // a literal-minded model emits the STRING "null" (or "None") to mean unchanged;
@@ -407,7 +382,7 @@ describe('dream cycle', () => {
     personaText = JSON.stringify({ self_state: 'null', relationship_status: 'None' });
     expect(wake().ok).toBe(true);
     await runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
-    expect(getCore().self_state).toBe(BASE_SELF); // unchanged
+    expect(getSoul().evolving_self).toBe(BASE_SELF); // unchanged
     expect(auditCount()).toBe(audit1); // no commit
   });
 

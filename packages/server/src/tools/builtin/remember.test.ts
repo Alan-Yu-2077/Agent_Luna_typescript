@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { migrate } from '../../sql';
 import { setMemoryDb } from '../../memory/sessionStore';
 import { listFacts } from '../../memory/l3Store';
-import { getCore } from '../../memory/coreMemory';
+import { getSoul } from '../../memory/soulStore';
 import { rememberTool } from './remember';
 
 let db: Database;
@@ -52,16 +52,16 @@ describe('remember tool (discriminated actions)', () => {
     expect(listFacts({ category: 'preferences' }).length).toBe(0);
   });
 
-  test('update_self patches core memory', async () => {
+  test('update_self patches the soul evolving section (v0.30.3)', async () => {
     const e = await run({ action: 'update_self', relationship_status: 'growing closer' });
     expect(e.data?.status).toBe('self_updated');
-    expect(getCore().relationship_status).toBe('growing closer');
+    expect(getSoul().evolving_bond).toBe('growing closer');
   });
 
-  test('update_self with identical values is a no-op write (the updateCore guard, v0.21.7)', async () => {
+  test('update_self with identical values is a no-op write (the updateEvolving guard, v0.21.7)', async () => {
     await run({ action: 'update_self', self_state: 'calm', relationship_status: 'close' });
     const auditAfter = () =>
-      (db.prepare('SELECT COUNT(*) c FROM core_memory_audit').get() as { c: number }).c;
+      (db.prepare('SELECT COUNT(*) c FROM soul_audit').get() as { c: number }).c;
     const before = auditAfter();
     const e = await run({ action: 'update_self', self_state: 'calm', relationship_status: 'close' });
     expect(e.data?.status).toBe('self_updated'); // the tool still reports success

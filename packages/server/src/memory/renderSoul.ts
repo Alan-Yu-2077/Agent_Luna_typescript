@@ -1,9 +1,9 @@
 import { getSoul } from './soulStore';
 import { FALLBACK_PERSONA } from '../persona/loader';
 
-// v0.30.1 (Initiative 22): the DB-sourced persona block — the whole soul as one document.
-// The fixed core (dev-authored, git-seeded) first, then Luna's own evolving voice fenced beneath
-// it. Replaces the persona-FILE push in buildSystemPrompt when LUNA_SOUL_DB is on.
+// Initiative 22: the DB-sourced persona block — the whole soul as one document. The fixed core
+// (dev-authored, git-seeded) first, then Luna's own evolving voice fenced beneath it. Since v0.30.3
+// this is THE persona block in buildSystemPrompt (the persona-file + core_memory render retired).
 //
 // DETERMINISTIC + TIMESTAMP-FREE — this sits inside the ONE cached system block, so its bytes must
 // be identical across turns unless the soul actually changed (an updateEvolving write bumps the

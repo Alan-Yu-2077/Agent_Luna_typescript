@@ -1,29 +1,17 @@
 import { getMemoryDb } from './sessionStore';
 import { getSoul, seedFixedCore, updateEvolving } from './soulStore';
-import { getCore } from './coreMemory';
 import { loadPersona } from '../persona/loader';
 
-// Boot-time seed for the soul substrate (Initiative 22, v0.30.0 — dark launch).
-// Nothing reads the soul table yet; this only populates it so v0.30.1 can swap
-// the render source over without a data migration in the critical path.
+// Boot-time seed for the soul substrate (Initiative 22). Seeds the fixed core from the persona file
+// (hash-gated no-op when unchanged) and runs the one-time evolving-bond purge. v0.30.3: the
+// core_memory → evolving migration moved into migration 0017 (which also drops the table), so this
+// no longer reads core_memory — by boot time (seedSoulOnBoot runs after migrate) it is already gone.
 export function seedSoulOnBoot(): void {
   const db = getMemoryDb();
   if (!db) return;
-  // Capture "never seeded" BEFORE seedFixedCore writes a row — its first-ever
-  // insert sets updated_ms to now, so this signal must be read first.
-  const neverSeeded = getSoul().updated_ms === 0;
   seedFixedCore(loadPersona().text);
-  if (neverSeeded) {
-    // One-time migration: copy core_memory verbatim into the evolving section.
-    // A direct write (not updateEvolving) — no audit row for a migration, and
-    // the neverSeeded guard above makes this idempotent across restarts.
-    const core = getCore();
-    db.prepare(
-      'UPDATE soul SET evolving_self = ?, evolving_bond = ?, updated_ms = ? WHERE id = 1',
-    ).run(core.self_state, core.relationship_status, Date.now());
-  }
   // v0.30.2: one-time purge of the migrated relationship_status fact-ledger (the audited
-  // contamination). Idempotent + safe (below). The new dream cleanup-trigger prompt is the general
+  // contamination). Idempotent + safe (below). The dream cleanup-trigger prompt is the general
   // backstop; this handles the known signature immediately + restore-ably.
   cleanEvolvingBond();
 }
