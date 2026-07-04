@@ -25,6 +25,8 @@ import { trace, flushTrace, traceEnabled } from '../trace/instrument';
 import { appendL2, listRecentL2, persistSession } from '../memory/sessionStore';
 import { buildActiveContext, maybeFold } from '../memory/l1Window';
 import { renderCoreBlock } from '../memory/renderCoreBlock';
+import { renderSoulBlock } from '../memory/renderSoul';
+import { soulDbEnabled } from '../memory/soulStore';
 import { renderDiaryDigest } from '../memory/diaries';
 import { renderRecallBlock, retrieve } from '../memory/recall/recall';
 import { getMemoryDb } from '../memory/sessionStore';
@@ -157,11 +159,14 @@ export function buildSystemPrompt(
   // (spotlighting — the field-standard mitigation). Stable text → cached block.
   if (webSearchMounted || webFetchMounted) parts.push(WEB_UNTRUSTED_RULE);
   if (Bun.env['LUNA_PERSONA'] !== '0') {
-    const persona = loadPersona();
+    // v0.30.1 (Initiative 22): under LUNA_SOUL_DB the persona is the DB soul (fixed core + her
+    // evolving voice); off, it's the persona file. Same framing line either way. The core block
+    // below drops its self/relationship half under the flag so there's no double-render.
+    const personaText = soulDbEnabled() ? renderSoulBlock() : loadPersona().text;
     parts.push(
       'This is who you are. Stay consistent with it, but keep your replies natural and alive ' +
         'instead of scripted or theatrical.\n\n' +
-        persona.text,
+        personaText,
     );
     parts.push(EMBODIMENT_BLOCK);
     parts.push(renderHumanityBlock());

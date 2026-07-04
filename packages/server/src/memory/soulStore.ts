@@ -5,6 +5,14 @@ import { contentHash } from './recall/embed';
 
 const EMPTY: Soul = { fixed_text: '', evolving_self: '', evolving_bond: '', updated_ms: 0 };
 
+// v0.30.1 (Initiative 22): the A/B flag. When on, the persona block renders from the DB soul
+// (fixed core + evolving section) and the core block drops its self/relationship half. Default
+// off keeps the v0.29.x file+core_memory path byte-identical. Removed at v0.30.3 (soul is the
+// only path). Lives here so both renderSoul and renderCoreBlock read one source of truth.
+export function soulDbEnabled(): boolean {
+  return Bun.env['LUNA_SOUL_DB'] === '1';
+}
+
 export function getSoul(): Soul {
   const db = getMemoryDb();
   if (!db) return EMPTY;
