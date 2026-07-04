@@ -326,6 +326,9 @@ body {
   inset: 0;
   z-index: 4;
   pointer-events: none;
+  /* A size container so the bubbles can scale to the model area (cqmin below). Safe here — this is a
+     pointer-events:none overlay, so containment never touches the model/canvas layout. */
+  container-type: size;
 }
 .speech-zone {
   position: absolute;
@@ -349,7 +352,7 @@ body {
 }
 .speech-bubble {
   position: relative;
-  max-width: min(300px, 100%);
+  max-width: 22em;
   /* Design review (2026-07-04): light-blue-white to match Luna's --sky palette instead of the
      off-brand --lavender it borrowed; frosted (semi-opaque white + blur) so it stays legible
      overlaid on the model art. */
@@ -358,9 +361,14 @@ body {
   backdrop-filter: blur(8px);
   color: var(--sky-text);
   border: 1px solid var(--lace);
-  border-radius: 14px;
-  padding: 8px 12px;
-  font-size: 14px;
+  /* Scale the whole bubble with the model area: font tracks cqmin (the smaller of the model-stage's
+     width/height, via the .speech-stack size container), everything else is em — so a small
+     pet/window gets a proportionally small bubble instead of a fixed 14px one that dwarfs her
+     (design review 2026-07-04). The px fallback covers engines without container-query units. */
+  font-size: 13px;
+  font-size: clamp(8px, 2.8cqmin, 14px);
+  border-radius: 1em;
+  padding: 0.55em 0.85em;
   line-height: 1.45;
   box-shadow: 0 6px 20px rgba(39, 73, 107, 0.18);
   opacity: 1;
@@ -374,25 +382,25 @@ body {
 .speech-bubble::after {
   content: '';
   position: absolute;
-  bottom: -4px;
-  width: 13px;
-  height: 13px;
+  bottom: -0.28em;
+  width: 0.9em;
+  height: 0.9em;
   background: rgba(255, 255, 255, 0.82);
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
-  border-radius: 0 0 3px 0;
+  border-radius: 0 0 0.2em 0;
   transform-origin: center;
   transform: rotate(45deg) scale(0.3);
   opacity: 0;
   transition: opacity 0.25s ease, transform 0.25s ease;
 }
 .speech-bubble.side-left::after {
-  right: -4px;
+  right: -0.28em;
   border-right: 1px solid var(--lace);
   border-bottom: 1px solid var(--lace);
 }
 .speech-bubble.side-right::after {
-  left: -4px;
+  left: -0.28em;
   border-left: 1px solid var(--lace);
   border-bottom: 1px solid var(--lace);
 }
