@@ -93,7 +93,7 @@ async function boot(): Promise<void> {
   // in localStorage, toggled by the header collapse button + applied as a `.collapsed` class).
   const speechStack = new SpeechStackView(refs.modelStage);
   let isCollapsed = localStorage.getItem('luna:collapsed') === '1';
-  const view = new RouterBubbleView(windowView, speechStack, () => isCollapsed);
+  const view = new RouterBubbleView(windowView, speechStack);
 
   let audio: AudioSink = noopAudioSink;
   if (localStorage.getItem('luna:tts') !== '0') {

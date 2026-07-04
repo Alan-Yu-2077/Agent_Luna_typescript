@@ -17,46 +17,42 @@ function recorder(): { view: BubbleView; calls: Call[] } {
   return { view, calls };
 }
 
-describe('RouterBubbleView (v0.25.0)', () => {
-  test('expanded → only the window view sees Luna replies', () => {
+describe('RouterBubbleView (v0.25.0 + 2026-07-04 all-modes)', () => {
+  test('every reply goes to BOTH the window and the stack (all modes)', () => {
     const w = recorder();
     const s = recorder();
-    const r = new RouterBubbleView(w.view, s.view, () => false);
+    const r = new RouterBubbleView(w.view, s.view);
     r.open('m1');
     r.append('m1', 'hi');
     r.finalize('m1', 'hello');
-    expect(w.calls).toEqual([
+    const expected: Call[] = [
       ['open', 'm1'],
       ['append', 'm1', 'hi'],
       ['finalize', 'm1', 'hello'],
+    ];
+    expect(w.calls).toEqual(expected);
+    expect(s.calls).toEqual(expected);
+  });
+
+  test('discard / chip / setThinking also fan out to both', () => {
+    const w = recorder();
+    const s = recorder();
+    const r = new RouterBubbleView(w.view, s.view);
+    r.chip('tool', 'ran a tool', undefined);
+    r.setThinking(true);
+    r.discard('m1');
+    expect(w.calls).toEqual(s.calls);
+    expect(s.calls).toEqual([
+      ['chip', 'tool', 'ran a tool', undefined],
+      ['thinking', true],
+      ['discard', 'm1'],
     ]);
-    expect(s.calls).toEqual([]);
-  });
-
-  test('collapsed → both the window AND the stack see them', () => {
-    const w = recorder();
-    const s = recorder();
-    const r = new RouterBubbleView(w.view, s.view, () => true);
-    r.finalize('m1', 'hello');
-    expect(w.calls).toEqual([['finalize', 'm1', 'hello']]);
-    expect(s.calls).toEqual([['finalize', 'm1', 'hello']]);
-  });
-
-  test('collapsed is read LIVE per call — flipping mid-stream never strands the stack', () => {
-    const w = recorder();
-    const s = recorder();
-    let mode = false;
-    const r = new RouterBubbleView(w.view, s.view, () => mode);
-    r.open('m1'); // expanded — window only
-    mode = true;
-    r.finalize('m1', 'x'); // now collapsed — both
-    expect(s.calls).toEqual([['finalize', 'm1', 'x']]); // stack never saw the earlier open
   });
 
   test('renderHistory goes only to the window (the stack never replays history)', () => {
     const w = recorder();
     const s = recorder();
-    const r = new RouterBubbleView(w.view, s.view, () => true);
+    const r = new RouterBubbleView(w.view, s.view);
     r.renderHistory([{ userText: 'u', assistantText: 'a', tMs: 1 }]);
     expect(w.calls).toEqual([['history', 1]]);
     expect(s.calls).toEqual([]);

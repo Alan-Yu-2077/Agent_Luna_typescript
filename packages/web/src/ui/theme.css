@@ -316,27 +316,40 @@ body {
 .boot-skip:hover { background: rgba(143, 183, 255, 0.45); }
 .reduce-motion .boot-moon, .reduce-motion .boot-spinner i { animation: none; }
 
-/* v0.25.0 (Initiative 18): the beside-model speech-bubble stack (collapsed companion mode).
-   v0.25.2 (Alan's design review): anchored beside the model's HEAD — the sink publishes the head
-   position as --luna-head-x/--luna-head-y CSS vars (tracking drag/zoom/glide). The stack's BOTTOM
-   sits at head height to the left of her face: the newest bubble appears at her head, older ones
-   are pushed UP above it. pointer-events:none so it never blocks the model's drag/gaze. */
+/* v0.25.0 (Initiative 18) + design review 2026-07-04: the beside-model speech bubbles. Each reply
+   pops on a RANDOM side of her head — two head-anchored zones (left/right of --luna-head-x, which
+   the sink republishes every frame in EVERY mode, so this works windowed / app / pet alike). Within
+   a zone the newest sits at head height, older ones push UP. pointer-events:none so it never blocks
+   the model's drag/gaze. */
 .speech-stack {
   position: absolute;
-  left: 8px;
-  right: calc(100% - var(--luna-head-x, 60%) + var(--luna-head-gap, 90px));
-  bottom: calc(100% - var(--luna-head-y, 30%));
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  justify-content: flex-end;
+  inset: 0;
   z-index: 4;
   pointer-events: none;
 }
+.speech-zone {
+  position: absolute;
+  bottom: calc(100% - var(--luna-head-y, 30%));
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  max-width: 44%;
+}
+/* left of the head → bubbles hug the head-facing (right) edge */
+.speech-zone.left {
+  left: 8px;
+  right: calc(100% - var(--luna-head-x, 50%) + var(--luna-head-gap, 60px));
+  align-items: flex-end;
+}
+/* right of the head → bubbles hug the head-facing (left) edge */
+.speech-zone.right {
+  left: calc(var(--luna-head-x, 50%) + var(--luna-head-gap, 60px));
+  right: 8px;
+  align-items: flex-start;
+}
 .speech-bubble {
   position: relative;
-  align-self: flex-end;
-  max-width: min(340px, 100%);
+  max-width: min(300px, 100%);
   /* Design review (2026-07-04): light-blue-white to match Luna's --sky palette instead of the
      off-brand --lavender it borrowed; frosted (semi-opaque white + blur) so it stays legible
      overlaid on the model art. */
@@ -355,26 +368,33 @@ body {
   transition: opacity 0.5s ease, transform 0.5s ease;
   animation: speech-rise 0.28s ease;
 }
-/* The comic tail pokes out of the bubble's bottom-RIGHT CORNER (toward her face), not the side.
-   Present on every bubble but visible only on .latest — removing the class the moment a bubble
-   becomes history TRANSITIONS the tail away (shrink + fade), turning it into a plain bubble. */
+/* The comic tail pokes from the bottom CORNER on the HEAD-facing side: bottom-right for a left-side
+   bubble (her head is to its right), bottom-left for a right-side bubble. Visible only on .latest —
+   dropping the class transitions the tail away as the bubble becomes history. */
 .speech-bubble::after {
   content: '';
   position: absolute;
-  right: -4px;
   bottom: -4px;
   width: 13px;
   height: 13px;
   background: rgba(255, 255, 255, 0.82);
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
-  border-right: 1px solid var(--lace);
-  border-bottom: 1px solid var(--lace);
   border-radius: 0 0 3px 0;
   transform-origin: center;
   transform: rotate(45deg) scale(0.3);
   opacity: 0;
   transition: opacity 0.25s ease, transform 0.25s ease;
+}
+.speech-bubble.side-left::after {
+  right: -4px;
+  border-right: 1px solid var(--lace);
+  border-bottom: 1px solid var(--lace);
+}
+.speech-bubble.side-right::after {
+  left: -4px;
+  border-left: 1px solid var(--lace);
+  border-bottom: 1px solid var(--lace);
 }
 .speech-bubble.latest::after {
   opacity: 1;

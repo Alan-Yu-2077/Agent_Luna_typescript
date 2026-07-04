@@ -1,12 +1,17 @@
 import type { BubbleView, ChipKind, HistoryTurnView } from '../bubbles';
 
 // v0.25.0 (Initiative 18): the beside-model speech-bubble stack — Luna's replies as timed bubbles
-// next to the Live2D model in collapsed companion mode. A `BubbleView` fed by the SAME
-// controller-driven finalize() calls the chat window consumes (via RouterBubbleView), so no
-// controller/protocol change. Newest bubble at the bottom (DOM append order in a bottom-anchored
-// column); each lives ~ttlMs then gently fades; an overflow cap fast-fades the oldest; barge-in
-// clears the stack. open/append/chip/setThinking/renderHistory are intentional no-ops — the stack
-// shows only completed spoken replies (the window view keeps the full log + streaming + chips).
+// beside the Live2D model. A `BubbleView` fed by the SAME controller-driven finalize() calls the
+// chat window consumes (via RouterBubbleView), so no controller/protocol change. Each reply lives
+// ~ttlMs then gently fades; an overflow cap fast-fades the oldest; barge-in clears the stack.
+// open/append/chip/setThinking/renderHistory are intentional no-ops — the stack shows only
+// completed spoken replies (the window view keeps the full log + streaming + chips).
+//
+// Design review (2026-07-04): each bubble pops on a RANDOM side of her head — left OR right — so it
+// feels alive instead of a fixed column. Two head-anchored zones (left/right of --luna-head-x); the
+// bubble is routed to a random one and stacks upward within it. Works in every mode (windowed / pet /
+// web) because it anchors to the head vars the sink always publishes. Newest overall carries `.latest`
+// (the comic tail, which points toward her — right on a left-side bubble, left on a right-side one).
 
 // Injected so the TTL is deterministic in tests. Returns a cancel fn.
 export type StackScheduler = (fn: () => void, ms: number) => () => void;
@@ -20,14 +25,15 @@ export type SpeechStackOptions = {
   fadeMs?: number; // the fade-out transition before DOM removal (must match the CSS)
   maxVisible?: number; // overflow cap — the oldest fast-fades past this
   schedule?: StackScheduler;
-  rng?: () => number; // injected for deterministic tests (drives the per-bubble position jitter)
+  rng?: () => number; // injected for deterministic tests (drives the random side + vertical jitter)
 };
 
 type StackBubble = { el: HTMLElement; cancel: (() => void) | null };
 
 export class SpeechStackView implements BubbleView {
-  private readonly container: HTMLElement;
-  private readonly live: StackBubble[] = []; // oldest → newest; newest is the bottom bubble
+  private readonly leftZone: HTMLElement;
+  private readonly rightZone: HTMLElement;
+  private readonly live: StackBubble[] = []; // oldest → newest (across BOTH zones); newest is `.latest`
   private readonly ttlMs: number;
   private readonly fadeMs: number;
   private readonly maxVisible: number;
@@ -41,25 +47,31 @@ export class SpeechStackView implements BubbleView {
     this.schedule = opts.schedule ?? realScheduler;
     this.rng = opts.rng ?? Math.random;
     const doc = host.ownerDocument;
-    this.container = doc.createElement('div');
-    this.container.className = 'speech-stack';
-    host.appendChild(this.container);
+    const outer = doc.createElement('div');
+    outer.className = 'speech-stack';
+    this.leftZone = doc.createElement('div');
+    this.leftZone.className = 'speech-zone left';
+    this.rightZone = doc.createElement('div');
+    this.rightZone.className = 'speech-zone right';
+    outer.appendChild(this.leftZone);
+    outer.appendChild(this.rightZone);
+    host.appendChild(outer);
   }
 
-  // A completed reply → a new bubble at the bottom; the older ones sit above it (DOM order).
-  // The newest carries `.latest` (the comic tail pointing at her); the previous newest loses it
-  // AT THIS MOMENT — the CSS transition animates its tail away as it becomes history. Each bubble
-  // lands with a small random offset near the head (漫画感 — not a fixed slot).
+  // A completed reply → a new bubble on a RANDOM side, stacking upward in that zone. The newest
+  // carries `.latest` (the comic tail); the previous newest loses it AT THIS MOMENT so the CSS
+  // transition animates its tail away as it becomes history.
   finalize(_id: string, text: string): void {
     const t = text.trim();
     if (!t) return;
     this.live[this.live.length - 1]?.el.classList.remove('latest');
-    const el = this.container.ownerDocument.createElement('div');
-    el.className = 'speech-bubble latest';
+    const right = this.rng() < 0.5;
+    const zone = right ? this.rightZone : this.leftZone;
+    const el = zone.ownerDocument.createElement('div');
+    el.className = `speech-bubble latest side-${right ? 'right' : 'left'}`;
     el.textContent = t;
-    el.style.marginRight = `${Math.round(this.rng() * 34)}px`;
-    el.style.marginTop = `${Math.round(2 + this.rng() * 8)}px`;
-    this.container.appendChild(el);
+    el.style.marginTop = `${Math.round(2 + this.rng() * 8)}px`; // a little vertical 漫画感 stagger
+    zone.appendChild(el);
     const bubble: StackBubble = { el, cancel: null };
     this.live.push(bubble);
     bubble.cancel = this.schedule(() => this.fadeOut(bubble), this.ttlMs);

@@ -59,20 +59,31 @@ function manualScheduler(): { schedule: StackScheduler; fireAll: () => void } {
   return { schedule, fireAll };
 }
 
+// rng() → 0.9 forces every bubble to the LEFT zone (right = rng() < 0.5 → false), so the behavioural
+// tests get a single deterministic zone to assert order against.
 function stackOf(opts: { ttlMs?: number; fadeMs?: number; maxVisible?: number } = {}): {
   view: SpeechStackView;
-  container: FakeEl;
+  outer: FakeEl;
+  leftZone: FakeEl;
+  container: FakeEl; // the left zone — where the forced-left bubbles land
   fireAll: () => void;
 } {
   const host = new FakeEl();
   const { schedule, fireAll } = manualScheduler();
   // WHY as unknown: FakeEl is a minimal DOM stand-in (bun test has no DOM); we exercise stack logic.
-  const view = new SpeechStackView(host as unknown as HTMLElement, { ...opts, schedule });
-  const container = host.children[0]!; // the `.speech-stack` container the view created
-  return { view, container, fireAll };
+  const view = new SpeechStackView(host as unknown as HTMLElement, { ...opts, schedule, rng: () => 0.9 });
+  const outer = host.children[0]!; // the `.speech-stack` container (holds the two zones)
+  const leftZone = outer.children[0]!;
+  return { view, outer, leftZone, container: leftZone, fireAll };
 }
 
-describe('SpeechStackView (v0.25.0)', () => {
+describe('SpeechStackView (v0.25.0 + 2026-07-04 random-side)', () => {
+  test('creates two head-anchored zones (left + right)', () => {
+    const { outer } = stackOf();
+    expect(outer.className).toContain('speech-stack');
+    expect(outer.children.map((c) => c.className)).toEqual(['speech-zone left', 'speech-zone right']);
+  });
+
   test('finalize adds a bubble; newest is the last child (bottom of the column)', () => {
     const { view, container } = stackOf();
     view.finalize('m1', 'first');
@@ -133,7 +144,6 @@ describe('SpeechStackView (v0.25.0)', () => {
     expect(container.children.length).toBe(0);
   });
 
-  // ── comic-tail + jitter (Alan's design review) ──
   test('the newest bubble carries .latest (the tail); the previous loses it the moment it becomes history', () => {
     const { view, container } = stackOf();
     view.finalize('m1', 'first');
@@ -151,20 +161,33 @@ describe('SpeechStackView (v0.25.0)', () => {
     expect(container.children[0]!.classList.contains('fading')).toBe(true);
   });
 
-  test('each bubble lands with a bounded random offset near the head (injected rng)', () => {
+  // ── random side + jitter (2026-07-04 design review) ──
+  test('each bubble picks a random side; a right-side pick lands in the right zone with side-right', () => {
+    const host = new FakeEl();
+    const { schedule } = manualScheduler();
+    // rng() → 0.1 (< 0.5) forces the RIGHT side.
+    const view = new SpeechStackView(host as unknown as HTMLElement, { schedule, rng: () => 0.1 });
+    view.finalize('m1', 'over here');
+    const outer = host.children[0]!;
+    const rightZone = outer.children[1]!;
+    expect(rightZone.children.length).toBe(1);
+    expect(rightZone.children[0]!.className).toContain('side-right');
+    expect(outer.children[0]!.children.length).toBe(0); // nothing in the left zone
+  });
+
+  test('the vertical jitter comes from the injected rng (side pick, then marginTop)', () => {
     const host = new FakeEl();
     const { schedule } = manualScheduler();
     let calls = 0;
     const rng = (): number => {
       calls += 1;
-      return 0.5;
+      return 0.5; // side: 0.5 < 0.5 is false → LEFT
     };
-    // WHY as unknown: FakeEl is a minimal DOM stand-in (bun test has no DOM).
     const view = new SpeechStackView(host as unknown as HTMLElement, { schedule, rng });
     view.finalize('m1', 'hi');
-    const el = host.children[0]!.children[0]!;
-    expect(el.style['marginRight']).toBe('17px'); // 0.5 × 34
+    const el = host.children[0]!.children[0]!.children[0]!; // outer → left zone → bubble
+    expect(el.className).toContain('side-left');
     expect(el.style['marginTop']).toBe('6px'); // 2 + 0.5 × 8
-    expect(calls).toBe(2);
+    expect(calls).toBe(2); // one rng for the side, one for the jitter
   });
 });
