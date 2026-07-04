@@ -123,7 +123,7 @@ stay as separate hardcoded blocks; only `persona (04)` + `core memory (07)` move
 
 | Plan | Version | Theme | Risk | Depends | Status |
 |---|---|---|---|---|---|
-| 1/4 | v0.30.0 | **Soul store + migration + seed** (dark launch — populated, unused; zero runtime change) | Medium | Init 21 | PLANNED |
+| 1/4 | v0.30.0 | **Soul store + migration + seed** (dark launch — populated, unused; zero runtime change) | Medium | Init 21 | SHIPPED (branch, draft PR) |
 | 2/4 | v0.30.1 | **Render the soul into the prompt** — block 04 = full soul from DB, block 07 self/rel folds in (L3 stays); behind `LUNA_SOUL_DB` | Medium | v0.30.0 | PLANNED |
 | 3/4 | v0.30.2 | **Dream authors the evolving section** — `persona_update` targets the soul; fix the freeze + the cleanup-gap; one-time relationship purge | High | v0.30.1 | PLANNED |
 | 4/4 | v0.30.3 | **Flip default, retire `core_memory`, remove the old path**, close the initiative | Medium | v0.30.2 | PLANNED |

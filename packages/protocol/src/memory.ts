@@ -28,9 +28,25 @@ export const L3Fact = z.object({
 });
 export type L3Fact = z.infer<typeof L3Fact>;
 
+// v0.30.0: deprecated in favor of Soul (Initiative 22) — retired at v0.30.3
+// once core_memory is dropped and the evolving section fully replaces it.
 export const CoreMemory = z.object({
   self_state: z.string(),
   relationship_status: z.string(),
   updated_ms: z.number().int().nonnegative(),
 });
 export type CoreMemory = z.infer<typeof CoreMemory>;
+
+// The soul file (Initiative 22): a single persona split by authorship into a
+// fixed core (dev-authored, git-seeded, Luna-immutable — rendered from
+// fixed_text) and an evolving section Luna self-authors via the dream
+// (evolving_self/evolving_bond, mirroring core_memory's self_state/
+// relationship_status). fixed_hash is a DB-internal cache-gate detail, not
+// part of the wire type.
+export const Soul = z.object({
+  fixed_text: z.string(),
+  evolving_self: z.string(),
+  evolving_bond: z.string(),
+  updated_ms: z.number().int().nonnegative(),
+});
+export type Soul = z.infer<typeof Soul>;
