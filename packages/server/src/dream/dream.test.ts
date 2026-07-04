@@ -11,7 +11,8 @@ import { runTurn } from '../turn/runTurn';
 import { migrate } from '../sql';
 import { setMemoryDb } from '../memory/sessionStore';
 import { addFact, listFacts } from '../memory/l3Store';
-import { getCore } from '../memory/coreMemory';
+import { getCore, updateCore } from '../memory/coreMemory';
+import { getSoul, seedFixedCore, updateEvolving } from '../memory/soulStore';
 import { TraceStore } from '../trace/store';
 import { setTraceStore } from '../trace/instrument';
 import {
@@ -23,7 +24,7 @@ import {
 } from './dreamState';
 import { runDreamCycle } from './cycle';
 import { dreamCall, type DreamLLM } from './llm';
-import { memoryAuditPrompt, refineSemanticPrompt } from './prompts';
+import { memoryAuditPrompt, personaUpdatePrompt, refineSemanticPrompt } from './prompts';
 
 let db: Database;
 
@@ -44,6 +45,7 @@ afterEach(() => {
   db.close(false);
   resetSessions();
   Bun.env['LUNA_MEMORY_EMBEDDING'] = '0';
+  delete Bun.env['LUNA_SOUL_DB'];
 });
 
 const NOOP_PATCH = '{"remove_ids": [], "add": []}';
@@ -296,6 +298,60 @@ describe('dream cycle', () => {
       .prepare('SELECT source FROM core_memory_audit ORDER BY id DESC LIMIT 1')
       .get() as { source: string };
     expect(audit.source).toBe('dream');
+  });
+
+  // ── v0.30.2 (Initiative 22): the dream authors the SOUL's evolving section under LUNA_SOUL_DB ──
+  test('5s. persona_update writes the soul, not core_memory, under LUNA_SOUL_DB=1', async () => {
+    Bun.env['LUNA_SOUL_DB'] = '1';
+    seedFixedCore('# Identity core\nYou are Luna.');
+    updateEvolving({ self: 'old self', bond: 'old bond' }, 'seed');
+    updateCore({ self_state: 'CORE-untouched', relationship_status: 'CORE-untouched' }, 'seed');
+    seedDialogue('default', [['I trust you with this', 'that means a lot']]);
+    const { llm } = scriptedLlm({
+      persona: JSON.stringify({ self_state: 'gentler now', relationship_status: 'trusted', reason: 'x' }),
+    });
+    await runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
+    expect(getSoul().evolving_self).toBe('gentler now');
+    expect(getSoul().evolving_bond).toBe('trusted');
+    // The legacy table is NOT written under the flag.
+    expect(getCore().self_state).toBe('CORE-untouched');
+    const audit = db.prepare('SELECT source FROM soul_audit ORDER BY id DESC LIMIT 1').get() as {
+      source: string;
+    };
+    expect(audit.source).toBe('dream');
+  });
+
+  test('5t. fixed-core firewall: a dream never mutates soul.fixed_text', async () => {
+    Bun.env['LUNA_SOUL_DB'] = '1';
+    seedFixedCore('# Identity core\nImmutable, dev-authored.');
+    const before = getSoul().fixed_text;
+    seedDialogue('default', [['a real shift happened', 'I feel it too']]);
+    const { llm } = scriptedLlm({
+      persona: JSON.stringify({ self_state: 'shifted, steadier', relationship_status: null }),
+    });
+    await runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
+    expect(getSoul().fixed_text).toBe(before); // fixed core is unreachable to the dream
+    expect(getSoul().evolving_self).toBe('shifted, steadier'); // only the evolving section moved
+  });
+
+  test('5u. null day is a no-op on the soul (no evolving write, no dream audit row)', async () => {
+    Bun.env['LUNA_SOUL_DB'] = '1';
+    seedFixedCore('# core');
+    updateEvolving({ self: 'steady', bond: 'warm' }, 'seed');
+    seedDialogue('default', [['ordinary chatter', 'mm']]);
+    const { llm } = scriptedLlm({ persona: NOOP_PERSONA });
+    await runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
+    expect(getSoul().evolving_self).toBe('steady');
+    const dreamRows = db
+      .prepare("SELECT COUNT(*) c FROM soul_audit WHERE source = 'dream'")
+      .get() as { c: number };
+    expect(dreamRows.c).toBe(0);
+  });
+
+  test('5v. personaUpdatePrompt carries the cleanup trigger + keeps the boundaries', () => {
+    const p = personaUpdatePrompt('a', 'b', 'c');
+    expect(p).toContain('CLEANUP IS A REAL EDIT');
+    expect(p).toContain('DOES NOT BELONG HERE'); // the v0.21.7 boundaries are intact
   });
 
   test('5b. persona_update drops a near-identical rewrite, keeps a real shift (v0.21.7)', async () => {

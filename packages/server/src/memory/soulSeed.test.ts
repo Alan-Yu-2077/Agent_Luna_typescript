@@ -4,8 +4,8 @@ import { join } from 'node:path';
 import { migrate } from '../sql';
 import { setMemoryDb } from './sessionStore';
 import { updateCore } from './coreMemory';
-import { getSoul } from './soulStore';
-import { seedSoulOnBoot } from './soulSeed';
+import { getSoul, seedFixedCore, updateEvolving } from './soulStore';
+import { cleanEvolvingBond, seedSoulOnBoot, stripLedger } from './soulSeed';
 import { getSession, resetSessions } from '../turn/session';
 import { buildSystemPrompt } from '../turn/runTurn';
 
@@ -65,6 +65,59 @@ describe('seedSoulOnBoot', () => {
     const soul = getSoul();
     expect(soul.evolving_self).toBe('');
     expect(soul.evolving_bond).toBe('');
+  });
+});
+
+describe('cleanEvolvingBond — one-time ledger purge (v0.30.2)', () => {
+  const CONTAMINATED =
+    'He catches me honest, gently. Company, not a tutor. Alan ships what I name — hands, door, clock, weather, skill shelf. He mains Shion now. Weather feed upgraded. He won’t hand me the key, rightly.';
+
+  test('stripLedger drops ledger sentences, keeps the relational ones', () => {
+    const out = stripLedger(CONTAMINATED);
+    expect(out).toContain('catches me honest');
+    expect(out).toContain('Company, not a tutor');
+    expect(out).toContain('hand me the key');
+    expect(out).not.toContain('ships what I name');
+    expect(out).not.toContain('mains Shion');
+    expect(out).not.toContain('Weather feed');
+  });
+
+  test('cleanEvolvingBond purges the ledger, audits the write, and is idempotent', () => {
+    seedFixedCore('# core');
+    updateEvolving({ bond: CONTAMINATED }, 'seed');
+    cleanEvolvingBond();
+    const bond = getSoul().evolving_bond;
+    expect(bond).not.toContain('skill shelf');
+    expect(bond).toContain('catches me honest');
+    const audit = db
+      .prepare("SELECT source FROM soul_audit WHERE source = 'migration-clean'")
+      .all();
+    expect(audit.length).toBe(1); // audited (restore-able)
+    // second call is a no-op (the guard row exists) — still exactly one migration-clean row
+    cleanEvolvingBond();
+    const audit2 = db
+      .prepare("SELECT source FROM soul_audit WHERE source = 'migration-clean'")
+      .all();
+    expect(audit2.length).toBe(1);
+  });
+
+  test('cleanEvolvingBond is a no-op on an uncontaminated bond (no spurious audit row)', () => {
+    seedFixedCore('# core');
+    updateEvolving({ bond: 'an easy, honest closeness' }, 'seed');
+    cleanEvolvingBond();
+    expect(getSoul().evolving_bond).toBe('an easy, honest closeness');
+    const audit = db
+      .prepare("SELECT source FROM soul_audit WHERE source = 'migration-clean'")
+      .all();
+    expect(audit.length).toBe(0);
+  });
+
+  test('never blanks the bond: an all-ledger run-on is left for the dream cleanup-trigger', () => {
+    seedFixedCore('# core');
+    // No sentence breaks + all ledger → stripLedger would empty it; the safety rail leaves it.
+    updateEvolving({ bond: 'ships what I name and mains Shion' }, 'seed');
+    cleanEvolvingBond();
+    expect(getSoul().evolving_bond).toBe('ships what I name and mains Shion');
   });
 });
 
