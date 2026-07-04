@@ -1,7 +1,8 @@
 # Initiative 22 — The Soul File (persona → a DB-stored, authored-vs-evolving document)
 
-> **Status: PLANNED.** Priority: **high** (owner-driven redesign of the identity substrate).
-> Version range: **v0.30.0 – v0.30.3**. Follows Initiative 21. Master index:
+> **Status: ✅ SHIPPED 2026-07-04** (v0.30.0 merged; v0.30.1–v0.30.3 on branch `feat/soul-file-v0.30.1-3`).
+> Priority: **high** (owner-driven redesign of the identity substrate). Version range:
+> **v0.30.0 – v0.30.3**. Follows Initiative 21. Master index:
 > [`../README.md`](../README.md). **Disruptive** — amends LD #12; retires the `core_memory` table.
 
 ## The idea
@@ -124,9 +125,9 @@ stay as separate hardcoded blocks; only `persona (04)` + `core memory (07)` move
 | Plan | Version | Theme | Risk | Depends | Status |
 |---|---|---|---|---|---|
 | 1/4 | v0.30.0 | **Soul store + migration + seed** (dark launch — populated, unused; zero runtime change) | Medium | Init 21 | SHIPPED (branch, draft PR) |
-| 2/4 | v0.30.1 | **Render the soul into the prompt** — block 04 = full soul from DB, block 07 self/rel folds in (L3 stays); behind `LUNA_SOUL_DB` | Medium | v0.30.0 | PLANNED |
-| 3/4 | v0.30.2 | **Dream authors the evolving section** — `persona_update` targets the soul; fix the freeze + the cleanup-gap; one-time relationship purge | High | v0.30.1 | PLANNED |
-| 4/4 | v0.30.3 | **Flip default, retire `core_memory`, remove the old path**, close the initiative | Medium | v0.30.2 | PLANNED |
+| 2/4 | v0.30.1 | **Render the soul into the prompt** — block 04 = full soul from DB, block 07 self/rel folds in (L3 stays); behind `LUNA_SOUL_DB` | Medium | v0.30.0 | ✅ SHIPPED |
+| 3/4 | v0.30.2 | **Dream authors the evolving section** — `persona_update` targets the soul; fix the freeze + the cleanup-gap; one-time relationship purge | High | v0.30.1 | ✅ SHIPPED |
+| 4/4 | v0.30.3 | **Flip default, retire `core_memory`, remove the old path**, close the initiative | Medium | v0.30.2 | ✅ SHIPPED |
 
 ## Acceptance criteria for the whole initiative
 

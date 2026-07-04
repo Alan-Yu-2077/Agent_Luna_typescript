@@ -2,12 +2,16 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { Database } from 'bun:sqlite';
 import type Anthropic from '@anthropic-ai/sdk';
 import { MockProvider } from '../provider/mock';
 import type { ProviderEvent } from '../provider/types';
 import { builtinRegistry } from '../tools/registry';
 import { getSession, resetSessions } from '../turn/session';
 import { runTurn } from '../turn/runTurn';
+import { migrate } from '../sql';
+import { setMemoryDb } from '../memory/sessionStore';
+import { seedFixedCore } from '../memory/soulStore';
 import { loadPersona, resetPersonaCache } from './loader';
 import {
   MAX_CHARS,
@@ -167,27 +171,32 @@ describe('persona system-prompt integration (runTurn)', () => {
     expect(JSON.stringify(req2.system)).not.toContain('Scene state:');
   });
 
-  test('persona file edit changes the system prompt exactly once, then stable', async () => {
+  // v0.30.3: the persona is DB-sourced (the soul's fixed core), not the file — so a change flows
+  // through a soul write (seedFixedCore bumps the memory epoch), not a live file edit.
+  test('a soul change flows into the system prompt exactly once, then stable', async () => {
     resetSessions();
-    const file = join(dir, 'live.md');
-    writeFileSync(file, 'persona generation one');
-    Bun.env['LUNA_PERSONA_PATH'] = file;
-    resetPersonaCache();
+    const db = new Database(':memory:', { strict: true });
+    migrate(db, join(import.meta.dir, '..', 'migrations'));
+    setMemoryDb(db);
+    try {
+      seedFixedCore('persona generation one');
+      const session = getSession('persona-edit');
+      const provider = new MockProvider([endRound('a'), endRound('b'), endRound('c')]);
+      const opts = { session, provider, registry: builtinRegistry, emit: () => {} };
+      await runTurn({ ...opts, turnId: 't1', userText: 'x' });
+      await runTurn({ ...opts, turnId: 't2', userText: 'y' });
 
-    const session = getSession('persona-edit');
-    const provider = new MockProvider([endRound('a'), endRound('b'), endRound('c')]);
-    const opts = { session, provider, registry: builtinRegistry, emit: () => {} };
-    await runTurn({ ...opts, turnId: 't1', userText: 'x' });
-    await runTurn({ ...opts, turnId: 't2', userText: 'y' });
+      seedFixedCore('persona generation two'); // a re-seed (changed content) → epoch bump
+      await runTurn({ ...opts, turnId: 't3', userText: 'z' });
 
-    writeFileSync(file, 'persona generation two');
-    utimesSync(file, new Date(), new Date(Date.now() + 5000));
-    await runTurn({ ...opts, turnId: 't3', userText: 'z' });
-
-    const sys = provider.requests.map((r) => JSON.stringify(r.system));
-    expect(sys[0]).toBe(sys[1]!);
-    expect(sys[2]).not.toBe(sys[1]!);
-    expect(sys[0]).toContain('generation one');
-    expect(sys[2]).toContain('generation two');
+      const sys = provider.requests.map((r) => JSON.stringify(r.system));
+      expect(sys[0]).toBe(sys[1]!);
+      expect(sys[2]).not.toBe(sys[1]!);
+      expect(sys[0]).toContain('generation one');
+      expect(sys[2]).toContain('generation two');
+    } finally {
+      setMemoryDb(null);
+      db.close(false);
+    }
   });
 });

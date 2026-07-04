@@ -10,8 +10,6 @@ import { runTurn } from '../turn/runTurn';
 import { migrate } from '../sql';
 import { setMemoryDb } from './sessionStore';
 import { addFact, forgetFact, listFacts } from './l3Store';
-import { getCore, restore, updateCore } from './coreMemory';
-import { memoryEpoch } from './epoch';
 import { renderCoreBlock } from './renderCoreBlock';
 
 let db: Database;
@@ -75,55 +73,20 @@ describe('l3Store', () => {
   });
 });
 
-describe('coreMemory', () => {
-  test('update audits prior state; restore(1) rolls back', () => {
-    updateCore({ self_state: 'curious and warm', relationship_status: 'new friends' }, 'test');
-    updateCore({ relationship_status: 'close friends' }, 'test');
-    expect(getCore().relationship_status).toBe('close friends');
-    expect(getCore().self_state).toBe('curious and warm');
+// v0.30.3 (Initiative 22): the `coreMemory` unit tests moved to soulStore.test.ts (updateEvolving
+// carries the same audit / no-op-guard / epoch-bump / restore semantics); core_memory is retired.
 
-    const restored = restore(1);
-    expect(restored?.relationship_status).toBe('new friends');
-    expect(restored?.self_state).toBe('curious and warm');
-
-    const auditCount = db.prepare('SELECT COUNT(*) c FROM core_memory_audit').get() as {
-      c: number;
-    };
-    expect(auditCount.c).toBe(3);
-  });
-
-  test('a no-op patch (both fields unchanged) writes nothing — no audit, no epoch bump (v0.21.7)', () => {
-    updateCore({ self_state: 'steady', relationship_status: 'warm' }, 'test');
-    const epochAfterFirst = memoryEpoch();
-    const before = getCore();
-
-    // re-submitting identical values must NOT land (the dream-churn source)
-    const result = updateCore({ self_state: 'steady', relationship_status: 'warm' }, 'dream');
-    expect(result).toEqual(before); // returns the unchanged state, untouched
-    expect(memoryEpoch()).toBe(epochAfterFirst); // cached system block NOT invalidated
-    const c1 = db.prepare('SELECT COUNT(*) c FROM core_memory_audit').get() as { c: number };
-    expect(c1.c).toBe(1); // only the first (changing) write was audited
-
-    // a genuine change still lands (audit + epoch bump)
-    updateCore({ self_state: 'steadier than before' }, 'dream');
-    expect(getCore().self_state).toBe('steadier than before');
-    expect(memoryEpoch()).toBe(epochAfterFirst + 1);
-    const c2 = db.prepare('SELECT COUNT(*) c FROM core_memory_audit').get() as { c: number };
-    expect(c2.c).toBe(2);
-  });
-});
-
-describe('renderCoreBlock + cache stability', () => {
-  test('renders core memory + capped facts deterministically; unset memory renders empty', () => {
+describe('renderCoreBlock (L3-only since v0.30.3) + cache stability', () => {
+  test('renders capped facts deterministically; unset memory renders empty', () => {
     expect(renderCoreBlock()).toBe('');
-    updateCore({ self_state: 'gentle, curious' }, 'test');
     addFact('core_facts', 'Alan writes TypeScript');
     const a = renderCoreBlock();
     const b = renderCoreBlock();
     expect(a).toBe(b);
-    expect(a).toContain('gentle, curious');
     expect(a).toContain('Alan writes TypeScript');
     expect(a).toContain('remember tool');
+    // the self/relationship prose is the soul's job now — never in this block
+    expect(a).not.toContain('## About yourself');
   });
 
   test('system prompt is byte-identical across turns without memory change, differs after', async () => {
