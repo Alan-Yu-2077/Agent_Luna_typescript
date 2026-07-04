@@ -1,6 +1,9 @@
 import { getMemoryDb } from '../memory/sessionStore';
 import { resetSessions } from '../turn/session';
 import { lazyHtml } from '../devHtml';
+import { getSoul, updateEvolving, updateFixedCore } from '../memory/soulStore';
+import { bumpMemoryEpoch } from '../memory/epoch';
+import { loadPersona } from '../persona/loader';
 
 // Developer data IDE (the TS analog of the Python project's `.workspace`). A
 // VSCode-style read view over every SQLite table, plus dev-only write actions:
@@ -14,6 +17,19 @@ function json(data: unknown, status = 200): Response {
     status,
     headers: { 'content-type': 'application/json' },
   });
+}
+
+// The soul as the editor sees it (v0.31.0): the three authored fields + when it last changed +
+// whether the mutating routes are unlocked (LUNA_DEV_TOOLS=1).
+function soulView(): Record<string, unknown> {
+  const s = getSoul();
+  return {
+    fixed_text: s.fixed_text,
+    evolving_self: s.evolving_self,
+    evolving_bond: s.evolving_bond,
+    updated_ms: s.updated_ms,
+    writable: Bun.env['LUNA_DEV_TOOLS'] === '1',
+  };
 }
 
 function sanitize(v: unknown): unknown {
@@ -86,8 +102,8 @@ function dumpAll(limit: number): TableDump[] {
 }
 
 // One-click reset: clear the conversational + memory + trace data, drop the live
-// in-memory session so the open socket reloads fresh. Schema + identity tables
-// (core_memory / dream_state) are left intact.
+// in-memory session so the open socket reloads fresh. Identity tables (soul /
+// soul_audit / dream_state) are left intact — a data reset must never wipe her persona.
 function resetData(): Record<string, number> {
   const db = getMemoryDb();
   if (!db) return {};
@@ -98,7 +114,6 @@ function resetData(): Record<string, number> {
     'embeddings_cache',
     'diaries',
     'dream_reports',
-    'core_memory_audit',
     'sessions',
   ];
   const cleared: Record<string, number> = {};
@@ -125,6 +140,38 @@ export async function workspaceHandler(req: Request): Promise<Response | null> {
     const raw = Number(url.searchParams.get('limit') ?? 100);
     const limit = Number.isFinite(raw) ? Math.max(1, Math.min(1000, raw)) : 100;
     return json({ enabled: getMemoryDb() !== null, limit, tables: dumpAll(limit) });
+  }
+  // v0.31.0: the soul file as an owner-editable document (not raw table rows). Read is open (like
+  // /api/all); the writes are LUNA_DEV_TOOLS-gated like reset/edit. The fixed core is the human
+  // owner's — Luna's dream/tools still cannot reach it (updateFixedCore is not on any of her paths).
+  if (path === '/_workspace/api/soul' && req.method === 'GET') {
+    return json({ enabled: getMemoryDb() !== null, soul: soulView() });
+  }
+  if (path === '/_workspace/api/soul' && req.method === 'POST') {
+    if (Bun.env['LUNA_DEV_TOOLS'] !== '1') {
+      return json({ error: 'mutating routes require LUNA_DEV_TOOLS=1' }, 403);
+    }
+    if (!getMemoryDb()) return json({ error: 'no db' }, 400);
+    const body = (await req.json().catch(() => ({}))) as {
+      fixed?: string;
+      self?: string;
+      bond?: string;
+    };
+    if (typeof body.fixed === 'string') updateFixedCore(body.fixed);
+    if (typeof body.self === 'string' || typeof body.bond === 'string') {
+      updateEvolving({ self: body.self, bond: body.bond }, 'owner');
+    }
+    return json({ ok: true, soul: soulView() });
+  }
+  if (path === '/_workspace/api/soul/reseed' && req.method === 'POST') {
+    if (Bun.env['LUNA_DEV_TOOLS'] !== '1') {
+      return json({ error: 'mutating routes require LUNA_DEV_TOOLS=1' }, 403);
+    }
+    if (!getMemoryDb()) return json({ error: 'no db' }, 400);
+    const body = (await req.json().catch(() => ({}))) as { confirm?: boolean };
+    if (!body.confirm) return json({ error: 'confirm:true required' }, 400);
+    updateFixedCore(loadPersona().text); // revert the fixed core to the git template
+    return json({ ok: true, soul: soulView() });
   }
   // S2 (v0.16.0): the read-only view stays under LUNA_VIEWER, but the MUTATING
   // routes (reset/edit) require an explicit LUNA_DEV_TOOLS=1 — so even on-host
@@ -157,6 +204,9 @@ export async function workspaceHandler(req: Request): Promise<Response | null> {
     try {
       if (action === 'delete') {
         const r = db.prepare(`DELETE FROM "${table}" WHERE rowid = ?`).run(rowid);
+        // v0.31.0: the soul sits in the cached system block — a raw-grid edit to it must bust the
+        // prompt cache too, or the change wouldn't land until the next unrelated epoch bump.
+        if (table === 'soul' && r.changes > 0) bumpMemoryEpoch();
         return json({ ok: true, changes: r.changes });
       }
       if (action === 'update') {
@@ -167,6 +217,7 @@ export async function workspaceHandler(req: Request): Promise<Response | null> {
         const r = db
           .prepare(`UPDATE "${table}" SET "${column}" = ? WHERE rowid = ?`)
           .run(body.value as never, rowid);
+        if (table === 'soul' && r.changes > 0) bumpMemoryEpoch();
         return json({ ok: true, changes: r.changes });
       }
       return json({ error: 'unknown action' }, 400);

@@ -11,7 +11,7 @@ import { getSession, resetSessions } from '../turn/session';
 import { runTurn } from '../turn/runTurn';
 import { migrate } from '../sql';
 import { setMemoryDb } from '../memory/sessionStore';
-import { seedFixedCore } from '../memory/soulStore';
+import { seedFixedCore, updateFixedCore } from '../memory/soulStore';
 import { loadPersona, resetPersonaCache } from './loader';
 import {
   MAX_CHARS,
@@ -172,7 +172,9 @@ describe('persona system-prompt integration (runTurn)', () => {
   });
 
   // v0.30.3: the persona is DB-sourced (the soul's fixed core), not the file — so a change flows
-  // through a soul write (seedFixedCore bumps the memory epoch), not a live file edit.
+  // through a soul write, which bumps the memory epoch. v0.31.0: a runtime fixed-core change is an
+  // owner edit (updateFixedCore); seedFixedCore is first-boot-only (seed-if-empty) and no longer
+  // re-clobbers on change.
   test('a soul change flows into the system prompt exactly once, then stable', async () => {
     resetSessions();
     const db = new Database(':memory:', { strict: true });
@@ -186,7 +188,7 @@ describe('persona system-prompt integration (runTurn)', () => {
       await runTurn({ ...opts, turnId: 't1', userText: 'x' });
       await runTurn({ ...opts, turnId: 't2', userText: 'y' });
 
-      seedFixedCore('persona generation two'); // a re-seed (changed content) → epoch bump
+      updateFixedCore('persona generation two'); // an owner edit of the fixed core → epoch bump
       await runTurn({ ...opts, turnId: 't3', userText: 'z' });
 
       const sys = provider.requests.map((r) => JSON.stringify(r.system));

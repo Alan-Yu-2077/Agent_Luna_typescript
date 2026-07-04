@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, test } from 'bun:test';
+import { Database } from 'bun:sqlite';
+import { join } from 'node:path';
 import { workspaceHandler } from './workspace';
+import { migrate } from '../sql';
+import { setMemoryDb } from '../memory/sessionStore';
+import { getSoul } from '../memory/soulStore';
 
 // S2 (v0.16.0): the mutating /_workspace routes must require LUNA_DEV_TOOLS=1.
 // The gate is checked before any DB access, so these need no memory DB.
@@ -49,5 +54,39 @@ describe('workspace mutating-route gate', () => {
     const res = await workspaceHandler(new Request('http://localhost/_workspace/api/all'));
     expect(res).not.toBeNull();
     expect(res?.status).not.toBe(403);
+  });
+
+  test('soul read /soul GET is not gated; the writes are (403 without dev tools)', async () => {
+    delete Bun.env['LUNA_DEV_TOOLS'];
+    const read = await workspaceHandler(new Request('http://localhost/_workspace/api/soul'));
+    expect(read?.status).not.toBe(403);
+    const save = await workspaceHandler(post('/_workspace/api/soul', { fixed: 'x' }));
+    expect(save?.status).toBe(403);
+    const reseed = await workspaceHandler(post('/_workspace/api/soul/reseed', { confirm: true }));
+    expect(reseed?.status).toBe(403);
+  });
+});
+
+describe('workspace soul editor (v0.31.0)', () => {
+  let db: Database;
+  afterEach(() => {
+    setMemoryDb(null);
+    db.close(false);
+  });
+
+  test('POST /soul writes the owner-edited fixed core through to the soul', async () => {
+    db = new Database(':memory:', { strict: true });
+    migrate(db, join(import.meta.dir, '..', 'migrations'));
+    setMemoryDb(db);
+    Bun.env['LUNA_DEV_TOOLS'] = '1';
+
+    const res = await workspaceHandler(
+      post('/_workspace/api/soul', { fixed: 'owner core', self: 'becoming', bond: 'trusting' }),
+    );
+    expect(res?.status).toBe(200);
+    const soul = getSoul();
+    expect(soul.fixed_text).toBe('owner core');
+    expect(soul.evolving_self).toBe('becoming');
+    expect(soul.evolving_bond).toBe('trusting');
   });
 });

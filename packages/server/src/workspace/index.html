@@ -153,6 +153,29 @@
         pointer-events: none;
       }
       .toast.on { opacity: 1; }
+      /* soul editor (v0.31.0) — the owner-maintained persona document */
+      .soulnav .ic { color: var(--pink); }
+      .soulform { padding: 14px 16px; max-width: 900px; }
+      .soulform .sfld { margin-bottom: 16px; }
+      .soulform label { display: block; color: var(--accent2); margin-bottom: 4px; font-weight: 600; }
+      .soulform label .dim { color: var(--dim); font-weight: 400; }
+      .soulform textarea {
+        width: 100%;
+        background: #1a1a1a;
+        color: var(--fg);
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        padding: 8px 10px;
+        font: inherit;
+        resize: vertical;
+        line-height: 1.5;
+      }
+      .soulform textarea:focus { outline: none; border-color: var(--accent); }
+      .soulform textarea#s_fixed { min-height: 260px; }
+      .soulform textarea#s_self, .soulform textarea#s_bond { min-height: 90px; }
+      .soulform textarea:disabled { opacity: 0.6; cursor: not-allowed; }
+      .soulform .sactions { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
+      .soulform .sactions .hint { color: var(--dim); }
     </style>
   </head>
   <body>
@@ -170,6 +193,8 @@
     </div>
     <div class="shell">
       <div class="sidebar">
+        <h2>Soul</h2>
+        <div class="tab soulnav" id="soulnav"><span class="ic">🪶</span><span class="nm">soul · 人格</span></div>
         <h2>Tables</h2>
         <div id="tabs"></div>
       </div>
@@ -235,6 +260,7 @@
       }
       function select(name) {
         current = name;
+        $('soulnav').classList.remove('active');
         renderTabs();
         const t = DATA.tables.find((x) => x.name === name);
         if (!t) return;
@@ -281,6 +307,58 @@
           if (r.ok) load(true);
         }));
       }
+      // Soul editor (v0.31.0): the owner-maintained persona document. Read is open; the Save/Reset
+      // actions post to the LUNA_DEV_TOOLS-gated routes (writable flag from the server).
+      async function selectSoul() {
+        current = '__soul__';
+        renderTabs();
+        $('soulnav').classList.add('active');
+        $('curname').textContent = '🪶 Soul · 人格';
+        $('curhint').textContent = 'owner-maintained · Luna 不能自改 fixed core';
+        $('grid').innerHTML = '<div class="nodata">loading…</div>';
+        const res = await fetch('/_workspace/api/soul').then((x) => x.json()).catch(() => null);
+        if (!res || !res.enabled) { $('grid').innerHTML = '<div class="nodata">persistence off — no DB</div>'; return; }
+        const s = res.soul;
+        const ro = s.writable ? '' : ' disabled';
+        $('grid').innerHTML =
+          '<div class="soulform">' +
+          '<div class="sfld"><label>Fixed core <span class="dim">— 你维护；Luna 不能自改；default.md 只是首次种子</span></label>' +
+          '<textarea id="s_fixed"' + ro + '></textarea></div>' +
+          '<div class="sfld"><label>Who I am becoming <span class="dim">— evolving_self（梦境自写，你也可改）</span></label>' +
+          '<textarea id="s_self"' + ro + '></textarea></div>' +
+          '<div class="sfld"><label>The bond, right now <span class="dim">— evolving_bond</span></label>' +
+          '<textarea id="s_bond"' + ro + '></textarea></div>' +
+          '<div class="sactions">' +
+          (s.writable
+            ? '<button class="btn" id="s_save">💾 Save soul</button><button class="btn ghost" id="s_reseed">↺ Reset fixed core → default.md</button>'
+            : '') +
+          '<span class="hint" id="s_meta"></span></div></div>';
+        $('s_fixed').value = s.fixed_text || '';
+        $('s_self').value = s.evolving_self || '';
+        $('s_bond').value = s.evolving_bond || '';
+        $('s_meta').textContent = s.writable
+          ? (s.updated_ms ? 'last change ' + new Date(s.updated_ms).toLocaleString() : 'never edited')
+          : '只读 · set LUNA_DEV_TOOLS=1 to edit';
+        if (s.writable) wireSoul();
+      }
+      function wireSoul() {
+        $('s_save').addEventListener('click', async () => {
+          const r = await fetch('/_workspace/api/soul', {
+            method: 'POST', headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ fixed: $('s_fixed').value, self: $('s_self').value, bond: $('s_bond').value }),
+          }).then((x) => x.json());
+          toast(r.ok ? 'soul saved · 生效于下一轮对话' : 'error: ' + (r.error || '?'));
+        });
+        $('s_reseed').addEventListener('click', async () => {
+          if (!confirm('把 fixed core 重置回 persona/default.md？你当前对固定内核的自定义会被覆盖。')) return;
+          const r = await fetch('/_workspace/api/soul/reseed', {
+            method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ confirm: true }),
+          }).then((x) => x.json());
+          if (r.ok) { $('s_fixed').value = r.soul.fixed_text || ''; toast('fixed core 已重置'); }
+          else toast('error: ' + (r.error || '?'));
+        });
+      }
+      $('soulnav').addEventListener('click', selectSoul);
       $('refresh').addEventListener('click', () => load(true));
       $('limit').addEventListener('change', () => load(true));
       $('reset').addEventListener('click', async () => {

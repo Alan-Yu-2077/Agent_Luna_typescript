@@ -14,25 +14,47 @@ export function getSoul(): Soul {
   return row ?? EMPTY;
 }
 
-// Hash-gated: an unchanged fixed_text (e.g. an unchanged default.md at boot)
-// must be a true no-op — no write, no epoch bump — so re-seeding on every boot
-// never busts the prompt cache. Preserves evolving_* untouched (upsert only
-// touches fixed_text/fixed_hash).
+// Seed-if-empty (v0.31.0): the fixed core is the human owner's to maintain in the DB, so the git
+// persona file is only a FIRST-BOOT template. Once the soul holds a non-empty fixed core (seeded
+// once, or since edited by the owner via the workspace), never re-clobber it from the file — an
+// unchanged boot is a true no-op (no write, no epoch bump → the prompt-cache block stays identical).
+// (Before v0.31.0 the file was authoritative and overwrote the DB whenever default.md's hash changed,
+// so the owner could not customize the core without editing code. fixed_hash is now vestigial for
+// seeding — kept as metadata that updateFixedCore/seed still stamp.)
 export function seedFixedCore(fixedText: string): void {
   const db = getMemoryDb();
   if (!db) return;
-  const hash = contentHash(fixedText);
-  const row = db.prepare('SELECT fixed_hash FROM soul WHERE id = 1').get() as
-    | { fixed_hash: string }
+  const row = db.prepare('SELECT fixed_text FROM soul WHERE id = 1').get() as
+    | { fixed_text: string }
     | null;
-  if (row && row.fixed_hash === hash) return; // unchanged — no-op (cache invariant)
+  if (row && row.fixed_text.trim().length > 0) return; // already owned — never clobber
   const now = Date.now();
   db.prepare(
     `INSERT INTO soul (id, fixed_text, fixed_hash, evolving_self, evolving_bond, updated_ms)
      VALUES (1, ?, ?, '', '', ?)
      ON CONFLICT(id) DO UPDATE SET fixed_text = excluded.fixed_text, fixed_hash = excluded.fixed_hash, updated_ms = excluded.updated_ms`,
-  ).run(fixedText, hash, now);
+  ).run(fixedText, contentHash(fixedText), now);
   bumpMemoryEpoch();
+}
+
+// Owner-authoritative edit of the fixed core (v0.31.0) — the write behind the workspace soul editor.
+// The fixed core is the human owner's; Luna's autonomous processes (dream / tools) never call this,
+// so the fixed-core firewall (a dream can never touch fixed_text) is unchanged. No-op-guarded +
+// epoch-bumped, so an edit lands on the next turn without busting the cache on a non-change. Preserves
+// the evolving section (ON CONFLICT touches only fixed_text/fixed_hash/updated_ms).
+export function updateFixedCore(fixedText: string): Soul | null {
+  const db = getMemoryDb();
+  if (!db) return null;
+  const prev = getSoul();
+  if (fixedText === prev.fixed_text) return prev;
+  const now = Date.now();
+  db.prepare(
+    `INSERT INTO soul (id, fixed_text, fixed_hash, evolving_self, evolving_bond, updated_ms)
+     VALUES (1, ?, ?, '', '', ?)
+     ON CONFLICT(id) DO UPDATE SET fixed_text = excluded.fixed_text, fixed_hash = excluded.fixed_hash, updated_ms = excluded.updated_ms`,
+  ).run(fixedText, contentHash(fixedText), now);
+  bumpMemoryEpoch();
+  return { ...prev, fixed_text: fixedText, updated_ms: now };
 }
 
 export type EvolvingPatch = { self?: string; bond?: string };
