@@ -12,7 +12,13 @@ import { saveSkill } from '../../skills/skillStore';
 // auto-executed. Behind LUNA_SKILLS.
 const Input = z.object({
   name: z.string().min(1).max(80).describe('a short stable id for the skill'),
-  description: z.string().min(1).max(400).describe('one line: what the skill is for (used for recall)'),
+  description: z
+    .string()
+    .min(1)
+    .max(400)
+    .describe(
+      'one line: WHAT it does + WHEN to use it — the skill shelf displays this and recall matches on it',
+    ),
   body: z.string().min(1).max(8000).describe('the reusable procedure / steps / snippet to remember'),
   verify: z
     .boolean()
@@ -32,10 +38,15 @@ export type SaveSkillOutput = z.infer<typeof Output>;
 
 export const saveSkillTool = defineTool({
   name: 'save_skill',
+  // "Pushy" + what-AND-when by design (v0.32.0): models under-trigger skill saves,
+  // and the description is the tool's only self-advertisement.
   description:
-    'Save a reusable procedure to your skill library so you can recall it later. By default it runs ' +
-    'the test suite first and REFUSES to save if anything is failing (only verified skills are kept). ' +
-    'A skill is notes you reuse — it is never executed automatically.',
+    'Save a reusable procedure to your skill library — it appears on your skill shelf and ' +
+    'recall_skill fetches it later. Use it whenever you have just worked out a how-to you will ' +
+    'want again: a multi-step method, a debugging route, a way of doing something that took real ' +
+    'figuring out. Not for one-off facts (that is remember). Write the description as what it ' +
+    'does plus when to use it. By default it runs the test suite first and REFUSES to save if ' +
+    'anything is failing. A skill is notes you reuse — it is never executed automatically.',
   input: Input,
   output: Output,
   concurrency: 'session-serial',

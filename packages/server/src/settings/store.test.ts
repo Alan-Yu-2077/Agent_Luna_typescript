@@ -65,6 +65,15 @@ describe('settings registry', () => {
     expect(validateValue(geo, '91,0')).not.toBeNull();
     expect(validateValue(geo, 'shanghai')).not.toBeNull();
   });
+
+  test('skills.enabled is panel-visible (v0.32.0) — boot-read boolean over LUNA_SKILLS', () => {
+    const s = specFor('skills.enabled');
+    if (!s) throw new Error('skills.enabled spec missing');
+    expect(s.env).toBe('LUNA_SKILLS');
+    expect(s.kind).toBe('boolean');
+    expect(s.defaultValue).toBe('1'); // mirrors skillsEnabled(): LUNA_SKILLS !== '0'
+    expect(s.restartRequired).toBe(true); // registry composed at boot
+  });
 });
 
 describe('settings store', () => {

@@ -159,7 +159,7 @@ agency) writes into: verified code procedures need a durable, surfaced, self-mai
 
 | Plan | Version | Theme | Risk | Depends | Status |
 |---|---|---|---|---|---|
-| [v0.32.0-shelf-and-trigger.md](v0.32.0-shelf-and-trigger.md) | v0.32.0 | Lifecycle substrate (audit/usage/provenance/deprecation) + the skill shelf in the cached block + the L1 skills clause + settings exposure | **Low-Med** | nothing | PLANNED |
+| [v0.32.0-shelf-and-trigger.md](v0.32.0-shelf-and-trigger.md) | v0.32.0 | Lifecycle substrate (audit/usage/provenance/deprecation) + the skill shelf in the cached block + the L1 skills clause + settings exposure | **Low-Med** | nothing | ✅ SHIPPED 2026-07-04 |
 | [v0.32.1-recall-source.md](v0.32.1-recall-source.md) | v0.32.1 | Skills as a `retrieve()` source (semantic recall) + usage tracking wired + the rag_refresh embed-key fix | **Low** | v0.32.0 | PLANNED |
 | [v0.32.2-dream-distillation.md](v0.32.2-dream-distillation.md) | v0.32.2 | The `distill_skills` dream step — dark launch behind `LUNA_DREAM_SKILLS=0` | **High** | v0.32.1 | PLANNED |
 | [v0.32.3-flip-owner-surface.md](v0.32.3-flip-owner-surface.md) | v0.32.3 | Flip distillation on (after a live dream A/B) + `/_workspace` Skills panel + LD #12 amendment + close | **Medium** | v0.32.2 + live A/B | PLANNED |

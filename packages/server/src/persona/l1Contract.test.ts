@@ -70,6 +70,35 @@ describe('renderL1Contract', () => {
     expect(renderL1Contract(true)).toBe(on);
     expect(renderL1Contract(false)).toBe(off);
   });
+
+  test('skills clause is gated on the skills mount, in two shelf-honest variants (v0.32.0)', () => {
+    const off = renderL1Contract();
+    expect(off).not.toContain('skill shelf');
+    expect(off).not.toContain('skill library');
+
+    // mounted + shelf visible → the shelf variant
+    const withShelf = renderL1Contract(false, false, false, false, false, false, false, true, true);
+    expect(withShelf).toContain('skill shelf');
+    expect(withShelf).toContain('listed by name in your context');
+    expect(withShelf).toContain('recall_skill');
+    expect(withShelf).toContain('save_skill');
+    expect(withShelf).toContain('facts go to remember');
+
+    // mounted but shelf suppressed (LUNA_SKILL_SHELF=0 / LUNA_MEMORY_INJECT=0) → the
+    // library variant: still teaches recall/save, never asserts an in-context listing
+    const noShelf = renderL1Contract(false, false, false, false, false, false, false, true, false);
+    expect(noShelf).toContain('skill library');
+    expect(noShelf).not.toContain('listed by name in your context');
+    expect(noShelf).toContain('recall_skill');
+    expect(noShelf).toContain('save_skill');
+
+    // distinct memo-key segments — no collision across the three variants
+    expect(withShelf).not.toBe(noShelf);
+    expect(noShelf).not.toBe(off);
+    expect(renderL1Contract(false, false, false, false, false, false, false, true, true)).toBe(
+      withShelf,
+    );
+  });
 });
 
 function endRound(text: string): ProviderEvent[] {

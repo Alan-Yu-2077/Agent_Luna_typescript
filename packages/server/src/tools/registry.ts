@@ -248,6 +248,12 @@ export function isRepoMapMode(registry: ToolRegistry): boolean {
   return registry.repo_map !== undefined;
 }
 
+// Skills mount check (v0.32.0): gates the L1 skills clause + the skill shelf in the
+// cached system block — both name recall_skill, so they must never render without it.
+export function isSkillsMode(registry: ToolRegistry): boolean {
+  return registry.recall_skill !== undefined;
+}
+
 // The LD #9 everything-as-tool surface. Mode selection happens once at boot
 // (main.ts reads LUNA_MESSAGE_TOOL); everywhere else derives the mode from
 // the registry itself — single source of truth, no env reads in the turn loop.

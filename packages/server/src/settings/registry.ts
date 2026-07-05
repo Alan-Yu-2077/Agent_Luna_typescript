@@ -148,6 +148,16 @@ export const SETTING_SPECS: readonly SettingSpec[] = [
     restartRequired: true,
   },
   {
+    key: 'skills.enabled',
+    env: 'LUNA_SKILLS',
+    label: 'Skill library',
+    hint: 'She keeps + reuses saved procedures (save_skill / recall_skill + the skill shelf)',
+    category: 'Abilities',
+    kind: 'boolean',
+    defaultValue: '1',
+    restartRequired: true,
+  },
+  {
     key: 'weather.tool',
     env: 'LUNA_WEATHER',
     label: 'Weather lookups',

@@ -75,6 +75,32 @@ const REPO_MAP_CLAUSE =
   'and its references, structurally verified) or repo_map (a ranked outline of the codebase) over ' +
   'reading whole files to hunt for a name.';
 
+// Skills clauses (Initiative 23, v0.32.0) — the behavioral driver the audit found
+// missing: the tools shipped in v0.15.4 but nothing ever told her WHEN to reach for
+// them (1 save + 4 recalls in 19 days). Two disciplines: consult the library before
+// redoing a procedure, and save a procedure once it proves reusable. Gated on the
+// actual mount (isSkillsMode) like every other tool clause — and the SHELF sentence
+// only renders when the shelf block itself can render (skillShelfVisible), so the
+// contract never asserts an in-context listing that LUNA_SKILL_SHELF=0 /
+// LUNA_MEMORY_INJECT=0 suppressed.
+const SKILLS_SAVE_DISCIPLINE =
+  'And when you have just worked out a reusable procedure — a how-to you will want again, not a ' +
+  'one-off fact (facts go to remember) — save it with save_skill, with a description that says ' +
+  'what it does and when to use it.';
+
+const SKILLS_CLAUSE_WITH_SHELF =
+  'You keep a skill shelf — procedures you have already worked out, listed by name in your ' +
+  'context whenever you have any. Before doing something that feels like a procedure you have ' +
+  'done before, glance at the shelf; if one matches, recall_skill fetches the full steps — ' +
+  'reuse them instead of re-deriving. ' +
+  SKILLS_SAVE_DISCIPLINE;
+
+const SKILLS_CLAUSE_NO_SHELF =
+  'You keep a skill library — procedures you have already worked out. Before doing something ' +
+  'that feels like a procedure you have done before, check it with recall_skill; if a skill ' +
+  'matches, reuse the steps instead of re-deriving. ' +
+  SKILLS_SAVE_DISCIPLINE;
+
 export function renderL1Contract(
   webSearchMounted = false,
   webFetchMounted = false,
@@ -83,8 +109,10 @@ export function renderL1Contract(
   codeWriteMounted = false,
   shellMounted = false,
   repoMapMounted = false,
+  skillsMounted = false,
+  skillShelfVisible = false,
 ): string {
-  const key = `${webSearchMounted}|${webFetchMounted}|${timeAware}|${weatherAware}|${codeWriteMounted}|${shellMounted}|${repoMapMounted}`;
+  const key = `${webSearchMounted}|${webFetchMounted}|${timeAware}|${weatherAware}|${codeWriteMounted}|${shellMounted}|${repoMapMounted}|${skillsMounted}|${skillShelfVisible}`;
   const hit = cache.get(key);
   if (hit !== undefined) return hit;
   const clauses = [
@@ -124,6 +152,8 @@ export function renderL1Contract(
   if (codeWriteMounted) clauses.push(CODE_EDIT_CLAUSE);
   if (shellMounted) clauses.push(SHELL_VERIFY_CLAUSE);
   if (repoMapMounted) clauses.push(REPO_MAP_CLAUSE);
+  if (skillsMounted)
+    clauses.push(skillShelfVisible ? SKILLS_CLAUSE_WITH_SHELF : SKILLS_CLAUSE_NO_SHELF);
   if (webSearchMounted) clauses.push(WEB_SEARCH_CLAUSE);
   if (webFetchMounted) clauses.push(WEB_FETCH_CLAUSE);
   if (timeAware) clauses.push(TIME_CLAUSE);

@@ -13,6 +13,7 @@ import {
   isMessageMode,
   isRepoMapMode,
   isShellMode,
+  isSkillsMode,
   isWebFetchMode,
   isWebSearchMode,
   type ToolRegistry,
@@ -27,6 +28,7 @@ import { buildActiveContext, maybeFold } from '../memory/l1Window';
 import { renderCoreBlock } from '../memory/renderCoreBlock';
 import { renderSoulBlock } from '../memory/renderSoul';
 import { renderDiaryDigest } from '../memory/diaries';
+import { renderSkillShelf } from '../skills/renderShelf';
 import { renderRecallBlock, retrieve } from '../memory/recall/recall';
 import { getMemoryDb } from '../memory/sessionStore';
 import { renderHumanityBlock } from '../persona/humanity';
@@ -131,9 +133,17 @@ export function buildSystemPrompt(
   codeWriteMounted = false,
   shellMounted = false,
   repoMapMounted = false,
+  skillsMounted = false,
 ): Anthropic.TextBlockParam[] {
   const parts: string[] = [BASE_DIRECTIVES];
   if (messageMode) parts.push(MESSAGE_MODE_DIRECTIVE);
+  // v0.32.0: ONE truth for "can the shelf block render this build" — the same value
+  // gates the shelf push below AND selects the L1 skills-clause variant, so the
+  // contract never asserts an in-context shelf that a flag suppressed.
+  const skillShelfVisible =
+    skillsMounted &&
+    Bun.env['LUNA_SKILL_SHELF'] !== '0' &&
+    Bun.env['LUNA_MEMORY_INJECT'] !== '0';
   // L1 thinking contract governs HOW she reasons, so it scopes everything below
   // it. Stable text → stays inside the one cached block (cache invariant).
   // Default ON since v0.9.0; LUNA_L1_CONTRACT=0 opts out. The web + time clauses
@@ -149,6 +159,8 @@ export function buildSystemPrompt(
         codeWriteMounted,
         shellMounted,
         repoMapMounted,
+        skillsMounted,
+        skillShelfVisible,
       ),
     );
   // Standing prompt-injection defense (Initiative 11, v0.18.2): when EITHER web
@@ -176,6 +188,17 @@ export function buildSystemPrompt(
     // it stays inside the one cached block.
     const diary = renderDiaryDigest();
     if (diary.length > 0) parts.push(diary);
+    // v0.32.0 (Initiative 23): the skill shelf — names + one-line descriptions of her
+    // active skills, so the library is visible every turn (progressive disclosure;
+    // recall_skill fetches a body on demand). Gated on the ACTUAL mount (it names
+    // recall_skill) via the same skillShelfVisible that picked the L1 clause variant
+    // above. Name-ordered + timestamp-free in renderSkillShelf (cache invariant);
+    // saveSkill/deprecate/restore — and a membership-changing markUsed — bump the
+    // memory epoch, so a mid-turn change re-renders exactly once.
+    if (skillShelfVisible) {
+      const shelf = renderSkillShelf();
+      if (shelf.length > 0) parts.push(shelf);
+    }
   }
   return [{ type: 'text', text: parts.join('\n\n'), cache_control: { type: 'ephemeral' } }];
 }
@@ -342,6 +365,7 @@ const graph: Graph<TurnState, TurnNode> = {
         isCodeWriteMode(s.registry),
         isShellMode(s.registry),
         isRepoMapMode(s.registry),
+        isSkillsMode(s.registry),
       );
       s.systemBlockEpoch = epoch;
     }
