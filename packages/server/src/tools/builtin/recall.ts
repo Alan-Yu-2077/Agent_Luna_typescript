@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { defineTool } from '../defineTool';
 import { retrieve } from '../../memory/recall/recall';
 import { getMemoryDb } from '../../memory/sessionStore';
+import { skillsRecallMounted } from '../../skills/skillStore';
 
 // Agentic memory search (Initiative 4, v0.8.3, resolves Open Q #9). The
 // complement to the automatic recall injection shipped in v0.4.x: Luna decides
@@ -10,17 +11,18 @@ import { getMemoryDb } from '../../memory/sessionStore';
 const Input = z.object({
   query: z.string().min(1).describe('what to search your memory for, in natural language'),
   scope: z
-    .enum(['facts', 'timeline', 'both'])
+    .enum(['facts', 'timeline', 'skills', 'both'])
     .optional()
     .describe(
-      'facts = durable things you know; timeline = past conversation + diaries; default both',
+      'facts = durable things you know; timeline = past conversation + diaries; skills = saved ' +
+        'procedures, when the skill library is enabled; default both (everything)',
     ),
   limit: z.number().int().min(1).max(10).optional().describe('how many hits to return (default 5)'),
 });
 
 const RecallHit = z.object({
   id: z.string(),
-  source: z.enum(['l2', 'l3', 'diary']),
+  source: z.enum(['l2', 'l3', 'diary', 'skills']),
   text: z.string(),
   score: z.number(),
   when_ms: z.number(),
@@ -55,17 +57,31 @@ export const recallTool = defineTool({
       return;
     }
     const limit = input.limit ?? DEFAULT_LIMIT;
-    const scope: 'facts' | 'timeline' | 'both' = input.scope ?? 'both';
+    const scope: 'facts' | 'timeline' | 'skills' | 'both' = input.scope ?? 'both';
+    // v0.32.1: an explicit skills scope in a skills-off boot gets the truth, not a
+    // silently empty library (retrieve()'s candidate gate would return 0 hits).
+    if (scope === 'skills' && !skillsRecallMounted()) {
+      yield {
+        kind: 'err',
+        code: 'execution_exception',
+        message: 'the skill library is disabled this session (LUNA_SKILLS=0)',
+        recoverable: true,
+      };
+      return;
+    }
     // Push scope into retrieve() so the k limit applies PER-SCOPE — facts = l3,
-    // timeline = l2 + diary (diaries are distilled past conversation). This stops
-    // a burst of recent off-scope rows from starving the wanted source out of the
-    // top-k (the old over-fetch×2-then-filter could come back short or empty).
+    // timeline = l2 + diary (diaries are distilled past conversation), skills =
+    // saved procedures (v0.32.1). This stops a burst of recent off-scope rows from
+    // starving the wanted source out of the top-k (the old over-fetch×2-then-filter
+    // could come back short or empty).
     const sources =
       scope === 'facts'
         ? (['l3'] as const)
         : scope === 'timeline'
           ? (['l2', 'diary'] as const)
-          : undefined;
+          : scope === 'skills'
+            ? (['skills'] as const)
+            : undefined;
     const raw = await retrieve(ctx.sessionId, input.query, { k: limit, sources });
     const hits = raw.map((h) => ({
       id: h.id,

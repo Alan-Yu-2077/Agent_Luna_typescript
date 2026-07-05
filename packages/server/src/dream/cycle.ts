@@ -6,12 +6,8 @@ import { getSoul, updateEvolving, type EvolvingPatch } from '../memory/soulStore
 import { similarityRatio } from '../memory/similarity';
 import { maybeFold } from '../memory/l1Window';
 import { getSession } from '../turn/session';
-import {
-  contentHash,
-  embeddingEnabled,
-  fetchEmbedClient,
-  type EmbedClient,
-} from '../memory/recall/embed';
+import { embedCacheKey, embeddingEnabled, fetchEmbedClient, type EmbedClient } from '../memory/recall/embed';
+import { listSkills, skillEmbedText, skillsRecallMounted } from '../skills/skillStore';
 import { trace, flushTrace, traceEnabled } from '../trace/instrument';
 import { enterDream, parkFinishedIdle, setStep } from './dreamState';
 import {
@@ -340,10 +336,17 @@ const dreamGraph: Graph<DreamCycleState, DreamNode> = {
       for (const f of listFacts()) texts.add(f.text);
       const diaryRows = db.prepare('SELECT text FROM diaries').all() as { text: string }[];
       for (const d of diaryRows) texts.add(d.text);
+      // v0.32.1: skills join the pre-warm — same skillEmbedText the candidate loop
+      // uses, and the same mount gate (no paid embeddings for texts recall will
+      // never read in a skills-off boot).
+      if (skillsRecallMounted()) for (const sk of listSkills(500)) texts.add(skillEmbedText(sk));
 
+      // v0.32.1 FIX: key by embedCacheKey (model-namespaced), matching what retrieve()
+      // reads/writes — the pre-warm had keyed by contentHash since v0.20.5 split the
+      // two, so every warmed vector was unreadable by recall (dead work).
       const all = [...texts];
       const missing = all.filter(
-        (t) => !db.prepare('SELECT 1 FROM embeddings_cache WHERE hash = ?').get(contentHash(t)),
+        (t) => !db.prepare('SELECT 1 FROM embeddings_cache WHERE hash = ?').get(embedCacheKey(t)),
       );
       if (missing.length === 0) return ['skipped', `cache warm (${all.length} texts)`];
 
@@ -353,7 +356,7 @@ const dreamGraph: Graph<DreamCycleState, DreamNode> = {
       );
       vecs.forEach((v, i) => {
         const blob = new Uint8Array(v.buffer, v.byteOffset, v.byteLength);
-        insert.run(contentHash(missing[i]!), v.length, blob);
+        insert.run(embedCacheKey(missing[i]!), v.length, blob);
       });
       return ['ok', `misses_before=${missing.length} filled=${vecs.length} after=0`];
     }),

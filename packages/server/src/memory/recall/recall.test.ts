@@ -10,6 +10,7 @@ import { runTurn } from '../../turn/runTurn';
 import { migrate } from '../../sql';
 import { appendL2, listRecentL2, setMemoryDb } from '../sessionStore';
 import { addFact, forgetFact } from '../l3Store';
+import { deprecateSkill, saveSkill, setSkillsRecallMounted } from '../../skills/skillStore';
 import { memoryEpoch } from '../epoch';
 import { lexicalScore, tokenize } from './lexical';
 import {
@@ -62,6 +63,7 @@ beforeEach(() => {
   embedCalls = [];
   Bun.env['LUNA_EMBEDDING_API_KEY'] = 'test-key';
   delete Bun.env['LUNA_MEMORY_EMBEDDING'];
+  setSkillsRecallMounted(true);
 });
 
 afterEach(() => {
@@ -73,6 +75,7 @@ afterEach(() => {
   delete Bun.env['LUNA_EMBEDDING_API_KEY'];
   // Restore the preload's ambient-network guard.
   Bun.env['LUNA_MEMORY_EMBEDDING'] = '0';
+  setSkillsRecallMounted(false);
 });
 
 function seedL2(sessionId: string, turns: [string, string][]): void {
@@ -380,5 +383,54 @@ describe('v0.17.1 — diaries as recall candidates + GA ranking', () => {
     expect(hi).toBeDefined();
     expect(lo).toBeDefined();
     expect(hi!.score).toBeGreaterThan(lo!.score); // importance term lifts it
+  });
+});
+
+describe('skills as a recall source (v0.32.1)', () => {
+  test('a paraphrased query surfaces a skill by meaning — pointer text, never the body', async () => {
+    saveSkill(
+      { name: 'brew-notes', description: 'how to make espresso coffee', body: 'SECRET-STEPS' },
+      1000,
+    );
+    const hits = await retrieve('s', 'latte', { k: 8 }); // zero lexical overlap; same concept axis
+    const skill = hits.find((h) => h.source === 'skills');
+    expect(skill).toBeDefined();
+    expect(skill!.id).toBe('skill:brew-notes');
+    expect(skill!.text).toBe('brew-notes: how to make espresso coffee');
+    expect(skill!.text).not.toContain('SECRET-STEPS');
+  });
+
+  test("sources:['skills'] scopes to skills only; default includes them alongside the rest", async () => {
+    seedL2('s', [['we talked about coffee', 'yes espresso']]);
+    saveSkill({ name: 'brew-notes', description: 'espresso method', body: 'b' }, 1000);
+    const scoped = await retrieve('s', 'coffee', { k: 8, sources: ['skills'] });
+    expect(scoped.length).toBeGreaterThan(0);
+    expect(scoped.every((h) => h.source === 'skills')).toBe(true);
+    const all = await retrieve('s', 'coffee', { k: 8 });
+    expect(all.some((h) => h.source === 'skills')).toBe(true);
+    expect(all.some((h) => h.source === 'l2')).toBe(true);
+  });
+
+  test('unmounted skills (boot-frozen setter) never surface — a live env flip is ignored', async () => {
+    setSkillsRecallMounted(false);
+    saveSkill({ name: 'brew-notes', description: 'espresso method', body: 'b' }, 1000);
+    delete Bun.env['LUNA_SKILLS']; // env says ON — must not matter; the boot truth rules
+    const hits = await retrieve('s', 'espresso', { k: 8 });
+    expect(hits.some((h) => h.source === 'skills')).toBe(false);
+  });
+
+  test('flood guard: a just-saved IRRELEVANT skill never enters recall (relevance-gated, no recency term)', async () => {
+    seedL2('s', [['we talked about the rain today', 'yes the weather was grim']]);
+    saveSkill({ name: 'brew-notes', description: 'espresso method', body: 'b' }, Date.now());
+    const hits = await retrieve('s', 'rain weather', { k: 12 });
+    expect(hits.length).toBeGreaterThan(0); // the relevant memory is there
+    expect(hits.some((h) => h.source === 'skills')).toBe(false); // the fresh skill is not
+  });
+
+  test('deprecated skills never surface', async () => {
+    saveSkill({ name: 'brew-notes', description: 'espresso method', body: 'b' }, 1000);
+    deprecateSkill('brew-notes', 2000, 'owner');
+    const hits = await retrieve('s', 'espresso', { k: 8 });
+    expect(hits.some((h) => h.source === 'skills')).toBe(false);
   });
 });

@@ -38,6 +38,7 @@ import { runDreamCycle } from './dream/cycle';
 import { setOnWeatherRefresh, startWeatherRefresh } from './tools/web/weather/snapshot';
 import { activeSessionIds, preloadSessions } from './turn/session';
 import { initSettings } from './settings/store';
+import { setSkillsRecallMounted } from './skills/skillStore';
 
 const port = Number(process.env['LUNA_PORT'] ?? 8787);
 
@@ -104,6 +105,9 @@ if (Bun.env['ANTHROPIC_API_KEY']) {
   // Skill library + propose-only self-edit (v0.15.4) layer on iff LUNA_SKILLS /
   // LUNA_SELF_EDIT != 0 (default ON; self-edit is propose-only so it never writes).
   const skillMode = skillsEnabled();
+  // v0.32.1: freeze the same truth for the recall paths (candidates + rag_refresh
+  // pre-warm) — a live LUNA_SKILLS pin must not half-apply skills before restart.
+  setSkillsRecallMounted(skillMode);
   const selfEditMode = selfEditEnabled();
   // Web tools (v0.18.0 search, v0.18.1 fetch) layer on iff their flags are set.
   // v0.18.2 flips both default ON; search degrades to off when no API key.

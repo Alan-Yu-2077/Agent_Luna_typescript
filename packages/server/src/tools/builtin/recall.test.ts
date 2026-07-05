@@ -151,4 +151,41 @@ describe('recall tool execute', () => {
     ).toBe('1 hit');
     expect(recallTool.summarize({ hits: [] })).toBe('0 hits');
   });
+
+  test("scope 'skills' returns skill pointers that pass the output enum (v0.32.1)", async () => {
+    const { saveSkill, setSkillsRecallMounted } = await import('../../skills/skillStore');
+    setSkillsRecallMounted(true);
+    saveSkill({ name: 'deploy-check', description: 'how to verify a deploy', body: 'SECRET' }, 1000);
+    const res = await run({ query: 'verify deploy', scope: 'skills' });
+    expect(res.kind).toBe('ok');
+    const hits = res.data!.hits;
+    expect(hits.length).toBeGreaterThan(0);
+    expect(hits.every((h) => h.source === 'skills')).toBe(true);
+    expect(hits[0]!.id).toBe('skill:deploy-check');
+    expect(hits[0]!.text).not.toContain('SECRET'); // pointer only — body stays behind recall_skill
+    // the wire schema accepts the new source (the closed-enum pitfall)
+    expect(recallTool.output.safeParse(res.data).success).toBe(true);
+  });
+
+  test("scope 'both' includes skills alongside the other sources", async () => {
+    const { saveSkill, setSkillsRecallMounted } = await import('../../skills/skillStore');
+    setSkillsRecallMounted(true);
+    saveSkill({ name: 'deploy-check', description: 'how to verify a deploy', body: 'b' }, 1000);
+    addFact('preferences', 'likes deploy checklists');
+    const res = await run({ query: 'deploy', scope: 'both' });
+    const sources = new Set(res.data!.hits.map((h) => h.source));
+    expect(sources.has('skills')).toBe(true);
+    expect(sources.has('l3')).toBe(true);
+  });
+
+  test("scope 'skills' in a skills-off boot returns an honest error, not an empty library", async () => {
+    const { saveSkill, setSkillsRecallMounted } = await import('../../skills/skillStore');
+    setSkillsRecallMounted(false);
+    saveSkill({ name: 'deploy-check', description: 'how to verify a deploy', body: 'b' }, 1000);
+    const events: unknown[] = [];
+    for await (const e of recallTool.execute({ query: 'deploy', scope: 'skills' }, ctx())) events.push(e);
+    const first = events[0] as { kind: string; message?: string };
+    expect(first.kind).toBe('err');
+    expect(first.message).toContain('skill library is disabled');
+  });
 });

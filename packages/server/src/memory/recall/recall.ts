@@ -1,6 +1,7 @@
 import { getMemoryDb, listRecentL2 } from '../sessionStore';
 import { listFacts } from '../l3Store';
 import { listRecentDiaries } from '../diaries';
+import { listSkills, skillEmbedText, skillsRecallMounted } from '../../skills/skillStore';
 import { relativeLabel } from '../../turn/temporalContext';
 import {
   cosine,
@@ -29,9 +30,21 @@ const W_RELEVANCE = Number(Bun.env['LUNA_RECALL_W_RELEVANCE'] ?? 1);
 // Default normalized importance for candidates without a per-turn salience score.
 const DEFAULT_IMPORTANCE = 0.4;
 const DIARY_IMPORTANCE = 0.7; // diaries are distilled summaries — inherently salient
+// v0.32.1: a skill exists BECAUSE it proved reusable — slightly above diary.
+const SKILL_IMPORTANCE = 0.75;
+const SKILL_CANDIDATE_LIMIT = 500;
+// Skills are RELEVANCE-GATED into recall (review fix): without this, a fresh skill
+// scored (recency 1.0 + importance 0.75 + 0)/3 = 0.58 with ZERO query relevance —
+// outranking genuinely relevant older memories and flooding the k=12 hot-path block
+// after a save burst. A skill hit requires real signal: token overlap (lex > 0) or
+// a cosine at least this high (paraphrase reach; env-tunable for embedding spaces
+// with a high unrelated-pair baseline).
+const SKILL_MIN_COS = Number(Bun.env['LUNA_SKILL_RECALL_MIN_COS'] ?? 0.5);
+
+export type RecallSource = 'l2' | 'l3' | 'diary' | 'skills';
 
 export type Hit = {
-  source: 'l2' | 'l3' | 'diary';
+  source: RecallSource;
   id: string;
   text: string;
   score: number;
@@ -76,7 +89,7 @@ export function resetRecallStateForTests(): void {}
 
 // `importance` is the 0–1 normalized salience used by the GA recall score (v0.17.1).
 type Candidate = {
-  source: 'l2' | 'l3' | 'diary';
+  source: RecallSource;
   id: string;
   text: string;
   t_ms: number;
@@ -110,9 +123,8 @@ function collectCandidates(sessionId: string): Candidate[] {
       importance: DEFAULT_IMPORTANCE,
     });
   }
-  // v0.17.1: diaries are now recall candidates — their rag_refresh embeddings
-  // (keyed by contentHash(text)) finally become retrievable (fixes the dead-work
-  // finding); hash is computed on the fly like L3.
+  // v0.17.1: diaries are recall candidates. (rag_refresh pre-warms their vectors —
+  // keyed by embedCacheKey since v0.32.1, matching what scoreCosine reads.)
   for (const d of listRecentDiaries(DIARY_CANDIDATE_LIMIT)) {
     out.push({
       source: 'diary',
@@ -121,6 +133,24 @@ function collectCandidates(sessionId: string): Candidate[] {
       t_ms: d.generated_ms,
       importance: DIARY_IMPORTANCE,
     });
+  }
+  // v0.32.1 (Initiative 23): active skills surface by MEANING in recall — the
+  // candidate text is name+description (the retrieval key, never the body; the L1
+  // clause routes her to recall_skill for the full procedure). Gated on the
+  // boot-frozen mount truth (set by main.ts beside the registry composition), so a
+  // live LUNA_SKILLS pin can never surface pointers to an unmounted recall_skill.
+  // t_ms is created_ms — when she LEARNED it (verified_ms is a maintenance stamp a
+  // re-verify moves, which would lie in the "when it happened" recall label).
+  if (skillsRecallMounted()) {
+    for (const s of listSkills(SKILL_CANDIDATE_LIMIT)) {
+      out.push({
+        source: 'skills',
+        id: `skill:${s.name}`,
+        text: skillEmbedText(s),
+        t_ms: s.created_ms,
+        importance: SKILL_IMPORTANCE,
+      });
+    }
   }
   return out;
 }
@@ -142,7 +172,7 @@ export async function retrieve(
   // per-scope — the agentic recall tool passes it for scoped queries so a burst of
   // recent off-scope rows can't starve the wanted source out of the top-k. Default
   // (undefined) = all sources → the hot-path auto-injection is byte-identical.
-  opts?: { k?: number; embedBudgetMs?: number; sources?: ReadonlyArray<'l2' | 'l3' | 'diary'> },
+  opts?: { k?: number; embedBudgetMs?: number; sources?: ReadonlyArray<RecallSource> },
 ): Promise<Hit[]> {
   const k = opts?.k ?? RETRIEVAL_K;
   const all = collectCandidates(sessionId);
@@ -220,6 +250,16 @@ export async function retrieve(
     const cos = cosScores[i];
     const blended = cos !== null && cos !== undefined ? 0.7 * cos + 0.3 * lex : lex;
     const rel = Math.min(1, Math.max(0, blended));
+    // v0.32.1 (review fix): a skill is a PROCEDURAL pointer, not an episode — it
+    // enters recall only on real relevance signal, and its created_ms is metadata,
+    // not an event time, so the recency term is zeroed (same denominator, so
+    // dropping the term is never an advantage). Kills the save-burst flood and the
+    // re-verify recency-renewal vector.
+    if (c.source === 'skills') {
+      const eligible = lex > 0 || (cos !== null && cos !== undefined && cos >= SKILL_MIN_COS);
+      const score = eligible ? (W_IMPORTANCE * c.importance + W_RELEVANCE * rel) / sumW : 0;
+      return { source: c.source, id: c.id, text: c.text, t_ms: c.t_ms, score };
+    }
     // normalize back to ~0–1 so the floor + downstream consumers are weight-stable
     const score =
       (W_RECENCY * recencyScore(c.t_ms, now) + W_IMPORTANCE * c.importance + W_RELEVANCE * rel) /

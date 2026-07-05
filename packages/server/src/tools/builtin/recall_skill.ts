@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { defineTool } from '../defineTool';
-import { listSkills, searchSkills } from '../../skills/skillStore';
+import { listSkills, markUsed, searchSkills } from '../../skills/skillStore';
 
 // recall_skill (Initiative 8, v0.15.4) — list or search the skill library. Pure
 // read of saved (verified) skills, so proactiveRisk:'safe'. Returns the body so
@@ -42,6 +42,10 @@ export const recallSkillTool = defineTool({
   execute: async function* (input) {
     const limit = input.limit ?? 10;
     const skills = input.query ? searchSkills(input.query, limit) : listSkills(limit);
+    // v0.32.1: usage trace — shelf eviction + dream deprecation read these. A hit
+    // means the skill actually reached her context again.
+    const now = Date.now();
+    for (const s of skills) markUsed(s.name, now);
     yield {
       kind: 'ok',
       data: {

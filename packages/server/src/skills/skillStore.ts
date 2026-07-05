@@ -34,6 +34,29 @@ export type Skill = {
 const COLS =
   'name, description, body, created_ms, verified_ms, used_count, last_used_ms, source, deprecated_ms';
 
+// The ONE embed/candidate text for a skill (v0.32.1): name + description — the
+// retrieval key (the Voyager pattern), never the body. Shared by the recall
+// candidate loop AND rag_refresh's pre-warm so the embedding cache key matches.
+export function skillEmbedText(s: { name: string; description: string }): string {
+  return `${s.name}: ${s.description}`;
+}
+
+// Boot-frozen mount truth for the recall paths (v0.32.1 review fix). The registry,
+// L1 clause, and shelf are all composed ONCE at boot from skillsEnabled(); a live
+// settings pin mutates Bun.env immediately even though the flag is restartRequired,
+// so a call-time env read here would half-apply skills (candidates surfacing while
+// recall_skill is unmounted — advertising a tool that doesn't exist). main.ts sets
+// this beside the registry composition; everything recall-side reads it, never env.
+let recallMounted = false;
+
+export function setSkillsRecallMounted(on: boolean): void {
+  recallMounted = on;
+}
+
+export function skillsRecallMounted(): boolean {
+  return recallMounted;
+}
+
 type Db = NonNullable<ReturnType<typeof getMemoryDb>>;
 
 function auditPrev(db: Db, prev: Skill, actor: string, nowMs: number): void {
