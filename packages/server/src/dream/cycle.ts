@@ -7,7 +7,16 @@ import { similarityRatio } from '../memory/similarity';
 import { maybeFold } from '../memory/l1Window';
 import { getSession } from '../turn/session';
 import { embedCacheKey, embeddingEnabled, fetchEmbedClient, type EmbedClient } from '../memory/recall/embed';
-import { listSkills, skillEmbedText, skillsRecallMounted } from '../skills/skillStore';
+import {
+  deprecateSkill,
+  getSkill,
+  listShelf,
+  listSkills,
+  saveSkill,
+  shelfMax,
+  skillEmbedText,
+  skillsRecallMounted,
+} from '../skills/skillStore';
 import { trace, flushTrace, traceEnabled } from '../trace/instrument';
 import { enterDream, parkFinishedIdle, setStep } from './dreamState';
 import {
@@ -16,10 +25,12 @@ import {
   MemoryPatch,
   PersonaPatch,
   SaliencePatch,
+  SkillPatch,
   type DreamLLM,
 } from './llm';
 import {
   diaryPrompt,
+  distillSkillsPrompt,
   memoryAuditPrompt,
   personaUpdatePrompt,
   refineSemanticPrompt,
@@ -59,6 +70,7 @@ export type DreamNode =
   | 'memory_audit'
   | 'persona_update'
   | 'run_diaries'
+  | 'distill_skills'
   | 'rag_refresh';
 
 export type StepRecord = { step: DreamNode; status: DreamStepStatus; detail: string; ms: number };
@@ -79,6 +91,9 @@ const ORDER: DreamNode[] = [
   'memory_audit',
   'persona_update',
   'run_diaries',
+  // v0.32.2: distillation sits between the diaries and the embed pre-warm so a
+  // freshly distilled skill is embedded in the SAME cycle (rag_refresh reads it).
+  'distill_skills',
   'rag_refresh',
 ];
 
@@ -325,6 +340,121 @@ const dreamGraph: Graph<DreamCycleState, DreamNode> = {
       }
 
       return written > 0 ? ['ok', `${written} diaries written`] : ['skipped', 'diaries up to date'];
+    }),
+
+  // v0.32.2 (Initiative 23): dream-time skill distillation — the day's salient
+  // episodes (rated by rate_salience earlier THIS cycle) become at most a capped
+  // number of provenance-tagged skills. Dark-launched behind LUNA_DREAM_SKILLS
+  // (default OFF; the live A/B gates the v0.32.3 flip). HARD BOUNDARIES: writes go
+  // ONLY through the audited store (saveSkill/deprecateSkill, source 'dream' —
+  // every one is a single restoreSkill call to undo), and this step NEVER spawns
+  // the test suite (dreams can run at shutdown; save_skill's verify gate is
+  // awake-tool-only — dream skills are distinguishable by provenance instead).
+  distill_skills: (s) =>
+    runStep(s, 'distill_skills', async () => {
+      if (Bun.env['LUNA_DREAM_SKILLS'] !== '1') return ['skipped', 'off (LUNA_DREAM_SKILLS)'];
+      const db = getMemoryDb();
+      if (!db) return ['skipped', 'no memory db'];
+      if (!skillsRecallMounted()) return ['skipped', 'skills unmounted'];
+
+      const dayAgo = Date.now() - 86_400_000;
+      const salient = listL2(s.sessionId).filter(
+        (r) => r.t_ms > dayAgo && (r.importance ?? 0) >= 4,
+      );
+      if (salient.length === 0) return ['skipped', 'no salient episodes today'];
+      const episodes = salient
+        .slice(-20)
+        .map((r) => `User: ${r.user_text}\nLuna: ${r.assistant_text}`)
+        .join('\n\n');
+
+      const shelf = listShelf(shelfMax()).map((k) => ({
+        name: k.name,
+        description: k.description,
+      }));
+      const staleDaysRaw = Number(Bun.env['LUNA_SKILL_STALE_DAYS']);
+      const staleMs =
+        (Number.isFinite(staleDaysRaw) && staleDaysRaw > 0 ? staleDaysRaw : 30) * 86_400_000;
+      const stale = listSkills(500)
+        .filter((k) => k.used_count === 0 && Date.now() - k.verified_ms > staleMs)
+        .map((k) => ({ name: k.name, description: k.description }));
+
+      // 8192 output tokens: SkillPatch allows two near-cap bodies (~8k chars each) and
+      // CJK runs ~1 token/char — the 2048 default truncated mid-JSON on a thorough day,
+      // failing the parse forever (review finding). A still-truncated pathological patch
+      // fails parse → retried next cycle, never half-applied.
+      const call = await dreamCall(s.llm, distillSkillsPrompt(episodes, shelf, stale), 8192);
+      if (!call.ok) return ['failed', `${call.failure}: ${call.detail}`];
+      const patch = parseJsonBlock(SkillPatch, call.text);
+      if (!patch) return ['failed', 'unparseable skill patch'];
+      const news = patch.new ?? [];
+      const merges = patch.merge ?? [];
+      const deprecates = patch.deprecate ?? [];
+      if (news.length === 0 && merges.length === 0 && deprecates.length === 0) {
+        return ['skipped', 'nothing to distill'];
+      }
+
+      // Whole-patch structural rejection (the rate_salience exemplar): a bad shape
+      // means the model misunderstood the contract — apply NOTHING, retry next cycle.
+      // The dream may never RESURRECT: a deprecated name is still taken (deprecation
+      // is a durable owner/dream decision; only a deliberate awake save or an owner
+      // restore revives — the autonomous writer is held to the stricter rule).
+      const seen = new Set<string>();
+      for (const item of [...news, ...merges]) {
+        if (seen.has(item.name)) {
+          return ['failed', `duplicate name "${item.name}" in one patch`];
+        }
+        seen.add(item.name);
+      }
+      for (const n of news) {
+        const existing = getSkill(n.name);
+        if (existing) {
+          return [
+            'failed',
+            existing.deprecated_ms === 0
+              ? `new "${n.name}" collides with an active skill (must be a merge)`
+              : `new "${n.name}" collides with a deprecated skill (the dream may not revive it)`,
+          ];
+        }
+      }
+      for (const m of merges) {
+        const target = getSkill(m.name);
+        if (!target) return ['failed', `merge target "${m.name}" does not exist`];
+        if (target.deprecated_ms > 0) {
+          return ['failed', `merge target "${m.name}" is deprecated (the dream may not revive it)`];
+        }
+      }
+      const staleNames = new Set(stale.map((k) => k.name));
+      for (const d of deprecates) {
+        if (!staleNames.has(d)) return ['failed', `deprecate "${d}" is not a stale candidate`];
+      }
+
+      // Caps in code, never prompt-trust: at most LUNA_DREAM_SKILLS_MAX writes per
+      // cycle (merges first — refining beats adding), at most one deprecation.
+      // Drops are named in the detail string (no silent truncation). NaN-guarded
+      // like shelfMax — Math.max(1, NaN) is NaN and slice(0, NaN) silently applies
+      // ZERO writes while reporting ok (review finding).
+      const maxRaw = Number(Bun.env['LUNA_DREAM_SKILLS_MAX']);
+      const maxWrites = Number.isFinite(maxRaw) && maxRaw > 0 ? Math.floor(maxRaw) : 2;
+      const writes = [
+        ...merges.map((item) => ({ kind: 'merge', item })),
+        ...news.map((item) => ({ kind: 'new', item })),
+      ];
+      const now = Date.now();
+      const applied: string[] = [];
+      for (const w of writes.slice(0, maxWrites)) {
+        saveSkill(w.item, now, 'dream');
+        applied.push(`${w.kind}:${w.item.name}`);
+      }
+      if (deprecates.length > 0 && deprecateSkill(deprecates[0]!, now, 'dream')) {
+        applied.push(`deprecate:${deprecates[0]}`);
+      }
+      const droppedWrites = Math.max(0, writes.length - maxWrites);
+      const droppedDeps = Math.max(0, deprecates.length - 1);
+      const dropNote =
+        droppedWrites > 0 || droppedDeps > 0
+          ? ` (over cap: dropped ${droppedWrites} write(s), ${droppedDeps} deprecation(s))`
+          : '';
+      return ['ok', `${applied.join(', ')}${dropNote}`];
     }),
 
   rag_refresh: (s) =>

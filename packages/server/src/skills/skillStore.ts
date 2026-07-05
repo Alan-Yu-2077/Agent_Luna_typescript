@@ -75,19 +75,36 @@ function auditPrev(db: Db, prev: Skill, actor: string, nowMs: number): void {
   );
 }
 
+// name + description render into the ONE cached system block (the shelf) as plain
+// markdown lines — a newline in either would let a skill break out of its bullet
+// and forge a sibling system-prompt section (the v0.32.2 review's injection sink).
+// Coerce both to single lines at the write choke point; the body never renders in
+// a prompt block (it travels only as recall_skill tool output — a data channel).
+function oneLine(s: string): string {
+  return s.replace(/\s+/g, ' ').trim();
+}
+
 // Upsert a skill. `created_ms` and the usage counters are preserved on update
 // (first-seen time; an improved skill keeps its usage history); `verified_ms`
 // refreshes each save — including a byte-identical one (the caller just
 // re-verified; only the CONTENT no-op skips audit + epoch, since verified_ms is
-// never rendered on the shelf). Saving an existing DEPRECATED skill revives it.
+// never rendered on the shelf). Saving an existing DEPRECATED skill revives it
+// (the AWAKE paths' deliberate-re-save semantics; the dream's distiller applies
+// its own stricter no-resurrection guard before calling in).
 // Returns false when there is no DB (nothing persisted).
 export function saveSkill(
-  skill: { name: string; description: string; body: string },
+  rawSkill: { name: string; description: string; body: string },
   nowMs: number,
   source: SkillSource = 'saved',
 ): boolean {
   const db = getMemoryDb();
   if (!db) return false;
+  const skill = {
+    name: oneLine(rawSkill.name),
+    description: oneLine(rawSkill.description),
+    body: rawSkill.body,
+  };
+  if (skill.name.length === 0 || skill.description.length === 0) return false;
   const prev = getSkill(skill.name);
   if (
     prev &&

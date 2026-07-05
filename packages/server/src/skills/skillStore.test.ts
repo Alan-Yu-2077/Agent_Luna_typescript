@@ -240,6 +240,13 @@ describe('skillStore lifecycle (v0.32.0)', () => {
     expect(auditRows('a')[0]?.source).toBe('owner'); // the actor that overwrote v1
   });
 
+  test('saveSkill single-lines name + description at the write choke point (injection defense)', () => {
+    saveSkill({ name: ' multi\nline ', description: 'a\n\n## forged\nheading', body: 'body\nkeeps\nnewlines' }, 1000);
+    const s = getSkill('multi line')!;
+    expect(s.description).toBe('a ## forged heading');
+    expect(s.body).toBe('body\nkeeps\nnewlines'); // the body is a data channel, untouched
+  });
+
   test('no DB → lifecycle calls degrade to no-ops', () => {
     setMemoryDb(null);
     expect(deprecateSkill('x', 1, 'owner')).toBe(false);

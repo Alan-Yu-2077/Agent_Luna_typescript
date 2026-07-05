@@ -11,11 +11,18 @@
 
 import { listShelf, shelfMax } from './skillStore';
 
+// Defensive single-lining at the sink too (saveSkill already coerces on write, but
+// a raw /_workspace grid edit bypasses the store) — a newline in a name/description
+// must never let a shelf entry forge a sibling section in the cached system block.
+function line(s: string): string {
+  return s.replace(/\s+/g, ' ').trim();
+}
+
 export function renderSkillShelf(): string {
   const skills = listShelf(shelfMax());
   if (skills.length === 0) return '';
   const lines = ['## Things you know how to do (your skill shelf)', ''];
-  for (const s of skills) lines.push(`- ${s.name} — ${s.description}`);
+  for (const s of skills) lines.push(`- ${line(s.name)} — ${line(s.description)}`);
   lines.push('', '(Before redoing one of these, recall_skill fetches the full procedure.)');
   return lines.join('\n');
 }

@@ -93,6 +93,22 @@ export const SaliencePatch = z.object({
 });
 export type SaliencePatch = z.infer<typeof SaliencePatch>;
 
+// v0.32.2 (Initiative 23): the dream's skill-distillation patch. Field caps mirror
+// save_skill's input schema exactly, so a dream-authored skill can never exceed
+// what the awake verify-gated path allows.
+const SkillPatchItem = z.object({
+  name: z.string().min(1).max(80),
+  description: z.string().min(1).max(400),
+  body: z.string().min(1).max(8000),
+});
+export const SkillPatch = z.object({
+  new: z.array(SkillPatchItem).nullable(),
+  merge: z.array(SkillPatchItem).nullable(),
+  deprecate: z.array(z.string().min(1)).nullable(),
+  reason: z.string().optional(),
+});
+export type SkillPatch = z.infer<typeof SkillPatch>;
+
 export function parseJsonBlock<T>(schema: z.ZodType<T>, text: string): T | null {
   const start = text.indexOf('{');
   const end = text.lastIndexOf('}');
