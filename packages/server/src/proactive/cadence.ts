@@ -85,7 +85,7 @@ export function passesAntiSpam(c: Cadence, x: WakeContext): { ok: boolean; reaso
   }
   // v0.24.2: the cooldown + quota come from the effective cadence (the activeness lever scaled
   // inside the operator floor/ceiling; balanced === the raw knobs, so behaviour is unchanged until
-  // Luna moves her activeness via set_proactive_style).
+  // the operator moves activeness via the LUNA_PROACTIVE_ACTIVENESS setting, v0.32.4).
   const eff = effectiveCadence();
   const sinceProactive = c.lastProactiveMs > 0 ? x.nowMs - c.lastProactiveMs : Infinity;
   if (sinceProactive < eff.minIntervalMs) {

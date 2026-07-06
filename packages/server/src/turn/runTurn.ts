@@ -587,6 +587,47 @@ const graph: Graph<TurnState, TurnNode> = {
       s.finishReason = 'max_iterations';
       return 'finalize';
     }
+    // v0.32.4 — is_final short-circuit. If this round's tools were ALL `message`
+    // calls and the last one was is_final:true, she promised she is done. The
+    // normal trailing round (build_request → open_stream) would only spend a full
+    // model round-trip re-confirming that — during which `activeTurn` stays locked,
+    // so a user message sent in that window bounces with `turn_in_progress` while
+    // her (already-delivered) reply sits on screen looking finished. Honor the
+    // promise: go straight to finalize. finalize still runs the empty/promise/
+    // intent guards on `end_turn`, so a genuine unfulfilled intent still loops back.
+    // A real action tool this round (message + web_search) needs its result fed
+    // back, so require message-only; proactive turns keep their own loop.
+    if (
+      !s.proactiveTurn &&
+      isMessageMode(s.registry) &&
+      s.lastMessageIsFinal === true &&
+      s.pendingToolUses.length > 0 &&
+      s.pendingToolUses.every((u) => u.name === 'message')
+    ) {
+      // ...unless finalizing right now would trip a FRESH intent-without-act
+      // correction. That trailing round is exactly where she'd act on the
+      // promise ("我去查一下" + is_final:true), and the finalize guard's
+      // false-positive protection depends on seeing that action land. When the
+      // promise is clean (the common case — a plain conversational sign-off),
+      // no correction fires, so skipping the round is pure latency saved.
+      const freshIntentRetry =
+        Bun.env['LUNA_INTEGRITY_GUARD'] !== '0' &&
+        !s.correctionUsed.has('intent') &&
+        (() => {
+          const d = detectDefection({
+            messageTexts: s.messageTexts.slice(s.correctionWatermark),
+            lastIsFinal: s.lastMessageIsFinal,
+            thinking: s.thinking,
+            calledToolNames: s.toolNamesThisTurn,
+            finishReason: 'end_turn',
+          });
+          return d.defected && d.kind === 'message_intent';
+        })();
+      if (!freshIntentRetry) {
+        s.finishReason = 'end_turn';
+        return 'finalize';
+      }
+    }
     return 'build_request';
   },
 

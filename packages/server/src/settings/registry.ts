@@ -36,6 +36,13 @@ function validQuietHours(value: string): string | null {
   return null;
 }
 
+function validActiveness(value: string): string | null {
+  if (value.trim() === '') return null;
+  return ['aloof', 'balanced', 'clingy'].includes(value.trim())
+    ? null
+    : 'activeness must be one of: aloof, balanced, clingy';
+}
+
 function validLatLon(value: string): string | null {
   if (value.trim() === '') return null;
   const m = value.split(',').map((s) => Number(s.trim()));
@@ -67,6 +74,16 @@ export const SETTING_SPECS: readonly SettingSpec[] = [
     kind: 'text',
     defaultValue: '0,1,2,3,4,5',
     validate: validQuietHours,
+  },
+  {
+    key: 'proactive.activeness',
+    env: 'LUNA_PROACTIVE_ACTIVENESS',
+    label: 'Outreach intensity',
+    hint: 'How eagerly she opens first: aloof, balanced, or clingy (still capped by the safety rails)',
+    category: 'Companion',
+    kind: 'text',
+    defaultValue: 'balanced',
+    validate: validActiveness,
   },
   {
     key: 'selfcont.enabled',

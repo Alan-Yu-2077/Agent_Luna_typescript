@@ -107,7 +107,9 @@ describe('is_final promise guard', () => {
       [endRound],
     ]);
     const events = await turn('t1', provider);
-    expect(provider.requests.length).toBe(4);
+    // v0.32.4: the final is_final:true bubble short-circuits the trailing endRound
+    // round (promise correction + both bubbles unchanged), so 4 → 3.
+    expect(provider.requests.length).toBe(3);
     expect(directivesInRequests(provider)).toContain('is_final:false');
     const ds = decisions('t1');
     expect(ds.filter((d) => d.decision === 'corrected' && d.kind === 'is_final_promise').length).toBe(1);
@@ -175,7 +177,9 @@ describe('intent-without-act guard', () => {
       [endRound],
     ]);
     await turn('t5', provider);
-    expect(provider.requests.length).toBe(2); // no retry
+    // v0.32.4: a clean is_final:true bubble (thinking-only intent, message-only,
+    // no message-text promise) short-circuits the trailing endRound, so 2 → 1.
+    expect(provider.requests.length).toBe(1); // no retry
     expect(decisions('t5').some((d) => d.decision === 'corrected')).toBe(false);
   });
 });
@@ -202,7 +206,9 @@ describe('flag-off parity', () => {
       [endRound],
     ]);
     const events = await turn('t7', provider);
-    expect(provider.requests.length).toBe(3); // empty guard retried once
+    // v0.32.4: empty guard retries once, then the is_final:true bubble
+    // short-circuits the trailing endRound (guard flag off ⇒ no intent gate), 3 → 2.
+    expect(provider.requests.length).toBe(2); // empty guard retried once
     const result = events.find((e) => e.type === 'turn.result') as { text: string };
     expect(result.text).toBe('在的。');
   });
@@ -219,7 +225,9 @@ describe('multi-reason bound (each reason corrects once, turn still terminates)'
       [endRound],
     ]);
     const events = await turn('t8', provider);
-    expect(provider.requests.length).toBe(5); // empty(+1) + promise(+1), then terminates
+    // v0.32.4: empty(+1) + promise(+1), then the final is_final:true bubble
+    // short-circuits the trailing endRound (both corrections + text unchanged), 5 → 4.
+    expect(provider.requests.length).toBe(4);
     const ds = decisions('t8');
     expect(ds.filter((d) => d.decision === 'corrected' && d.kind === 'is_final_promise').length).toBe(1);
     const result = events.find((e) => e.type === 'turn.result') as { text: string };

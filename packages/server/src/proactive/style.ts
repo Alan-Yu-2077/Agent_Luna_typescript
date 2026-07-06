@@ -1,15 +1,17 @@
-import { getMemoryDb } from '../memory/sessionStore';
-
-// v0.24.2 (Initiative 17 close): the two-layer proactive style (port of Python
-// memory/proactive_config.py). Operator-owned env knobs are the mechanical floor/ceiling — the
-// safety kernel. Luna's self-writable style (activeness + voice notes, via set_proactive_style)
-// scales her eagerness WITHIN those rails; she can never breach them.
+// The two-layer proactive style (port of Python memory/proactive_config.py). Operator-owned env
+// knobs are the mechanical floor/ceiling — the safety kernel. The `activeness` lever scales
+// eagerness WITHIN those rails; it can never breach them.
+//
+// v0.32.4: activeness is now an OWNER setting (`LUNA_PROACTIVE_ACTIVENESS`, surfaced in the
+// settings panel), not a Luna-writable self-setting. The `set_proactive_style` tool and its
+// `proactive_style` DB table are retired — the intrusiveness knob belongs to the human operator,
+// not the model. Voice notes are retired with it.
 
 export type Activeness = 'aloof' | 'balanced' | 'clingy';
 export const ACTIVENESS_LEVELS: readonly Activeness[] = ['aloof', 'balanced', 'clingy'];
-export type ProactiveStyle = { activeness: Activeness; voiceNotes: string };
+export type ProactiveStyle = { activeness: Activeness };
 
-const DEFAULT_STYLE: ProactiveStyle = { activeness: 'balanced', voiceNotes: '' };
+const DEFAULT_STYLE: ProactiveStyle = { activeness: 'balanced' };
 
 export function isActiveness(s: string): s is Activeness {
   return s === 'aloof' || s === 'balanced' || s === 'clingy';
@@ -47,7 +49,7 @@ export function styleEnabled(): boolean {
 
 // The safety kernel: apply the activeness lever to the operator base knobs, then clamp inside the
 // mechanical floor/ceiling. `balanced` (the default) reproduces the raw base knobs exactly, so the
-// ladder/rail behaviour is unchanged until Luna moves her activeness.
+// ladder/rail behaviour is unchanged until the operator moves activeness.
 export function resolveEffectiveCadence(style: ProactiveStyle): EffectiveCadence {
   const m = LEVEL_MULT[style.activeness] ?? LEVEL_MULT.balanced;
   const baseInterval = num('LUNA_PROACTIVE_MIN_INTERVAL_MS', 300_000);
@@ -68,36 +70,11 @@ export function resolveEffectiveCadence(style: ProactiveStyle): EffectiveCadence
   };
 }
 
-type StyleRow = { activeness: string; voice_notes: string };
-
+// The operator's chosen activeness (settings-panel pin lands in Bun.env at boot via initSettings).
+// A missing or corrupt value degrades to balanced — i.e. the raw operator knobs.
 export function loadStyle(): ProactiveStyle {
-  const db = getMemoryDb();
-  if (!db) return { ...DEFAULT_STYLE };
-  const row = db
-    .prepare('SELECT activeness, voice_notes FROM proactive_style WHERE id = 1')
-    .get() as StyleRow | null;
-  if (!row) return { ...DEFAULT_STYLE };
-  return {
-    activeness: isActiveness(row.activeness) ? row.activeness : 'balanced',
-    voiceNotes: row.voice_notes ?? '',
-  };
-}
-
-export function saveStyle(patch: Partial<ProactiveStyle>): ProactiveStyle {
-  const current = loadStyle();
-  const next: ProactiveStyle = {
-    activeness:
-      patch.activeness && isActiveness(patch.activeness) ? patch.activeness : current.activeness,
-    voiceNotes: typeof patch.voiceNotes === 'string' ? patch.voiceNotes.trim() : current.voiceNotes,
-  };
-  const db = getMemoryDb();
-  if (db) {
-    db.prepare(
-      'INSERT INTO proactive_style (id, activeness, voice_notes) VALUES (1, ?, ?) ' +
-        'ON CONFLICT(id) DO UPDATE SET activeness = excluded.activeness, voice_notes = excluded.voice_notes',
-    ).run(next.activeness, next.voiceNotes);
-  }
-  return next;
+  const raw = Bun.env['LUNA_PROACTIVE_ACTIVENESS'];
+  return { activeness: raw && isActiveness(raw) ? raw : 'balanced' };
 }
 
 // The scaled cadence in effect right now (balanced — i.e. the raw knobs — when the style layer is

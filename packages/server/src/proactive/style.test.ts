@@ -1,9 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { Database } from 'bun:sqlite';
-import { join } from 'node:path';
-import { migrate } from '../sql';
-import { setMemoryDb } from '../memory/sessionStore';
-import { isActiveness, loadStyle, resolveEffectiveCadence, saveStyle } from './style';
+import { isActiveness, loadStyle, resolveEffectiveCadence } from './style';
 
 const KNOBS = [
   'LUNA_PROACTIVE_MIN_INTERVAL_MS',
@@ -14,23 +10,19 @@ const KNOBS = [
   'LUNA_PROACTIVE_NUDGE_PROB',
   'LUNA_PROACTIVE_AMBIENT_PROB',
   'LUNA_PROACTIVE_STYLE',
+  'LUNA_PROACTIVE_ACTIVENESS',
 ];
 
-let db: Database;
 beforeEach(() => {
-  db = new Database(':memory:', { strict: true });
-  migrate(db, join(import.meta.dir, '..', 'migrations'));
-  setMemoryDb(db);
   for (const k of KNOBS) delete Bun.env[k];
 });
 afterEach(() => {
-  setMemoryDb(null);
-  db.close(false);
+  for (const k of KNOBS) delete Bun.env[k];
 });
 
 describe('resolveEffectiveCadence (activeness lever, v0.24.2)', () => {
   test('balanced reproduces the raw base knobs (behaviour unchanged by default)', () => {
-    const c = resolveEffectiveCadence({ activeness: 'balanced', voiceNotes: '' });
+    const c = resolveEffectiveCadence({ activeness: 'balanced' });
     expect(c.minIntervalMs).toBe(300_000);
     expect(c.renudgeBaseMs).toBe(300_000);
     expect(c.dailyQuota).toBe(5);
@@ -39,7 +31,7 @@ describe('resolveEffectiveCadence (activeness lever, v0.24.2)', () => {
   });
 
   test('clingy raises eagerness but the quota stays clamped to the ceiling and prob to 1', () => {
-    const c = resolveEffectiveCadence({ activeness: 'clingy', voiceNotes: '' });
+    const c = resolveEffectiveCadence({ activeness: 'clingy' });
     expect(c.minIntervalMs).toBe(180_000); // 300k × 0.6
     expect(c.dailyQuota).toBe(6); // round(5×1.6)=8 → clamped to ceiling 6
     expect(c.nudgeProb).toBe(1.0); // 1.0×1.35 → clamped to 1
@@ -47,7 +39,7 @@ describe('resolveEffectiveCadence (activeness lever, v0.24.2)', () => {
   });
 
   test('aloof lowers eagerness', () => {
-    const c = resolveEffectiveCadence({ activeness: 'aloof', voiceNotes: '' });
+    const c = resolveEffectiveCadence({ activeness: 'aloof' });
     expect(c.minIntervalMs).toBe(540_000); // 300k × 1.8
     expect(c.dailyQuota).toBe(2); // round(5×0.4)
     expect(c.nudgeProb).toBeCloseTo(0.45);
@@ -56,31 +48,31 @@ describe('resolveEffectiveCadence (activeness lever, v0.24.2)', () => {
   test('the min-interval floor clamps a small operator base (the lever cannot breach it)', () => {
     Bun.env['LUNA_PROACTIVE_MIN_INTERVAL_MS'] = '100000'; // 100s base
     // clingy ×0.6 = 60s, but the 120s floor holds
-    expect(resolveEffectiveCadence({ activeness: 'clingy', voiceNotes: '' }).minIntervalMs).toBe(
-      120_000,
-    );
+    expect(resolveEffectiveCadence({ activeness: 'clingy' }).minIntervalMs).toBe(120_000);
   });
 });
 
-describe('loadStyle / saveStyle (v0.24.2)', () => {
+// v0.32.4: activeness is now an owner setting read from LUNA_PROACTIVE_ACTIVENESS (settings-panel
+// pin lands in Bun.env at boot), NOT a Luna-writable DB row. saveStyle + voice notes are retired.
+describe('loadStyle (owner setting, v0.32.4)', () => {
   test('isActiveness guards the level', () => {
     expect(isActiveness('clingy')).toBe(true);
     expect(isActiveness('unhinged')).toBe(false);
   });
 
-  test('default is balanced with no notes', () => {
-    expect(loadStyle()).toEqual({ activeness: 'balanced', voiceNotes: '' });
+  test('default is balanced when the env is unset', () => {
+    expect(loadStyle()).toEqual({ activeness: 'balanced' });
   });
 
-  test('saveStyle persists + trims; a partial patch keeps the rest', () => {
-    saveStyle({ activeness: 'clingy', voiceNotes: '  warm and a bit teasing  ' });
-    expect(loadStyle()).toEqual({ activeness: 'clingy', voiceNotes: 'warm and a bit teasing' });
-    saveStyle({ activeness: 'aloof' }); // voice notes untouched
-    expect(loadStyle()).toEqual({ activeness: 'aloof', voiceNotes: 'warm and a bit teasing' });
+  test('reads the operator activeness from the env pin', () => {
+    Bun.env['LUNA_PROACTIVE_ACTIVENESS'] = 'clingy';
+    expect(loadStyle()).toEqual({ activeness: 'clingy' });
+    Bun.env['LUNA_PROACTIVE_ACTIVENESS'] = 'aloof';
+    expect(loadStyle()).toEqual({ activeness: 'aloof' });
   });
 
-  test('loadStyle degrades a corrupt persisted activeness to balanced', () => {
-    db.prepare("UPDATE proactive_style SET activeness = 'bogus' WHERE id = 1").run();
+  test('degrades a corrupt env value to balanced', () => {
+    Bun.env['LUNA_PROACTIVE_ACTIVENESS'] = 'bogus';
     expect(loadStyle().activeness).toBe('balanced');
   });
 });

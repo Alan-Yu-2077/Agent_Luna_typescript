@@ -175,7 +175,9 @@ describe('message-tool mode (LUNA_MESSAGE_TOOL registry)', () => {
     ]);
     const events = await turn(provider, '说话呀');
 
-    expect(provider.requests.length).toBe(3);
+    // v0.32.4: empty guard retries once, then the is_final:true bubble
+    // short-circuits the trailing endRound (reply text unchanged), 3 → 2.
+    expect(provider.requests.length).toBe(2);
     const lastReq = provider.requests[1]!;
     const directive = JSON.stringify(lastReq.messages[lastReq.messages.length - 1]);
     expect(directive).toContain('Stage direction');
