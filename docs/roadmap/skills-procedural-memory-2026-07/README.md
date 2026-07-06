@@ -1,8 +1,10 @@
 # Initiative 23 — Skills as Procedural Memory (v0.32.0 – v0.32.3)
 
-> **Status: PLANNED.** Priority: next up after Initiative 22 (the Soul File). Version range
-> **v0.32.0 – v0.32.3** (4 versions; v0.31.0 was consumed by the ad hoc owner-soul release).
-> Master index: [`../README.md`](../README.md).
+> **Status: ✅ SHIPPED 2026-07-05** (all 4 versions on `mainline`; see DEVELOPMENT.md
+> v0.32.0–v0.32.3). Three adversarial reviews (14+9+11 agents: 25 confirmed findings, all fixed
+> pre-commit — incl. one HIGH prompt-injection sink) + a 4-run live dream A/B (null-restraint +
+> positive distillation verified against the real DB; one shape bug caught + fixed) gated the
+> ship. Version range **v0.32.0 – v0.32.3**. Master index: [`../README.md`](../README.md).
 
 ## The idea
 
@@ -162,25 +164,25 @@ agency) writes into: verified code procedures need a durable, surfaced, self-mai
 | [v0.32.0-shelf-and-trigger.md](v0.32.0-shelf-and-trigger.md) | v0.32.0 | Lifecycle substrate (audit/usage/provenance/deprecation) + the skill shelf in the cached block + the L1 skills clause + settings exposure | **Low-Med** | nothing | ✅ SHIPPED 2026-07-04 |
 | [v0.32.1-recall-source.md](v0.32.1-recall-source.md) | v0.32.1 | Skills as a `retrieve()` source (semantic recall) + usage tracking wired + the rag_refresh embed-key fix | **Low** | v0.32.0 | ✅ SHIPPED 2026-07-04 |
 | [v0.32.2-dream-distillation.md](v0.32.2-dream-distillation.md) | v0.32.2 | The `distill_skills` dream step — dark launch behind `LUNA_DREAM_SKILLS=0` | **High** | v0.32.1 | ✅ SHIPPED 2026-07-04 (flip awaits the live A/B) |
-| [v0.32.3-flip-owner-surface.md](v0.32.3-flip-owner-surface.md) | v0.32.3 | Flip distillation on (after a live dream A/B) + `/_workspace` Skills panel + LD #12 amendment + close | **Medium** | v0.32.2 + live A/B | PLANNED |
+| [v0.32.3-flip-owner-surface.md](v0.32.3-flip-owner-surface.md) | v0.32.3 | Flip distillation on (after a live dream A/B) + `/_workspace` Skills panel + LD #12 amendment + close | **Medium** | v0.32.2 + live A/B | ✅ SHIPPED 2026-07-05 |
 
 ## Acceptance criteria for the whole initiative
 
-- [ ] The shelf (names + descriptions, name-ordered, capped) renders in the cached system block
+- [x] The shelf (names + descriptions, name-ordered, capped) renders in the cached system block
       whenever skill tools are mounted; an empty library renders nothing; bytes are stable across
       turns with no library change (cache-invariant test).
-- [ ] The L1 contract carries the skills clause (use-before-redo + when-to-save) iff skills are
+- [x] The L1 contract carries the skills clause (use-before-redo + when-to-save) iff skills are
       mounted, derived from registry contents.
-- [ ] Every skill write is audited (`skills_audit`) and restorable; `saveSkill` is
+- [x] Every skill write is audited (`skills_audit`) and restorable; `saveSkill` is
       no-op-guarded and epoch-bumped; usage (`used_count`/`last_used_ms`) is tracked on recall.
-- [ ] `retrieve()` surfaces relevant skills semantically (a paraphrased query finds a skill whose
+- [x] `retrieve()` surfaces relevant skills semantically (a paraphrased query finds a skill whose
       stored wording differs); the recall tool exposes them without output-validation failure.
-- [ ] The dream distills at most a capped number of provenance-tagged skills per cycle, merges
+- [x] The dream distills at most a capped number of provenance-tagged skills per cycle, merges
       rather than duplicates, deprecates stale entries, never runs the test suite, and every
       write is one-call restorable. A live dream A/B is recorded before the default flip.
-- [ ] The owner can view/edit/deprecate/restore skills in `/_workspace`; `LUNA_SKILLS` (and the
+- [x] The owner can view/edit/deprecate/restore skills in `/_workspace`; `LUNA_SKILLS` (and the
       distillation flag) are visible in the settings panel.
-- [ ] LD #12 amended at v0.32.3 (procedural-memory clause); full `bun test` green; `tsc` clean
+- [x] LD #12 amended at v0.32.3 (procedural-memory clause); full `bun test` green; `tsc` clean
       across packages at every version.
 
 ## Open questions blocking start

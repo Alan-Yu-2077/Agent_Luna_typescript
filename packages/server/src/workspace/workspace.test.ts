@@ -67,6 +67,50 @@ describe('workspace mutating-route gate', () => {
   });
 });
 
+describe('workspace skills panel (v0.32.3)', () => {
+  let db: Database;
+  afterEach(() => {
+    setMemoryDb(null);
+    db.close(false);
+  });
+
+  test('GET /skills is open; POST is dev-tools-gated; writes go through the audited store', async () => {
+    db = new Database(':memory:', { strict: true });
+    migrate(db, join(import.meta.dir, '..', 'migrations'));
+    setMemoryDb(db);
+
+    delete Bun.env['LUNA_DEV_TOOLS'];
+    const read = await workspaceHandler(new Request('http://localhost/_workspace/api/skills'));
+    expect(read?.status).not.toBe(403);
+    const gated = await workspaceHandler(
+      post('/_workspace/api/skills', { action: 'save', name: 'x', description: 'd', body: 'b' }),
+    );
+    expect(gated?.status).toBe(403);
+
+    Bun.env['LUNA_DEV_TOOLS'] = '1';
+    const saved = await workspaceHandler(
+      post('/_workspace/api/skills', { action: 'save', name: 'owner-skill', description: 'd', body: 'b' }),
+    );
+    expect(saved?.status).toBe(200);
+    const { getSkill } = await import('../skills/skillStore');
+    expect(getSkill('owner-skill')!.source).toBe('owner');
+
+    const dep = await workspaceHandler(post('/_workspace/api/skills', { action: 'deprecate', name: 'owner-skill' }));
+    expect(dep?.status).toBe(200);
+    expect(getSkill('owner-skill')!.deprecated_ms).toBeGreaterThan(0);
+    const res = await workspaceHandler(post('/_workspace/api/skills', { action: 'restore', name: 'owner-skill' }));
+    expect(res?.status).toBe(200);
+    expect(getSkill('owner-skill')!.deprecated_ms).toBe(0);
+
+    const payload = (await (
+      await workspaceHandler(new Request('http://localhost/_workspace/api/skills'))
+    )!.json()) as { skills: Array<{ name: string; audit: unknown[] }>; writable: boolean };
+    expect(payload.writable).toBe(true);
+    const row = payload.skills.find((s) => s.name === 'owner-skill')!;
+    expect(row.audit.length).toBeGreaterThan(0); // the lifecycle left an audit tail
+  });
+});
+
 describe('workspace soul editor (v0.31.0)', () => {
   let db: Database;
   afterEach(() => {

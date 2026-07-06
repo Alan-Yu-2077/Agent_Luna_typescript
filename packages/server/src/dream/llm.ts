@@ -95,21 +95,34 @@ export type SaliencePatch = z.infer<typeof SaliencePatch>;
 
 // v0.32.2 (Initiative 23): the dream's skill-distillation patch. Field caps mirror
 // save_skill's input schema exactly, so a dream-authored skill can never exceed
-// what the awake verify-gated path allows.
+// what the awake verify-gated path allows. Tolerant on the array shape (the
+// v0.23.4 lesson): the live A/B showed the model emitting a SINGLE OBJECT for a
+// one-item day — coerce object→[object] instead of failing the whole patch.
 const SkillPatchItem = z.object({
   name: z.string().min(1).max(80),
   description: z.string().min(1).max(400),
   body: z.string().min(1).max(8000),
 });
+const itemsField = z
+  .union([SkillPatchItem, z.array(SkillPatchItem)])
+  .nullable()
+  .transform((v) => (v == null ? null : Array.isArray(v) ? v : [v]));
+const namesField = z
+  .union([z.string().min(1), z.array(z.string().min(1))])
+  .nullable()
+  .transform((v) => (v == null ? null : Array.isArray(v) ? v : [v]));
 export const SkillPatch = z.object({
-  new: z.array(SkillPatchItem).nullable(),
-  merge: z.array(SkillPatchItem).nullable(),
-  deprecate: z.array(z.string().min(1)).nullable(),
+  new: itemsField,
+  merge: itemsField,
+  deprecate: namesField,
   reason: z.string().optional(),
 });
 export type SkillPatch = z.infer<typeof SkillPatch>;
 
-export function parseJsonBlock<T>(schema: z.ZodType<T>, text: string): T | null {
+// Input widened to `unknown` (v0.32.2): a transform schema (SkillPatch's shape
+// coercion) has Input ≠ Output, which the default ZodType<T> (Input = Output)
+// rejects — T would silently infer as the raw input union at the call sites.
+export function parseJsonBlock<T>(schema: z.ZodType<T, z.ZodTypeDef, unknown>, text: string): T | null {
   const start = text.indexOf('{');
   const end = text.lastIndexOf('}');
   if (start < 0 || end <= start) return null;

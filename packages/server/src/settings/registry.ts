@@ -158,6 +158,15 @@ export const SETTING_SPECS: readonly SettingSpec[] = [
     restartRequired: true,
   },
   {
+    key: 'skills.dream_distill',
+    env: 'LUNA_DREAM_SKILLS',
+    label: 'Dream skill distillation',
+    hint: 'Her dream turns the day’s significant moments into reusable skills (audited, undoable)',
+    category: 'Memory',
+    kind: 'boolean',
+    defaultValue: '1',
+  },
+  {
     key: 'weather.tool',
     env: 'LUNA_WEATHER',
     label: 'Weather lookups',

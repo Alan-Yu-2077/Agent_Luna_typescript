@@ -4,6 +4,7 @@ import { lazyHtml } from '../devHtml';
 import { getSoul, updateEvolving, updateFixedCore } from '../memory/soulStore';
 import { bumpMemoryEpoch } from '../memory/epoch';
 import { loadPersona } from '../persona/loader';
+import { deprecateSkill, listSkills, restoreSkill, saveSkill } from '../skills/skillStore';
 
 // Developer data IDE (the TS analog of the Python project's `.workspace`). A
 // VSCode-style read view over every SQLite table, plus dev-only write actions:
@@ -163,6 +164,48 @@ export async function workspaceHandler(req: Request): Promise<Response | null> {
     }
     return json({ ok: true, soul: soulView() });
   }
+  // v0.32.3 (Initiative 23): the skill library as an owner surface — full lifecycle
+  // fields + per-skill audit tails on read; writes go through the audited store only
+  // (never raw SQL), so no-op guards + epoch discipline hold by construction.
+  if (path === '/_workspace/api/skills' && req.method === 'GET') {
+    const db = getMemoryDb();
+    if (!db) return json({ enabled: false, skills: [], writable: false });
+    const skills = listSkills(500, true).map((s) => ({
+      ...s,
+      audit: db
+        .prepare(
+          'SELECT t_ms, prev_description, prev_body, prev_source, prev_deprecated_ms, source FROM skills_audit WHERE name = ? ORDER BY id DESC LIMIT 5',
+        )
+        .all(s.name),
+    }));
+    return json({ enabled: true, skills, writable: Bun.env['LUNA_DEV_TOOLS'] === '1' });
+  }
+  if (path === '/_workspace/api/skills' && req.method === 'POST') {
+    if (Bun.env['LUNA_DEV_TOOLS'] !== '1') {
+      return json({ error: 'mutating routes require LUNA_DEV_TOOLS=1' }, 403);
+    }
+    if (!getMemoryDb()) return json({ error: 'no db' }, 400);
+    const body = (await req.json().catch(() => ({}))) as {
+      action?: string;
+      name?: string;
+      description?: string;
+      body?: string;
+    };
+    if (!body.name || body.name.trim().length === 0) return json({ error: 'name required' }, 400);
+    const now = Date.now();
+    if (body.action === 'save') {
+      if (!body.description || !body.body) return json({ error: 'description + body required' }, 400);
+      saveSkill({ name: body.name, description: body.description, body: body.body }, now, 'owner');
+      return json({ ok: true });
+    }
+    if (body.action === 'deprecate') {
+      return json({ ok: deprecateSkill(body.name, now, 'owner') });
+    }
+    if (body.action === 'restore') {
+      return json({ ok: restoreSkill(body.name, now) !== null });
+    }
+    return json({ error: 'unknown action' }, 400);
+  }
   if (path === '/_workspace/api/soul/reseed' && req.method === 'POST') {
     if (Bun.env['LUNA_DEV_TOOLS'] !== '1') {
       return json({ error: 'mutating routes require LUNA_DEV_TOOLS=1' }, 403);
@@ -204,9 +247,10 @@ export async function workspaceHandler(req: Request): Promise<Response | null> {
     try {
       if (action === 'delete') {
         const r = db.prepare(`DELETE FROM "${table}" WHERE rowid = ?`).run(rowid);
-        // v0.31.0: the soul sits in the cached system block — a raw-grid edit to it must bust the
-        // prompt cache too, or the change wouldn't land until the next unrelated epoch bump.
-        if (table === 'soul' && r.changes > 0) bumpMemoryEpoch();
+        // v0.31.0/v0.32.3: soul + skills sit in the cached system block — a raw-grid
+        // edit must bust the prompt cache too, or the change wouldn't land until the
+        // next unrelated epoch bump.
+        if ((table === 'soul' || table === 'skills') && r.changes > 0) bumpMemoryEpoch();
         return json({ ok: true, changes: r.changes });
       }
       if (action === 'update') {
@@ -217,7 +261,7 @@ export async function workspaceHandler(req: Request): Promise<Response | null> {
         const r = db
           .prepare(`UPDATE "${table}" SET "${column}" = ? WHERE rowid = ?`)
           .run(body.value as never, rowid);
-        if (table === 'soul' && r.changes > 0) bumpMemoryEpoch();
+        if ((table === 'soul' || table === 'skills') && r.changes > 0) bumpMemoryEpoch();
         return json({ ok: true, changes: r.changes });
       }
       return json({ error: 'unknown action' }, 400);

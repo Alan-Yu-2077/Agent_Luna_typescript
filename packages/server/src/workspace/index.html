@@ -195,6 +195,8 @@
       <div class="sidebar">
         <h2>Soul</h2>
         <div class="tab soulnav" id="soulnav"><span class="ic">🪶</span><span class="nm">soul · 人格</span></div>
+        <h2>Skills</h2>
+        <div class="tab soulnav" id="skillsnav"><span class="ic">🛠</span><span class="nm">skills · 技能</span></div>
         <h2>Tables</h2>
         <div id="tabs"></div>
       </div>
@@ -261,6 +263,7 @@
       function select(name) {
         current = name;
         $('soulnav').classList.remove('active');
+        $('skillsnav').classList.remove('active');
         renderTabs();
         const t = DATA.tables.find((x) => x.name === name);
         if (!t) return;
@@ -358,6 +361,67 @@
           else toast('error: ' + (r.error || '?'));
         });
       }
+      // Skills panel (v0.32.3): the whole library incl. deprecated + provenance +
+      // usage; writes go through the audited store routes (save/deprecate/restore).
+      async function selectSkills() {
+        current = '__skills__';
+        renderTabs();
+        $('soulnav').classList.remove('active');
+        $('skillsnav').classList.add('active');
+        $('curname').textContent = '🛠 Skills · 技能库';
+        $('curhint').textContent = 'saved=醒态验证 · dream=梦蒸馏 · owner=你 · 全部可审计撤销';
+        $('grid').innerHTML = '<div class="nodata">loading…</div>';
+        const res = await fetch('/_workspace/api/skills').then((x) => x.json()).catch(() => null);
+        if (!res || !res.enabled) { $('grid').innerHTML = '<div class="nodata">persistence off — no DB</div>'; return; }
+        const w = res.writable;
+        const rows = res.skills.map((s) => {
+          const dead = s.deprecated_ms > 0;
+          const badge = '<span class="ct">' + esc(s.source) + '</span>';
+          const use = '<span class="ct">' + s.used_count + '×</span>';
+          const btns = w
+            ? (dead
+                ? '<button class="btn ghost sk-restore" data-n="' + esc(s.name) + '">↩ restore</button>'
+                : '<button class="btn ghost sk-dep" data-n="' + esc(s.name) + '">🗑 deprecate</button>')
+            : '';
+          return (
+            '<div class="sfld" style="border:1px solid var(--line);border-radius:4px;padding:10px 12px">' +
+            '<label style="' + (dead ? 'text-decoration:line-through;opacity:.6' : '') + '">' +
+            esc(s.name) + ' ' + badge + ' ' + use + '</label>' +
+            '<div class="hint" style="margin-bottom:6px">' + esc(s.description) + '</div>' +
+            '<textarea data-n="' + esc(s.name) + '" class="sk-body" ' + (w && !dead ? '' : 'disabled') + ' style="min-height:80px">' + esc(s.body) + '</textarea>' +
+            '<div class="sactions">' + (w && !dead ? '<button class="btn sk-save" data-n="' + esc(s.name) + '">💾 Save</button>' : '') + btns + '</div>' +
+            '</div>'
+          );
+        });
+        $('grid').innerHTML =
+          '<div class="soulform">' +
+          (rows.length ? rows.join('') : '<div class="nodata">— library empty —</div>') +
+          (w ? '' : '<div class="hint">只读 · set LUNA_DEV_TOOLS=1 to edit</div>') +
+          '</div>';
+        if (!w) return;
+        const post = (b) => fetch('/_workspace/api/skills', {
+          method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b),
+        }).then((x) => x.json());
+        $('grid').querySelectorAll('.sk-save').forEach((btn) => btn.addEventListener('click', async () => {
+          const name = btn.dataset.n;
+          const sk = res.skills.find((x) => x.name === name);
+          const bodyEl = $('grid').querySelector('.sk-body[data-n="' + CSS.escape(name) + '"]');
+          const r = await post({ action: 'save', name, description: sk.description, body: bodyEl.value });
+          toast(r.ok ? 'saved · 生效于下一轮' : 'error: ' + (r.error || '?'));
+        }));
+        $('grid').querySelectorAll('.sk-dep').forEach((btn) => btn.addEventListener('click', async () => {
+          if (!confirm('弃用这个技能？(可 restore 撤销)')) return;
+          const r = await post({ action: 'deprecate', name: btn.dataset.n });
+          toast(r.ok ? 'deprecated' : 'error: ' + (r.error || '?'));
+          if (r.ok) selectSkills();
+        }));
+        $('grid').querySelectorAll('.sk-restore').forEach((btn) => btn.addEventListener('click', async () => {
+          const r = await post({ action: 'restore', name: btn.dataset.n });
+          toast(r.ok ? 'restored' : 'error: ' + (r.error || '?'));
+          if (r.ok) selectSkills();
+        }));
+      }
+      $('skillsnav').addEventListener('click', selectSkills);
       $('soulnav').addEventListener('click', selectSoul);
       $('refresh').addEventListener('click', () => load(true));
       $('limit').addEventListener('change', () => load(true));

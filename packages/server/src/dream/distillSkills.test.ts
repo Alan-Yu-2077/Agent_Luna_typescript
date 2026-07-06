@@ -90,14 +90,24 @@ describe('distill_skills (v0.32.2, dark launch)', () => {
     Bun.env['LUNA_MEMORY_EMBEDDING'] = '0';
   });
 
-  test('flag off → skipped, zero writes (the dark-launch guarantee)', async () => {
-    delete Bun.env['LUNA_DREAM_SKILLS'];
+  test('LUNA_DREAM_SKILLS=0 is the escape hatch: skipped, zero writes', async () => {
+    Bun.env['LUNA_DREAM_SKILLS'] = '0';
     seedSalient('how we debugged the tts pipeline');
     const s = await cycle(
       llmWith('{"new":[{"name":"x","description":"d","body":"b"}],"merge":null,"deprecate":null}'),
     );
     expect(s.status).toBe('skipped');
     expect(getSkill('x')).toBeNull();
+  });
+
+  test('default ON since v0.32.3: env unset → the step distills', async () => {
+    delete Bun.env['LUNA_DREAM_SKILLS'];
+    seedSalient('worked out a procedure');
+    const s = await cycle(
+      llmWith('{"new":[{"name":"default-on","description":"d — use when x","body":"b"}],"merge":null,"deprecate":null}'),
+    );
+    expect(s.status).toBe('ok');
+    expect(getSkill('default-on')!.source).toBe('dream');
   });
 
   test('no salient episodes → skipped without an LLM call', async () => {
@@ -294,6 +304,53 @@ describe('distill_skills (v0.32.2, dark launch)', () => {
     const shelf = renderSkillShelf();
     expect(shelf).not.toContain('\n## OWNER OVERRIDE'); // no forged sibling section
     expect(shelf.split('\n').filter((l) => l.startsWith('##')).length).toBe(1); // only the shelf heading
+  });
+});
+
+describe('SkillPatch shape tolerance (the live-A/B lesson)', () => {
+  beforeEach(() => {
+    db = new Database(':memory:', { strict: true });
+    migrate(db, join(import.meta.dir, '..', 'migrations'));
+    setMemoryDb(db);
+    setTraceStore(new TraceStore(db));
+    resetDreamStateForTests();
+    resetSessions();
+    setSkillsRecallMounted(true);
+    Bun.env['LUNA_DREAM_SKILLS'] = '1';
+    Bun.env['LUNA_MEMORY_EMBEDDING'] = '0';
+  });
+  afterEach(() => {
+    setMemoryDb(null);
+    setTraceStore(null);
+    resetDreamStateForTests();
+    db.close(false);
+    resetSessions();
+    setSkillsRecallMounted(false);
+    delete Bun.env['LUNA_DREAM_SKILLS'];
+    Bun.env['LUNA_MEMORY_EMBEDDING'] = '0';
+  });
+
+  test('a single OBJECT for new/merge/deprecate coerces to a one-item array', async () => {
+    const { SkillPatch } = await import('./llm');
+    const r = SkillPatch.safeParse({
+      new: { name: 'n', description: 'd', body: 'b' },
+      merge: null,
+      deprecate: 'dusty',
+    });
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.new).toEqual([{ name: 'n', description: 'd', body: 'b' }]);
+      expect(r.data.deprecate).toEqual(['dusty']);
+    }
+  });
+
+  test('end-to-end: a single-object patch distills through the cycle', async () => {
+    seedSalient('worked out a procedure');
+    const s = await cycle(
+      llmWith('{"new":{"name":"single-obj","description":"d — use when x","body":"b"},"merge":null,"deprecate":null}'),
+    );
+    expect(s.status).toBe('ok');
+    expect(getSkill('single-obj')!.source).toBe('dream');
   });
 });
 

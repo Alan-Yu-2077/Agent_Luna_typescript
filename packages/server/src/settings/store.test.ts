@@ -73,6 +73,11 @@ describe('settings registry', () => {
     expect(s.kind).toBe('boolean');
     expect(s.defaultValue).toBe('1'); // mirrors skillsEnabled(): LUNA_SKILLS !== '0'
     expect(s.restartRequired).toBe(true); // registry composed at boot
+    const d = specFor('skills.dream_distill');
+    if (!d) throw new Error('skills.dream_distill spec missing');
+    expect(d.env).toBe('LUNA_DREAM_SKILLS');
+    expect(d.defaultValue).toBe('1'); // mirrors the v0.32.3 flip (=== '0' is the hatch)
+    expect(d.restartRequired ?? false).toBe(false); // read call-time in the dream step
   });
 });
 

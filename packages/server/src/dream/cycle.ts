@@ -352,7 +352,10 @@ const dreamGraph: Graph<DreamCycleState, DreamNode> = {
   // awake-tool-only — dream skills are distinguishable by provenance instead).
   distill_skills: (s) =>
     runStep(s, 'distill_skills', async () => {
-      if (Bun.env['LUNA_DREAM_SKILLS'] !== '1') return ['skipped', 'off (LUNA_DREAM_SKILLS)'];
+      // v0.32.3: default ON after the live A/B (null-restraint + positive distillation
+      // both verified against the real DB); =0 is the escape hatch. Read call-time, so
+      // the settings-panel toggle applies without a restart.
+      if (Bun.env['LUNA_DREAM_SKILLS'] === '0') return ['skipped', 'off (LUNA_DREAM_SKILLS=0)'];
       const db = getMemoryDb();
       if (!db) return ['skipped', 'no memory db'];
       if (!skillsRecallMounted()) return ['skipped', 'skills unmounted'];
