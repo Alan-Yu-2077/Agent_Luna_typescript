@@ -39,7 +39,8 @@ LUNA_EMBEDDING_BASE_URL=
 LUNA_WEATHER_PROVIDER=
 LUNA_WEATHER_API_KEY=
 LUNA_WEATHER_API_HOST=
-# Weather location (lat,lon) — the desktop webview has no browser GPS, so set this for weather.
+# Weather location (lat,lon) — auto-filled from the Mac (CoreLocation → timezone) since v0.33.0;
+# set it here to override (a manual value is never changed).
 LUNA_LAT_LON=
 LUNA_WEB_SEARCH_PROVIDER=
 LUNA_WEB_SEARCH_API_KEY=

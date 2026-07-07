@@ -1,10 +1,11 @@
-import { app, BrowserWindow, dialog, ipcMain } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, session } from 'electron';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { defaultDistDir, startWebHost, WEB_PORT } from './serve';
 import { ENV_TEMPLATE, parseEnvFile } from './envfile';
 import { readShellSettings, writeShellSettings } from './shellSettings';
 import { classifyProbe, mergeEnvFile, needsOnboarding, type ProbeVerdict } from './onboarding';
+import { formatLatLon, resolveDesktopLocation } from './location';
 import { createPetDrag, type PetDrag } from './petDrag';
 import { petWindowOptions } from './petWindow';
 import { createSupervisor, waitForPort, type Supervisor } from './supervisor';
@@ -348,6 +349,34 @@ void app.whenReady().then(async () => {
   const p = resolvePaths();
   paths = p;
   const userEnv = ensureUserConfig(p);
+
+  // v0.33.0: our window loads ONLY Luna's own pinned-loopback bundle, so permission requests come
+  // from trusted local content — grant them. Crucially geolocation, which Electron denies by
+  // default, leaving the webview's navigator.geolocation → client.geo → weather path silently dead
+  // on the desktop. Set before any window loads.
+  session.defaultSession.setPermissionRequestHandler((_wc, _permission, cb) => cb(true));
+  session.defaultSession.setPermissionCheckHandler(() => true);
+
+  // v0.33.0: the desktop webview has no browser GPS, so resolve a location from the Mac itself
+  // (CoreLocationCLI → system timezone) and inject it as LUNA_LAT_LON before the sidecar spawns, so
+  // weather mounts at boot. A manual luna.env value is respected (returns null); an accurate
+  // CoreLocation fix is persisted so it sticks + shows in the settings panel.
+  const loc = resolveDesktopLocation(userEnv);
+  if (loc) {
+    userEnv['LUNA_LAT_LON'] = formatLatLon(loc);
+    console.log(`[luna-desktop] location ${userEnv['LUNA_LAT_LON']} (via ${loc.source})`);
+    if (loc.persist) {
+      try {
+        writeFileSync(
+          p.envFile,
+          mergeEnvFile(readFileSync(p.envFile, 'utf8'), { LUNA_LAT_LON: userEnv['LUNA_LAT_LON'] }),
+        );
+      } catch (e) {
+        console.warn('[luna-desktop] could not persist location to luna.env:', e);
+      }
+    }
+  }
+
   if (userEnv['LUNA_PET_MODE'] === '1') petMode = true;
   const shell = readShellSettings(p.userData);
   if (typeof shell.petMode === 'boolean') petMode = shell.petMode;
@@ -390,6 +419,9 @@ void app.whenReady().then(async () => {
       env: {
         ...(process.env as Record<string, string>),
         LUNA_PROACTIVE: userEnv['LUNA_PROACTIVE'] ?? '0',
+        // v0.33.0: pass the Mac-resolved location through so the dev-all server also boots with it
+        // (dev-all reads the repo .env, which usually has no LUNA_LAT_LON).
+        ...(userEnv['LUNA_LAT_LON'] ? { LUNA_LAT_LON: userEnv['LUNA_LAT_LON'] } : {}),
       },
       onEvent: (e) => console.log(`[luna-desktop] dev-all: ${e}`),
     });

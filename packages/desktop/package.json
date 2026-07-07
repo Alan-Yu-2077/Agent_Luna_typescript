@@ -31,7 +31,11 @@
     ],
     "mac": {
       "target": [{ "target": "dir", "arch": ["arm64"] }],
-      "identity": null
+      "identity": null,
+      "extendInfo": {
+        "NSLocationUsageDescription": "Luna uses your location to show local weather.",
+        "NSLocationWhenInUseUsageDescription": "Luna uses your location to show local weather."
+      }
     }
   }
 }
