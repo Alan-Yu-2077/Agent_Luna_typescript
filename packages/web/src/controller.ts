@@ -21,6 +21,14 @@ export type ControllerDeps = {
 // synthetic bubble id for text-mode (LUNA_MESSAGE_TOOL=0) reply.token streaming
 const TEXT_BUBBLE = 'reply';
 
+// v0.33.1: 💭 = a "second thought" self-continuation (its cycle_id carries the `:cont:` marker set
+// in continuation.ts); 🌱 = a self-initiated ladder/scheduler opener. Both ride the same proactive
+// path, so the cycle_id is the only tell — this lets a mid-conversation follow-up read differently
+// from a real proactive reach-out at a glance.
+function proactiveGlyph(cycleId: string): string {
+  return cycleId.includes(':cont:') ? '💭' : '🌱';
+}
+
 export function createController(deps: ControllerDeps): { handle: (e: ServerEvent) => void } {
   // call_ids that opened as message-tool bubbles (vs other tools → chips)
   const messageBubbles = new Set<string>();
@@ -188,7 +196,7 @@ export function createController(deps: ControllerDeps): { handle: (e: ServerEven
         return;
 
       case 'proactive.started':
-        deps.view.chip('proactive', '🌱 …');
+        deps.view.chip('proactive', `${proactiveGlyph(e.cycle_id)} …`);
         turnActive = true;
         reflectTyping();
         return;
@@ -199,7 +207,8 @@ export function createController(deps: ControllerDeps): { handle: (e: ServerEven
         // bug, when app.ts only hid on turn.result).
         resetTurnState();
         reflectTyping();
-        if (!e.spoke) deps.view.chip('proactive', '🌱 (quietly did something)');
+        if (!e.spoke)
+          deps.view.chip('proactive', `${proactiveGlyph(e.cycle_id)} (quietly did something)`);
         return;
 
       case 'error':

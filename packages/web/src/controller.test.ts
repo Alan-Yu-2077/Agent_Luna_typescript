@@ -232,6 +232,19 @@ describe('frontend controller — other events', () => {
     expect(h.calls.filter((c) => c[1] === 'error').length).toBe(1);
   });
 
+  test('continuation vs ladder proactive get distinct glyphs (💭 vs 🌱) — v0.33.1', () => {
+    const h = harness();
+    h.handle({ type: 'proactive.started', cycle_id: 'default:1783' }); // ladder / scheduler
+    h.handle({ type: 'proactive.started', cycle_id: 'default:cont:1783' }); // self-continuation
+    const glyphs = h.calls
+      .filter((c) => c[0] === 'chip' && c[1] === 'proactive')
+      .map((c) => c[2] as string);
+    expect(glyphs[0]).toContain('🌱'); // ladder opener → seedling
+    expect(glyphs[0]).not.toContain('💭');
+    expect(glyphs[1]).toContain('💭'); // continuation → second-thought
+    expect(glyphs[1]).not.toContain('🌱');
+  });
+
   test('proactive.finished spoke:true → no chip (she spoke via bubbles)', () => {
     const h = harness();
     h.handle({ type: 'proactive.finished', cycle_id: 'c1', spoke: true });
