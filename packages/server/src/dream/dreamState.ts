@@ -104,3 +104,18 @@ export function bootReconcile(): void {
 export function resetDreamStateForTests(): void {
   state = { is_dreaming: 0, current_step: null, cycle_id: null, last_dream_ms: null, cycle_count: 0 };
 }
+
+// v0.32.5 — shutdown-dream cooldown. On desktop every window close SIGTERMs the
+// sidecar, so the graceful-exit dream (main.ts) fired on EVERY close — a full
+// cycle per app quit, nothing like the once-a-day sleep it was meant to be. Gate
+// it: a shutdown dream is only "due" when the last dream is at least `minGapMs`
+// old (or there has never been one). Pure so the decision is unit-tested without
+// the process-exit handler. minGapMs === 0 restores the old always-dream.
+export function shutdownDreamDue(
+  lastDreamMs: number | null,
+  nowMs: number,
+  minGapMs: number,
+): boolean {
+  if (lastDreamMs === null) return true; // never consolidated → let the last exit do it
+  return nowMs - lastDreamMs >= minGapMs;
+}

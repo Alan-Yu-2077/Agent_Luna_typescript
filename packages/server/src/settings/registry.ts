@@ -227,7 +227,7 @@ export const SETTING_SPECS: readonly SettingSpec[] = [
     key: 'dream.shutdown',
     env: 'LUNA_SHUTDOWN_DREAM',
     label: 'Dream on quit',
-    hint: 'She consolidates memories before shutting down',
+    hint: 'She consolidates memories before shutting down (at most once every few hours, not every close)',
     category: 'Memory',
     kind: 'boolean',
     defaultValue: '1',

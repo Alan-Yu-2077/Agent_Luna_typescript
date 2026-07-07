@@ -33,7 +33,7 @@ import { devChatHandler } from './devchat/devchat';
 import { setMemoryDb } from './memory/sessionStore';
 import { seedSoulOnBoot } from './memory/soulSeed';
 import { initCustomSqlite } from './memory/recall/vecRuntime';
-import { bootReconcile, isDreaming } from './dream/dreamState';
+import { bootReconcile, dreamStatus, isDreaming, shutdownDreamDue } from './dream/dreamState';
 import { runDreamCycle } from './dream/cycle';
 import { setOnWeatherRefresh, startWeatherRefresh } from './tools/web/weather/snapshot';
 import { activeSessionIds, preloadSessions } from './turn/session';
@@ -164,12 +164,18 @@ if (Bun.env['ANTHROPIC_API_KEY']) {
   // terminal-exit equivalent of going to sleep. Best-effort + deadline-bounded; a
   // second signal forces an immediate exit. LUNA_SHUTDOWN_DREAM=0 disables it (for
   // fast dev restarts); LUNA_SHUTDOWN_DREAM_TIMEOUT_MS (default 120s) bounds the wait.
+  // v0.32.5 — cooldown gate: on desktop every window close SIGTERMs the sidecar, so
+  // this fired a full dream on EVERY quit. Only dream if the last one is at least
+  // LUNA_SHUTDOWN_DREAM_MIN_GAP_MS old (default 6h; 0 = always, NaN/neg → default).
   let shuttingDown = false;
   const shutdown = async (signal: string): Promise<void> => {
     if (shuttingDown) process.exit(1); // a second signal → force exit now
     shuttingDown = true;
     try {
-      if (Bun.env['LUNA_SHUTDOWN_DREAM'] !== '0' && !isDreaming()) {
+      const rawGap = Number(Bun.env['LUNA_SHUTDOWN_DREAM_MIN_GAP_MS']);
+      const minGapMs = Number.isFinite(rawGap) && rawGap >= 0 ? rawGap : 21_600_000;
+      const due = shutdownDreamDue(dreamStatus().last_dream_ms, Date.now(), minGapMs);
+      if (Bun.env['LUNA_SHUTDOWN_DREAM'] !== '0' && !isDreaming() && due) {
         console.log(`[luna-server] ${signal} — running a shutdown dream…`);
         const deadlineMs = Number(Bun.env['LUNA_SHUTDOWN_DREAM_TIMEOUT_MS'] ?? 120_000);
         const dreams = (async () => {
@@ -178,6 +184,8 @@ if (Bun.env['ANTHROPIC_API_KEY']) {
           }
         })();
         await Promise.race([dreams, Bun.sleep(deadlineMs)]);
+      } else if (Bun.env['LUNA_SHUTDOWN_DREAM'] !== '0' && !isDreaming() && !due) {
+        console.log(`[luna-server] ${signal} — last dream too recent, skipping shutdown dream`);
       }
     } catch (e) {
       console.error('[luna-server] shutdown dream failed:', e);
