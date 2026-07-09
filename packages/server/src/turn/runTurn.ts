@@ -337,7 +337,12 @@ const graph: Graph<TurnState, TurnNode> = {
     }
     blocks.push({ type: 'text', text: s.userText });
     s.session.history.push({ role: 'user', content: blocks });
-    s.emit({ type: 'turn.started', turn_id: s.turnId });
+    // v0.33.2: a proactive turn (continuation / ladder) runs through this same engine but is
+    // NOT a user-initiated exchange. Emitting turn.started makes the frontend treat it as a
+    // barge-in (controller.ts) and stop the previous message's still-playing TTS — so a 💭
+    // follow-up cut off the reply it was following. It already announces itself via
+    // proactive.started; suppress the reactive turn.started here.
+    if (!s.proactiveTurn) s.emit({ type: 'turn.started', turn_id: s.turnId });
     return 'build_request';
   },
 

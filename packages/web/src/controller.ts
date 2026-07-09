@@ -78,8 +78,9 @@ export function createController(deps: ControllerDeps): { handle: (e: ServerEven
       case 'turn.started':
         // Barge-in: a new reactive turn (user just sent) cuts off any still-draining
         // speech from the previous turn so replies don't stack up behind a backlog.
-        // (proactive turns emit proactive.started, not turn.started — they don't
-        // interrupt themselves.)
+        // Only reactive turns reach here — a proactive turn (continuation / ladder) is
+        // suppressed server-side from emitting turn.started (runTurn.ts, v0.33.2) precisely
+        // so a 💭 follow-up queues behind the reply's TTS instead of barging in over it.
         deps.audio.stop();
         // Reset at the boundary so a leaked id from a PRIOR turn (a dropped
         // tool.finished) can't keep messageBubbles non-empty and wedge the dots off.
@@ -198,6 +199,10 @@ export function createController(deps: ControllerDeps): { handle: (e: ServerEven
       case 'proactive.started':
         deps.view.chip('proactive', `${proactiveGlyph(e.cycle_id)} …`);
         turnActive = true;
+        // v0.33.2: proactive turns no longer emit turn.started (that would barge-in over the
+        // prior reply's TTS), so set the thinking pose here — it used to ride the inner
+        // turn.started. NB: no audio.stop() — a follow-up must queue behind, not cut off.
+        deps.live2d.setState('thinking');
         reflectTyping();
         return;
 

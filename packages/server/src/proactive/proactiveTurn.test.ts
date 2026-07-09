@@ -96,6 +96,19 @@ describe('runProactiveTurn', () => {
     expect(silent).toBe(true);
   });
 
+  test('does NOT emit turn.started — only proactive.started (v0.33.2 barge-in fix)', async () => {
+    // turn.started makes the frontend stop the prior reply's still-playing TTS (barge-in),
+    // so a 💭 continuation was cutting off the message it followed. A proactive turn must
+    // announce itself only via proactive.started.
+    const provider = new MockProvider([
+      [msgRound([{ id: 'm1', input: { text: '突然想到你。', is_final: true } }])],
+      [endRound],
+    ]);
+    const { events } = await fire(provider);
+    expect(events.some((e) => e.type === 'proactive.started')).toBe(true);
+    expect(events.some((e) => e.type === 'turn.started')).toBe(false);
+  });
+
   test('speaking outcome: sends a message → spoke=true, turn.result carries the text', async () => {
     const provider = new MockProvider([
       [msgRound([{ id: 'm1', input: { text: '突然想到你，就来打个招呼。', is_final: true } }])],
