@@ -12,7 +12,7 @@ const TTS_UPSTREAM = Bun.env['LUNA_TTS_PROXY'];
 
 Bun.serve({
   port,
-  // GPT-SoVITS loads a ~5GB model on the first /speak, which far exceeds Bun's
+  // A voice backend can load a large model on the first /speak, which far exceeds Bun's
   // default 10s idleTimeout — without this the proxied request is killed mid-synth
   // ("request timed out after 10 seconds"). 255s is Bun's max; covers a cold load.
   idleTimeout: 255,

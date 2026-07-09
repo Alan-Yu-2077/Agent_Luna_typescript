@@ -50,8 +50,8 @@ async function boot(): Promise<void> {
   const refs = buildLayout(root);
   const windowView = new CuteBubbleView(refs.chatLog, refs.scrollPill);
 
-  // Boot gate: when voice is on, block the UI until GPT-SoVITS has warmed its
-  // (~5GB) model. Skippable, and degrades fast (no block) if no sidecar is up.
+  // Boot gate: when voice is on, block the UI until the voice backend has warmed
+  // its model. Skippable, and degrades fast (no block) if no sidecar is up.
   // The rest of boot (Live2D, WS) proceeds behind the overlay.
   if (localStorage.getItem('luna:tts') !== '0') {
     const gate = createBootGate(root);

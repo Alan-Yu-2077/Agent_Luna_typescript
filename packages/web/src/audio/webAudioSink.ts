@@ -75,7 +75,7 @@ export class WebAudioSink implements AudioSink {
       // An intentional barge-in abort is NOT a TTS failure — never count it toward
       // the latch, or repeated interruptions would mute the session.
       if (signal?.aborted || (e as { name?: string }).name === 'AbortError') return null;
-      // Retryable statuses don't count: 503 = GPT-SoVITS warming its ~5GB model on
+      // Retryable statuses don't count: 503 = the voice backend warming its model on
       // the first /speak; 502/504 = the proxy during a sidecar restart. Only true
       // hard failures (network / 4xx) accrue toward the latch.
       const status = (e as { status?: number }).status;

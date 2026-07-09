@@ -1,7 +1,7 @@
-// A full-screen boot gate shown while GPT-SoVITS warms its (~5GB) model on first
+// A full-screen boot gate shown while the voice backend warms its model on first
 // run — the page stays blocked until voice is ready (or the user skips / it
-// fails), per the "TTS 预热好之前页面不可用" ask. Degrades fast (no block) when no
-// sidecar is configured, so running the web standalone still works.
+// fails). Degrades fast (no block) when no voice sidecar is configured, so running
+// the web standalone (or voiceless) still works.
 
 export type BootGate = {
   setStatus(text: string): void;
@@ -19,7 +19,7 @@ export function createBootGate(root: HTMLElement): BootGate {
     '<div class="boot-moon">🌙</div>' +
     '<div class="boot-spinner"><i></i><i></i><i></i></div>' +
     '<div class="boot-title">Luna is waking up…</div>' +
-    '<div class="boot-sub">First launch loads the voice model (~5GB), one moment…</div>' +
+    '<div class="boot-sub">First launch loads the voice model, one moment…</div>' +
     '<div class="boot-status">Connecting…</div>' +
     '<div class="boot-elapsed"></div>' +
     '<button class="boot-skip" type="button">Skip · enter muted</button>';
@@ -53,9 +53,9 @@ const TTS_STATE_LABEL: Record<string, string> = {
   starting: 'Starting the voice engine…',
   spawning: 'Starting the voice engine…',
   booting: 'Starting the voice engine…',
-  loading: 'Loading the voice model (~5GB)…',
-  loading_model: 'Loading the voice model (~5GB)…',
-  warming: 'Loading the voice model (~5GB)…',
+  loading: 'Loading the voice model…',
+  loading_model: 'Loading the voice model…',
+  warming: 'Loading the voice model…',
   ready: 'Voice ready ✓',
 };
 

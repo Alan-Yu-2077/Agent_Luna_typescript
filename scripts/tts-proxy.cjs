@@ -1,17 +1,18 @@
-// Standalone HTTP wrapper around the (local, not-open-sourced) GPT-SoVITS service
-// from the Python project. The original `gpt-sovits-service.js` is built to be
-// MOUNTED into the old Python ws-server; here we just give it its own listener so
-// the one-command dev launcher can bring TTS up alongside the TS server + web.
-//
-// It reuses the Python TTS module as-is (handleHttp already routes
-// /api/gpt-sovits/{health,voices,speak,diagnostics} and manages the api_v2
-// backend). Local use only. Override the TTS location with LUNA_TTS_DIR.
+// Standalone HTTP wrapper that gives a local GPT-SoVITS service its own listener so the one-command
+// dev launcher can bring voice up alongside the TS server + web. Voice is bring-your-own: point
+// LUNA_TTS_DIR at a GPT-SoVITS install that exposes `server/gpt-sovits-service.js` (whose handleHttp
+// routes /api/gpt-sovits/{health,voices,speak,diagnostics} and manages the api_v2 backend). Local use
+// only; if LUNA_TTS_DIR is unset the launcher never spawns this — the app runs voiceless.
 
 const http = require('http');
 const path = require('path');
 
-const ttsDir = process.env.LUNA_TTS_DIR || path.resolve(__dirname, '..', '..', 'Agent_Luna', 'TTS');
+const ttsDir = process.env.LUNA_TTS_DIR;
 const port = Number(process.env.LUNA_TTS_PORT || 8788);
+if (!ttsDir) {
+  console.error('[tts-proxy] LUNA_TTS_DIR not set — point it at a GPT-SoVITS install, or run without voice.');
+  process.exit(1);
+}
 
 let GptSovitsService;
 try {

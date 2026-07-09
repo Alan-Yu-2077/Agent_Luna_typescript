@@ -89,8 +89,8 @@ function sidecarEnv(p: Paths, userEnv: Record<string, string>): Record<string, s
     LUNA_PERSONA_PATH: p.personaFile,
   };
   // First-run degradation is the SHELL's job: an empty key would throw in the SDK constructor and
-  // crash-loop the sidecar. A placeholder lets the app boot (yumi renders, the window explains);
-  // turns fail politely until the real key lands in luna.env.
+  // crash-loop the sidecar. A placeholder lets the app boot (the avatar renders if installed, the
+  // window explains); turns fail politely until the real key lands in luna.env.
   if (!env['ANTHROPIC_API_KEY']) env['ANTHROPIC_API_KEY'] = 'sk-not-configured';
   // The smoke must exit promptly: the graceful shutdown dream (SIGTERM → up to 120s of memory
   // consolidation) would hold the inherited stdout pipe open long after app.exit.
@@ -107,13 +107,13 @@ let ttsCfg: TtsConfig | null = null;
 let ttsProxyPath = '';
 
 // Bun inlines __dirname as the SOURCE dir (packages/desktop/src) at compile time (see the preload
-// note below), so the repo root — where scripts/ and the sibling Agent_Luna/TTS live — is three up.
-// In a packaged app these paths don't exist; resolveTtsConfig's availability probe degrades to muted.
+// note below), so the repo root — where scripts/ lives — is three up. In a packaged app these paths
+// don't exist; resolveTtsConfig's availability probe degrades to muted.
 const REPO_ROOT = join(__dirname, '..', '..', '..');
 
 // Spawn the TTS proxy via Electron-as-node (ELECTRON_RUN_AS_NODE) so we don't depend on `bun` being
 // on PATH in a packaged app — tts-proxy.cjs is plain CJS. Idempotent + guarded; a no-op under SMOKE
-// (the smoke must exit fast and never load a 5GB model) or when the proxy/module isn't present.
+// (the smoke must exit fast and never load a large voice model) or when the proxy/module isn't present.
 function maybeStartTts(): void {
   if (SMOKE || ttsSupervisor || !ttsCfg?.available || !existsSync(ttsProxyPath)) return;
   ttsSupervisor = createSupervisor({
@@ -296,6 +296,7 @@ async function smokeProbe(win: BrowserWindow): Promise<void> {
         .find((l) => l.textContent.includes('Desktop pet'))?.querySelector('input');
       return JSON.stringify({
         canvas: !!document.querySelector('.model-stage canvas'),
+        placeholder: !!document.querySelector('.model-placeholder'),
         headX: document.querySelector('.model-stage')?.style.getPropertyValue('--luna-head-x') || null,
         wsStatus: document.querySelector('.status-badge')?.dataset.status || null,
         pet: document.body.classList.contains('pet'),
@@ -313,6 +314,7 @@ async function smokeProbe(win: BrowserWindow): Promise<void> {
   )) as string;
   const p = JSON.parse(probe) as {
     canvas: boolean;
+    placeholder: boolean;
     headX: string | null;
     wsStatus: string | null;
     pet: boolean;
@@ -338,8 +340,13 @@ async function smokeProbe(win: BrowserWindow): Promise<void> {
   // v0.27.2: the preload bridge must be live (setPetMode exposed → the pet toggle row renders).
   // This is exactly the check that would have caught the __dirname preload-path bug earlier.
   const bridgeOk = p.bridgeSetPetMode === 'function' && p.petRowVisible;
-  const ok = p.canvas && p.headX !== null && p.wsStatus === 'open' && petOk && bridgeOk;
-  console.log(JSON.stringify({ ok, ...p }));
+  // No model ships by default (OSS), so the stage is two-tier: a bare boot showing the empty-state
+  // placeholder PASSES; the head-anchor render check only applies WHEN a model actually mounted a
+  // canvas. (The WS + pet + bridge checks always hold — they prove the packaged shell wired up.)
+  const rendered = p.canvas && p.headX !== null;
+  const stageOk = rendered || (!p.canvas && p.placeholder);
+  const ok = stageOk && p.wsStatus === 'open' && petOk && bridgeOk;
+  console.log(JSON.stringify({ ok, rendered, ...p }));
   supervisor?.stop();
   ttsSupervisor?.stop();
   app.exit(ok ? 0 : 1);

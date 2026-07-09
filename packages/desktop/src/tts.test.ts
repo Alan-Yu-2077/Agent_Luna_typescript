@@ -6,10 +6,11 @@ const REPO = '/repo';
 const yes = (): boolean => true;
 const no = (): boolean => false;
 
-describe('resolveTtsConfig (v0.28.7)', () => {
-  it('defaults to the sibling Agent_Luna/TTS dir + port 8788', () => {
-    const cfg = resolveTtsConfig({}, REPO, no);
-    expect(cfg.dir).toBe(resolve(REPO, '..', 'Agent_Luna', 'TTS'));
+describe('resolveTtsConfig', () => {
+  it('has no default dir — unset LUNA_TTS_DIR → empty + unavailable (voice is BYO), port 8788', () => {
+    const cfg = resolveTtsConfig({}, REPO, yes);
+    expect(cfg.dir).toBe('');
+    expect(cfg.available).toBe(false); // no dir → nothing to probe, even if existsFn says yes
     expect(cfg.port).toBe(8788);
     expect(cfg.upstream).toBe('http://127.0.0.1:8788');
   });
@@ -31,9 +32,9 @@ describe('resolveTtsConfig (v0.28.7)', () => {
     expect(seen).toContain(resolve('/custom/tts', 'server', 'gpt-sovits-service.js'));
   });
 
-  it('is unavailable when the module is absent', () => {
-    expect(resolveTtsConfig({}, REPO, no).available).toBe(false);
-    expect(resolveTtsConfig({}, REPO, yes).available).toBe(true);
+  it('is unavailable when the module is absent, available when present (with a dir set)', () => {
+    expect(resolveTtsConfig({ LUNA_TTS_DIR: '/custom/tts' }, REPO, no).available).toBe(false);
+    expect(resolveTtsConfig({ LUNA_TTS_DIR: '/custom/tts' }, REPO, yes).available).toBe(true);
   });
 });
 

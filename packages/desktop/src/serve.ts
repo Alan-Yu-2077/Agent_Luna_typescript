@@ -54,9 +54,9 @@ export function startWebHost(distDir: string, port = WEB_PORT, ttsUpstream?: str
     res.writeHead(200, { 'content-type': MIME[extname(file)] ?? 'application/octet-stream' });
     createReadStream(file).pipe(res);
   });
-  // GPT-SoVITS loads a ~5GB model on the first /speak; the synth response can take minutes on a cold
-  // start. Node's default requestTimeout (5min) is borderline — bump it so the warm-up isn't killed
-  // mid-flight (dev-server.ts raises Bun's idleTimeout for the same reason).
+  // A voice backend can load a large model on the first /speak; the synth response can take minutes on
+  // a cold start. Node's default requestTimeout (5min) is borderline — bump it so the warm-up isn't
+  // killed mid-flight (dev-server.ts raises Bun's idleTimeout for the same reason).
   server.requestTimeout = 600_000;
   server.listen(port, '127.0.0.1');
   return server;

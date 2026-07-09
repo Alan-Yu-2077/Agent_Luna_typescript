@@ -3,12 +3,10 @@
 // teardown. Run via `bun run dev`. TTS is local-only; if the local TTS module
 // isn't found, the app still starts (silent voice).
 
-import { resolve } from 'node:path';
-
 const BUN = process.execPath; // the bun binary running this script
-const TTS_DIR = Bun.env['LUNA_TTS_DIR'] ?? resolve(import.meta.dir, '../../Agent_Luna/TTS');
+const TTS_DIR = Bun.env['LUNA_TTS_DIR'] ?? ''; // voice is BYO — unset means run without a voice sidecar
 const TTS_PORT = Bun.env['LUNA_TTS_PORT'] ?? '8788';
-const ttsAvailable = await Bun.file(`${TTS_DIR}/server/gpt-sovits-service.js`).exists();
+const ttsAvailable = TTS_DIR !== '' && (await Bun.file(`${TTS_DIR}/server/gpt-sovits-service.js`).exists());
 
 type Service = { name: string; color: string; cmd: string[]; env?: Record<string, string> };
 
@@ -21,7 +19,8 @@ if (ttsAvailable) {
     env: { LUNA_TTS_DIR: TTS_DIR, LUNA_TTS_PORT: TTS_PORT },
   });
 } else {
-  console.warn(`[dev] TTS module not found at ${TTS_DIR} — starting without voice (set LUNA_TTS_DIR to enable).`);
+  const where = TTS_DIR === '' ? 'LUNA_TTS_DIR unset' : `not found at ${TTS_DIR}`;
+  console.warn(`[dev] TTS ${where} — starting without voice (point LUNA_TTS_DIR at a GPT-SoVITS install to enable).`);
 }
 services.push({
   name: 'server',

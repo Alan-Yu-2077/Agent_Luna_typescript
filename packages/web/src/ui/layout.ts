@@ -178,9 +178,9 @@ export function buildLayout(root: HTMLElement): LayoutRefs {
   add(moodPip, 'span', 'emoji', '');
   add(moodPip, 'span', 'mood-label', '');
   const ph = add(modelStage, 'div', 'model-placeholder');
-  add(ph, 'div', 'ph-circle', 'yumi');
-  add(ph, 'div', 'label', 'Model stage');
-  add(ph, 'div', 'sub', 'Draggable · real model in v0.13.1');
+  add(ph, 'div', 'ph-circle', '🌙');
+  add(ph, 'div', 'label', 'No avatar installed');
+  add(ph, 'div', 'sub', 'Add a Live2D model to see Luna');
   const dreamBtn = doc.createElement('button');
   dreamBtn.className = 'dream-btn';
   dreamBtn.type = 'button';
