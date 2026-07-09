@@ -60,7 +60,7 @@ messages.push({
     {
       type: 'tool_result',
       tool_use_id: toolUse.id,
-      content: JSON.stringify({ iso: new Date().toISOString(), tz: 'Asia/Shanghai' }),
+      content: JSON.stringify({ iso: new Date().toISOString(), tz: 'America/New_York' }),
     },
   ],
 });

@@ -47,7 +47,7 @@ function validLatLon(value: string): string | null {
   if (value.trim() === '') return null;
   const m = value.split(',').map((s) => Number(s.trim()));
   if (m.length !== 2 || m.some((n) => !Number.isFinite(n))) {
-    return 'location must be "lat,lon" (e.g. "31.23,121.47")';
+    return 'location must be "lat,lon" (e.g. "40.71,-74.01")';
   }
   const [lat, lon] = m as [number, number];
   if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return 'lat must be -90..90, lon -180..180';
@@ -128,7 +128,7 @@ export const SETTING_SPECS: readonly SettingSpec[] = [
     key: 'weather.lat_lon',
     env: 'LUNA_LAT_LON',
     label: 'Location (lat,lon)',
-    hint: 'Where she checks the weather, e.g. "31.23,121.47"',
+    hint: 'Where she checks the weather, e.g. "40.71,-74.01"',
     category: 'Perception',
     kind: 'text',
     defaultValue: '',
@@ -138,7 +138,7 @@ export const SETTING_SPECS: readonly SettingSpec[] = [
     key: 'time.zone',
     env: 'LUNA_TZ',
     label: 'Timezone',
-    hint: 'IANA zone like Asia/Shanghai; empty = system',
+    hint: 'IANA zone like America/New_York; empty = system',
     category: 'Perception',
     kind: 'text',
     defaultValue: '',

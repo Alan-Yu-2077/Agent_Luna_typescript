@@ -49,7 +49,7 @@ export const weatherTool = defineTool({
   summarize: (out) =>
     `${out.location} · ${out.condition} ${Math.round(out.temp)}°, high ${Math.round(out.high)}°/low ${Math.round(out.low)}°`,
   execute: async function* (_input, ctx) {
-    yield { kind: 'progress', payload: { note: '正在查天气…' } };
+    yield { kind: 'progress', payload: { note: 'Checking the weather…' } };
 
     if (ctx.abortSignal.aborted) {
       yield { kind: 'err', code: 'aborted', message: 'weather aborted', recoverable: true };
