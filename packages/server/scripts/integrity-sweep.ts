@@ -56,7 +56,7 @@ async function runMode(m: Mode): Promise<void> {
   setMemoryDb(db);
   const store = new TraceStore(db);
   setTraceStore(store);
-  addFact('preferences', '用户最喜欢的饮品是在家手冲的意式浓缩咖啡');
+  addFact('preferences', '用户最喜欢的饮品是在家手冲的茶');
   resetSessions();
   const provider = new AnthropicProvider();
 

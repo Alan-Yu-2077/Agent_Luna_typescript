@@ -4,17 +4,17 @@ import { unwrapGatewayInput } from './anthropic';
 describe('unwrapGatewayInput (yunwu _noargs artifact)', () => {
   test('unwraps {"_noargs": "<json object string>"} to the real object', () => {
     const wrapped = {
-      _noargs: '{"action": "add", "category": "core_facts", "text": "用户的名字是 Alan"}',
+      _noargs: '{"action": "add", "category": "core_facts", "text": "用户的名字是 Sam"}',
     };
     expect(unwrapGatewayInput(wrapped)).toEqual({
       action: 'add',
       category: 'core_facts',
-      text: '用户的名字是 Alan',
+      text: '用户的名字是 Sam',
     });
   });
 
   test('non-JSON raw text passes through unchanged (validation rejects it later)', () => {
-    const wrapped = { _noargs: '用户名字是 Alan，正在开发 Agent_Luna' };
+    const wrapped = { _noargs: '用户名字是 Sam，正在开发 Agent_Luna' };
     expect(unwrapGatewayInput(wrapped)).toBe(wrapped);
   });
 

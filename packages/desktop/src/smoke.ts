@@ -5,7 +5,7 @@ import { defaultDistDir, startWebHost } from './serve';
 
 // v0.26.0 (Initiative 19): the automated rendering go/no-go — does the WHOLE stack (dist bundle →
 // loopback origin → pixi v7 WebGL → Cubism Core WASM → yumi) render inside Electron's Chromium?
-// Runs a HIDDEN window (never pops on Alan's desktop) with backgroundThrottling OFF (a hidden
+// Runs a HIDDEN window (never pops on the owner's desktop) with backgroundThrottling OFF (a hidden
 // window otherwise freezes rAF — the exact pet failure mode), pointed at a DEAD ws port (8899) so
 // the smoke can never touch the stable server on :8787. Probes the DOM + captures a PNG, prints one
 // JSON line, exits 0/1.

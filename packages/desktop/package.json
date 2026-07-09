@@ -19,7 +19,7 @@
     "electron-builder": "^25.1.8"
   },
   "build": {
-    "appId": "dev.alan.luna",
+    "appId": "app.luna.desktop",
     "productName": "Luna",
     "directories": {
       "output": "release"

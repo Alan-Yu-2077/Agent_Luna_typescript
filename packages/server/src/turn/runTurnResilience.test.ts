@@ -148,14 +148,14 @@ describe('runTurn persistence resilience', () => {
           kind: 'message_stop',
           stopReason: 'tool_use',
           toolUses: [
-            { id: 'p1', name: 'message', input: { text: 'Morning Alan — sun is out.', is_final: true } },
+            { id: 'p1', name: 'message', input: { text: 'Morning Sam — sun is out.', is_final: true } },
           ],
           assistantContent: [
             {
               type: 'tool_use',
               id: 'p1',
               name: 'message',
-              input: { text: 'Morning Alan — sun is out.', is_final: true },
+              input: { text: 'Morning Sam — sun is out.', is_final: true },
             },
           ] as unknown as Anthropic.ContentBlock[],
           usage: { input_tokens: 1, output_tokens: 1 },
@@ -175,7 +175,7 @@ describe('runTurn persistence resilience', () => {
 
     const rows = listL2('r4');
     expect(rows.length).toBe(1);
-    expect(rows[0]!.assistant_text).toBe('Morning Alan — sun is out.');
+    expect(rows[0]!.assistant_text).toBe('Morning Sam — sun is out.');
     expect(rows[0]!.user_text).toBe(''); // NOT the priming directive
     expect(rows[0]!.user_text).not.toContain('System proactive trigger');
   });

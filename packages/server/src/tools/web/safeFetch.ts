@@ -23,7 +23,8 @@ import https from 'node:https';
 
 const MAX_URL_LEN = 2048;
 const MAX_REDIRECTS = 5;
-const USER_AGENT = 'Luna/0.18 (+https://github.com/Alan-Yu-2077/Agent_Luna_typescript)';
+const USER_AGENT =
+  process.env['LUNA_USER_AGENT'] ?? 'Luna/0.18 (+https://github.com/Alan-Yu-2077/Luna-ts)';
 
 export type AssertResult =
   | { ok: true; url: URL; ips: string[] }

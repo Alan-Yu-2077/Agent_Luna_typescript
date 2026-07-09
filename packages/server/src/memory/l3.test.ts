@@ -29,7 +29,7 @@ afterEach(() => {
 
 describe('l3Store', () => {
   test('add persists; forget soft-deletes; asOf time-travel sees the past', async () => {
-    const added = addFact('core_facts', 'Alan lives in Shanghai');
+    const added = addFact('core_facts', 'Sam lives in a coastal city');
     expect(added?.status).toBe('added');
     const beforeForget = Date.now();
     await Bun.sleep(2);
@@ -40,7 +40,7 @@ describe('l3Store', () => {
     expect(listFacts({ category: 'core_facts' }).length).toBe(0);
     const past = listFacts({ category: 'core_facts', asOf: beforeForget });
     expect(past.length).toBe(1);
-    expect(past[0]?.text).toBe('Alan lives in Shanghai');
+    expect(past[0]?.text).toBe('Sam lives in a coastal city');
 
     const row = db.prepare('SELECT deleted_ms FROM l3_facts WHERE id = ?').get(added!.id) as {
       deleted_ms: number | null;
@@ -79,18 +79,18 @@ describe('l3Store', () => {
 describe('renderCoreBlock (L3-only since v0.30.3) + cache stability', () => {
   test('renders capped facts deterministically; unset memory renders empty', () => {
     expect(renderCoreBlock()).toBe('');
-    addFact('core_facts', 'Alan writes TypeScript');
+    addFact('core_facts', 'Sam writes TypeScript');
     const a = renderCoreBlock();
     const b = renderCoreBlock();
     expect(a).toBe(b);
-    expect(a).toContain('Alan writes TypeScript');
+    expect(a).toContain('Sam writes TypeScript');
     expect(a).toContain('remember tool');
     // the self/relationship prose is the soul's job now — never in this block
     expect(a).not.toContain('## About yourself');
   });
 
   test('system prompt is byte-identical across turns without memory change, differs after', async () => {
-    addFact('core_facts', 'Alan likes precise systems');
+    addFact('core_facts', 'Sam likes precise systems');
     const session = getSession('test');
 
     function endRound(text: string): ProviderEvent[] {

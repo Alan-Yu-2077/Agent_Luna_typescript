@@ -44,7 +44,7 @@ export function buildWeatherBlock(s: WeatherSnapshot): string {
 export function weatherNoteFor(snapshot: WeatherSnapshot | null): string | null {
   if (snapshot == null) return null;
   const u = snapshot.units === 'fahrenheit' ? '°F' : '°C';
-  // v0.27.6: de-hardcoded "Alan"; dropped the "never a forecast/status report"
+  // v0.27.6: de-hardcoded the owner name; dropped the "never a forecast/status report"
   // tail — the cached WEATHER_CLAUSE already owns that rule (was duplicated here).
   return (
     ` (It's ${snapshot.condition} out (${Math.round(snapshot.temp)}${u}) where the user is — if you ` +

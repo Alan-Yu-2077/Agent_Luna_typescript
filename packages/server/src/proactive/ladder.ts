@@ -2,7 +2,7 @@ import type { Session } from '../turn/session';
 import type { Cadence, ProactivePhase } from './cadence';
 import { effectiveCadence } from './style';
 
-// v0.24.0 (Initiative 17): the silence-driven escalation ladder — Alan's original
+// v0.24.0 (Initiative 17): the silence-driven escalation ladder — the original
 // Python proactive design (`runtime/proactive.py` evaluate()) restored as the proactive
 // DECISION layer. Pure + clock/rng-injectable. Behind `LUNA_PROACTIVE_LADDER`; when on,
 // `maybeFireProactive` consults this instead of the detector registry (which v0.24.1 deletes).

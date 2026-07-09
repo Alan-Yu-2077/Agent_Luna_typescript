@@ -236,7 +236,7 @@ describe('retrieve (hybrid)', () => {
 
 describe('system prompt cache invariant with recall', () => {
   test('system stays byte-identical across different queries (recall is message-level)', async () => {
-    addFact('core_facts', 'Alan builds Luna');
+    addFact('core_facts', 'Sam builds Luna');
     seedL2('test', [['talked about espresso', 'noted']]);
     const session = getSession('test');
 

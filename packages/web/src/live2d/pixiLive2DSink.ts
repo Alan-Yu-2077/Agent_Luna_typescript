@@ -183,7 +183,7 @@ export async function createPixiLive2DSink(
     driver.setModeOffset(x, 0);
   };
 
-  // v0.25.2 (Alan's design review): the speech-bubble stack anchors beside the model's HEAD, so the
+  // v0.25.2 (the owner's design review): the speech-bubble stack anchors beside the model's HEAD, so the
   // sink publishes the head position (same HEAD_FRAC anchor the gaze uses) as CSS vars on the host —
   // fit/drag/zoom/glide all keep the bubbles tracking her face. Change-guarded to avoid style thrash.
   let lastHeadKey = '';
@@ -191,7 +191,7 @@ export async function createPixiLive2DSink(
     const x = Math.round(Math.max(170, model.x + model.width / 2));
     const y = Math.round(model.y + model.height * HEAD_FRAC);
     // The lateral clearance the bubbles keep from the head CENTER — past the hair, so a bubble
-    // never covers her (Alan: 气泡不能挡住模型). Scales with the model (zoom/viewport).
+    // never covers her (per the owner: 气泡不能挡住模型). Scales with the model (zoom/viewport).
     const gap = Math.round(model.width * 0.26);
     // v0.26.2: the model's host-relative bbox — pet mode's click-through hit-test reads these to
     // keep the cursor interactive over her body and pass-through everywhere else.

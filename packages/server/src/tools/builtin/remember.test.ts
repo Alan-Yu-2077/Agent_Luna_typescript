@@ -39,14 +39,14 @@ afterEach(() => {
 
 describe('remember tool (discriminated actions)', () => {
   test('add stores a fact', async () => {
-    const e = await run({ action: 'add', category: 'core_facts', text: 'Alan codes in TS' });
+    const e = await run({ action: 'add', category: 'core_facts', text: 'Sam codes in TS' });
     expect(e.kind).toBe('ok');
     expect(e.data?.status).toBe('added');
     expect(listFacts({ category: 'core_facts' }).length).toBe(1);
   });
 
   test('forget soft-deletes by id', async () => {
-    const added = await run({ action: 'add', category: 'preferences', text: 'likes cats' });
+    const added = await run({ action: 'add', category: 'preferences', text: 'likes houseplants' });
     const e = await run({ action: 'forget', id: added.data!.id! });
     expect(e.data?.status).toBe('forgotten');
     expect(listFacts({ category: 'preferences' }).length).toBe(0);

@@ -19,7 +19,7 @@ describe('similarityRatio (v0.21.7 core-memory churn gate)', () => {
 
   test('wholly different prose scores low (a genuine shift)', () => {
     const a = 'I feel steadier and more present than I used to be';
-    const b = 'Alan mains Shion and grinds NFA DFA between Overwatch rounds';
+    const b = 'Sam plays a roguelike and studies for an exam between board-game nights';
     expect(similarityRatio(a, b)).toBeLessThan(0.5);
   });
 });

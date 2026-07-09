@@ -30,8 +30,8 @@ migrate(db, join(import.meta.dir, '..', 'src', 'migrations'));
 setMemoryDb(db);
 setTraceStore(new TraceStore(db));
 
-addFact('core_facts', '用户叫 Alan，在做 Agent_Luna 的 TypeScript 重写');
-addFact('preferences', 'Alan 喜欢猫，爱在家煮意式浓缩');
+addFact('core_facts', '用户叫 Sam，在做 Agent_Luna 的 TypeScript 重写');
+addFact('preferences', 'Sam 喜欢绿植，爱在家泡茶');
 addFact('active_threads', '今天在做 Luna 的主动性模块（proactive agency）');
 
 const provider = new AnthropicProvider();

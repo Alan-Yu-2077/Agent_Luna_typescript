@@ -32,7 +32,7 @@ function num(env: string, fallback: number): number {
   return Number.isFinite(v) && v > 0 ? v : fallback;
 }
 
-// Default ON since v0.11.0 (Alan's choice). LUNA_PROACTIVE=0 is the kill switch.
+// Default ON since v0.11.0 (the owner's choice). LUNA_PROACTIVE=0 is the kill switch.
 export function proactiveEnabled(): boolean {
   return Bun.env['LUNA_PROACTIVE'] !== '0';
 }

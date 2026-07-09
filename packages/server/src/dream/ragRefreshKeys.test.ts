@@ -55,8 +55,8 @@ describe('rag_refresh embed-key fix (v0.32.1)', () => {
   });
 
   test('pre-warm writes under embedCacheKey (readable by recall), incl. skill texts; second cycle is warm', async () => {
-    addFact('preferences', 'likes espresso in the morning');
-    saveSkill({ name: 'brew-notes', description: 'espresso method', body: 'steps' }, 1000);
+    addFact('preferences', 'likes tea in the morning');
+    saveSkill({ name: 'brew-notes', description: 'tea method', body: 'steps' }, 1000);
 
     const embedClient = async (texts: string[]) => {
       embedded.push([...texts]);
@@ -72,7 +72,7 @@ describe('rag_refresh embed-key fix (v0.32.1)', () => {
 
     const has = (hash: string) =>
       db.prepare('SELECT 1 FROM embeddings_cache WHERE hash = ?').get(hash) !== null;
-    const factText = 'likes espresso in the morning';
+    const factText = 'likes tea in the morning';
     const skillText = skillEmbedText(getSkill('brew-notes')!);
     // the fix: rows live under the model-namespaced key retrieve() reads...
     expect(has(embedCacheKey(factText))).toBe(true);

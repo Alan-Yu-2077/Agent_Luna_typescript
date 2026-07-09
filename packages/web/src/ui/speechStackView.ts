@@ -21,7 +21,7 @@ const realScheduler: StackScheduler = (fn, ms) => {
 };
 
 export type SpeechStackOptions = {
-  ttlMs?: number; // a bubble's life before it fades (default 10s — Alan's "~10s")
+  ttlMs?: number; // a bubble's life before it fades (default 10s — the owner's "~10s")
   fadeMs?: number; // the fade-out transition before DOM removal (must match the CSS)
   maxVisible?: number; // overflow cap — the oldest fast-fades past this
   schedule?: StackScheduler;

@@ -73,19 +73,19 @@ describe('recall tool schema', () => {
 
 describe('recall tool execute', () => {
   test('returns ranked hits from the hybrid store', async () => {
-    addFact('preferences', '用户喜欢在家煮意式浓缩咖啡');
-    addFact('core_facts', '用户的名字是 Alan');
-    const e = await run({ query: '咖啡' });
+    addFact('preferences', '用户喜欢在家泡茶');
+    addFact('core_facts', '用户的名字是 Sam');
+    const e = await run({ query: '泡茶' });
     expect(e.kind).toBe('ok');
     expect(e.data!.hits.length).toBeGreaterThanOrEqual(1);
-    expect(e.data!.hits.some((h) => h.text.includes('咖啡'))).toBe(true);
+    expect(e.data!.hits.some((h) => h.text.includes('泡茶'))).toBe(true);
   });
 
   test('respects limit', async () => {
-    for (let i = 0; i < 6; i++) addFact('key_moments', `关于猫的第${i}个回忆，猫咪很可爱`);
+    for (let i = 0; i < 6; i++) addFact('key_moments', `关于绿植的第${i}个回忆，绿植很可爱`);
     // query a 2-char term that lexically matches (bigram) so the assertion is
     // about the limit, independent of GA recency/importance weighting.
-    const e = await run({ query: '猫咪', limit: 2 });
+    const e = await run({ query: '绿植', limit: 2 });
     // "respects limit" = never returns MORE than the limit (the slice clip). The
     // count can only be < limit if candidates drop below the score floor, never
     // more — so assert the limit semantic itself, not an exact survivor count.
@@ -93,17 +93,17 @@ describe('recall tool execute', () => {
   });
 
   test('scope=facts returns only l3, scope=timeline excludes l3 (l2 + diary)', async () => {
-    addFact('preferences', '用户喜欢猫');
+    addFact('preferences', '用户喜欢绿植');
     appendL2({
       sessionId: 'test',
       turnId: 't1',
-      userText: '我家的猫叫 Mochi',
+      userText: '我家的绿植叫 Mochi',
       assistantText: '记住了',
       rawContent: [],
     });
-    const facts = await run({ query: '猫', scope: 'facts' });
+    const facts = await run({ query: '绿植', scope: 'facts' });
     expect(facts.data!.hits.every((h) => h.source === 'l3')).toBe(true);
-    const timeline = await run({ query: '猫', scope: 'timeline' });
+    const timeline = await run({ query: '绿植', scope: 'timeline' });
     expect(timeline.data!.hits.every((h) => h.source !== 'l3')).toBe(true);
   });
 
@@ -113,28 +113,28 @@ describe('recall tool execute', () => {
     db.prepare('INSERT INTO diaries (kind, period_key, text, generated_ms) VALUES (?, ?, ?, ?)').run(
       'day',
       '2026-06-15',
-      '今天聊了很多关于猫的事，猫咪很可爱',
+      '今天聊了很多关于绿植的事，绿植很可爱',
       Date.now(),
     );
-    const timeline = await run({ query: '猫', scope: 'timeline' });
+    const timeline = await run({ query: '绿植', scope: 'timeline' });
     expect(timeline.data!.hits.some((h) => h.source === 'diary')).toBe(true);
   });
 
   // v0.20.5 — scope is pushed into retrieve(), so a burst of recent off-scope l2
   // rows can no longer starve the wanted source out of the top-k.
   test('scope=facts still returns facts under heavy recent-l2 skew (no starvation)', async () => {
-    addFact('preferences', '用户很喜欢猫，养了一只叫 Mochi 的猫');
-    addFact('key_moments', '第一次见到猫是在咖啡馆，那只猫很亲人');
+    addFact('preferences', '用户很喜欢绿植，养了一株叫 Mochi 的绿植');
+    addFact('key_moments', '第一次见到绿植是在咖啡馆，那株绿植很好看');
     for (let i = 0; i < 12; i++) {
       appendL2({
         sessionId: 'test',
         turnId: `t${i}`,
-        userText: `刚才又看到一只猫 ${i}`,
-        assistantText: '猫真好',
+        userText: `刚才又看到一株绿植 ${i}`,
+        assistantText: '绿植真好',
         rawContent: [],
       });
     }
-    const facts = await run({ query: '猫', scope: 'facts', limit: 5 });
+    const facts = await run({ query: '绿植', scope: 'facts', limit: 5 });
     expect(facts.data!.hits.length).toBeGreaterThanOrEqual(1);
     expect(facts.data!.hits.every((h) => h.source === 'l3')).toBe(true);
   });

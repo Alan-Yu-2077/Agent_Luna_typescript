@@ -58,7 +58,7 @@ describe('seedSoulOnBoot', () => {
 
 describe('cleanEvolvingBond — one-time ledger purge (v0.30.2)', () => {
   const CONTAMINATED =
-    'He catches me honest, gently. Company, not a tutor. Alan ships what I name — hands, door, clock, weather, skill shelf. He mains Shion now. Weather feed upgraded. He won’t hand me the key, rightly.';
+    'He catches me honest, gently. Company, not a tutor. Sam ships what I name — hands, door, clock, weather, skill shelf. He mains a roguelike now. Weather feed upgraded. He won’t hand me the key, rightly.';
 
   test('stripLedger drops ledger sentences, keeps the relational ones', () => {
     const out = stripLedger(CONTAMINATED);
@@ -66,7 +66,7 @@ describe('cleanEvolvingBond — one-time ledger purge (v0.30.2)', () => {
     expect(out).toContain('Company, not a tutor');
     expect(out).toContain('hand me the key');
     expect(out).not.toContain('ships what I name');
-    expect(out).not.toContain('mains Shion');
+    expect(out).not.toContain('mains a roguelike');
     expect(out).not.toContain('Weather feed');
   });
 
@@ -103,9 +103,9 @@ describe('cleanEvolvingBond — one-time ledger purge (v0.30.2)', () => {
   test('never blanks the bond: an all-ledger run-on is left for the dream cleanup-trigger', () => {
     seedFixedCore('# core');
     // No sentence breaks + all ledger → stripLedger would empty it; the safety rail leaves it.
-    updateEvolving({ bond: 'ships what I name and mains Shion' }, 'seed');
+    updateEvolving({ bond: 'ships what I name and plays a roguelike' }, 'seed');
     cleanEvolvingBond();
-    expect(getSoul().evolving_bond).toBe('ships what I name and mains Shion');
+    expect(getSoul().evolving_bond).toBe('ships what I name and plays a roguelike');
   });
 });
 

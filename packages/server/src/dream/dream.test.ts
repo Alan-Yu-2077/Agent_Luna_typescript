@@ -174,14 +174,14 @@ describe('dream cycle', () => {
   });
 
   test('3. reconciliation: planted contradiction → exactly one active fact survives', async () => {
-    const cat = addFact('preferences', 'User loves cats and wants one');
+    const cat = addFact('preferences', 'User loves houseplants and wants one');
     seedDialogue('default', [
-      ['actually I got a dog last week, I am off cats now', 'a dog! tell me everything'],
+      ['actually I got a dog last week, I am off houseplants now', 'a dog! tell me everything'],
     ]);
     const { llm } = scriptedLlm({
       audit: JSON.stringify({
         remove_ids: [cat!.id],
-        add: [{ category: 'preferences', text: 'User has a dog now (off cats)' }],
+        add: [{ category: 'preferences', text: 'User has a dog now (off houseplants)' }],
       }),
     });
 
@@ -197,7 +197,7 @@ describe('dream cycle', () => {
   });
 
   test('4. diaries: yesterday gets a day row; 7 day-diaries roll into a week', async () => {
-    seedDialogue('default', [['we talked about espresso', 'lovely']], 1);
+    seedDialogue('default', [['we talked about tea', 'lovely']], 1);
     const { llm } = scriptedLlm();
     await runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
 
