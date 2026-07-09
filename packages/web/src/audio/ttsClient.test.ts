@@ -14,9 +14,9 @@ describe('fetchSpeech', () => {
       return new Response(new ArrayBuffer(8), { status: 200 });
     }) as unknown as typeof fetch; // test stub: minimal fetch shape (no preconnect)
 
-    const buf = await fetchSpeech('你好', { apiBase: '/api/gpt-sovits' });
+    const buf = await fetchSpeech('你好'); // default base is /api/tts
     expect(buf.byteLength).toBe(8);
-    expect(String(captured?.url)).toContain('/api/gpt-sovits/speak');
+    expect(String(captured?.url)).toContain('/api/tts/speak');
     expect(JSON.parse(String(captured?.init?.body)).text).toBe('你好');
   });
 

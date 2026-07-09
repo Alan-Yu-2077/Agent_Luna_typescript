@@ -1,6 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, session } from 'electron';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { basename, join } from 'node:path';
 import { defaultDistDir, startWebHost, WEB_PORT } from './serve';
 import { ENV_TEMPLATE, parseEnvFile } from './envfile';
 import { readShellSettings, writeShellSettings } from './shellSettings';
@@ -9,7 +9,6 @@ import { formatLatLon, resolveDesktopLocation } from './location';
 import { createPetDrag, type PetDrag } from './petDrag';
 import { petWindowOptions } from './petWindow';
 import { createSupervisor, waitForPort, type Supervisor } from './supervisor';
-import { resolveTtsConfig, ttsProxyScript, type TtsConfig } from './tts';
 import { resolveDevLauncher, resolveSidecarDb, shouldAttach } from './backend';
 
 // v0.26.1 (Initiative 19): the single-machine app. The shell OWNS the whole runtime: it reads the
@@ -42,6 +41,7 @@ type Paths = {
   migrationsDir: string;
   personaFile: string;
   webDist: string;
+  userModelsDir: string;
 };
 
 function resolvePaths(): Paths {
@@ -64,6 +64,7 @@ function resolvePaths(): Paths {
       ? join(res, 'persona', 'default.md')
       : join(repo, 'server', 'persona', 'default.md'),
     webDist: app.isPackaged ? join(res, 'web') : defaultDistDir(__dirname),
+    userModelsDir: join(userData, 'models'), // bring-your-own Live2D models the picker installs here
   };
 }
 
@@ -72,8 +73,18 @@ function resolvePaths(): Paths {
 // the keys instead. The app still boots either way; no secret ever ships in the bundle.
 function ensureUserConfig(p: Paths): Record<string, string> {
   mkdirSync(p.userData, { recursive: true });
+  mkdirSync(p.userModelsDir, { recursive: true }); // so the static host can serve an installed model
   if (!existsSync(p.envFile)) writeFileSync(p.envFile, ENV_TEMPLATE);
   return parseEnvFile(readFileSync(p.envFile, 'utf8'));
+}
+
+// The renderer's boot config, injected by the preload as window.lunaConfig. Read fresh from luna.env
+// (over process.env) so a just-installed model / changed voice is picked up on the next window load.
+function currentLunaConfig(): { modelUrl?: string; ttsBackend?: string; ttsUrl?: string } {
+  const env: Record<string, string | undefined> = paths
+    ? { ...process.env, ...parseEnvFile(readFileSync(paths.envFile, 'utf8')) }
+    : process.env;
+  return { modelUrl: env['LUNA_MODEL_URL'], ttsBackend: env['LUNA_TTS_BACKEND'], ttsUrl: env['LUNA_TTS_URL'] };
 }
 
 function sidecarEnv(p: Paths, userEnv: Record<string, string>): Record<string, string> {
@@ -100,35 +111,11 @@ function sidecarEnv(p: Paths, userEnv: Record<string, string>): Record<string, s
 
 let supervisor: Supervisor | null = null;
 let paths: Paths | null = null;
-// v0.28.7: the local GPT-SoVITS proxy, spawned as a second supervised sidecar when the module is
-// present. Non-critical — a missing proxy just means muted, so we never block the app on it.
-let ttsSupervisor: Supervisor | null = null;
-let ttsCfg: TtsConfig | null = null;
-let ttsProxyPath = '';
 
 // Bun inlines __dirname as the SOURCE dir (packages/desktop/src) at compile time (see the preload
-// note below), so the repo root — where scripts/ lives — is three up. In a packaged app these paths
-// don't exist; resolveTtsConfig's availability probe degrades to muted.
+// note below), so the repo root — where scripts/ lives — is three up (used by the dev launcher).
 const REPO_ROOT = join(__dirname, '..', '..', '..');
 
-// Spawn the TTS proxy via Electron-as-node (ELECTRON_RUN_AS_NODE) so we don't depend on `bun` being
-// on PATH in a packaged app — tts-proxy.cjs is plain CJS. Idempotent + guarded; a no-op under SMOKE
-// (the smoke must exit fast and never load a large voice model) or when the proxy/module isn't present.
-function maybeStartTts(): void {
-  if (SMOKE || ttsSupervisor || !ttsCfg?.available || !existsSync(ttsProxyPath)) return;
-  ttsSupervisor = createSupervisor({
-    command: process.execPath,
-    args: [ttsProxyPath],
-    env: {
-      ...(process.env as Record<string, string>),
-      ELECTRON_RUN_AS_NODE: '1',
-      LUNA_TTS_DIR: ttsCfg.dir,
-      LUNA_TTS_PORT: String(ttsCfg.port),
-    },
-    onEvent: (e) => console.log(`[luna-desktop] tts: ${e}`),
-  });
-  ttsSupervisor.start();
-}
 // v0.28.3: serialize onboarding submits — ipcMain.handle does NOT serialize concurrent awaits, so a
 // double-invoke (DevTools, or a fast double-click that beats setBusy) could double-restart the
 // sidecar + build two app windows. The renderer disables its buttons; this is the belt.
@@ -273,7 +260,6 @@ ipcMain.handle('luna:onboarding-submit', async (_event, raw: OnboardingFields): 
     writeFileSync(paths.envFile, merged);
     // Apply the keys live: re-spawn the sidecar against the new env (it may never have started).
     supervisor?.restart(sidecarEnv(paths, parseEnvFile(merged)));
-    maybeStartTts();
     const up = await waitForPort(SERVER_PORT);
     if (!up) return { ok: false, error: 'Saved, but the server did not start. Check the logs.' };
     // Swap the setup window for the real app window (createWindow reads the resolved petMode).
@@ -283,6 +269,32 @@ ipcMain.handle('luna:onboarding-submit', async (_event, raw: OnboardingFields): 
   } finally {
     onboardingInFlight = false;
   }
+});
+
+// Synchronous boot-config read for the preload (window.lunaConfig). sendSync is a one-time read at
+// window load, so blocking is fine.
+ipcMain.on('luna:get-config', (event) => {
+  event.returnValue = currentLunaConfig();
+});
+
+// "Choose model folder…": pick a Live2D model dir, verify it has a *.model3.json, copy it into
+// userData/models, persist LUNA_MODEL_URL, and reload so the preload re-injects window.lunaConfig.
+ipcMain.handle('luna:choose-model', async (): Promise<{ ok: boolean; modelUrl?: string; error?: string }> => {
+  if (!paths) return { ok: false, error: 'Not ready — try again in a moment.' };
+  const picked = dialog.showOpenDialogSync({
+    title: 'Choose a Live2D model folder',
+    properties: ['openDirectory'],
+  });
+  const src = picked?.[0];
+  if (!src) return { ok: false, error: 'cancelled' };
+  const manifest = readdirSync(src).find((f) => f.endsWith('.model3.json'));
+  if (!manifest) return { ok: false, error: 'No .model3.json found in that folder.' };
+  const name = basename(src);
+  cpSync(src, join(paths.userModelsDir, name), { recursive: true });
+  const modelUrl = `/models/${name}/${manifest}`;
+  writeFileSync(paths.envFile, mergeEnvFile(readFileSync(paths.envFile, 'utf8'), { LUNA_MODEL_URL: modelUrl }));
+  for (const w of BrowserWindow.getAllWindows()) w.reload(); // re-inject lunaConfig → the model renders
+  return { ok: true, modelUrl };
 });
 
 async function smokeProbe(win: BrowserWindow): Promise<void> {
@@ -348,7 +360,6 @@ async function smokeProbe(win: BrowserWindow): Promise<void> {
   const ok = stageOk && p.wsStatus === 'open' && petOk && bridgeOk;
   console.log(JSON.stringify({ ok, rendered, ...p }));
   supervisor?.stop();
-  ttsSupervisor?.stop();
   app.exit(ok ? 0 : 1);
 }
 
@@ -387,9 +398,10 @@ void app.whenReady().then(async () => {
   if (userEnv['LUNA_PET_MODE'] === '1') petMode = true;
   const shell = readShellSettings(p.userData);
   if (typeof shell.petMode === 'boolean') petMode = shell.petMode;
-  ttsCfg = resolveTtsConfig(process.env, REPO_ROOT);
-  ttsProxyPath = ttsProxyScript(REPO_ROOT);
-  startWebHost(p.webDist, WEB_PORT, ttsCfg.available ? ttsCfg.upstream : undefined);
+  // Voice is bring-your-own: the static host forwards /api/tts/* to a GPT-SoVITS api_v2 backend read
+  // from env (LUNA_TTS_URL). Unset → the forward 502s and the app runs voiceless / with browser voice.
+  // It also serves any picker-installed model from userData/models (undefined ttsEnv → env default).
+  startWebHost(p.webDist, WEB_PORT, undefined, p.userModelsDir);
   supervisor = createSupervisor({
     command: p.serverBin,
     env: sidecarEnv(p, userEnv),
@@ -397,10 +409,10 @@ void app.whenReady().then(async () => {
   });
 
   // v0.28.8: is a backend already listening on the canonical port (e.g. `bun run dev`)? If so, ATTACH
-  // — our window becomes another client of that one Luna. We spawn no sidecar and no TTS proxy
-  // (dev-all owns it), and skip onboarding (the running server already holds the keys); the static
-  // host above still serves our own frontend and forwards TTS to the existing proxy. The renderer
-  // connects to `?ws=${SERVER_PORT}` either way, so both paths land on the same backend + DB.
+  // — our window becomes another client of that one Luna. We spawn no sidecar, and skip onboarding (the
+  // running server already holds the keys); the static host above still serves our own frontend and
+  // forwards /api/tts to the configured api_v2 backend. The renderer connects to `?ws=${SERVER_PORT}`
+  // either way, so both paths land on the same backend + DB.
   const attached = shouldAttach({ portListening: await waitForPort(SERVER_PORT, 800), smoke: SMOKE });
   if (attached) {
     console.log(`[luna-desktop] attaching to existing backend on 127.0.0.1:${SERVER_PORT}`);
@@ -412,10 +424,10 @@ void app.whenReady().then(async () => {
   }
 
   // v0.28.9: nothing is up — start the backend ourselves. On a source checkout with bun reachable,
-  // launch the WHOLE dev stack (`bun scripts/dev-all.ts` = server 8787 + web 5173 + tts 8788) so one
-  // click brings everything up and the browser shares this same Luna. dev-all owns TTS and reads the
-  // repo `.env` for keys, so we skip maybeStartTts + onboarding here; LUNA_PROACTIVE follows luna.env
-  // (dev-all defaults it off). SMOKE + no-bun/no-repo fall through to the self-contained sidecar.
+  // launch the WHOLE dev stack (`bun scripts/dev-all.ts` = server 8787 + web 5173) so one click brings
+  // everything up and the browser shares this same Luna. dev-all reads the repo `.env` for keys, so we
+  // skip onboarding here; LUNA_PROACTIVE follows luna.env (dev-all defaults it off). SMOKE + no-bun/
+  // no-repo fall through to the self-contained sidecar.
   const dev = SMOKE ? null : resolveDevLauncher({ repoRoot: REPO_ROOT, env: process.env });
   if (dev) {
     console.log(`[luna-desktop] launching full dev stack: ${dev.bun} ${dev.script}`);
@@ -462,7 +474,6 @@ void app.whenReady().then(async () => {
   }
 
   supervisor.start();
-  maybeStartTts();
   const up = await waitForPort(SERVER_PORT);
   if (!up && !SMOKE) {
     dialog.showMessageBoxSync({
@@ -478,14 +489,11 @@ void app.whenReady().then(async () => {
   });
 });
 
-// Kill the sidecars on every exit path — an orphan luna-server would hold the port + the DB lock,
-// an orphan TTS proxy would hold its port + the GPT-SoVITS backend.
+// Kill the sidecar on every exit path — an orphan luna-server would hold the port + the DB lock.
 app.on('before-quit', () => {
   supervisor?.stop();
-  ttsSupervisor?.stop();
 });
 app.on('window-all-closed', () => {
   supervisor?.stop();
-  ttsSupervisor?.stop();
   app.quit();
 });

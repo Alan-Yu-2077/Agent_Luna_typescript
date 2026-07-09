@@ -26,9 +26,11 @@ bun run dev:web         # the web front end
 bun test                # the test suite
 ```
 
-Open the web front end and you have a running Luna. A fresh install ships **no avatar model and no voice
-weights** — you bring your own; the UI shows a friendly empty state until a Live2D model is installed,
-and voice is optional. [`.env.example`](.env.example) documents the full configuration surface.
+Open the web front end and you have a running Luna — chat works, and she speaks with the browser's
+built-in voice. A fresh install ships **no avatar model and no voice weights** — you bring your own; the
+UI shows a friendly empty state until a Live2D model is installed. [`docs/SETUP.md`](docs/SETUP.md)
+walks through installing a model and (optionally) a higher-quality voice; [`.env.example`](.env.example)
+documents the full configuration surface.
 
 The server binds **loopback (`127.0.0.1`) by default**; set `LUNA_BIND_HOST=0.0.0.0` to expose it on the
 LAN (only on a trusted network).
@@ -43,6 +45,8 @@ LAN (only on a trusted network).
 ├── LICENSE                    ← MIT (one carve-out; see below)
 ├── THIRD_PARTY_LICENSES       ← bundled third-party components
 ├── .env.example               ← the full, documented configuration surface
+├── docs/SETUP.md              ← bring-your-own model & voice
+├── services/tts/              ← optional self-hosted GPT-SoVITS voice (docker-compose)
 └── packages/
     ├── protocol/              ← shared Zod schemas + types (the wire contract)
     ├── server/                ← Bun + WebSocket runtime (brain, memory, tools, proactive)
@@ -59,6 +63,7 @@ covered by the MIT grant — it is governed by Live2D's own license. See
 
 ## Further reading
 
+- [`docs/SETUP.md`](docs/SETUP.md) — bring-your-own model and voice, step by step.
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — the structural map: packages, the wire contract, memory, tools,
   proactive rails, perception, and the front end.
 - [`ROADMAP.md`](ROADMAP.md) — where things are heading.

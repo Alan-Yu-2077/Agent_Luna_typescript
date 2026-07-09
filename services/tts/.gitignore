@@ -1,0 +1,4 @@
+# Your bring-your-own voice — weights + reference audio are NEVER committed. Mounted into the
+# GPT-SoVITS container by docker-compose.yml; supply your own per docs/SETUP.md.
+voice/
+pretrained_models/

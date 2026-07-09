@@ -1,13 +1,13 @@
 import type { VoiceParams } from '@luna/protocol';
 
-// Client for the (reused, as-is) GPT-SoVITS proxy — `POST <base>/speak` → WAV.
-// The proxy + the Python sidecar are NOT rebuilt here (REWRITE_CONTEXT locked
-// decision); the dev server forwards /api/gpt-sovits/* to the configured upstream.
+// Client for the TTS forward — `POST <base>/speak {text}` → WAV. The server-side forward
+// (dev-server.ts / serve.ts) translates this into a direct GPT-SoVITS api_v2 `/tts` call using the
+// BYO voice config in env; the browser only supplies the text.
 
 export type FetchSpeechOpts = { voice?: VoiceParams; apiBase?: string; signal?: AbortSignal };
 
 export async function fetchSpeech(text: string, opts: FetchSpeechOpts = {}): Promise<ArrayBuffer> {
-  const base = opts.apiBase ?? '/api/gpt-sovits';
+  const base = opts.apiBase ?? '/api/tts';
   const res = await fetch(`${base}/speak`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },

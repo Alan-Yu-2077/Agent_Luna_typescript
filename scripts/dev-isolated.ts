@@ -2,8 +2,8 @@
 // stack so development never disturbs the stable instance you test on:
 //   - server (8888, --watch so edits hot-reload) with its OWN DB (luna-dev.sqlite)
 //   - web (5273) pointed at the dev server via ?ws=8888
-//   - TTS is SHARED with the stable instance (8788) — synthesis is stateless
-// The stable `bun run dev` (8787/5173/8788, luna.sqlite) is untouched.
+//   - voice is bring-your-own: LUNA_TTS_URL (if set) is inherited by the web /api/tts forward
+// The stable `bun run dev` (8787/5173, luna.sqlite) is untouched.
 //
 // Open: http://localhost:5273/?ws=8888
 import { resolve } from 'node:path';
@@ -13,7 +13,7 @@ const ROOT = resolve(import.meta.dir, '..');
 const DEV_DB = resolve(ROOT, 'luna-dev.sqlite');
 const SERVER_PORT = Bun.env['LUNA_PORT'] ?? '8888';
 const WEB_PORT = Bun.env['PORT'] ?? '5273';
-const TTS_PROXY = Bun.env['LUNA_TTS_PROXY'] ?? 'http://localhost:8788'; // share the stable TTS
+const TTS_URL = Bun.env['LUNA_TTS_URL']; // BYO GPT-SoVITS api_v2, if any (inherited by the web forward)
 
 type Service = { name: string; color: string; cmd: string[]; env: Record<string, string> };
 const services: Service[] = [
@@ -27,7 +27,7 @@ const services: Service[] = [
     name: 'web',
     color: '\x1b[35m',
     cmd: [BUN, 'packages/web/dev-server.ts'],
-    env: { PORT: WEB_PORT, LUNA_TTS_PROXY: TTS_PROXY },
+    env: { PORT: WEB_PORT }, // LUNA_TTS_* flow through from process.env (the spawn merge below)
   },
 ];
 
@@ -48,7 +48,7 @@ console.log(`  ${bold('Luna DEV (isolated)')} — separate from your stable inst
 console.log(`     ${bold('\x1b[35mhttp://localhost:' + WEB_PORT + '/?ws=' + SERVER_PORT + '\x1b[0m')}   ${dim('← open this for dev')}`);
 console.log(dim(`     server   ws://localhost:${SERVER_PORT}   (--watch, DB: luna-dev.sqlite)`));
 console.log(dim(`     web      http://localhost:${WEB_PORT}`));
-console.log(dim(`     tts      ${TTS_PROXY}   (shared with stable)`));
+console.log(dim(`     voice    ${TTS_URL ?? '(browser, or set LUNA_TTS_URL)'}`));
 console.log(dim(`     stable instance (8787/5173, luna.sqlite) is untouched.`));
 console.log('');
 

@@ -6,10 +6,10 @@ import { createGlide } from './glide';
 import { petFraming } from './petFraming';
 import { DEFAULT_IDLE_PROFILE, IDLE_PROFILE_IDS, type IdleProfileId } from './faceData';
 
-// The real Live2DSink: loads yumi via pixi-live2d-display, drives her through a
-// FaceVm on the pixi ticker, and makes her draggable with a persisted offset.
-// Returns null when WebGL is unavailable or loading fails, so the caller keeps
-// the static placeholder and the rest of the app works.
+// The real Live2DSink: loads the configured Live2D model via pixi-live2d-display, drives it through a
+// FaceVm on the pixi ticker, and makes it draggable with a persisted offset. Returns null when no model
+// URL is configured, WebGL is unavailable, or loading fails, so the caller keeps the empty-state
+// placeholder and the rest of the app works.
 
 const POS_KEY = 'luna:live2d:pos';
 const ZOOM_KEY = 'luna:live2d:zoom';
@@ -87,7 +87,8 @@ export async function createPixiLive2DSink(
   host: HTMLElement,
   opts: { pet?: boolean; modelUrl?: string } = {},
 ): Promise<Live2DSink | null> {
-  const modelUrl = opts.modelUrl ?? '/models/yumi/yumi.model3.json';
+  const modelUrl = opts.modelUrl;
+  if (!modelUrl) return null; // no avatar installed — the caller shows the empty state
   // v0.28.1: pet mode fixes the model as a half-body portrait — no drag, no scroll-zoom (v0.28.2
   // hands move/resize to the WINDOW instead). Windowed mode keeps full-body + drag + zoom.
   const pet = opts.pet === true;

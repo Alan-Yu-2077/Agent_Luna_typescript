@@ -14,7 +14,11 @@ import { mountSetupView } from './ui/setupView';
 import { startTimestampRefresh } from './ui/time';
 import { moodOf } from './ui/mood';
 import { createPixiLive2DSink } from './live2d/pixiLive2DSink';
+import { resolveModelUrl } from './live2d/resolveModelUrl';
+import { webglAvailable } from './live2d/cubismRuntime';
 import { WebAudioSink } from './audio/webAudioSink';
+import { WebSpeechSink } from './audio/webSpeechSink';
+import { resolveTtsBackend } from './audio/ttsBackend';
 import { createBootGate, warmUpTts } from './ui/bootGate';
 
 // Browser entry — builds the cute UI shell + the live Live2D avatar + voice, and
@@ -50,17 +54,21 @@ async function boot(): Promise<void> {
   const refs = buildLayout(root);
   const windowView = new CuteBubbleView(refs.chatLog, refs.scrollPill);
 
-  // Boot gate: when voice is on, block the UI until the voice backend has warmed
-  // its model. Skippable, and degrades fast (no block) if no sidecar is up.
-  // The rest of boot (Live2D, WS) proceeds behind the overlay.
-  if (localStorage.getItem('luna:tts') !== '0') {
+  // Voice backend: 'browser' (zero-setup Web Speech — the default a fresh install speaks with) |
+  // 'http' (self-hosted GPT-SoVITS via the /api/tts forward) | 'none'. Only the http backend loads a
+  // model, so only it gets the warm-up boot gate; the browser voice needs no warm-up.
+  const ttsBackend = resolveTtsBackend();
+
+  // Boot gate: for the http voice backend, block the UI until it has warmed its model. Skippable, and
+  // degrades fast (no block) if no sidecar is up. The rest of boot (Live2D, WS) proceeds behind it.
+  if (ttsBackend === 'http') {
     const gate = createBootGate(root);
     let skipped = false;
     gate.onSkip(() => {
       skipped = true;
       gate.done();
     });
-    void warmUpTts('/api/gpt-sovits', (s) => {
+    void warmUpTts('/api/tts', (s) => {
       if (!skipped) gate.setStatus(s);
     }).then((res) => {
       if (skipped) return;
@@ -80,13 +88,24 @@ async function boot(): Promise<void> {
   const isPet = new URLSearchParams(location.search).has('pet');
 
   let live2d: Live2DSink = consoleLive2DSink;
+  // No model ships by default (bring-your-own). Resolve an installed one; when there's none, WebGL is
+  // off, or a configured model fails to load, keep the empty-state placeholder — labelled by which.
+  let modelState: 'ok' | 'none' | 'webgl-off' | 'load-failed' = 'none';
   if (localStorage.getItem('luna:live2d') !== '0') {
-    const sink = await createPixiLive2DSink(refs.modelStage, { pet: isPet });
-    if (sink) {
-      live2d = sink;
-      refs.modelStage.querySelector('.model-placeholder')?.remove();
+    const modelUrl = resolveModelUrl();
+    if (!modelUrl) modelState = 'none';
+    else if (!webglAvailable()) modelState = 'webgl-off';
+    else {
+      const sink = await createPixiLive2DSink(refs.modelStage, { pet: isPet, modelUrl });
+      if (sink) {
+        live2d = sink;
+        modelState = 'ok';
+        refs.modelStage.querySelector('.model-placeholder')?.remove();
+      } else modelState = 'load-failed';
     }
   }
+  refs.modelStage.dataset['modelState'] = modelState;
+  if (modelState !== 'ok') applyEmptyState(refs.modelStage, modelState);
 
   // v0.25.0 (Initiative 18): the beside-model speech stack + a router that mirrors Luna's replies to
   // it in collapsed companion mode. v0.25.1: `collapsed` now reads the real collapse state (persisted
@@ -96,8 +115,10 @@ async function boot(): Promise<void> {
   const view = new RouterBubbleView(windowView, speechStack);
 
   let audio: AudioSink = noopAudioSink;
-  if (localStorage.getItem('luna:tts') !== '0') {
+  if (ttsBackend === 'http') {
     audio = new WebAudioSink({ onMouth: (frame) => live2d.setMouth(frame) });
+  } else if (ttsBackend === 'browser') {
+    audio = new WebSpeechSink({ onMouth: (frame) => live2d.setMouth(frame) });
   }
   // Speech-gate the stack: when Luna actually begins speaking a reply, restart the newest bubble's
   // life so its ~10s aligns with the utterance (playback is serialized, so emit ≠ speak time).
@@ -330,6 +351,36 @@ async function boot(): Promise<void> {
   }
 
   startTimestampRefresh(refs.chatLog);
+}
+
+// The empty-state placeholder copy, keyed by why no avatar rendered. `none` is the default
+// bring-your-own state; the other two explain a real fault. Points at where to drop a model + SETUP.md.
+function applyEmptyState(stage: HTMLElement, state: 'none' | 'webgl-off' | 'load-failed'): void {
+  const ph = stage.querySelector('.model-placeholder');
+  if (!ph) return;
+  const copy: Record<typeof state, [string, string]> = {
+    none: ['No avatar installed', 'Drop a Live2D model in public/models/ — see docs/SETUP.md'],
+    'webgl-off': ['WebGL unavailable', "This browser can't render the avatar"],
+    'load-failed': ['Model failed to load', 'Check the model files in public/models/'],
+  };
+  const [labelText, subText] = copy[state];
+  const label = ph.querySelector('.label');
+  const sub = ph.querySelector('.sub');
+  if (label) label.textContent = labelText;
+  if (sub) sub.textContent = subText;
+  // Desktop only: a native folder picker to install a model (a plain browser has no bridge → drop a
+  // folder in public/models/ + set luna:model-url per docs/SETUP.md instead).
+  const chooseModel = (
+    globalThis as { lunaPet?: { chooseModel?: () => Promise<{ ok: boolean; error?: string }> } }
+  ).lunaPet?.chooseModel;
+  if (chooseModel && state === 'none' && !ph.querySelector('.choose-model-btn')) {
+    const btn = ph.ownerDocument.createElement('button');
+    btn.className = 'choose-model-btn';
+    btn.type = 'button';
+    btn.textContent = 'Choose model folder…';
+    btn.addEventListener('click', () => void chooseModel());
+    ph.appendChild(btn);
+  }
 }
 
 // Dev-only (?dev) floating panel: trigger every preset emotion + the coarse

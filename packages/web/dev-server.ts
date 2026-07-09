@@ -1,14 +1,16 @@
 import { join } from 'node:path';
 import index from './index.html';
+import { planTtsForward, readTtsEnv } from './src/tts/apiV2';
 
 // Dev server for the web app: Bun bundles the HTML entry (+ its TS/pixi), and
-// this fetch fallback serves the vendored Cubism core + yumi model assets
+// this fetch fallback serves the vendored Cubism core + any installed model assets
 // statically from public/ (pixi-live2d-display fetches them at runtime by URL).
 // `bun <html>` alone cannot serve those runtime-fetched files.
 const PUBLIC = join(import.meta.dir, 'public');
 const port = Number(Bun.env['PORT'] ?? 5173);
-// Origin serving the (reused, as-is) GPT-SoVITS proxy. Unset → TTS degrades to silence.
-const TTS_UPSTREAM = Bun.env['LUNA_TTS_PROXY'];
+// Voice is bring-your-own: /api/tts/* translates to a GPT-SoVITS api_v2 backend at LUNA_TTS_URL.
+// Unset → the forward answers 502 and the app degrades to silence (or the browser voice).
+const TTS_ENV = readTtsEnv(Bun.env as unknown as Record<string, string | undefined>);
 
 Bun.serve({
   port,
@@ -18,17 +20,28 @@ Bun.serve({
   idleTimeout: 255,
   routes: { '/': index },
   async fetch(req) {
-    const { pathname, search } = new URL(req.url);
-    // Forward the GPT-SoVITS proxy (Python side, reused as-is) when configured.
-    if (pathname.startsWith('/api/gpt-sovits/')) {
-      if (!TTS_UPSTREAM) return new Response('tts upstream not configured', { status: 502 });
+    const { pathname } = new URL(req.url);
+    // Translate /api/tts/{speak,health} directly into a GPT-SoVITS api_v2 call — no owner glue.
+    if (pathname.startsWith('/api/tts/')) {
+      const subpath = pathname.slice('/api/tts/'.length);
+      const body = req.method === 'GET' || req.method === 'HEAD' ? '' : await req.text();
+      const plan = planTtsForward(subpath, body, TTS_ENV);
+      if (plan.kind === 'error') return new Response(plan.message, { status: plan.status });
       try {
-        const init: RequestInit = { method: req.method };
-        if (req.method !== 'GET' && req.method !== 'HEAD') {
-          init.body = await req.text();
-          init.headers = { 'content-type': req.headers.get('content-type') ?? 'application/json' };
+        if (plan.kind === 'health') {
+          await fetch(plan.url, { signal: AbortSignal.timeout(5000) }); // reachable? any response is alive
+          return Response.json({ backend: { ready: true, state: 'ready' } });
         }
-        return await fetch(`${TTS_UPSTREAM}${pathname}${search}`, init);
+        const upstream = await fetch(plan.url, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: plan.body,
+          signal: AbortSignal.timeout(600_000), // covers a cold api_v2 model load
+        });
+        return new Response(upstream.body, {
+          status: upstream.status,
+          headers: { 'content-type': upstream.headers.get('content-type') ?? 'audio/wav' },
+        });
       } catch {
         return new Response('tts upstream unreachable', { status: 502 });
       }

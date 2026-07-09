@@ -1,41 +1,31 @@
-// One-command local dev launcher: brings up the GPT-SoVITS TTS proxy + the agent
-// server (WS 8787) + the web app (5173) together, with prefixed logs and Ctrl-C
-// teardown. Run via `bun run dev`. TTS is local-only; if the local TTS module
-// isn't found, the app still starts (silent voice).
+// One-command local dev launcher: brings up the agent server (WS 8787) + the web app (5173)
+// together, with prefixed logs and Ctrl-C teardown. Run via `bun run dev`.
+//
+// Voice is bring-your-own and needs no process here: the web dev-server forwards /api/tts/* to a
+// GPT-SoVITS api_v2 backend at LUNA_TTS_URL (inherited from the environment). Unset → the app uses the
+// zero-setup browser voice (or runs muted). See docs/SETUP.md.
 
 const BUN = process.execPath; // the bun binary running this script
-const TTS_DIR = Bun.env['LUNA_TTS_DIR'] ?? ''; // voice is BYO — unset means run without a voice sidecar
-const TTS_PORT = Bun.env['LUNA_TTS_PORT'] ?? '8788';
-const ttsAvailable = TTS_DIR !== '' && (await Bun.file(`${TTS_DIR}/server/gpt-sovits-service.js`).exists());
+const TTS_URL = Bun.env['LUNA_TTS_URL'];
 
 type Service = { name: string; color: string; cmd: string[]; env?: Record<string, string> };
 
-const services: Service[] = [];
-if (ttsAvailable) {
-  services.push({
-    name: 'tts',
-    color: '34',
-    cmd: [BUN, `${import.meta.dir}/tts-proxy.cjs`],
-    env: { LUNA_TTS_DIR: TTS_DIR, LUNA_TTS_PORT: TTS_PORT },
-  });
-} else {
-  const where = TTS_DIR === '' ? 'LUNA_TTS_DIR unset' : `not found at ${TTS_DIR}`;
-  console.warn(`[dev] TTS ${where} — starting without voice (point LUNA_TTS_DIR at a GPT-SoVITS install to enable).`);
-}
-services.push({
-  name: 'server',
-  color: '32',
-  cmd: [BUN, 'run', 'packages/server/src/main.ts'],
-  // Proactive autonomous turns are OFF by default in dev so Luna never replies on
-  // her own and confuses the feedback loop. Export LUNA_PROACTIVE=1 to test them.
-  env: { LUNA_PROACTIVE: Bun.env['LUNA_PROACTIVE'] ?? '0' },
-});
-services.push({
-  name: 'web',
-  color: '35',
-  cmd: [BUN, 'packages/web/dev-server.ts'],
-  env: ttsAvailable ? { LUNA_TTS_PROXY: `http://localhost:${TTS_PORT}` } : {},
-});
+const services: Service[] = [
+  {
+    name: 'server',
+    color: '32',
+    cmd: [BUN, 'run', 'packages/server/src/main.ts'],
+    // Proactive autonomous turns are OFF by default in dev so Luna never replies on
+    // her own and confuses the feedback loop. Export LUNA_PROACTIVE=1 to test them.
+    env: { LUNA_PROACTIVE: Bun.env['LUNA_PROACTIVE'] ?? '0' },
+  },
+  {
+    name: 'web',
+    color: '35',
+    cmd: [BUN, 'packages/web/dev-server.ts'],
+    // The web dev-server reads LUNA_TTS_* straight from the inherited env for its /api/tts forward.
+  },
+];
 
 async function pipe(stream: ReadableStream<Uint8Array>, name: string, color: string): Promise<void> {
   const decoder = new TextDecoder();
@@ -70,11 +60,13 @@ console.log('');
 console.log(dim('  services:'));
 console.log(dim('     web      http://localhost:5173        (前端 / UI + Live2D)'));
 console.log(dim('     server   ws://localhost:8787          (agent 后端 / WebSocket)'));
-if (ttsAvailable) {
-  console.log(dim(`     tts      http://localhost:${TTS_PORT}        (GPT-SoVITS 语音 sidecar，本地)`));
-} else {
-  console.log(dim('     tts      (off — 未找到本地 TTS，静音运行)'));
-}
+console.log(
+  dim(
+    TTS_URL
+      ? `     voice    ${TTS_URL}   (GPT-SoVITS api_v2，经 /api/tts 转发)`
+      : '     voice    (browser 语音，或设 LUNA_TTS_URL 接 GPT-SoVITS)',
+  ),
+);
 console.log('');
 console.log(dim('  Ctrl-C 停止全部'));
 console.log('');

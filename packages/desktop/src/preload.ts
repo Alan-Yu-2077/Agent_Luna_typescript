@@ -23,7 +23,19 @@ contextBridge.exposeInMainWorld('lunaPet', {
   dragEnd: (): void => {
     ipcRenderer.send('luna:pet-drag-end');
   },
+  // Open a native folder picker to install a bring-your-own Live2D model; on success the shell copies
+  // it into userData/models, writes LUNA_MODEL_URL, and reloads. Returns {ok, modelUrl?} | {ok:false}.
+  chooseModel: (): Promise<{ ok: boolean; modelUrl?: string; error?: string }> =>
+    ipcRenderer.invoke('luna:choose-model'),
 });
+
+// Inject the desktop-resolved config (LUNA_MODEL_URL / LUNA_TTS_BACKEND / LUNA_TTS_URL) so the renderer
+// can resolve its avatar + voice without env access. sendSync is fine for a one-time boot read and is
+// sandbox-agnostic (a sandboxed preload has no process.env). A plain browser has no window.lunaConfig.
+contextBridge.exposeInMainWorld(
+  'lunaConfig',
+  ipcRenderer.sendSync('luna:get-config') as { modelUrl?: string; ttsBackend?: string; ttsUrl?: string },
+);
 
 // v0.28.0: the first-run setup bridge. The renderer collects base URL + key + model; the SHELL
 // tests + writes them to luna.env and restarts the sidecar. The key rides one direction only — the

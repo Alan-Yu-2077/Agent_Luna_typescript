@@ -1,0 +1,27 @@
+# Bring-your-own voice: a self-hosted GPT-SoVITS `api_v2` server that Luna's `/api/tts` forward speaks
+# to directly. NO weights and NO reference audio ship in this repo — you supply your own (mounted from
+# ./voice and ./pretrained_models below). See ../../docs/SETUP.md for the full walkthrough.
+#
+#   1. Put your GPT-SoVITS weights under ./pretrained_models and your reference clip under ./voice
+#   2. Pick an image (LUNA_TTS_IMAGE) or build from https://github.com/RVC-Boss/GPT-SoVITS
+#   3. docker compose -f services/tts/docker-compose.yml up
+#   4. In Luna's .env: LUNA_TTS_BACKEND=http, LUNA_TTS_URL=http://127.0.0.1:9880,
+#      LUNA_TTS_REF_AUDIO=/workspace/voice/<your-ref>.wav, LUNA_TTS_PROMPT_TEXT="<its transcript>"
+
+services:
+  gpt-sovits:
+    # Community GPT-SoVITS image that ships the api_v2 server. Pin a tag you trust, or build the
+    # upstream repo's Dockerfile yourself. This repo vendors no image and no weights.
+    image: ${LUNA_TTS_IMAGE:-please-set-LUNA_TTS_IMAGE}
+    ports:
+      - '${LUNA_TTS_PORT:-9880}:9880'
+    volumes:
+      # Your voice — pretrained SoVITS/GPT weights + the reference clip. Nothing here is committed.
+      - ./pretrained_models:/workspace/GPT_SoVITS/pretrained_models
+      - ./voice:/workspace/voice
+    # The canonical api_v2 invocation (host 0.0.0.0 so the port maps out; adjust the config path to
+    # your image's layout if it differs).
+    command: >
+      python api_v2.py -a 0.0.0.0 -p 9880
+      -c GPT_SoVITS/configs/tts_infer.yaml
+    restart: unless-stopped

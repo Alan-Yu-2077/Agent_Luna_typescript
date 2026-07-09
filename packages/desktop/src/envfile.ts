@@ -23,7 +23,8 @@ export function parseEnvFile(text: string): Record<string, string> {
 }
 
 // The first-run template written to app-data. Keys empty on purpose — Luna boots (the window opens,
-// yumi renders), but turns fail until the user fills them in. Never bundled, never committed.
+// the avatar renders if one is installed), but turns fail until the user fills them in. Never bundled,
+// never committed.
 export const ENV_TEMPLATE = `# Luna desktop configuration — fill in your keys, then restart Luna.
 # (This file lives in your user data folder and is never part of the app bundle.)
 
@@ -44,6 +45,13 @@ LUNA_WEATHER_API_HOST=
 LUNA_LAT_LON=
 LUNA_WEB_SEARCH_PROVIDER=
 LUNA_WEB_SEARCH_API_KEY=
+
+# Avatar & voice (bring-your-own — see docs/SETUP.md). The "Choose model folder…" picker sets
+# LUNA_MODEL_URL for you. Voice defaults to the browser; set LUNA_TTS_BACKEND=http + a GPT-SoVITS
+# api_v2 server (services/tts) for a custom voice.
+LUNA_MODEL_URL=
+LUNA_TTS_BACKEND=browser
+LUNA_TTS_URL=
 
 # Pet mode: 1 = a transparent, always-on-top Luna floating over the desktop (region click-through).
 # Initial default only — the in-app settings toggle ("Desktop pet") wins once used (settings.json).
