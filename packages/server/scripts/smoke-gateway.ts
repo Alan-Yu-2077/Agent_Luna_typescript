@@ -1,5 +1,5 @@
 // Manual smoke: 2-round tool turn through the gateway. Run with:
-//   bun --env-file=../../.env scripts/smoke-yunwu.ts
+//   bun --env-file=../../.env scripts/smoke-gateway.ts
 // Verifies the 3 gateway risks before building the turn loop:
 // 1. adaptive thinking + display:'summarized' accepted
 // 2. signed thinking blocks survive history round-trip (round 2 would 400 otherwise)

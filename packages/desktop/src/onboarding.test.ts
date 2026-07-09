@@ -29,12 +29,12 @@ describe('mergeEnvFile', () => {
     ].join('\n');
     const merged = mergeEnvFile(existing, {
       ANTHROPIC_API_KEY: 'sk-real',
-      ANTHROPIC_BASE_URL: 'https://yunwu.ai',
+      ANTHROPIC_BASE_URL: 'https://api.anthropic.com',
       LUNA_MODEL: 'claude-opus-4-8',
     });
     const parsed = parseEnvFile(merged);
     expect(parsed['ANTHROPIC_API_KEY']).toBe('sk-real');
-    expect(parsed['ANTHROPIC_BASE_URL']).toBe('https://yunwu.ai');
+    expect(parsed['ANTHROPIC_BASE_URL']).toBe('https://api.anthropic.com');
     expect(parsed['LUNA_MODEL']).toBe('claude-opus-4-8');
     // untouched
     expect(parsed['LUNA_LAT_LON']).toBe('31.23,121.47');

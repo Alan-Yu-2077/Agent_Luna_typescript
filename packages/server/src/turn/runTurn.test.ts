@@ -232,7 +232,7 @@ describe('runTurn', () => {
 });
 
 describe('tool wire schemas (gateway compatibility)', () => {
-  // The yunwu gateway mangles tools whose root schema is anyOf/oneOf (no
+  // Some proxy gateways mangle tools whose root schema is anyOf/oneOf (no
   // top-level properties): args come back wrapped as {"_noargs": "<raw>"}.
   // Every tool must therefore present a flat root-level object on the wire.
   test('every builtin tool schema is a root-level object with properties', () => {

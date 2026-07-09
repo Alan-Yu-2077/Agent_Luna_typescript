@@ -13,7 +13,7 @@ const MODEL = Bun.env['LUNA_MODEL'] ?? 'claude-opus-4-8';
 const RAW_MAX = Number(Bun.env['LUNA_MAX_TOKENS']);
 const MAX_TOKENS = Number.isFinite(RAW_MAX) && RAW_MAX > 0 ? RAW_MAX : 8192;
 
-// The yunwu gateway wraps tool arguments it failed to map upstream as
+// Some proxy gateways wrap tool arguments it failed to map upstream as
 // {"_noargs": "<raw args text>"} (observed 2026-06-12 on `remember` while its
 // wire schema was a root-level anyOf). Recover the real object when the raw
 // text is JSON; otherwise pass through and let tool validation reject it with

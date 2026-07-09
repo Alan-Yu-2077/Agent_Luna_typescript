@@ -389,7 +389,7 @@ describe('dream cycle', () => {
   test('6. key cascade falls back; prompts carry no <<< delimiters', async () => {
     const primary = new MockProvider([]);
     primary.completeResponder = () => {
-      throw new Error('rate limit: 当前分组上游负载已饱和');
+      throw new Error('rate limit: upstream overloaded');
     };
     const fallback = new MockProvider([]);
     fallback.completeResponder = () => 'fallback says hi';

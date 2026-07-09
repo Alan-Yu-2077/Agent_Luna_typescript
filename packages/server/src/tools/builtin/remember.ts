@@ -5,7 +5,7 @@ import { addFact, forgetFact } from '../../memory/l3Store';
 import { updateEvolving } from '../../memory/soulStore';
 
 // Flat object on purpose, NOT z.discriminatedUnion: a root-level anyOf wire
-// schema (no top-level `properties`) makes the yunwu gateway treat the tool as
+// schema (no top-level `properties`) makes some proxy gateways treat the tool as
 // argument-less and wrap the model's args as {"_noargs": "<raw>"} — every call
 // then fails validation. Per-action requirements are enforced in superRefine.
 const Input = z

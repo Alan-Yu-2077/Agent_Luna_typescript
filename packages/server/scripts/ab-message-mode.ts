@@ -2,7 +2,7 @@
 // message mode (messageRegistry) against the real model. Dev-scale comparison,
 // not a statistical claim — catches "message mode is obviously worse" before
 // the v0.7.0 default flip and leaves a written baseline for Initiative 4.
-// Run: ANTHROPIC_BASE_URL=https://yunwu.ai bun scripts/ab-message-mode.ts
+// Run: ANTHROPIC_BASE_URL=https://api.anthropic.com bun scripts/ab-message-mode.ts
 // Sessions are ephemeral (no setMemoryDb) — the real luna.sqlite is untouched.
 
 import { AnthropicProvider } from '../src/provider/anthropic';

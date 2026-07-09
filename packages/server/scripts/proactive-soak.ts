@@ -3,7 +3,7 @@
 // wake decisions (act/hold + reason), whether a turn fired, what she did (tools
 // + bubbles), and that the cadence governor holds (cooldown/quota). Dev-scale,
 // manual; not a deterministic test. Ephemeral db; the real luna.sqlite is safe.
-// Run: ANTHROPIC_BASE_URL=https://yunwu.ai LUNA_PROACTIVE=1 bun scripts/proactive-soak.ts
+// Run: ANTHROPIC_BASE_URL=https://api.anthropic.com LUNA_PROACTIVE=1 bun scripts/proactive-soak.ts
 import { Database } from 'bun:sqlite';
 import { join } from 'node:path';
 import { initCustomSqlite } from '../src/memory/recall/vecRuntime';

@@ -56,7 +56,7 @@ export function classifyProbe(status: number | null): ProbeVerdict {
   if (status === null) return { ok: false, error: "Couldn't reach that URL — check the base URL." };
   if (status === 401 || status === 403) return { ok: false, error: 'The API key was rejected.' };
   if (status === 404)
-    return { ok: false, error: 'Endpoint not found — check the base URL (e.g. https://yunwu.ai).' };
+    return { ok: false, error: 'Endpoint not found — check the base URL (e.g. https://api.anthropic.com).' };
   if (status < 400 || status === 400) return { ok: true };
   return { ok: false, error: `The server returned ${status}. Check your settings and try again.` };
 }

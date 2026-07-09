@@ -1,7 +1,7 @@
 import type { L3Fact } from '@luna/protocol';
 
 // Hard-won constraint (Python v0.56.1): <<<DELIMITER>>>-style markers trip the
-// yunwu.ai content filter. Data/instruction boundaries use natural-language
+// some gateway content filters. Data/instruction boundaries use natural-language
 // section headers only.
 
 export function renderFactsForPrompt(facts: L3Fact[]): string {

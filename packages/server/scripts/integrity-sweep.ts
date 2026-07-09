@@ -4,7 +4,7 @@
 // headline numbers: intent-without-act defections, guard corrections, tool-fire
 // on tool-warranted turns, and humanity violations (must stay 0 both ways).
 // Dev-scale, not a statistical claim. Ephemeral sessions; luna.sqlite untouched.
-// Run: ANTHROPIC_BASE_URL=https://yunwu.ai bun scripts/integrity-sweep.ts
+// Run: ANTHROPIC_BASE_URL=https://api.anthropic.com bun scripts/integrity-sweep.ts
 import { Database } from 'bun:sqlite';
 import { join } from 'node:path';
 import { initCustomSqlite } from '../src/memory/recall/vecRuntime';

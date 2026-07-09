@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { unwrapGatewayInput } from './anthropic';
 
-describe('unwrapGatewayInput (yunwu _noargs artifact)', () => {
+describe('unwrapGatewayInput (proxy-gateway _noargs artifact)', () => {
   test('unwraps {"_noargs": "<json object string>"} to the real object', () => {
     const wrapped = {
       _noargs: '{"action": "add", "category": "core_facts", "text": "用户的名字是 Sam"}',

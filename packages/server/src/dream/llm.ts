@@ -19,8 +19,7 @@ function classify(e: unknown): 'rate_limited' | 'content_filter' | 'auth' | 'exc
   if (
     msg.includes('rate') ||
     msg.includes('429') ||
-    msg.includes('overload') ||
-    msg.includes('饱和')
+    msg.includes('overload')
   ) {
     return 'rate_limited';
   }

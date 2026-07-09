@@ -7,7 +7,7 @@ function extract(chunks: string[]): string {
 }
 
 describe('JsonTextStream', () => {
-  test('spike-verified yunwu chunk shapes', () => {
+  test('spike-verified gateway chunk shapes', () => {
     const chunks = [
       '',
       '{"text": "小猫',

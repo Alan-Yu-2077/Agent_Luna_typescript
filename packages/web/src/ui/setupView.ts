@@ -52,7 +52,7 @@ export function mountSetupView(root: HTMLElement): void {
   sub.textContent = 'Connect your model to get started. You can change this later in Settings.';
   card.append(title, sub);
 
-  const baseUrl = field(card, 'API base URL', 'text', 'https://yunwu.ai', 'https://yunwu.ai');
+  const baseUrl = field(card, 'API base URL', 'text', 'https://api.anthropic.com', 'https://api.anthropic.com');
   const apiKey = field(card, 'API key', 'password', '', 'sk-…');
   const model = field(card, 'Model', 'text', 'claude-sonnet-4-6', 'claude-sonnet-4-6');
 

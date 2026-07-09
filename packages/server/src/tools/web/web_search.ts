@@ -9,7 +9,7 @@ import { wrapUntrusted } from './extract';
 // free. Read-only ⇒ proactiveRisk:'safe' (LD #15 lists searches as silent-OK).
 // Default ON since v0.18.2 (LUNA_WEB_SEARCH=0 is the off switch; auto-degrades
 // off when no LUNA_WEB_SEARCH_API_KEY is set — no SSRF surface, a fixed provider
-// endpoint). The yunwu gateway strips Anthropic's native web_search, so this is
+// endpoint). Some OpenAI-compatible proxy gateways strip Anthropic's native web_search, so this is
 // implemented in Luna's backend behind a provider abstraction.
 
 const Input = z.object({
