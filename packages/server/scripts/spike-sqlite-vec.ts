@@ -3,8 +3,14 @@
 // GO criteria: load succeeds, insert 4 vectors, KNN returns nearest-first.
 import { Database } from 'bun:sqlite';
 import * as sqliteVec from 'sqlite-vec';
+import { resolveSqliteLib } from '../src/memory/recall/vecRuntime';
 
-Database.setCustomSQLite('/opt/homebrew/opt/sqlite/lib/libsqlite3.dylib');
+const lib = resolveSqliteLib();
+if (!lib) {
+  console.log('[spike] FAIL: no extension-capable SQLite found (set LUNA_SQLITE_LIB)');
+  process.exit(1);
+}
+Database.setCustomSQLite(lib);
 
 const db = new Database(':memory:');
 sqliteVec.load(db);

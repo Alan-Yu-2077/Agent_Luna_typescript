@@ -2,7 +2,30 @@ import { existsSync } from 'node:fs';
 import { Database } from 'bun:sqlite';
 import * as sqliteVec from 'sqlite-vec';
 
-const CUSTOM_SQLITE = '/opt/homebrew/opt/sqlite/lib/libsqlite3.dylib';
+// Candidate extension-capable SQLite libraries. `LUNA_SQLITE_LIB` overrides; otherwise probe the
+// common macOS (arm64/Intel Homebrew) and Linux locations. Mirrors the desktop's multi-candidate
+// resolvers. Without this, sqlite-vec loaded only on an arm64-Homebrew macOS box and silently fell
+// back to slow TS-cosine recall everywhere else.
+const SQLITE_CANDIDATES = [
+  '/opt/homebrew/opt/sqlite/lib/libsqlite3.dylib', // macOS arm64 Homebrew
+  '/usr/local/opt/sqlite/lib/libsqlite3.dylib', // macOS Intel Homebrew
+  '/opt/homebrew/lib/libsqlite3.dylib',
+  '/usr/lib/x86_64-linux-gnu/libsqlite3.so', // Debian/Ubuntu
+  '/usr/lib/libsqlite3.so', // generic Linux
+  '/usr/lib64/libsqlite3.so', // Fedora/RHEL
+];
+
+// The first candidate that exists — `LUNA_SQLITE_LIB` first, then the list. Pure + injectable so it
+// unit-tests; returns null when none is found (recall then degrades to the TS-cosine fallback).
+export function resolveSqliteLib(
+  opts: { override?: string; candidates?: string[]; exists?: (p: string) => boolean } = {},
+): string | null {
+  const exists = opts.exists ?? existsSync;
+  const override = opts.override ?? Bun.env['LUNA_SQLITE_LIB'];
+  const cands = opts.candidates ?? [...(override ? [override] : []), ...SQLITE_CANDIDATES];
+  for (const p of cands) if (exists(p)) return p;
+  return null;
+}
 
 let customSet = false;
 let vecLoaded: boolean | null = null;
@@ -12,9 +35,10 @@ let vecLoaded: boolean | null = null;
 // Tests get this via bunfig preload; production via the top of main.ts.
 export function initCustomSqlite(): boolean {
   if (customSet) return true;
-  if (!existsSync(CUSTOM_SQLITE)) return false;
+  const lib = resolveSqliteLib();
+  if (!lib) return false;
   try {
-    Database.setCustomSQLite(CUSTOM_SQLITE);
+    Database.setCustomSQLite(lib);
     customSet = true;
     return true;
   } catch {
