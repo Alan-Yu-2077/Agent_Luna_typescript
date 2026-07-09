@@ -1,5 +1,7 @@
 {
   "name": "agent-luna-typescript",
+  "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/Alan-Yu-2077/Luna-ts.git" },
   "private": true,
   "type": "module",
   "workspaces": ["packages/*"],

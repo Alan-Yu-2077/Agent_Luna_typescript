@@ -1,0 +1,36 @@
+# Third-Party Licenses
+
+Luna-ts is MIT-licensed (see `LICENSE`). It redistributes the following third-party
+components, which are licensed separately and are **not** covered by that MIT grant.
+
+--------------------------------------------------------------------------------
+
+## Live2D Cubism Core — `packages/web/public/live2dcubismcore.min.js`
+
+- © Live2D Inc. **Proprietary software — NOT under this project's MIT license.**
+- Redistributed under the Live2D Proprietary Software License Agreement and the
+  Live2D Open Software License Agreement:
+  - https://www.live2d.com/eula/live2d-proprietary-software-license-agreement_en.html
+  - https://www.live2d.com/eula/live2d-open-software-license-agreement_en.html
+- Required at runtime to render **any** Live2D model (including a user-supplied one);
+  loaded by `packages/web/src/live2d/cubismRuntime.ts`.
+- **Downstream obligation:** Live2D imposes revenue-based licensing terms on some
+  commercial users. If you ship a product with it, review the EULA above.
+- Any Live2D avatar model you add (e.g. under `packages/web/public/models/`) is your
+  own asset under its own license — this project ships no model.
+
+--------------------------------------------------------------------------------
+
+## tree-sitter grammars — `packages/server/vendor/tree-sitter/*.wasm`
+
+- `tree-sitter-javascript.wasm`, `tree-sitter-tsx.wasm`, `tree-sitter-typescript.wasm`
+- © the tree-sitter contributors. **MIT License.**
+  - tree-sitter-javascript: https://github.com/tree-sitter/tree-sitter-javascript (MIT)
+  - tree-sitter-typescript (typescript + tsx): https://github.com/tree-sitter/tree-sitter-typescript (MIT)
+- Prebuilt WebAssembly grammars used by the repo-map + symbol-locator
+  (`packages/server/src/tools/**`).
+
+--------------------------------------------------------------------------------
+
+Runtime npm dependencies are licensed under their own terms (see each package and
+`bun.lock`); they are not redistributed in source here.
