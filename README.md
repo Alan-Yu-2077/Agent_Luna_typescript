@@ -1,61 +1,65 @@
-# Agent_Luna (TypeScript)
+# Luna (TypeScript)
 
-A clean-room TypeScript rewrite of [Agent_Luna](https://github.com/Alan-Yu-2077/Agent_Luna), focused on
-two goals the Python version cannot reach without further surgery:
+Luna is a companion agent — an LLM brain with persistent memory, proactive agency, action-integrity
+rails, a code-agent capability, and an embodied front end (a Live2D avatar with voice and lip-sync). It
+is built around two commitments:
 
-1. **End-to-end response speed** — eliminate the blocking-on-tool-turn,
-   `time.sleep`-on-HTTP-thread, and per-turn TCP teardown patterns that dominate the current
-   latency budget.
-2. **A single typed contract shared by backend and frontend** — eliminate the silent SSE / tool /
-   memory drift that has accumulated over 47 versions of Python iteration.
+1. **End-to-end response speed** — no blocking-on-tool-turn, no sleeping on the HTTP thread, no
+   per-turn connection teardown. Tool use and reply text stream as they happen.
+2. **A single typed contract shared by backend and frontend** — one Zod-validated event protocol, so
+   the server and the web client can never silently drift apart.
 
 The full stack ships: the agent brain (Bun + WebSocket runtime, interleaved tool-use), three-layer
-SQLite memory + dream consolidation, proactive agency, action-integrity rails, a code-agent
-capability, and the body — a Live2D avatar with voice and lip-sync. See
-[`docs/history/DEVELOPMENT.md`](docs/history/DEVELOPMENT.md) for the per-version log (the truth source
-for the current shipped version), [`docs/roadmap/README.md`](docs/roadmap/README.md) for the forward
-plan, and [`docs/REWRITE_CONTEXT.md`](docs/REWRITE_CONTEXT.md) for the audited facts + locked design
-decisions.
+SQLite memory + dream consolidation, proactive agency, action-integrity rails, a code-agent capability,
+and the body — a Live2D avatar with voice and lip-sync.
 
 ## Run
 
 ```sh
 bun install
-bun run dev          # one-command local launcher (server + web + TTS proxy)
+cp .env.example .env    # then set ANTHROPIC_API_KEY (the only value required for a text-only run)
+
+bun run dev             # one-command local launcher (server + web)
 # or individually:
-bun run dev:server   # Bun WS server (needs .env — see .env.example)
-bun run dev:web      # the web frontend
-bun test             # the test suite
+bun run dev:server      # the Bun WebSocket server
+bun run dev:web         # the web front end
+bun test                # the test suite
 ```
 
-The server binds **loopback (`127.0.0.1`) by default**; set `LUNA_BIND_HOST=0.0.0.0` to expose it on
-the LAN (only on a trusted network).
+Open the web front end and you have a running Luna. A fresh install ships **no avatar model and no voice
+weights** — you bring your own; the UI shows a friendly empty state until a Live2D model is installed,
+and voice is optional. [`.env.example`](.env.example) documents the full configuration surface.
 
-## Layout (planned)
+The server binds **loopback (`127.0.0.1`) by default**; set `LUNA_BIND_HOST=0.0.0.0` to expose it on the
+LAN (only on a trusted network).
+
+## Layout
 
 ```
-Agent_Luna_typescript/
-├── README.md                  ← you are here
-├── docs/
-│   ├── README.md              ← docs index
-│   ├── REWRITE_CONTEXT.md     ← Python-Luna audit findings + locked design decisions
-│   ├── history/
-│   │   └── DEVELOPMENT.md     ← per-version shipped log (truth source for "what version are we on")
-│   └── roadmap/
-│       ├── README.md          ← forward plan, initiatives in execution order
-│       └── <initiative>-YYYY-MM/
-│           ├── README.md
-│           └── vX.Y.Z-<theme>.md
-├── packages/                  ← to be created in v0.1
-│   ├── protocol/              ← shared Zod schemas + types (the wire contract)
-│   ├── server/                ← Bun + WebSocket runtime
-│   └── web/                   ← TS-ported agent-app controller (Live2D + audio kept as-is)
-└── ...
+.
+├── README.md
+├── ARCHITECTURE.md            ← how the pieces fit
+├── ROADMAP.md                 ← direction, by theme
+├── LICENSE                    ← MIT (one carve-out; see below)
+├── THIRD_PARTY_LICENSES       ← bundled third-party components
+├── .env.example               ← the full, documented configuration surface
+└── packages/
+    ├── protocol/              ← shared Zod schemas + types (the wire contract)
+    ├── server/                ← Bun + WebSocket runtime (brain, memory, tools, proactive)
+    ├── web/                   ← the browser front end (Live2D + audio + chat UI)
+    └── desktop/               ← an Electron shell (native window, desktop pet)
 ```
 
-## Reference
+## License
 
-The Python original lives at `/Users/alanyu2077/Desktop/Agent_Luna` and stays the running production
-system during the rewrite. Its `docs/history/DEVELOPMENT.md` is the authoritative log of what shipped
-on the Python side (current head: v0.47.11, 2026-06-11). When this rewrite reaches feature parity, it
-will replace the Python runtime; until then, both exist.
+Luna is released under the [MIT License](LICENSE), with a single carve-out: the vendored Live2D Cubism
+Core runtime (`packages/web/public/live2dcubismcore.min.js`) is proprietary to Live2D Inc. and is **not**
+covered by the MIT grant — it is governed by Live2D's own license. See
+[`THIRD_PARTY_LICENSES`](THIRD_PARTY_LICENSES) for details on it and other bundled components.
+
+## Further reading
+
+- [`ARCHITECTURE.md`](ARCHITECTURE.md) — the structural map: packages, the wire contract, memory, tools,
+  proactive rails, perception, and the front end.
+- [`ROADMAP.md`](ROADMAP.md) — where things are heading.
+- [`.env.example`](.env.example) — the full, documented configuration surface.
