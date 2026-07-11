@@ -14,3 +14,6 @@ packages/desktop/release/
 # Personal/local config is not.
 .claude/settings.local.json
 .claude/launch.json
+# local BYO model overlays (yumi etc.) — never committed to the public repo
+packages/web/public/models/*
+!packages/web/public/models/README.md
