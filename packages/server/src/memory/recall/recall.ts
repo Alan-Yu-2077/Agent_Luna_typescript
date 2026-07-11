@@ -14,7 +14,14 @@ import {
 } from './embed';
 import { lexicalScore } from './lexical';
 
-const RETRIEVAL_K = Number(Bun.env['LUNA_MEMORY_RETRIEVAL_K'] ?? 12);
+const RETRIEVAL_K = Number(Bun.env['LUNA_MEMORY_RETRIEVAL_K'] ?? 18);
+// Relevance floor (v0.34.11): the top LUNA_RECALL_FLOOR_N candidates by PURE cosine (≥
+// LUNA_RECALL_FLOOR_MIN_COS) are guaranteed a slot regardless of recency. The GA recency term
+// otherwise dominates — an 8-day-old turn's recency 1/(1+8)≈0.11 vs a fresh ~1.0 swamps a modest
+// cosine edge, so a decisively-relevant OLD memory ranks far below k. This is the retrieve-then-rerank
+// guarantee: it kicks in ONLY when a high-cosine old memory would be buried (for a normal query the
+// top-cosine candidates are already the recent ones → no-op), and no-ops when cosine is unavailable.
+// Both knobs are read per-call (below) so a live tune / a test takes effect without a restart.
 // Caps the cold-cache embedding work a single turn may do; the rest of the
 // candidates fall back to lexical-only for this turn. Dream's rag_refresh
 // (v0.5.0) is the bulk pre-warmer.
@@ -267,10 +274,34 @@ export async function retrieve(
     return { source: c.source, id: c.id, text: c.text, t_ms: c.t_ms, score };
   });
 
-  return hits
-    .filter((h) => h.score > 0.05)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, k);
+  const eligible = hits
+    .map((h, i) => ({ h, cos: cosScores[i] }))
+    .filter((x) => x.h.score > 0.05);
+  const byScore = [...eligible].sort((a, b) => b.h.score - a.h.score).map((x) => x.h);
+
+  // Relevance floor: the top floorN by pure cosine (≥ floorMinCos) are guaranteed ahead of the
+  // recency-blended fill, so a decisively-relevant old memory isn't dropped below k. All-null cosine
+  // (embedding off / budget timeout) → empty floor → byScore only (byte-identical to the prior path).
+  const floorN = Number(Bun.env['LUNA_RECALL_FLOOR_N'] ?? 3);
+  const floorMinCos = Number(Bun.env['LUNA_RECALL_FLOOR_MIN_COS'] ?? 0.35);
+  const floor: Hit[] =
+    floorN > 0
+      ? eligible
+          .filter((x): x is { h: Hit; cos: number } => typeof x.cos === 'number' && x.cos >= floorMinCos)
+          .sort((a, b) => b.cos - a.cos)
+          .slice(0, floorN)
+          .map((x) => x.h)
+      : [];
+
+  const seen = new Set<string>();
+  const out: Hit[] = [];
+  for (const h of [...floor, ...byScore]) {
+    if (seen.has(h.id)) continue;
+    seen.add(h.id);
+    out.push(h);
+    if (out.length >= k) break;
+  }
+  return out;
 }
 
 // v0.19.1 (Initiative 12, B): under LUNA_RECALL_TIME_LABELS, tag each recalled

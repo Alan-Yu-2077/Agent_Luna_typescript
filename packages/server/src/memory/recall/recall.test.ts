@@ -234,6 +234,54 @@ describe('retrieve (hybrid)', () => {
   });
 });
 
+describe('relevance floor (v0.34.11)', () => {
+  const DAY = 86_400_000;
+  // Seed one OLD, semantically-decisive turn (matcha → concept axis 0, zero lexical overlap with the
+  // beverage query) + 5 RECENT, unrelated decoys. By the GA blend the fresh decoys outscore the old
+  // turn (recency dominates), so at k=3 it ranks ~6th and would be dropped without the floor.
+  function seedBuriedOldMemory(oldText: string): void {
+    db.prepare(
+      'INSERT INTO l2_turns (session_id, turn_id, t_ms, user_text, assistant_text, raw_json) VALUES (?, ?, ?, ?, ?, ?)',
+    ).run('s', 'old', Date.now() - 30 * DAY, oldText, 'noted', '[]');
+    seedL2('s', [
+      ['the weather is rainy', 'grim'],
+      ['rain again today', 'yeah'],
+      ['sunny tomorrow maybe', 'hope'],
+      ['weather is weird', 'mm'],
+      ['more rain', 'ugh'],
+    ]);
+  }
+
+  test('a decisively-relevant OLD memory survives below-k recency ranking', async () => {
+    seedBuriedOldMemory('drinking matcha daily');
+    const hits = await retrieve('s', 'what beverage do I enjoy?', { k: 3 });
+    expect(hits.some((h) => h.text.includes('matcha'))).toBe(true); // floored in despite being 30d old
+  });
+
+  test('with the floor off (LUNA_RECALL_FLOOR_N=0) the same memory is buried below k', async () => {
+    Bun.env['LUNA_RECALL_FLOOR_N'] = '0';
+    seedBuriedOldMemory('drinking matcha daily');
+    const hits = await retrieve('s', 'what beverage do I enjoy?', { k: 3 });
+    expect(hits.some((h) => h.text.includes('matcha'))).toBe(false); // proves the floor is the cause
+    delete Bun.env['LUNA_RECALL_FLOOR_N'];
+  });
+
+  test('the min-cosine gate excludes a weak semantic match (no forced junk)', async () => {
+    Bun.env['LUNA_RECALL_FLOOR_MIN_COS'] = '0.85';
+    seedBuriedOldMemory('matcha'); // single-axis; vs a 2-axis query cos ≈ 0.71 < 0.85 → not floored
+    const hits = await retrieve('s', 'beverage code question', { k: 3 });
+    expect(hits.some((h) => h.text.includes('matcha'))).toBe(false);
+    delete Bun.env['LUNA_RECALL_FLOOR_MIN_COS'];
+  });
+
+  test('no-ops when embedding is off (no cosine → nothing to floor on)', async () => {
+    Bun.env['LUNA_MEMORY_EMBEDDING'] = '0';
+    seedBuriedOldMemory('drinking matcha daily');
+    const hits = await retrieve('s', 'what beverage do I enjoy?', { k: 3 });
+    expect(hits.some((h) => h.text.includes('matcha'))).toBe(false); // lexical-only, no overlap → absent
+  });
+});
+
 describe('system prompt cache invariant with recall', () => {
   test('system stays byte-identical across different queries (recall is message-level)', async () => {
     addFact('core_facts', 'Sam builds Luna');
