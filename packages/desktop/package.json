@@ -33,6 +33,7 @@
     ],
     "mac": {
       "target": [{ "target": "dir", "arch": ["arm64"] }],
+      "icon": "build/icon.icns",
       "identity": null,
       "extendInfo": {
         "NSLocationUsageDescription": "Luna uses your location to show local weather.",
