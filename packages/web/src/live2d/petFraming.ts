@@ -7,7 +7,7 @@
 export type Framing = { scale: number; baseX: number; baseY: number };
 
 // Multiplier on the full-body height-fit — >1 crops tighter (more of the body off-frame). ~1.7
-// lands head-to-waist for the yumi model; tuned in the isolated preview.
+// lands head-to-waist for the reference model; tuned in the isolated preview.
 const PET_ZOOM = 1.7;
 // Head crown as a fraction of host height from the top (small headroom; the rest of the body runs
 // off the bottom).

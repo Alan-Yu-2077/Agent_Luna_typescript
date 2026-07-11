@@ -144,10 +144,10 @@ describe('dream cycle', () => {
 
   test('2b. salience: dream rates unrated turns 1–5 and stores the scores (v0.17.0)', async () => {
     seedDialogue('default', [
-      ['I adopted a dog named Mochi', 'Mochi! what a name'],
+      ['I adopted a dog named Rex', 'Rex! what a name'],
       ['nice weather', 'mm'],
     ]);
-    // listUnratedL2 is most-recent-first → unrated[0]='nice weather', [1]='Mochi'.
+    // listUnratedL2 is most-recent-first → unrated[0]='nice weather', [1]='Rex'.
     const { llm } = scriptedLlm({ salience: JSON.stringify({ scores: [5, 1] }) });
     await runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
 
@@ -157,14 +157,14 @@ describe('dream cycle', () => {
     }[];
     const byText = Object.fromEntries(rows.map((r) => [r.user_text, r.importance]));
     expect(byText['nice weather']).toBe(5);
-    expect(byText['I adopted a dog named Mochi']).toBe(1);
+    expect(byText['I adopted a dog named Rex']).toBe(1);
   });
 
   // v0.20.6 — a score/turn count mismatch is rejected wholesale (positional map
   // would otherwise shift every later turn onto the wrong neighbour's score).
   test('2c. salience: a score/turn count mismatch is rejected, nothing written', async () => {
     seedDialogue('default', [
-      ['I adopted a dog named Mochi', 'Mochi! what a name'],
+      ['I adopted a dog named Rex', 'Rex! what a name'],
       ['nice weather', 'mm'],
     ]);
     const { llm } = scriptedLlm({ salience: JSON.stringify({ scores: [4] }) }); // 1 score, 2 turns

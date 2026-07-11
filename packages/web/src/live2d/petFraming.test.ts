@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { petFraming } from './petFraming';
 
-// A yumi-ish natural size (taller than wide, full body).
+// A reference-model-ish natural size (taller than wide, full body).
 const W = 900;
 const H = 2000;
 

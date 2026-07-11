@@ -97,7 +97,7 @@ describe('recall tool execute', () => {
     appendL2({
       sessionId: 'test',
       turnId: 't1',
-      userText: '我家的绿植叫 Mochi',
+      userText: '我家的绿植叫 小绿',
       assistantText: '记住了',
       rawContent: [],
     });
@@ -123,7 +123,7 @@ describe('recall tool execute', () => {
   // v0.20.5 — scope is pushed into retrieve(), so a burst of recent off-scope l2
   // rows can no longer starve the wanted source out of the top-k.
   test('scope=facts still returns facts under heavy recent-l2 skew (no starvation)', async () => {
-    addFact('preferences', '用户很喜欢绿植，养了一株叫 Mochi 的绿植');
+    addFact('preferences', '用户很喜欢绿植，养了一株叫 小绿 的绿植');
     addFact('key_moments', '第一次见到绿植是在咖啡馆，那株绿植很好看');
     for (let i = 0; i < 12; i++) {
       appendL2({

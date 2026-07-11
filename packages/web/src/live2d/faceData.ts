@@ -48,7 +48,7 @@ export const FACE_PARAM_GAIN: Partial<Record<FaceStateKey, number>> = {
   browLY: 1.35, browRY: 1.35,
 };
 
-// overlayRefs → special yumi params (config.js EXPRESSION_MAP).
+// overlayRefs → special reference-model params (config.js EXPRESSION_MAP).
 export const OVERLAYS: Record<string, Record<string, number>> = {
   脸红: { Paramsmileshy: 1 },
   俯身: { Paramdown1: 1 },

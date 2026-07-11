@@ -27,7 +27,7 @@ let db: Database;
 const CONCEPTS: [string, number][] = [
   ['beverage', 0],
   ['coffee', 0],
-  ['espresso', 0],
+  ['matcha', 0],
   ['latte', 0],
   ['weather', 1],
   ['rain', 1],
@@ -107,12 +107,12 @@ describe('lexical (CJK bigram)', () => {
 describe('retrieve (hybrid)', () => {
   test('paraphrase semantic hit: no shared keywords, embedding finds it', async () => {
     seedL2('s', [
-      ['I love espresso in the morning', 'noted, a latte person'],
+      ['I love matcha in the morning', 'noted, a latte person'],
       ['the weather is awful today', 'rain again'],
     ]);
     const hits = await retrieve('s', 'what beverage do I enjoy?');
     expect(hits.length).toBeGreaterThan(0);
-    expect(hits[0]?.text).toContain('espresso');
+    expect(hits[0]?.text).toContain('matcha');
   });
 
   test('embedding off → lexical-only, zero API calls', async () => {
@@ -124,7 +124,7 @@ describe('retrieve (hybrid)', () => {
   });
 
   test('hash cache: second retrieve embeds nothing new', async () => {
-    seedL2('s', [['coffee talk', 'espresso reply']]);
+    seedL2('s', [['coffee talk', 'matcha reply']]);
     await retrieve('s', 'coffee');
     const callsAfterFirst = embedCalls.length;
     await retrieve('s', 'coffee');
@@ -143,7 +143,7 @@ describe('retrieve (hybrid)', () => {
   // v0.20.5 — the embedding cache key is model-namespaced, so swapping the model
   // re-embeds instead of reusing a stale-dim vector keyed by content alone.
   test('a model swap re-embeds (namespaced embedding cache key)', async () => {
-    seedL2('s', [['coffee talk', 'espresso reply']]);
+    seedL2('s', [['coffee talk', 'matcha reply']]);
     Bun.env['LUNA_EMBEDDING_MODEL'] = 'model-a';
     await retrieve('s', 'coffee');
     const afterA = embedCalls.length;
@@ -237,7 +237,7 @@ describe('retrieve (hybrid)', () => {
 describe('system prompt cache invariant with recall', () => {
   test('system stays byte-identical across different queries (recall is message-level)', async () => {
     addFact('core_facts', 'Sam builds Luna');
-    seedL2('test', [['talked about espresso', 'noted']]);
+    seedL2('test', [['talked about matcha', 'noted']]);
     const session = getSession('test');
 
     function endRound(text: string): ProviderEvent[] {
@@ -389,20 +389,20 @@ describe('v0.17.1 — diaries as recall candidates + GA ranking', () => {
 describe('skills as a recall source (v0.32.1)', () => {
   test('a paraphrased query surfaces a skill by meaning — pointer text, never the body', async () => {
     saveSkill(
-      { name: 'brew-notes', description: 'how to make espresso coffee', body: 'SECRET-STEPS' },
+      { name: 'brew-notes', description: 'how to make matcha coffee', body: 'SECRET-STEPS' },
       1000,
     );
     const hits = await retrieve('s', 'latte', { k: 8 }); // zero lexical overlap; same concept axis
     const skill = hits.find((h) => h.source === 'skills');
     expect(skill).toBeDefined();
     expect(skill!.id).toBe('skill:brew-notes');
-    expect(skill!.text).toBe('brew-notes: how to make espresso coffee');
+    expect(skill!.text).toBe('brew-notes: how to make matcha coffee');
     expect(skill!.text).not.toContain('SECRET-STEPS');
   });
 
   test("sources:['skills'] scopes to skills only; default includes them alongside the rest", async () => {
-    seedL2('s', [['we talked about coffee', 'yes espresso']]);
-    saveSkill({ name: 'brew-notes', description: 'espresso method', body: 'b' }, 1000);
+    seedL2('s', [['we talked about coffee', 'yes matcha']]);
+    saveSkill({ name: 'brew-notes', description: 'matcha method', body: 'b' }, 1000);
     const scoped = await retrieve('s', 'coffee', { k: 8, sources: ['skills'] });
     expect(scoped.length).toBeGreaterThan(0);
     expect(scoped.every((h) => h.source === 'skills')).toBe(true);
@@ -413,24 +413,24 @@ describe('skills as a recall source (v0.32.1)', () => {
 
   test('unmounted skills (boot-frozen setter) never surface — a live env flip is ignored', async () => {
     setSkillsRecallMounted(false);
-    saveSkill({ name: 'brew-notes', description: 'espresso method', body: 'b' }, 1000);
+    saveSkill({ name: 'brew-notes', description: 'matcha method', body: 'b' }, 1000);
     delete Bun.env['LUNA_SKILLS']; // env says ON — must not matter; the boot truth rules
-    const hits = await retrieve('s', 'espresso', { k: 8 });
+    const hits = await retrieve('s', 'matcha', { k: 8 });
     expect(hits.some((h) => h.source === 'skills')).toBe(false);
   });
 
   test('flood guard: a just-saved IRRELEVANT skill never enters recall (relevance-gated, no recency term)', async () => {
     seedL2('s', [['we talked about the rain today', 'yes the weather was grim']]);
-    saveSkill({ name: 'brew-notes', description: 'espresso method', body: 'b' }, Date.now());
+    saveSkill({ name: 'brew-notes', description: 'matcha method', body: 'b' }, Date.now());
     const hits = await retrieve('s', 'rain weather', { k: 12 });
     expect(hits.length).toBeGreaterThan(0); // the relevant memory is there
     expect(hits.some((h) => h.source === 'skills')).toBe(false); // the fresh skill is not
   });
 
   test('deprecated skills never surface', async () => {
-    saveSkill({ name: 'brew-notes', description: 'espresso method', body: 'b' }, 1000);
+    saveSkill({ name: 'brew-notes', description: 'matcha method', body: 'b' }, 1000);
     deprecateSkill('brew-notes', 2000, 'owner');
-    const hits = await retrieve('s', 'espresso', { k: 8 });
+    const hits = await retrieve('s', 'matcha', { k: 8 });
     expect(hits.some((h) => h.source === 'skills')).toBe(false);
   });
 });
