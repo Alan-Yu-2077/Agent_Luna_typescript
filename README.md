@@ -36,11 +36,13 @@ bun run app             # build + package + launch the Electron app
 ```
 
 `bun run app` installs dependencies on first run, then packages the desktop app with
-`electron-builder` and launches it. It re-packages **only when a build input changed** since the last
-package — an unchanged re-run launches instantly. (Set `LUNA_APP_NO_LAUNCH=1` to package without
-opening the app, e.g. in CI.) Voice is bring-your-own: if you've configured `LUNA_TTS_BACKEND=http`
-but your GPT-SoVITS `api_v2` isn't running, the launcher prints a reminder — it never starts it for
-you (see [`docs/SETUP.md`](docs/SETUP.md)). A fresh install ships **no avatar model and no voice weights** — you bring your own; the
+`electron-builder`, **copies `Luna.app` to your Desktop**, and launches it. It re-packages **only when
+a build input changed** since the last package — an unchanged re-run launches instantly. The Desktop
+copy is a real, self-contained app you can double-click anytime (even if you move or delete the repo);
+override the destination folder with `LUNA_APP_DEST`, or set `LUNA_APP_NO_LAUNCH=1` to build + place it
+without opening a window (e.g. in CI). Voice is bring-your-own: if you've configured
+`LUNA_TTS_BACKEND=http` but your GPT-SoVITS `api_v2` isn't running, the launcher prints a reminder — it
+never starts it for you (see [`docs/SETUP.md`](docs/SETUP.md)). A fresh install ships **no avatar model and no voice weights** — you bring your own; the
 UI shows a friendly empty state until a Live2D model is installed. [`docs/SETUP.md`](docs/SETUP.md)
 walks through installing a model and (optionally) a higher-quality voice; [`.env.example`](.env.example)
 documents the full configuration surface.

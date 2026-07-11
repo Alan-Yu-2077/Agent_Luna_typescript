@@ -8,10 +8,16 @@
 // Voice is bring-your-own: this never spawns GPT-SoVITS. If LUNA_TTS_BACKEND=http and nothing is
 // listening on the api_v2 port, it prints a one-line reminder (see docs/SETUP.md).
 import { spawnSync } from 'node:child_process';
-import { existsSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 const ROOT = resolve(import.meta.dir, '..');
+
+// The delivered, double-clickable app lands on the user's Desktop (override the folder with
+// LUNA_APP_DEST). packages/desktop/release/… stays the build cache; this is the copy people launch.
+const DEST_DIR = process.env['LUNA_APP_DEST'] ?? join(homedir(), 'Desktop');
+const DEST_APP = join(DEST_DIR, 'Luna.app');
 
 function run(cmd: string[], cwd = ROOT): void {
   const r = spawnSync(cmd[0]!, cmd.slice(1), { cwd, stdio: 'inherit' });
@@ -79,32 +85,48 @@ if (!existsSync(join(ROOT, 'node_modules'))) {
   run(['bun', 'install']);
 }
 
-const existing = findApp();
+const cached = findApp();
 const srcMtime = Math.max(...SOURCE_PATHS.map((p) => newestMtime(join(ROOT, p))));
-const fresh = existing !== null && statSync(existing).mtimeMs >= srcMtime;
+const needBuild = cached === null || statSync(cached).mtimeMs < srcMtime;
 
-if (fresh) {
-  console.log('[app] packaged app is up to date — launching (edit source, re-run to re-package)');
-} else {
+if (needBuild) {
   console.log('[app] building web + server + packaging the desktop app…');
   run(['bun', 'run', '--cwd', 'packages/web', 'build']);
   run(['bun', 'run', '--cwd', 'packages/desktop', 'compile:server']);
   run(['bun', 'run', '--cwd', 'packages/desktop', 'pack']);
+} else {
+  console.log('[app] packaged app is up to date (edit source, re-run to re-package)');
 }
 
-const app = findApp();
-if (!app) {
+const built = findApp();
+if (!built) {
   console.error('[app] no Luna.app was produced — check the electron-builder output above.');
   process.exit(1);
 }
 
 await warnIfVoiceDown();
 
-if (process.env['LUNA_APP_NO_LAUNCH']) {
-  console.log(`[app] built (LUNA_APP_NO_LAUNCH set, not launching): ${app}`);
-} else if (process.platform === 'darwin') {
-  console.log(`[app] launching ${app}`);
-  run(['open', app]);
+if (process.platform !== 'darwin') {
+  console.log(`[app] built at: ${built} — open it for your platform (electron-builder --dir output).`);
+  process.exit(0);
+}
+
+// Deliver a real, double-clickable copy to the Desktop — it survives the repo being moved or deleted.
+// Refresh it only when the freshly built app is newer. `ditto` is the bundle-correct copy on macOS.
+const delivered = existsSync(DEST_APP) && statSync(DEST_APP).mtimeMs >= statSync(built).mtimeMs;
+if (delivered) {
+  console.log(`[app] Luna.app already on your Desktop → ${DEST_APP}`);
 } else {
-  console.log(`[app] built at: ${app} — open it for your platform (electron-builder --dir output).`);
+  console.log(`[app] placing Luna.app on your Desktop → ${DEST_APP}`);
+  mkdirSync(DEST_DIR, { recursive: true });
+  run(['/bin/rm', '-rf', DEST_APP]);
+  run(['/usr/bin/ditto', built, DEST_APP]);
+  run(['/usr/bin/touch', DEST_APP]);
+}
+
+if (process.env['LUNA_APP_NO_LAUNCH']) {
+  console.log(`[app] delivered (LUNA_APP_NO_LAUNCH set, not launching): ${DEST_APP}`);
+} else {
+  console.log(`[app] launching ${DEST_APP}`);
+  run(['open', DEST_APP]);
 }
