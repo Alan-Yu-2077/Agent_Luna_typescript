@@ -10,3 +10,7 @@ bun.lockb
 *.sqlite*
 packages/desktop/bin/
 packages/desktop/release/
+# Claude Code: the skills under .claude/skills/ ARE committed (see CONTRIBUTING.md).
+# Personal/local config is not.
+.claude/settings.local.json
+.claude/launch.json
