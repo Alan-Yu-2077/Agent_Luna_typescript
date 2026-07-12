@@ -71,4 +71,12 @@ contextBridge.exposeInMainWorld('lunaSetup', {
       kind === 'embedding' ? 'luna:probe-embedding' : kind === 'search' ? 'luna:probe-search' : 'luna:probe-weather';
     return ipcRenderer.invoke(channel, fields);
   },
+  // v0.35.3: the voice-pack flow. Same webUtils path handoff as the model drop; scan → the user
+  // confirms picks/transcript → install copies weights + writes luna.env + generates the api_v2
+  // config and launch command (canonical GPT-SoVITS standard). Nothing from the pack is executed.
+  scanVoicePack: (file: File): Promise<Record<string, unknown>> =>
+    ipcRenderer.invoke('luna:scan-voice-pack', webUtils.getPathForFile(file)),
+  installVoicePack: (args: Record<string, string>): Promise<Record<string, unknown>> =>
+    ipcRenderer.invoke('luna:install-voice-pack', args),
+  chooseTtsRuntime: (): Promise<Record<string, unknown>> => ipcRenderer.invoke('luna:choose-tts-runtime'),
 });

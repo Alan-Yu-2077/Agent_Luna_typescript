@@ -156,6 +156,9 @@ export type WizardBridge = {
   probe(f: SetupFields): Promise<SetupVerdict>;
   wizardSubmit(fields: Record<string, string>): Promise<SetupVerdict>;
   probeProvider?(kind: ProbeKind, fields: Record<string, string>): Promise<SetupVerdict>;
+  scanVoicePack?(file: File): Promise<Record<string, unknown>>;
+  installVoicePack?(args: Record<string, string>): Promise<Record<string, unknown>>;
+  chooseTtsRuntime?(): Promise<Record<string, unknown>>;
 };
 
 // v0.35.1: the probe gate for optional steps. Next with an untested filled key runs the probe
@@ -200,6 +203,28 @@ type PetBridge = {
   installModelFile?: (file: File) => Promise<InstallResult>;
 };
 
+// v0.35.3: voice-pack state that must survive re-renders (language toggles, step navigation).
+type VoiceScanResult = {
+  ok: boolean;
+  root?: string;
+  scan?: { gpt: string[]; sovits: string[]; refWavs: string[]; transcripts: string[] };
+  transcriptPreview?: string;
+  error?: string;
+};
+type VoiceState = {
+  root?: string;
+  scan?: NonNullable<VoiceScanResult['scan']>;
+  picks: { gptCkpt?: string; sovitsPth?: string; referenceWav?: string; transcriptTxt?: string };
+  transcript: string;
+  promptLang: string;
+  runtimeDir?: string;
+  runtimeVenv?: boolean;
+  command?: string;
+  installedOk?: boolean;
+};
+
+const fileName = (p: string): string => p.split('/').pop() ?? p;
+
 function bridges(): { setup?: WizardBridge & { wizard?: boolean }; pet?: PetBridge } {
   const g = globalThis as { lunaSetup?: WizardBridge & { wizard?: boolean }; lunaPet?: PetBridge };
   return { setup: g.lunaSetup, pet: g.lunaPet };
@@ -241,6 +266,8 @@ export function mountSetupWizard(root: HTMLElement, opts: { preview?: boolean } 
   const probeStates = new Map<string, ProbeState>(); // per-step; reset to 'none' when its fields change
   let voiceBackend = 'browser';
   let busy = false;
+  const voice: VoiceState = { picks: {}, transcript: '', promptLang: 'en' };
+  let healthTimer: ReturnType<typeof setInterval> | null = null;
 
   const card = doc.createElement('div');
   card.className = 'setup-card wizard';
@@ -253,6 +280,10 @@ export function mountSetupWizard(root: HTMLElement, opts: { preview?: boolean } 
     const t = makeT(lang);
     const s = nav.state();
     const step = steps[s.index]!;
+    if (healthTimer !== null) {
+      clearInterval(healthTimer);
+      healthTimer = null;
+    }
     while (card.firstChild) card.removeChild(card.firstChild);
 
     const langBtn = doc.createElement('button');
@@ -319,7 +350,256 @@ export function mountSetupWizard(root: HTMLElement, opts: { preview?: boolean } 
         radio.appendChild(lab);
       }
       body.appendChild(radio);
-      if (voiceBackend === 'http') for (const f of step.fields) fieldRow(body, t(f.labelKey), f, values);
+      if (voiceBackend === 'http') {
+        for (const f of step.fields) fieldRow(body, t(f.labelKey), f, values);
+
+        // v0.35.3: drop the downloaded GPT-SoVITS pack → scan → confirm picks/transcript → install
+        // (weights copied, luna.env written, api_v2 yaml + launch command generated). BYO boundary:
+        // Luna prepares everything; the user runs the command.
+        const scanPack = setup?.scanVoicePack;
+        const installPack = setup?.installVoicePack;
+        if (scanPack && installPack) {
+          const zone = createDropZone(doc, {
+            label: t('step.voice.drop'),
+            onFiles: (files) => {
+              const first = files.item(0);
+              if (!first) return;
+              setStatus(t('step.voice.scanning'), 'info');
+              void scanPack(first).then((r) => {
+                const res = r as VoiceScanResult;
+                if (!res.ok || !res.scan || !res.root) {
+                  setStatus(typeof res.error === 'string' ? res.error : '', 'error');
+                  return;
+                }
+                voice.root = res.root;
+                voice.scan = res.scan;
+                voice.picks = {
+                  ...(res.scan.gpt.length === 1 ? { gptCkpt: res.scan.gpt[0] } : {}),
+                  ...(res.scan.sovits.length === 1 ? { sovitsPth: res.scan.sovits[0] } : {}),
+                  ...(res.scan.refWavs.length === 1 ? { referenceWav: res.scan.refWavs[0] } : {}),
+                  ...(res.scan.transcripts.length > 0 ? { transcriptTxt: res.scan.transcripts[0] } : {}),
+                };
+                if (voice.transcript === '' && typeof res.transcriptPreview === 'string')
+                  voice.transcript = res.transcriptPreview;
+                voice.installedOk = false;
+                voice.command = undefined;
+                render();
+              });
+            },
+          });
+          body.appendChild(zone);
+
+          if (voice.scan && voice.root) {
+            const pickRow = (
+              labelKey: string,
+              options: string[],
+              picked: string | undefined,
+              onPick: (p: string) => void,
+            ): void => {
+              const row = doc.createElement('label');
+              row.className = 'setup-field';
+              const span = doc.createElement('span');
+              span.textContent = t(labelKey);
+              row.appendChild(span);
+              if (options.length === 1) {
+                const val = doc.createElement('div');
+                val.className = 'wizard-picked';
+                val.textContent = fileName(options[0]!);
+                row.appendChild(val);
+              } else {
+                const select = doc.createElement('select');
+                select.className = 'wizard-select';
+                for (const opt of options) {
+                  const o = doc.createElement('option');
+                  o.value = opt;
+                  o.textContent = fileName(opt);
+                  o.selected = opt === picked;
+                  select.appendChild(o);
+                }
+                select.addEventListener('change', () => onPick(select.value));
+                if (!picked && options[0]) onPick(options[0]);
+                row.appendChild(select);
+              }
+              body.appendChild(row);
+            };
+            pickRow('step.voice.gpt', voice.scan.gpt, voice.picks.gptCkpt, (p) => {
+              voice.picks.gptCkpt = p;
+            });
+            pickRow('step.voice.sovits', voice.scan.sovits, voice.picks.sovitsPth, (p) => {
+              voice.picks.sovitsPth = p;
+            });
+            pickRow('step.voice.ref', voice.scan.refWavs, voice.picks.referenceWav, (p) => {
+              voice.picks.referenceWav = p;
+            });
+
+            const tRow = doc.createElement('label');
+            tRow.className = 'setup-field';
+            const tSpan = doc.createElement('span');
+            tSpan.textContent = t('step.voice.transcript');
+            const tArea = doc.createElement('textarea');
+            tArea.className = 'wizard-textarea';
+            tArea.rows = 2;
+            tArea.value = voice.transcript;
+            tArea.addEventListener('input', () => {
+              voice.transcript = tArea.value;
+            });
+            tRow.append(tSpan, tArea);
+            body.appendChild(tRow);
+
+            const langRow = doc.createElement('label');
+            langRow.className = 'setup-field';
+            const lSpan = doc.createElement('span');
+            lSpan.textContent = t('step.voice.promptLang');
+            const lSel = doc.createElement('select');
+            lSel.className = 'wizard-select';
+            for (const l of ['en', 'zh', 'ja', 'auto']) {
+              const o = doc.createElement('option');
+              o.value = l;
+              o.textContent = l;
+              o.selected = voice.promptLang === l;
+              lSel.appendChild(o);
+            }
+            lSel.addEventListener('change', () => {
+              voice.promptLang = lSel.value;
+            });
+            langRow.append(lSpan, lSel);
+            body.appendChild(langRow);
+
+            const runtimeRow = doc.createElement('div');
+            runtimeRow.className = 'wizard-runtime-row';
+            const rBtn = doc.createElement('button');
+            rBtn.type = 'button';
+            rBtn.className = 'setup-btn ghost';
+            rBtn.textContent = t('step.voice.runtime.choose');
+            const rInfo = doc.createElement('span');
+            rInfo.className = 'wizard-runtime-info';
+            rInfo.textContent = voice.runtimeDir
+              ? `${fileName(voice.runtimeDir)}${voice.runtimeVenv ? ' (venv ✓)' : ''}`
+              : t('step.voice.runtime.none');
+            rBtn.addEventListener('click', () => {
+              void setup?.chooseTtsRuntime?.().then((r) => {
+                const ok = r['ok'] === true;
+                if (!ok) {
+                  if (r['error'] !== 'cancelled') setStatus(String(r['error'] ?? ''), 'error');
+                  return;
+                }
+                voice.runtimeDir = String(r['dir'] ?? '');
+                voice.runtimeVenv = r['venv'] === true;
+                render();
+              });
+            });
+            runtimeRow.append(rBtn, rInfo);
+            body.appendChild(runtimeRow);
+
+            const installBtn = doc.createElement('button');
+            installBtn.type = 'button';
+            installBtn.className = 'setup-btn wizard-voice-install';
+            installBtn.textContent = t('step.voice.install');
+            installBtn.disabled =
+              busy || !voice.picks.gptCkpt || !voice.picks.sovitsPth || !voice.picks.referenceWav;
+            installBtn.addEventListener('click', () => {
+              if (!voice.root) return;
+              setStatus(t('wizard.installing'), 'info');
+              const args: Record<string, string> = {
+                root: voice.root,
+                gptCkpt: voice.picks.gptCkpt ?? '',
+                sovitsPth: voice.picks.sovitsPth ?? '',
+                referenceWav: voice.picks.referenceWav ?? '',
+                transcriptTxt: voice.picks.transcriptTxt ?? '',
+                promptText: voice.transcript,
+                promptLang: voice.promptLang,
+                textLang: 'auto',
+              };
+              if (voice.runtimeDir) args['runtimeDir'] = voice.runtimeDir;
+              void installPack(args).then((r) => {
+                if (r['ok'] !== true) {
+                  setStatus(String(r['error'] ?? ''), 'error');
+                  return;
+                }
+                voice.installedOk = true;
+                voice.command = typeof r['command'] === 'string' ? r['command'] : undefined;
+                render();
+                const st = card.querySelector('.setup-status');
+                if (st instanceof HTMLElement) {
+                  st.textContent = t('step.voice.installed');
+                  st.dataset['kind'] = 'ok';
+                }
+              });
+            });
+            body.appendChild(installBtn);
+
+            if (voice.installedOk && voice.command) {
+              const cmdTitle = doc.createElement('div');
+              cmdTitle.className = 'setup-sub';
+              cmdTitle.textContent = t('step.voice.command.title');
+              const pre = doc.createElement('pre');
+              pre.className = 'wizard-command';
+              pre.textContent = voice.command;
+              const copyBtn = doc.createElement('button');
+              copyBtn.type = 'button';
+              copyBtn.className = 'setup-btn ghost wizard-copy';
+              copyBtn.textContent = t('step.voice.copy');
+              copyBtn.addEventListener('click', () => {
+                void navigator.clipboard?.writeText(voice.command ?? '').then(() => {
+                  copyBtn.textContent = t('step.voice.copied');
+                });
+              });
+              body.append(cmdTitle, pre, copyBtn);
+            }
+          }
+        }
+
+        // Live health badge — polls the same /api/tts/health the app itself uses; flips green the
+        // moment the user's api_v2 answers. Read-only and cheap; cleared on every re-render.
+        const badge = doc.createElement('div');
+        badge.className = 'wizard-voice-badge down';
+        badge.textContent = t('step.voice.badge.down');
+        body.appendChild(badge);
+        const testBtn = doc.createElement('button');
+        testBtn.type = 'button';
+        testBtn.className = 'setup-btn ghost wizard-voice-test';
+        testBtn.textContent = t('step.voice.test');
+        testBtn.disabled = true;
+        testBtn.addEventListener('click', () => {
+          testBtn.disabled = true;
+          void fetch('/api/tts/speak', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ text: 'Voice check — can you hear me?' }),
+          })
+            .then(async (res) => {
+              if (!res.ok) throw new Error(String(res.status));
+              const buf = await res.arrayBuffer();
+              const url = URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
+              const audio = new Audio(url);
+              audio.addEventListener('ended', () => URL.revokeObjectURL(url));
+              return audio.play();
+            })
+            .catch(() => setStatus(t('step.voice.test.failed'), 'error'))
+            .finally(() => {
+              testBtn.disabled = false;
+            });
+        });
+        body.appendChild(testBtn);
+        const pollHealth = (): void => {
+          void fetch('/api/tts/health', { signal: AbortSignal.timeout(2500) })
+            .then((res) => {
+              const up = res.ok;
+              badge.classList.toggle('up', up);
+              badge.classList.toggle('down', !up);
+              badge.textContent = t(up ? 'step.voice.badge.up' : 'step.voice.badge.down');
+              testBtn.disabled = !up;
+            })
+            .catch(() => {
+              badge.classList.remove('up');
+              badge.classList.add('down');
+              badge.textContent = t('step.voice.badge.down');
+              testBtn.disabled = true;
+            });
+        };
+        pollHealth();
+        healthTimer = setInterval(pollHealth, 3000);
+      }
     } else if (step.id === 'avatar') {
       const chooseModel = pet?.chooseModel;
       const installFile = pet?.installModelFile;

@@ -1,6 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, session } from 'electron';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { join, sep } from 'node:path';
 import { defaultDistDir, startWebHost, WEB_PORT } from './serve';
 import { readTtsEnv } from '../../web/src/tts/apiV2';
 import { ENV_TEMPLATE, parseEnvFile } from './envfile';
@@ -13,6 +13,14 @@ import { createSupervisor, waitForPort, type Supervisor } from './supervisor';
 import { resolveDevLauncher, resolveSidecarDb, shouldAttach } from './backend';
 import { probeEmbedding, probeSearch, probeWeather } from './probes';
 import { installModelFolder } from './modelInstall';
+import {
+  generateTtsYaml,
+  installVoicePack,
+  scanVoicePack,
+  startCommand,
+  validateRuntimeDir,
+  validateVoicePack,
+} from './voicePack';
 
 // v0.26.1 (Initiative 19): the single-machine app. The shell OWNS the whole runtime: it reads the
 // user's keys from app-data (never the bundle), spawns the compiled luna-server sidecar against an
@@ -390,6 +398,86 @@ ipcMain.handle('luna:install-model-path', async (_event, raw: unknown) => {
   return installModelAndReload(src);
 });
 
+// ── v0.35.3: the voice-pack flow (canonical GPT-SoVITS standard) ──────────────────────────────────
+
+ipcMain.handle('luna:scan-voice-pack', async (_event, raw: unknown) => {
+  const root = asStr(raw);
+  if (!root || !existsSync(root) || !statSync(root).isDirectory())
+    return { ok: false, error: 'That is not a folder.' };
+  const scan = scanVoicePack(root);
+  const valid = validateVoicePack(scan);
+  if (!valid.ok) return valid;
+  // Prefill the transcript textarea when the pack ships one (reference clips usually do).
+  let transcriptPreview = '';
+  const firstTxt = scan.transcripts[0];
+  if (firstTxt) {
+    try {
+      transcriptPreview = readFileSync(firstTxt, 'utf8').trim().slice(0, 500);
+    } catch {
+      /* unreadable transcript — the user types it instead */
+    }
+  }
+  return { ok: true, root, scan, transcriptPreview };
+});
+
+ipcMain.handle('luna:choose-tts-runtime', async () => {
+  const picked = dialog.showOpenDialogSync({
+    title: 'Choose your GPT-SoVITS folder',
+    properties: ['openDirectory'],
+  });
+  const dir = picked?.[0];
+  if (!dir) return { ok: false, error: 'cancelled' };
+  const check = validateRuntimeDir(dir);
+  if (!check.ok) return check;
+  return { ok: true, dir, venv: !!check.venvPython };
+});
+
+type VoiceInstallRaw = Record<string, unknown>;
+ipcMain.handle('luna:install-voice-pack', async (_event, raw: VoiceInstallRaw) => {
+  if (!paths) return { ok: false, error: 'Not ready — try again in a moment.' };
+  const root = asStr(raw?.['root']);
+  const picks = {
+    gptCkpt: asStr(raw?.['gptCkpt']),
+    sovitsPth: asStr(raw?.['sovitsPth']),
+    referenceWav: asStr(raw?.['referenceWav']),
+    ...(asStr(raw?.['transcriptTxt']) !== '' ? { transcriptTxt: asStr(raw?.['transcriptTxt']) } : {}),
+  };
+  // The picks must come from the scanned pack — a stray absolute path can't smuggle files in.
+  const inRoot = (p: string): boolean => p === '' || p.startsWith(root.endsWith(sep) ? root : root + sep);
+  if (!root || !inRoot(picks.gptCkpt) || !inRoot(picks.sovitsPth) || !inRoot(picks.referenceWav))
+    return { ok: false, error: 'Picked files must come from the dropped folder — re-scan it.' };
+  const installed = installVoicePack(root, picks, {
+    ttsDir: join(paths.userData, 'tts'),
+    envFile: paths.envFile,
+    promptText: asStr(raw?.['promptText']),
+    promptLang: asStr(raw?.['promptLang']),
+    textLang: asStr(raw?.['textLang']),
+  });
+  if (!installed.ok || !installed.packDir || !installed.gptCkpt || !installed.sovitsPth) return installed;
+
+  // With a validated GPT-SoVITS checkout we can produce the exact runtime config + launch command
+  // (the reference-instance form). Without one, the weights are installed and luna.env is set —
+  // the user picks the runtime later and re-installs to get the command.
+  const runtimeDir = asStr(raw?.['runtimeDir']);
+  let command: string | undefined;
+  let yamlPath: string | undefined;
+  if (runtimeDir !== '') {
+    const check = validateRuntimeDir(runtimeDir);
+    if (!check.ok) return { ok: false, error: check.error };
+    yamlPath = join(installed.packDir, 'tts_infer.runtime.yaml');
+    writeFileSync(
+      yamlPath,
+      generateTtsYaml({ checkout: runtimeDir, gptCkpt: installed.gptCkpt, sovitsPth: installed.sovitsPth }),
+    );
+    command = startCommand({ checkout: runtimeDir, yamlPath, ...(check.venvPython ? { venvPython: check.venvPython } : {}) });
+    writeFileSync(
+      paths.envFile,
+      mergeEnvFile(readFileSync(paths.envFile, 'utf8'), { LUNA_TTS_RUNTIME_DIR: runtimeDir }),
+    );
+  }
+  return { ok: true, refAudio: installed.refAudio, command, yamlPath };
+});
+
 async function smokeProbe(win: BrowserWindow): Promise<void> {
   await new Promise((r) => setTimeout(r, 6000));
   const probe = (await win.webContents.executeJavaScript(
@@ -492,12 +580,16 @@ void app.whenReady().then(async () => {
   const shell = readShellSettings(p.userData);
   if (typeof shell.petMode === 'boolean') petMode = shell.petMode;
   // Voice is bring-your-own: the static host forwards /api/tts/* to a GPT-SoVITS api_v2 backend. The
-  // upstream config lives in luna.env (LUNA_TTS_URL/REF_AUDIO/…), which is read into `userEnv` — NOT
-  // into this process's `process.env` — so it must be threaded in explicitly (a plain `undefined` here
-  // left serve.ts reading process.env, which lacks the keys → every /api/tts 502'd "not configured").
-  // Unset → the forward 502s and the app runs voiceless / with browser voice. It also serves any
-  // picker-installed model from userData/models.
-  startWebHost(p.webDist, WEB_PORT, readTtsEnv({ ...process.env, ...userEnv }), p.userModelsDir);
+  // upstream config lives in luna.env — NOT in this process's process.env (the v0.34.15 lesson) — so
+  // it's threaded in as a per-request GETTER (v0.35.3): a wizard voice-pack install or a hand edit
+  // applies on the very next /api/tts call, no host restart. Unset → the forward 502s and the app
+  // runs voiceless / with browser voice. It also serves any picker-installed model from userData/models.
+  startWebHost(
+    p.webDist,
+    WEB_PORT,
+    () => readTtsEnv({ ...process.env, ...parseEnvFile(readFileSync(p.envFile, 'utf8')) }),
+    p.userModelsDir,
+  );
   supervisor = createSupervisor({
     command: p.serverBin,
     env: sidecarEnv(p, userEnv),

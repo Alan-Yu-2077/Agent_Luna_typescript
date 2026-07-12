@@ -80,6 +80,22 @@ describe('startWebHost /api/tts → api_v2 forwarding', () => {
     expect(res.status).toBe(502);
   });
 
+  it('v0.35.3: a ttsEnv GETTER is re-read per request — a voice install applies with no restart', async () => {
+    const ttsPort = await portOf(startFakeApiV2());
+    let env: TtsEnv = {}; // boots unconfigured, like a fresh install
+    const web = await portOf(startWebHost(mkDist(), 0, () => env));
+    expect((await fetch(`http://127.0.0.1:${web}/api/tts/health`)).status).toBe(502);
+    env = { url: `http://127.0.0.1:${ttsPort}`, refAudio: '/voice/new-ref.wav' }; // the wizard installs a pack
+    expect((await fetch(`http://127.0.0.1:${web}/api/tts/health`)).status).toBe(200);
+    const speak = await fetch(`http://127.0.0.1:${web}/api/tts/speak`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ text: 'fresh' }),
+    });
+    const payload = JSON.parse(await speak.text()) as Record<string, unknown>;
+    expect(payload['ref_audio_path']).toBe('/voice/new-ref.wav'); // the NEW env, same host instance
+  });
+
   it('502s when the configured upstream is unreachable', async () => {
     // Port 1 is never listening — the forward's fetch rejects → 502, never a hang.
     const web = await portOf(startWebHost(mkDist(), 0, { url: 'http://127.0.0.1:1', refAudio: '/r.wav' }));

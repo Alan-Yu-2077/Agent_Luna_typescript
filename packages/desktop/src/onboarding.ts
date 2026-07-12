@@ -69,6 +69,7 @@ export const WIZARD_KEYS = [
   'LUNA_TTS_PROMPT_TEXT',
   'LUNA_TTS_PROMPT_LANG',
   'LUNA_TTS_TEXT_LANG',
+  'LUNA_TTS_RUNTIME_DIR', // v0.35.3: the user's GPT-SoVITS checkout — wizard-managed, server never reads it
 ] as const;
 
 export function filterWizardFields(raw: unknown): Record<string, string> {

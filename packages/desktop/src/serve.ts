@@ -27,10 +27,14 @@ export const WEB_PORT = 5177; // pinned — a floating port would silently reset
 export function startWebHost(
   distDir: string,
   port = WEB_PORT,
-  ttsEnv: TtsEnv = readTtsEnv(process.env),
+  // v0.35.3: accepts a GETTER so the tts upstream is re-read per request — installing a voice pack
+  // (or hand-editing luna.env) applies on the next /api/tts call with no host restart. A plain
+  // TtsEnv still works (tests, dev callers); the v0.34.15 stale-process.env class dies here.
+  ttsEnv: TtsEnv | (() => TtsEnv) = readTtsEnv(process.env),
   userModelsDir?: string,
 ): Server {
   const root = resolve(distDir);
+  const currentTtsEnv = typeof ttsEnv === 'function' ? ttsEnv : (): TtsEnv => ttsEnv;
   // A bring-your-own model installed by the desktop picker lands here (userData/models); it's served at
   // /models/* AHEAD of the bundled webDist so an installed avatar wins over the (empty) bundled one.
   const modelsRoot = userModelsDir ? resolve(userModelsDir) : null;
@@ -41,7 +45,7 @@ export function startWebHost(
       // The forward CONSTRUCTS the api_v2 target from a fixed path (never from the request path), so a
       // traversal like `/api/tts/..%2fadmin` decodes to an unknown subpath → 404, never reaching the
       // upstream. No path-based SSRF surface remains.
-      void forwardTts(req, res, pathname.slice('/api/tts/'.length), ttsEnv);
+      void forwardTts(req, res, pathname.slice('/api/tts/'.length), currentTtsEnv());
       return;
     }
     if (modelsRoot && pathname.startsWith('/models/') && serveModel(modelsRoot, pathname, res)) return;

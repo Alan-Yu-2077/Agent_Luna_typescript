@@ -554,6 +554,22 @@ body.pet { background: none; }
   transition: border-color 0.15s ease, background 0.15s ease;
 }
 .wizard-drop-zone.over { border-color: #7fa8d8; background: #f0f6fc; color: var(--ink-soft); }
+.wizard-picked { font-size: 12px; color: var(--ink); padding: 6px 2px; }
+.wizard-select, .wizard-textarea {
+  font: inherit; font-size: 12px; color: var(--ink); padding: 7px 9px; border-radius: 9px;
+  border: 1px solid rgba(90, 120, 160, 0.3); background: #fff; outline: none;
+}
+.wizard-textarea { resize: vertical; }
+.wizard-runtime-row { display: flex; align-items: center; gap: 10px; }
+.wizard-runtime-info { font-size: 11px; color: var(--muted); }
+.wizard-command {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: var(--ink);
+  background: #f0f4f9; border-radius: 9px; padding: 10px 12px; margin: 0;
+  white-space: pre-wrap; word-break: break-all; user-select: all;
+}
+.wizard-voice-badge { font-size: 12px; font-weight: 600; }
+.wizard-voice-badge.down { color: #c9556b; }
+.wizard-voice-badge.up { color: #4a9b6e; }
 
 /* v0.28.6: NO -webkit-app-region rules — on transparent frameless windows the drag region ate
    every mousedown before the DOM saw it (nothing inside the pet was clickable). Window-move is
