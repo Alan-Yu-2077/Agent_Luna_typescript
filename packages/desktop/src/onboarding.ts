@@ -46,6 +46,44 @@ export function mergeEnvFile(existing: string, fields: Record<string, string>): 
   return out.join('\n');
 }
 
+// v0.35.0: the exact set of luna.env keys the setup wizard may write. mergeEnvFile writes whatever
+// it is handed, so this whitelist is the defense-in-depth boundary between the renderer-collected
+// field map and the config file — anything outside it is silently dropped, never persisted.
+export const WIZARD_KEYS = [
+  'ANTHROPIC_BASE_URL',
+  'ANTHROPIC_API_KEY',
+  'LUNA_MODEL',
+  'LUNA_EMBEDDING_MODEL',
+  'LUNA_EMBEDDING_API_KEY',
+  'LUNA_EMBEDDING_BASE_URL',
+  'LUNA_WEB_SEARCH_PROVIDER',
+  'LUNA_WEB_SEARCH_API_KEY',
+  'LUNA_WEATHER_PROVIDER',
+  'LUNA_WEATHER_API_KEY',
+  'LUNA_WEATHER_API_HOST',
+  'LUNA_LAT_LON',
+  'LUNA_MODEL_URL',
+  'LUNA_TTS_BACKEND',
+  'LUNA_TTS_URL',
+  'LUNA_TTS_REF_AUDIO',
+  'LUNA_TTS_PROMPT_TEXT',
+  'LUNA_TTS_PROMPT_LANG',
+  'LUNA_TTS_TEXT_LANG',
+] as const;
+
+export function filterWizardFields(raw: unknown): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (typeof raw !== 'object' || raw === null) return out;
+  const rec = raw as Record<string, unknown>;
+  for (const key of WIZARD_KEYS) {
+    const v = rec[key];
+    if (typeof v !== 'string') continue;
+    const trimmed = v.trim();
+    if (trimmed !== '') out[key] = trimmed;
+  }
+  return out;
+}
+
 export type ProbeVerdict = { ok: boolean; error?: string };
 
 // Classify a connection-test outcome into a user-facing verdict. `status` is the HTTP status from

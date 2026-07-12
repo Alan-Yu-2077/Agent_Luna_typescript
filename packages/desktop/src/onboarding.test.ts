@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { classifyProbe, mergeEnvFile, needsOnboarding } from './onboarding';
+import { classifyProbe, filterWizardFields, mergeEnvFile, needsOnboarding, WIZARD_KEYS } from './onboarding';
 import { parseEnvFile } from './envfile';
 
 describe('needsOnboarding', () => {
@@ -72,6 +72,45 @@ describe('mergeEnvFile', () => {
     expect(parsed['LUNA_WEB_SEARCH_API_KEY']).toBeUndefined();
     expect(merged).not.toContain('\nLUNA_WEB_SEARCH_API_KEY=stolen');
     expect(merged.split('\n').filter((l) => l.startsWith('ANTHROPIC_API_KEY=')).length).toBe(1);
+  });
+});
+
+describe('filterWizardFields (v0.35.0)', () => {
+  test('keeps only whitelisted keys — anything else is dropped, never persisted', () => {
+    const out = filterWizardFields({
+      ANTHROPIC_API_KEY: 'sk-k',
+      LUNA_WORKSPACE_ROOT: '/tmp/evil',
+      RANDOM_KEY: 'y',
+      LUNA_SQLITE_LIB: '/evil.dylib',
+    });
+    expect(out).toEqual({ ANTHROPIC_API_KEY: 'sk-k' });
+  });
+
+  test('trims values and drops empties so a blank field never clobbers luna.env', () => {
+    const out = filterWizardFields({
+      ANTHROPIC_BASE_URL: '  https://api.anthropic.com  ',
+      LUNA_WEATHER_API_KEY: '   ',
+      LUNA_MODEL: '',
+    });
+    expect(out).toEqual({ ANTHROPIC_BASE_URL: 'https://api.anthropic.com' });
+  });
+
+  test('non-string and non-object inputs are ignored safely', () => {
+    expect(filterWizardFields({ ANTHROPIC_API_KEY: 42, LUNA_MODEL: null })).toEqual({});
+    expect(filterWizardFields(null)).toEqual({});
+    expect(filterWizardFields('ANTHROPIC_API_KEY=x')).toEqual({});
+  });
+
+  test('every wizard key survives the filter (whitelist is not lossy for its own set)', () => {
+    const all: Record<string, string> = {};
+    for (const k of WIZARD_KEYS) all[k] = 'v';
+    expect(Object.keys(filterWizardFields(all)).sort()).toEqual([...WIZARD_KEYS].sort());
+  });
+
+  test('a filtered map through mergeEnvFile cannot inject lines (composes with sanitize)', () => {
+    const fields = filterWizardFields({ ANTHROPIC_API_KEY: 'sk-a\nLUNA_PET_MODE=1' });
+    const merged = mergeEnvFile('ANTHROPIC_API_KEY=\n', fields);
+    expect(parseEnvFile(merged)['LUNA_PET_MODE']).toBeUndefined();
   });
 });
 

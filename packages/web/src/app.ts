@@ -11,6 +11,7 @@ import { RouterBubbleView } from './ui/routerBubbleView';
 import { buildLayout } from './ui/layout';
 import { renderServerSettings } from './ui/settingsView';
 import { mountSetupView } from './ui/setupView';
+import { mountSetupWizard } from './ui/setupWizard';
 import { startTimestampRefresh } from './ui/time';
 import { moodOf } from './ui/mood';
 import { createPixiLive2DSink } from './live2d/pixiLive2DSink';
@@ -38,8 +39,15 @@ async function boot(): Promise<void> {
   if (!root) return;
   // v0.28.0: first-run setup screen (desktop shell loads ?setup=1). Mount the form and stop — no
   // WS, no Live2D, no boot gate until the shell has keys and swaps this window for the app.
-  if (new URLSearchParams(location.search).has('setup')) {
-    mountSetupView(root);
+  // v0.35.0: the shell advertises the multi-step wizard via lunaSetup.wizard (LUNA_SETUP_WIZARD);
+  // `&wizard=1` mounts it bridge-less in a plain browser as a read-only PREVIEW (probe/finish
+  // disabled) so the flow + copy can be reviewed without the desktop app.
+  const search = new URLSearchParams(location.search);
+  if (search.has('setup')) {
+    const setupBridge = (globalThis as { lunaSetup?: { wizard?: boolean } }).lunaSetup;
+    if (setupBridge?.wizard) mountSetupWizard(root);
+    else if (search.has('wizard')) mountSetupWizard(root, { preview: true });
+    else mountSetupView(root);
     return;
   }
   // v0.25.2 review fix: the class also honors OS-level prefers-reduced-motion (CSS @media overrides
@@ -341,6 +349,23 @@ async function boot(): Promise<void> {
     refs.petToggle.addEventListener('change', () => setPetMode(refs.petToggle.checked));
   } else if (petRow instanceof HTMLElement) {
     petRow.style.display = 'none';
+  }
+
+  // v0.35.0: re-enter the setup wizard from Settings (desktop shell only — the shell owns the
+  // setup window). Rendered next to the pet row so shell-owned rows stay grouped.
+  const openSetup = (globalThis as { lunaSetup?: { openSetup?: () => void } }).lunaSetup?.openSetup;
+  if (openSetup && petRow?.parentElement) {
+    const row = document.createElement('label');
+    row.className = 'setting-row rerun-setup-row';
+    const name = document.createElement('span');
+    name.textContent = 'Setup wizard';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'setting-reset';
+    btn.textContent = 'Re-run…';
+    btn.addEventListener('click', () => openSetup());
+    row.append(name, btn);
+    petRow.after(row);
   }
 
   if (location.search.includes('dev')) {

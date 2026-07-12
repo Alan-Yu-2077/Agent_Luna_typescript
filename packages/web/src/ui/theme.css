@@ -528,6 +528,26 @@ body.pet { background: none; }
 .setup-btn.ghost { background: #eef3f9; color: var(--ink-soft); }
 .setup-btn:disabled { opacity: 0.55; cursor: default; }
 
+/* v0.35.0 (Initiative 25): the multi-step wizard over the same setup-card visual language */
+.setup-card.wizard { position: relative; width: min(480px, 94vw); }
+.setup-lang-btn {
+  position: absolute; top: 14px; right: 16px; font: inherit; font-size: 11px; padding: 4px 10px;
+  border-radius: 9px; border: 1px solid rgba(90, 120, 160, 0.3); background: #fff;
+  color: var(--ink-soft); cursor: pointer;
+}
+.wizard-dots { display: flex; gap: 7px; justify-content: center; margin: 2px 0; }
+.wizard-dot {
+  width: 8px; height: 8px; border-radius: 50%; background: #dbe6f2;
+  transition: background 0.15s ease;
+}
+.wizard-dot.done { background: #a9c6e6; }
+.wizard-dot.on { background: #7fa8d8; }
+.wizard-step-title { font-size: 13px; font-weight: 700; color: var(--ink-soft); }
+.wizard-step-body { display: flex; flex-direction: column; gap: 10px; min-height: 120px; }
+.wizard-radio-row { display: flex; gap: 16px; font-size: 13px; color: var(--ink-soft); }
+.wizard-radio-row label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.wizard-actions .wizard-back { margin-right: auto; }
+
 /* v0.28.6: NO -webkit-app-region rules — on transparent frameless windows the drag region ate
    every mousedown before the DOM saw it (nothing inside the pet was clickable). Window-move is
    now manual: app.ts pointer-drags her body via the lunaPet.drag* bridge; clicks stay ordinary. */

@@ -5,7 +5,7 @@ import { defaultDistDir, startWebHost, WEB_PORT } from './serve';
 import { readTtsEnv } from '../../web/src/tts/apiV2';
 import { ENV_TEMPLATE, parseEnvFile } from './envfile';
 import { readShellSettings, writeShellSettings } from './shellSettings';
-import { classifyProbe, mergeEnvFile, needsOnboarding, type ProbeVerdict } from './onboarding';
+import { classifyProbe, filterWizardFields, mergeEnvFile, needsOnboarding, type ProbeVerdict } from './onboarding';
 import { formatLatLon, resolveDesktopLocation } from './location';
 import { createPetDrag, type PetDrag } from './petDrag';
 import { petWindowOptions } from './petWindow';
@@ -88,6 +88,16 @@ function currentLunaConfig(): { modelUrl?: string; ttsBackend?: string; ttsUrl?:
   return { modelUrl: env['LUNA_MODEL_URL'], ttsBackend: env['LUNA_TTS_BACKEND'], ttsUrl: env['LUNA_TTS_URL'] };
 }
 
+// v0.35.0 (Initiative 25): the multi-step setup wizard, default OFF until v0.35.4. Read fresh (like
+// currentLunaConfig) so flipping the flag in luna.env applies on the next setup-window load — the
+// v0.34.15 lesson: the main process's process.env never carries luna.env values by itself.
+function wizardEnabled(): boolean {
+  const env: Record<string, string | undefined> = paths
+    ? { ...process.env, ...parseEnvFile(readFileSync(paths.envFile, 'utf8')) }
+    : process.env;
+  return env['LUNA_SETUP_WIZARD'] === '1';
+}
+
 function sidecarEnv(p: Paths, userEnv: Record<string, string>): Record<string, string> {
   const env: Record<string, string> = {
     // PATH etc. for the child; the user's keys OVERRIDE inherited vars, never the reverse.
@@ -112,6 +122,9 @@ function sidecarEnv(p: Paths, userEnv: Record<string, string>): Record<string, s
 
 let supervisor: Supervisor | null = null;
 let paths: Paths | null = null;
+// v0.35.0: true when we ATTACHED to an already-running backend (bun run dev) — the wizard submit
+// must not "restart" a sidecar we never started (it would race the external server for the port).
+let attachedToExternal = false;
 
 // Bun inlines __dirname as the SOURCE dir (packages/desktop/src) at compile time (see the preload
 // note below), so the repo root — where scripts/ lives — is three up (used by the dev launcher).
@@ -278,6 +291,56 @@ ipcMain.on('luna:get-config', (event) => {
   event.returnValue = currentLunaConfig();
 });
 
+ipcMain.on('luna:wizard-enabled', (event) => {
+  event.returnValue = wizardEnabled();
+});
+
+// v0.35.0: re-enter setup from the Settings panel. One setup window at most — focus an existing one
+// instead of stacking a second.
+ipcMain.on('luna:open-setup', () => {
+  const existing = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().includes('setup=1'));
+  if (existing) {
+    existing.focus();
+    return;
+  }
+  createWindow('setup');
+});
+
+// v0.35.0: the wizard's wide submit — every step's collected fields in ONE call, whitelisted
+// (filterWizardFields drops anything the wizard doesn't manage), chat probe-first when chat fields
+// are present (a bad key is never persisted, v0.28.0 rule), ONE luna.env merge + ONE sidecar
+// restart at the end. Values ride this one direction; the verdict never echoes them.
+ipcMain.handle('luna:wizard-submit', async (_event, raw: unknown): Promise<ProbeVerdict> => {
+  if (!paths) return { ok: false, error: 'Not ready — try again in a moment.' };
+  if (onboardingInFlight) return { ok: false, error: 'Setup already in progress…' };
+  onboardingInFlight = true;
+  try {
+    const fields = filterWizardFields(raw);
+    const baseUrl = fields['ANTHROPIC_BASE_URL'];
+    const apiKey = fields['ANTHROPIC_API_KEY'];
+    if (baseUrl !== undefined || apiKey !== undefined) {
+      if (!baseUrl || !apiKey) return { ok: false, error: 'Enter a base URL and an API key.' };
+      const verdict = await probeConnection(baseUrl, apiKey, fields['LUNA_MODEL'] ?? '');
+      if (!verdict.ok) return verdict;
+    }
+    const merged = mergeEnvFile(readFileSync(paths.envFile, 'utf8'), fields);
+    writeFileSync(paths.envFile, merged);
+    // Attached to an externally-started backend (bun run dev): its keys come from the repo .env,
+    // not luna.env — write only, no sidecar to restart. Shell-read values (model/tts) still apply
+    // via the window swap below.
+    if (!attachedToExternal) {
+      supervisor?.restart(sidecarEnv(paths, parseEnvFile(merged)));
+      const up = await waitForPort(SERVER_PORT);
+      if (!up) return { ok: false, error: 'Saved, but the server did not start. Check the logs.' };
+    }
+    const fresh = createWindow('app');
+    for (const w of BrowserWindow.getAllWindows()) if (w !== fresh) w.close();
+    return { ok: true };
+  } finally {
+    onboardingInFlight = false;
+  }
+});
+
 // "Choose model folder…": pick a Live2D model dir, verify it has a *.model3.json, copy it into
 // userData/models, persist LUNA_MODEL_URL, and reload so the preload re-injects window.lunaConfig.
 ipcMain.handle('luna:choose-model', async (): Promise<{ ok: boolean; modelUrl?: string; error?: string }> => {
@@ -419,6 +482,7 @@ void app.whenReady().then(async () => {
   // either way, so both paths land on the same backend + DB.
   const attached = shouldAttach({ portListening: await waitForPort(SERVER_PORT, 800), smoke: SMOKE });
   if (attached) {
+    attachedToExternal = true;
     console.log(`[luna-desktop] attaching to existing backend on 127.0.0.1:${SERVER_PORT}`);
     createWindow();
     app.on('activate', () => {

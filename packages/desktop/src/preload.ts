@@ -48,4 +48,13 @@ contextBridge.exposeInMainWorld('lunaSetup', {
     ipcRenderer.invoke('luna:onboarding-probe', fields),
   submit: (fields: SetupFields): Promise<SetupVerdict> =>
     ipcRenderer.invoke('luna:onboarding-submit', fields),
+  // v0.35.0: the multi-step wizard. `wizard` advertises the LUNA_SETUP_WIZARD flag (renderer picks
+  // the wizard vs the legacy card); wizardSubmit carries the whole whitelisted field map one way —
+  // the verdict never echoes a value. openSetup re-enters setup from the Settings panel.
+  wizard: ipcRenderer.sendSync('luna:wizard-enabled') === true,
+  wizardSubmit: (fields: Record<string, string>): Promise<SetupVerdict> =>
+    ipcRenderer.invoke('luna:wizard-submit', fields),
+  openSetup: (): void => {
+    ipcRenderer.send('luna:open-setup');
+  },
 });
