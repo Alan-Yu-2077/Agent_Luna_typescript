@@ -79,7 +79,9 @@ export const SETUP_COPY: CopyTable = {
 
   'step.avatar.title': { zh: 'Live2D 立绘', en: 'Live2D avatar' },
   'step.avatar.choose': { zh: '选择模型文件夹…', en: 'Choose model folder…' },
+  'step.avatar.drop': { zh: '把解压后的模型文件夹拖到这里', en: 'Drag the unzipped model folder here' },
   'step.avatar.installed': { zh: '模型已安装 ✓', en: 'Model installed ✓' },
+  'wizard.installing': { zh: '安装中…', en: 'Installing…' },
   'step.avatar.browserOnly': {
     zh: '模型安装仅在桌面 App 里可用。',
     en: 'Model install is only available in the desktop app.',

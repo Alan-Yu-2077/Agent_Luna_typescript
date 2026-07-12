@@ -9,6 +9,7 @@
 // collection without a DOM; mountSetupWizard is a thin renderer over it.
 
 import { detectSetupLang, makeT, persistSetupLang, type SetupLang } from './setupCopy';
+import { createDropZone } from './dropZone';
 
 export type WizardFieldSpec = {
   key: string; // the luna.env key this input feeds (whitelist enforced shell-side too)
@@ -193,7 +194,11 @@ const PROBE_STEP: Partial<Record<WizardStepSpec['id'], ProbeKind>> = {
   weather: 'weather',
 };
 
-type PetBridge = { chooseModel?: () => Promise<{ ok: boolean; modelUrl?: string; error?: string }> };
+type InstallResult = { ok: boolean; modelUrl?: string; error?: string };
+type PetBridge = {
+  chooseModel?: () => Promise<InstallResult>;
+  installModelFile?: (file: File) => Promise<InstallResult>;
+};
 
 function bridges(): { setup?: WizardBridge & { wizard?: boolean }; pet?: PetBridge } {
   const g = globalThis as { lunaSetup?: WizardBridge & { wizard?: boolean }; lunaPet?: PetBridge };
@@ -317,18 +322,36 @@ export function mountSetupWizard(root: HTMLElement, opts: { preview?: boolean } 
       if (voiceBackend === 'http') for (const f of step.fields) fieldRow(body, t(f.labelKey), f, values);
     } else if (step.id === 'avatar') {
       const chooseModel = pet?.chooseModel;
+      const installFile = pet?.installModelFile;
+      const onResult = (r: InstallResult): void => {
+        // 'cancelled' is the picker dialog being dismissed — not an error worth alarming over.
+        if (!r.ok && r.error === 'cancelled') return;
+        setStatus(r.ok ? t('step.avatar.installed') : (r.error ?? ''), r.ok ? 'ok' : 'error');
+      };
+      if (installFile) {
+        // v0.35.2: drag the downloaded model folder straight in.
+        const zone = createDropZone(doc, {
+          label: t('step.avatar.drop'),
+          onFiles: (files) => {
+            const first = files.item(0);
+            if (!first) return;
+            setStatus(t('wizard.installing'), 'info');
+            void installFile(first).then(onResult);
+          },
+        });
+        body.appendChild(zone);
+      }
       if (chooseModel) {
         const btn = doc.createElement('button');
         btn.type = 'button';
         btn.className = 'setup-btn ghost';
         btn.textContent = t('step.avatar.choose');
         btn.addEventListener('click', () => {
-          void chooseModel().then((r) => {
-            setStatus(r.ok ? t('step.avatar.installed') : (r.error ?? ''), r.ok ? 'ok' : 'error');
-          });
+          void chooseModel().then(onResult);
         });
         body.appendChild(btn);
-      } else {
+      }
+      if (!chooseModel && !installFile) {
         const note = doc.createElement('div');
         note.className = 'setup-sub';
         note.textContent = t('step.avatar.browserOnly');

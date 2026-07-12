@@ -1,6 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, session } from 'electron';
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { basename, join } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { defaultDistDir, startWebHost, WEB_PORT } from './serve';
 import { readTtsEnv } from '../../web/src/tts/apiV2';
 import { ENV_TEMPLATE, parseEnvFile } from './envfile';
@@ -12,6 +12,7 @@ import { petWindowOptions } from './petWindow';
 import { createSupervisor, waitForPort, type Supervisor } from './supervisor';
 import { resolveDevLauncher, resolveSidecarDb, shouldAttach } from './backend';
 import { probeEmbedding, probeSearch, probeWeather } from './probes';
+import { installModelFolder } from './modelInstall';
 
 // v0.26.1 (Initiative 19): the single-machine app. The shell OWNS the whole runtime: it reads the
 // user's keys from app-data (never the bundle), spawns the compiled luna-server sidecar against an
@@ -355,24 +356,38 @@ ipcMain.handle('luna:wizard-submit', async (_event, raw: unknown): Promise<Probe
   }
 });
 
-// "Choose model folder…": pick a Live2D model dir, verify it has a *.model3.json, copy it into
-// userData/models, persist LUNA_MODEL_URL, and reload so the preload re-injects window.lunaConfig.
-ipcMain.handle('luna:choose-model', async (): Promise<{ ok: boolean; modelUrl?: string; error?: string }> => {
+// v0.35.2: model install goes through ONE shared core (modelInstall.ts) — the picker and the
+// wizard's drag-and-drop are just two entrances. On success, reload only NON-setup windows: the
+// app window must re-inject lunaConfig so the model renders, but reloading the setup window would
+// blow the wizard back to step 1 (a v0.35.0 flow bug this version fixes).
+function installModelAndReload(src: string): { ok: boolean; modelUrl?: string; error?: string } {
   if (!paths) return { ok: false, error: 'Not ready — try again in a moment.' };
+  const result = installModelFolder(src, { modelsDir: paths.userModelsDir, envFile: paths.envFile });
+  if (result.ok) {
+    for (const w of BrowserWindow.getAllWindows()) {
+      if (!w.webContents.getURL().includes('setup=1')) w.reload();
+    }
+  }
+  return result;
+}
+
+// "Choose model folder…": pick a Live2D model dir via the native dialog.
+ipcMain.handle('luna:choose-model', async (): Promise<{ ok: boolean; modelUrl?: string; error?: string }> => {
   const picked = dialog.showOpenDialogSync({
     title: 'Choose a Live2D model folder',
     properties: ['openDirectory'],
   });
   const src = picked?.[0];
   if (!src) return { ok: false, error: 'cancelled' };
-  const manifest = readdirSync(src).find((f) => f.endsWith('.model3.json'));
-  if (!manifest) return { ok: false, error: 'No .model3.json found in that folder.' };
-  const name = basename(src);
-  cpSync(src, join(paths.userModelsDir, name), { recursive: true });
-  const modelUrl = `/models/${name}/${manifest}`;
-  writeFileSync(paths.envFile, mergeEnvFile(readFileSync(paths.envFile, 'utf8'), { LUNA_MODEL_URL: modelUrl }));
-  for (const w of BrowserWindow.getAllWindows()) w.reload(); // re-inject lunaConfig → the model renders
-  return { ok: true, modelUrl };
+  return installModelAndReload(src);
+});
+
+// v0.35.2: the wizard drop zone — the preload resolves the dropped File to a real path
+// (webUtils.getPathForFile) and only the path string crosses IPC.
+ipcMain.handle('luna:install-model-path', async (_event, raw: unknown) => {
+  const src = asStr(raw);
+  if (!src) return { ok: false, error: 'No folder received.' };
+  return installModelAndReload(src);
 });
 
 async function smokeProbe(win: BrowserWindow): Promise<void> {

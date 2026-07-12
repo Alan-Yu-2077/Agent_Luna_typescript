@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, webUtils } from 'electron';
 
 // v0.26.2: the pet-mode bridge — the renderer hit-tests the cursor (petHitTest.ts) and tells the
 // shell whether the window should take the mouse or pass clicks through to the desktop. The only
@@ -27,6 +27,10 @@ contextBridge.exposeInMainWorld('lunaPet', {
   // it into userData/models, writes LUNA_MODEL_URL, and reloads. Returns {ok, modelUrl?} | {ok:false}.
   chooseModel: (): Promise<{ ok: boolean; modelUrl?: string; error?: string }> =>
     ipcRenderer.invoke('luna:choose-model'),
+  // v0.35.2: the wizard drop zone. Electron 33 removed File.path — the real path is resolved HERE
+  // (webUtils needs the preload context) and only the path string crosses IPC.
+  installModelFile: (file: File): Promise<{ ok: boolean; modelUrl?: string; error?: string }> =>
+    ipcRenderer.invoke('luna:install-model-path', webUtils.getPathForFile(file)),
 });
 
 // Inject the desktop-resolved config (LUNA_MODEL_URL / LUNA_TTS_BACKEND / LUNA_TTS_URL) so the renderer
