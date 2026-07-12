@@ -5,8 +5,10 @@ import {
   nextLabelKey,
   probeFieldsFor,
   probeGateAction,
+  STEP_GUIDES,
   wizardSteps,
 } from './setupWizard';
+import { SETUP_COPY } from './setupCopy';
 
 describe('wizardSteps (v0.35.0)', () => {
   test('six steps in onboarding order, chat first and required', () => {
@@ -49,6 +51,35 @@ describe('createWizardNav', () => {
     expect(nav.next()).toMatchObject({ index: 2, atLast: true });
     expect(nav.next().index).toBe(2); // clamped
     expect(nav.back().index).toBe(1);
+  });
+});
+
+describe('walkthrough guides (v0.35.4)', () => {
+  test('every step has a guide whose text + link labels resolve in the copy table', () => {
+    for (const step of wizardSteps()) {
+      const guide = STEP_GUIDES[step.id];
+      expect(SETUP_COPY[guide.textKey], `text for ${step.id}`).toBeDefined();
+      for (const link of guide.links) {
+        expect(SETUP_COPY[link.labelKey], `label for ${link.href}`).toBeDefined();
+        expect(link.href.startsWith('https://')).toBe(true);
+      }
+    }
+  });
+
+  test('link audit: each vendor console + resource link appears exactly once', () => {
+    const hrefs = Object.values(STEP_GUIDES).flatMap((g) => g.links.map((l) => l.href));
+    const expected = [
+      'https://console.anthropic.com',
+      'https://platform.openai.com/api-keys',
+      'https://app.tavily.com',
+      'https://dev.qweather.com',
+      'https://b23.tv/NOg9J41',
+      'https://www.live2d.com/en/learn/sample/',
+      'https://b23.tv/cTW61p1',
+      'https://github.com/RVC-Boss/GPT-SoVITS',
+    ];
+    for (const url of expected) expect(hrefs.filter((h) => h === url).length, url).toBe(1);
+    expect(hrefs.length).toBe(expected.length);
   });
 });
 

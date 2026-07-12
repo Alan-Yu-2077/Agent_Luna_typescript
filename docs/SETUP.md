@@ -4,6 +4,19 @@ Luna ships with **no avatar model and no voice weights** — you supply your own
 text-only with a zero-setup browser voice; this guide covers adding an avatar and (optionally) a
 higher-quality voice.
 
+## The guided way (desktop app) — recommended
+
+Since v0.35, the **desktop app's first launch opens a setup wizard** (中文/English) that covers this
+entire guide interactively: chat API key (with a live connection test), memory embeddings, Tavily web
+search, QWeather weather (each with a real "test this key" probe and links to the exact registration
+consoles), then **drag-and-drop installs** for a Live2D model folder and a GPT-SoVITS voice pack —
+the voice step generates the api_v2 config and the exact launch command for you, and a live badge
+flips green when your voice server is up. Re-run it anytime from **Settings → Setup wizard →
+Re-run…**. `LUNA_SETUP_WIZARD=0` in `luna.env` restores the minimal three-field screen.
+
+Everything below is the manual/advanced path — the web-only (browser) flow, headless setups, and
+what the wizard writes under the hood.
+
 ## 0. Minimum run (text only)
 
 ```sh

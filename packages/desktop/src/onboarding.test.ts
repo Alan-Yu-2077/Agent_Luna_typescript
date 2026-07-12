@@ -1,6 +1,22 @@
 import { describe, expect, test } from 'bun:test';
-import { classifyProbe, filterWizardFields, mergeEnvFile, needsOnboarding, WIZARD_KEYS } from './onboarding';
+import {
+  classifyProbe,
+  filterWizardFields,
+  mergeEnvFile,
+  needsOnboarding,
+  WIZARD_KEYS,
+  wizardFlagEnabled,
+} from './onboarding';
 import { parseEnvFile } from './envfile';
+
+describe('wizardFlagEnabled (v0.35.4 default flip)', () => {
+  test('the wizard is the default; =0 is the one-release escape hatch', () => {
+    expect(wizardFlagEnabled(undefined)).toBe(true);
+    expect(wizardFlagEnabled('')).toBe(true);
+    expect(wizardFlagEnabled('1')).toBe(true);
+    expect(wizardFlagEnabled('0')).toBe(false);
+  });
+});
 
 describe('needsOnboarding', () => {
   test('true when the key is absent, empty, or the placeholder', () => {

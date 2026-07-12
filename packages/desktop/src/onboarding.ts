@@ -11,6 +11,12 @@ export function needsOnboarding(userEnv: Record<string, string>): boolean {
   return !key || key.trim() === '' || key === PLACEHOLDER_KEY;
 }
 
+// v0.35.4: the wizard is the default first-run experience; LUNA_SETUP_WIZARD=0 is the one-release
+// escape hatch back to the v0.28 single card (delete plan: the release after Initiative 25 ships).
+export function wizardFlagEnabled(value: string | undefined): boolean {
+  return value !== '0';
+}
+
 // Line-preserving merge into an existing luna.env: replace the value of an already-present
 // (uncommented) KEY= line in place, append a KEY=value for a missing one, and leave every other
 // line — comments, blanks, unrelated keys — exactly as it was. A re-run must never clobber the

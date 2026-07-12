@@ -114,3 +114,40 @@ export const SETUP_COPY: CopyTable = {
 export function makeT(lang: SetupLang): (key: string) => string {
   return (key) => SETUP_COPY[key]?.[lang] ?? key;
 }
+
+// v0.35.4: the walkthrough-card copy — registration guidance per the reference instance's vendors.
+// Keys are referenced from setupWizard's STEP_GUIDES; the parity test above covers them too.
+Object.assign(SETUP_COPY, {
+  'guide.chat': {
+    zh: '注册 Anthropic 后在控制台创建 API key,粘贴到下面;官方 base URL 保持不变。用中转/网关的话,换成网关的 base URL 和 key 即可。key 只保存在你本机的配置文件里,不会上传。',
+    en: 'Create an API key in the Anthropic Console and paste it below; keep the official base URL. Using a gateway? Swap in its base URL and key. Your key is stored only in a local config file — it never leaves this machine.',
+  },
+  'guide.chat.link': { zh: 'Anthropic 控制台', en: 'Anthropic Console' },
+  'guide.embedding': {
+    zh: '记忆的"语义联想"用 OpenAI 兼容的 embedding 接口。在 OpenAI 平台创建 key(或用网关,改 base URL)。跳过也能用:她仍会记住,但回忆退化为关键词匹配。',
+    en: "Semantic memory recall uses an OpenAI-compatible embeddings endpoint. Create a key on the OpenAI platform (or point the base URL at a gateway). Skipping is fine: she still remembers, but recall degrades to keyword matching.",
+  },
+  'guide.embedding.link': { zh: 'OpenAI API keys', en: 'OpenAI API keys' },
+  'guide.search': {
+    zh: '联网搜索用 Tavily。注册后在控制台拿 API key(免费额度约每月 1000 次)。不填的话,搜索工具不会挂载——她无法查网上的新信息。',
+    en: 'Web search uses Tavily. Register and grab an API key from its console (free tier ≈ 1000 calls/month). Without a key the search tool is not mounted — she cannot look things up online.',
+  },
+  'guide.search.link': { zh: 'Tavily 控制台', en: 'Tavily console' },
+  'guide.weather': {
+    zh: '天气用和风天气(QWeather):注册 → 控制台新建项目 → 拿 KEY,并在"设置"里抄下你账户专属的 API Host(形如 xxxx.qweatherapi.com——老的共享域名会报 Invalid Host)。不填 key 会自动落到免费的 Open-Meteo,国内精度略差。位置在 macOS 上会自动获取,也可手动填。',
+    en: "Weather uses QWeather: register → create a project in the console → grab the KEY, and copy your account's dedicated API host from Settings (xxxx.qweatherapi.com — the legacy shared hosts answer Invalid Host). No key = automatic fallback to the free Open-Meteo. Location auto-fills on macOS, or type it manually.",
+  },
+  'guide.weather.link': { zh: '和风天气控制台', en: 'QWeather console' },
+  'guide.avatar': {
+    zh: '还没有立绘?视频里有一只免费的 Live2D 小狗模型(7Apoi 等作者发布,可直播使用、须署名、禁转卖)——照视频从网盘下载、解压,然后把整个文件夹拖进下面的虚线框。任何标准 Live2D 模型文件夹(含 .model3.json)都可以。',
+    en: 'No avatar yet? The linked video shares a free Live2D puppy model (by 7Apoi & co — streaming OK, credit required, no resale). Download from the video\'s netdisk link, unzip, then drag the whole folder into the dashed box below. Any standard Live2D folder (with a .model3.json) works.',
+  },
+  'guide.avatar.link.pack': { zh: '免费小狗模型(B站视频)', en: 'Free puppy model (bilibili)' },
+  'guide.avatar.link.samples': { zh: 'Live2D 官方示例模型', en: 'Live2D official samples' },
+  'guide.voice': {
+    zh: '自定义音色分两步:① 装 GPT-SoVITS 运行时——macOS/Linux 克隆官方仓库并建好环境;Windows 可直接用视频里的整合包。② 从视频网盘下载音色权重包,解压后拖进下面的虚线框。装好后,复制生成的那条命令到终端启动语音服务,徽章变绿就能试听。',
+    en: 'A custom voice takes two parts: ① the GPT-SoVITS runtime — clone the official repo (macOS/Linux) or use the video\'s bundled package (Windows). ② the voice weights pack from the video\'s netdisk link — unzip and drag the folder into the dashed box. After install, run the generated command in a terminal; the badge turns green and you can test it.',
+  },
+  'guide.voice.link.pack': { zh: 'Neuro/Evil 音色包(B站视频)', en: 'Neuro/Evil voice pack (bilibili)' },
+  'guide.voice.link.runtime': { zh: 'GPT-SoVITS 官方仓库', en: 'GPT-SoVITS (official repo)' },
+} satisfies CopyTable);

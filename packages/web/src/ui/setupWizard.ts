@@ -197,6 +197,44 @@ const PROBE_STEP: Partial<Record<WizardStepSpec['id'], ProbeKind>> = {
   weather: 'weather',
 };
 
+// v0.35.4: the per-step walkthrough cards — where to register, what to paste, what skipping means.
+// Text lives in the zh/en copy table; hrefs are pinned here so a link-audit test can assert each
+// vendor/resource URL appears exactly once. Links open via the shell's window-open handler
+// (system browser only, https only).
+export type StepGuide = { textKey: string; links: Array<{ href: string; labelKey: string }> };
+export const STEP_GUIDES: Record<WizardStepSpec['id'], StepGuide> = {
+  chat: {
+    textKey: 'guide.chat',
+    links: [{ href: 'https://console.anthropic.com', labelKey: 'guide.chat.link' }],
+  },
+  embedding: {
+    textKey: 'guide.embedding',
+    links: [{ href: 'https://platform.openai.com/api-keys', labelKey: 'guide.embedding.link' }],
+  },
+  search: {
+    textKey: 'guide.search',
+    links: [{ href: 'https://app.tavily.com', labelKey: 'guide.search.link' }],
+  },
+  weather: {
+    textKey: 'guide.weather',
+    links: [{ href: 'https://dev.qweather.com', labelKey: 'guide.weather.link' }],
+  },
+  avatar: {
+    textKey: 'guide.avatar',
+    links: [
+      { href: 'https://b23.tv/NOg9J41', labelKey: 'guide.avatar.link.pack' },
+      { href: 'https://www.live2d.com/en/learn/sample/', labelKey: 'guide.avatar.link.samples' },
+    ],
+  },
+  voice: {
+    textKey: 'guide.voice',
+    links: [
+      { href: 'https://b23.tv/cTW61p1', labelKey: 'guide.voice.link.pack' },
+      { href: 'https://github.com/RVC-Boss/GPT-SoVITS', labelKey: 'guide.voice.link.runtime' },
+    ],
+  },
+};
+
 type InstallResult = { ok: boolean; modelUrl?: string; error?: string };
 type PetBridge = {
   chooseModel?: () => Promise<InstallResult>;
@@ -325,6 +363,28 @@ export function mountSetupWizard(root: HTMLElement, opts: { preview?: boolean } 
     body.className = 'wizard-step-body';
     body.dataset['step'] = step.id;
     card.appendChild(body);
+
+    // v0.35.4: the walkthrough card — plain-language registration/download guidance + links.
+    const guide = STEP_GUIDES[step.id];
+    const guideBox = doc.createElement('div');
+    guideBox.className = 'wizard-guide';
+    const guideText = doc.createElement('div');
+    guideText.className = 'wizard-guide-text';
+    guideText.textContent = t(guide.textKey);
+    guideBox.appendChild(guideText);
+    const linkRow = doc.createElement('div');
+    linkRow.className = 'wizard-guide-links';
+    for (const link of guide.links) {
+      const a = doc.createElement('a');
+      a.href = link.href;
+      a.target = '_blank';
+      a.rel = 'noreferrer';
+      a.className = 'wizard-guide-link';
+      a.textContent = t(link.labelKey);
+      linkRow.appendChild(a);
+    }
+    guideBox.appendChild(linkRow);
+    body.appendChild(guideBox);
 
     if (step.id === 'voice') {
       const radio = doc.createElement('div');

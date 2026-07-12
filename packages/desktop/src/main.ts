@@ -1,11 +1,18 @@
-import { app, BrowserWindow, dialog, ipcMain, session } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, session, shell } from 'electron';
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join, sep } from 'node:path';
 import { defaultDistDir, startWebHost, WEB_PORT } from './serve';
 import { readTtsEnv } from '../../web/src/tts/apiV2';
 import { ENV_TEMPLATE, parseEnvFile } from './envfile';
 import { readShellSettings, writeShellSettings } from './shellSettings';
-import { classifyProbe, filterWizardFields, mergeEnvFile, needsOnboarding, type ProbeVerdict } from './onboarding';
+import {
+  classifyProbe,
+  filterWizardFields,
+  mergeEnvFile,
+  needsOnboarding,
+  wizardFlagEnabled,
+  type ProbeVerdict,
+} from './onboarding';
 import { formatLatLon, resolveDesktopLocation } from './location';
 import { createPetDrag, type PetDrag } from './petDrag';
 import { petWindowOptions } from './petWindow';
@@ -98,14 +105,15 @@ function currentLunaConfig(): { modelUrl?: string; ttsBackend?: string; ttsUrl?:
   return { modelUrl: env['LUNA_MODEL_URL'], ttsBackend: env['LUNA_TTS_BACKEND'], ttsUrl: env['LUNA_TTS_URL'] };
 }
 
-// v0.35.0 (Initiative 25): the multi-step setup wizard, default OFF until v0.35.4. Read fresh (like
-// currentLunaConfig) so flipping the flag in luna.env applies on the next setup-window load — the
-// v0.34.15 lesson: the main process's process.env never carries luna.env values by itself.
+// v0.35.4 (Initiative 25 close): the wizard is the DEFAULT setup experience; LUNA_SETUP_WIZARD=0 is
+// the one-release escape hatch to the v0.28 single card. Read fresh (like currentLunaConfig) so a
+// luna.env flip applies on the next setup-window load — the v0.34.15 lesson: the main process's
+// process.env never carries luna.env values by itself.
 function wizardEnabled(): boolean {
   const env: Record<string, string | undefined> = paths
     ? { ...process.env, ...parseEnvFile(readFileSync(paths.envFile, 'utf8')) }
     : process.env;
-  return env['LUNA_SETUP_WIZARD'] === '1';
+  return wizardFlagEnabled(env['LUNA_SETUP_WIZARD']);
 }
 
 function sidecarEnv(p: Paths, userEnv: Record<string, string>): Record<string, string> {
@@ -175,6 +183,12 @@ function createWindow(mode: 'app' | 'setup' = 'app'): BrowserWindow {
   });
   win.webContents.on('preload-error', (_e, path, error) => {
     console.error(`[luna-desktop] PRELOAD ERROR at ${path}: ${error.message}`);
+  });
+  // v0.35.4: the wizard's walkthrough cards link vendor consoles + resource pages. Those must open
+  // in the system browser, never as a bare Electron child window (and non-https never opens at all).
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('https://')) void shell.openExternal(url);
+    return { action: 'deny' };
   });
   if (usePet) {
     win.setAlwaysOnTop(true, 'floating');
@@ -671,12 +685,35 @@ void app.whenReady().then(async () => {
       detail: `No response on 127.0.0.1:${SERVER_PORT}. Check ${p.envFile} and the logs.`,
     });
   }
-  const win = createWindow();
-  if (SMOKE) void smokeProbe(win);
+  // v0.35.4: LUNA_SMOKE_SETUP probes the WIZARD in the packaged shell (fresh-machine E2E for the
+  // default-on flip) instead of the app window.
+  const smokeSetup = SMOKE && process.env['LUNA_SMOKE_SETUP'] === '1';
+  const win = createWindow(smokeSetup ? 'setup' : 'app');
+  if (SMOKE) void (smokeSetup ? smokeSetupProbe(win) : smokeProbe(win));
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 });
+
+// The wizard go/no-go: the packaged setup window mounts the six-step wizard (default-on flag), the
+// first step is the chat card, and the language toggle is live. Asserted from the real bundle.
+async function smokeSetupProbe(win: BrowserWindow): Promise<void> {
+  await new Promise((r) => setTimeout(r, 4000));
+  const probe = (await win.webContents.executeJavaScript(
+    `(() => JSON.stringify({
+      wizard: !!document.querySelector('.setup-card.wizard'),
+      dots: document.querySelectorAll('.wizard-dot').length,
+      step: document.querySelector('.wizard-step-title')?.textContent || null,
+      guide: !!document.querySelector('.wizard-guide'),
+      langBtn: !!document.querySelector('.setup-lang-btn'),
+    }))()`,
+  )) as string;
+  const p = JSON.parse(probe) as { wizard: boolean; dots: number; step: string | null; guide: boolean; langBtn: boolean };
+  const ok = p.wizard && p.dots === 6 && !!p.step && p.guide && p.langBtn;
+  console.log(JSON.stringify({ ok, ...p }));
+  supervisor?.stop();
+  app.exit(ok ? 0 : 1);
+}
 
 // Kill the sidecar on every exit path — an orphan luna-server would hold the port + the DB lock.
 app.on('before-quit', () => {

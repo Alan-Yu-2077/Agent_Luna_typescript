@@ -36,7 +36,11 @@ bun run app             # build + package + launch the Electron app
 ```
 
 `bun run app` installs dependencies on first run, then packages the desktop app with
-`electron-builder`, **copies `Luna.app` to your Desktop**, and launches it. It re-packages **only when
+`electron-builder`, **copies `Luna.app` to your Desktop**, and launches it. First launch opens a
+**guided setup wizard** (中文/English) that walks through the chat API key, memory, web search,
+weather, a drag-and-drop Live2D avatar install, and a drag-and-drop GPT-SoVITS voice install — with
+live "test this key" checks at every step (`LUNA_SETUP_WIZARD=0` restores the minimal three-field
+screen). It re-packages **only when
 a build input changed** since the last package — an unchanged re-run launches instantly. The Desktop
 copy is a real, self-contained app you can double-click anytime (even if you move or delete the repo);
 override the destination folder with `LUNA_APP_DEST`, or set `LUNA_APP_NO_LAUNCH=1` to build + place it
