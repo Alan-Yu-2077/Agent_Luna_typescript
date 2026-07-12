@@ -2,6 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, session } from 'electron';
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { defaultDistDir, startWebHost, WEB_PORT } from './serve';
+import { readTtsEnv } from '../../web/src/tts/apiV2';
 import { ENV_TEMPLATE, parseEnvFile } from './envfile';
 import { readShellSettings, writeShellSettings } from './shellSettings';
 import { classifyProbe, mergeEnvFile, needsOnboarding, type ProbeVerdict } from './onboarding';
@@ -398,10 +399,13 @@ void app.whenReady().then(async () => {
   if (userEnv['LUNA_PET_MODE'] === '1') petMode = true;
   const shell = readShellSettings(p.userData);
   if (typeof shell.petMode === 'boolean') petMode = shell.petMode;
-  // Voice is bring-your-own: the static host forwards /api/tts/* to a GPT-SoVITS api_v2 backend read
-  // from env (LUNA_TTS_URL). Unset → the forward 502s and the app runs voiceless / with browser voice.
-  // It also serves any picker-installed model from userData/models (undefined ttsEnv → env default).
-  startWebHost(p.webDist, WEB_PORT, undefined, p.userModelsDir);
+  // Voice is bring-your-own: the static host forwards /api/tts/* to a GPT-SoVITS api_v2 backend. The
+  // upstream config lives in luna.env (LUNA_TTS_URL/REF_AUDIO/…), which is read into `userEnv` — NOT
+  // into this process's `process.env` — so it must be threaded in explicitly (a plain `undefined` here
+  // left serve.ts reading process.env, which lacks the keys → every /api/tts 502'd "not configured").
+  // Unset → the forward 502s and the app runs voiceless / with browser voice. It also serves any
+  // picker-installed model from userData/models.
+  startWebHost(p.webDist, WEB_PORT, readTtsEnv({ ...process.env, ...userEnv }), p.userModelsDir);
   supervisor = createSupervisor({
     command: p.serverBin,
     env: sidecarEnv(p, userEnv),
