@@ -1,5 +1,12 @@
 import { describe, expect, test } from 'bun:test';
-import { collectValues, createWizardNav, wizardSteps } from './setupWizard';
+import {
+  collectValues,
+  createWizardNav,
+  nextLabelKey,
+  probeFieldsFor,
+  probeGateAction,
+  wizardSteps,
+} from './setupWizard';
 
 describe('wizardSteps (v0.35.0)', () => {
   test('six steps in onboarding order, chat first and required', () => {
@@ -42,6 +49,51 @@ describe('createWizardNav', () => {
     expect(nav.next()).toMatchObject({ index: 2, atLast: true });
     expect(nav.next().index).toBe(2); // clamped
     expect(nav.back().index).toBe(1);
+  });
+});
+
+describe('probe gate (v0.35.1)', () => {
+  test('Next on a filled, untested step probes first — the skip-confirm branch', () => {
+    expect(probeGateAction(true, 'none')).toBe('probe');
+  });
+  test('empty fields, a passed probe, or an armed failure all advance', () => {
+    expect(probeGateAction(false, 'none')).toBe('advance');
+    expect(probeGateAction(true, 'ok')).toBe('advance');
+    expect(probeGateAction(true, 'fail')).toBe('advance'); // second click = continue anyway
+  });
+  test('a failed probe relabels Next as continue-anyway', () => {
+    expect(nextLabelKey('fail', false)).toBe('wizard.continueAnyway');
+    expect(nextLabelKey('none', false)).toBe('wizard.next');
+    expect(nextLabelKey('ok', true)).toBe('wizard.finish');
+  });
+});
+
+describe('probeFieldsFor', () => {
+  test('embedding: null without a key; full trio (with defaults) once the key is set', () => {
+    const values = new Map<string, string>([
+      ['LUNA_EMBEDDING_MODEL', 'text-embedding-3-large'],
+      ['LUNA_EMBEDDING_BASE_URL', 'https://api.openai.com'],
+    ]);
+    expect(probeFieldsFor('embedding', values)).toBeNull();
+    values.set('LUNA_EMBEDDING_API_KEY', 'sk-e');
+    expect(probeFieldsFor('embedding', values)).toEqual({
+      baseUrl: 'https://api.openai.com',
+      apiKey: 'sk-e',
+      model: 'text-embedding-3-large',
+    });
+  });
+  test('weather: either field filled triggers the probe (so a lone key gets the host hint)', () => {
+    expect(probeFieldsFor('weather', new Map())).toBeNull();
+    expect(probeFieldsFor('weather', new Map([['LUNA_WEATHER_API_KEY', 'k']]))).toEqual({
+      apiKey: 'k',
+      apiHost: '',
+    });
+  });
+  test('search: key or nothing', () => {
+    expect(probeFieldsFor('search', new Map())).toBeNull();
+    expect(probeFieldsFor('search', new Map([['LUNA_WEB_SEARCH_API_KEY', ' tvly-1 ']]))).toEqual({
+      apiKey: 'tvly-1',
+    });
   });
 });
 

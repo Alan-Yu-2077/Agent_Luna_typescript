@@ -11,6 +11,7 @@ import { createPetDrag, type PetDrag } from './petDrag';
 import { petWindowOptions } from './petWindow';
 import { createSupervisor, waitForPort, type Supervisor } from './supervisor';
 import { resolveDevLauncher, resolveSidecarDb, shouldAttach } from './backend';
+import { probeEmbedding, probeSearch, probeWeather } from './probes';
 
 // v0.26.1 (Initiative 19): the single-machine app. The shell OWNS the whole runtime: it reads the
 // user's keys from app-data (never the bundle), spawns the compiled luna-server sidecar against an
@@ -254,6 +255,19 @@ const asStr = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
 ipcMain.handle('luna:onboarding-probe', async (_event, raw: OnboardingFields) => {
   return probeConnection(asStr(raw?.baseUrl), asStr(raw?.apiKey), asStr(raw?.model));
 });
+
+// v0.35.1: the wizard's optional-step probes. Main-process-side like the chat probe — the key rides
+// one IPC direction and only the {ok, error?} verdict returns.
+type ProviderFields = Record<string, unknown>;
+ipcMain.handle('luna:probe-embedding', async (_event, raw: ProviderFields) =>
+  probeEmbedding({ baseUrl: asStr(raw?.['baseUrl']), apiKey: asStr(raw?.['apiKey']), model: asStr(raw?.['model']) }),
+);
+ipcMain.handle('luna:probe-search', async (_event, raw: ProviderFields) =>
+  probeSearch({ apiKey: asStr(raw?.['apiKey']) }),
+);
+ipcMain.handle('luna:probe-weather', async (_event, raw: ProviderFields) =>
+  probeWeather({ apiKey: asStr(raw?.['apiKey']), apiHost: asStr(raw?.['apiHost']) }),
+);
 
 ipcMain.handle('luna:onboarding-submit', async (_event, raw: OnboardingFields): Promise<ProbeVerdict> => {
   if (!paths) return { ok: false, error: 'Not ready — try again in a moment.' };

@@ -51,6 +51,8 @@ export const SETUP_COPY: CopyTable = {
   'wizard.lang': { zh: 'English', en: '中文' },
   'wizard.chat.required': { zh: '请填写 base URL 和 API key。', en: 'Enter a base URL and an API key.' },
   'wizard.optional': { zh: '(可跳过)', en: '(optional)' },
+  'wizard.continueAnyway': { zh: '仍然继续', en: 'Continue anyway' },
+  'wizard.nothingToTest': { zh: '还没填写要测试的 key。', en: 'Nothing to test yet — fill in a key first.' },
 
   'step.chat.title': { zh: '聊天模型', en: 'Chat model' },
   'step.chat.baseUrl': { zh: 'API base URL', en: 'API base URL' },
@@ -69,6 +71,11 @@ export const SETUP_COPY: CopyTable = {
   'step.weather.apiKey': { zh: '和风天气 key', en: 'QWeather key' },
   'step.weather.apiHost': { zh: '和风 API Host', en: 'QWeather API host' },
   'step.weather.latlon': { zh: '位置(纬度,经度)', en: 'Location (lat,lon)' },
+  'step.weather.provider.qweather': { zh: '天气源:和风天气(QWeather)', en: 'Weather source: QWeather' },
+  'step.weather.provider.openmeteo': {
+    zh: '天气源:Open-Meteo(不填 key 的免费兜底)',
+    en: 'Weather source: Open-Meteo (keyless fallback)',
+  },
 
   'step.avatar.title': { zh: 'Live2D 立绘', en: 'Live2D avatar' },
   'step.avatar.choose': { zh: '选择模型文件夹…', en: 'Choose model folder…' },

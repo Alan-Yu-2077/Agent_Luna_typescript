@@ -150,9 +150,47 @@ export function createWizardNav(count: number): {
 
 type SetupFields = { baseUrl: string; apiKey: string; model: string };
 type SetupVerdict = { ok: boolean; error?: string };
+export type ProbeKind = 'embedding' | 'search' | 'weather';
 export type WizardBridge = {
   probe(f: SetupFields): Promise<SetupVerdict>;
   wizardSubmit(fields: Record<string, string>): Promise<SetupVerdict>;
+  probeProvider?(kind: ProbeKind, fields: Record<string, string>): Promise<SetupVerdict>;
+};
+
+// v0.35.1: the probe gate for optional steps. Next with an untested filled key runs the probe
+// first; a failed probe arms "continue anyway" (the second click advances). Pure so it unit-tests.
+export type ProbeState = 'none' | 'ok' | 'fail';
+export function probeGateAction(filled: boolean, probed: ProbeState): 'probe' | 'advance' {
+  return filled && probed === 'none' ? 'probe' : 'advance';
+}
+export function nextLabelKey(probed: ProbeState, atLast: boolean): string {
+  if (probed === 'fail') return 'wizard.continueAnyway';
+  return atLast ? 'wizard.finish' : 'wizard.next';
+}
+
+// Which values feed each optional step's probe; null = nothing filled → no probe, plain advance.
+export function probeFieldsFor(kind: ProbeKind, values: Map<string, string>): Record<string, string> | null {
+  const v = (k: string): string => (values.get(k) ?? '').trim();
+  if (kind === 'embedding') {
+    if (v('LUNA_EMBEDDING_API_KEY') === '') return null;
+    return {
+      baseUrl: v('LUNA_EMBEDDING_BASE_URL'),
+      apiKey: v('LUNA_EMBEDDING_API_KEY'),
+      model: v('LUNA_EMBEDDING_MODEL'),
+    };
+  }
+  if (kind === 'search') {
+    if (v('LUNA_WEB_SEARCH_API_KEY') === '') return null;
+    return { apiKey: v('LUNA_WEB_SEARCH_API_KEY') };
+  }
+  if (v('LUNA_WEATHER_API_KEY') === '' && v('LUNA_WEATHER_API_HOST') === '') return null;
+  return { apiKey: v('LUNA_WEATHER_API_KEY'), apiHost: v('LUNA_WEATHER_API_HOST') };
+}
+
+const PROBE_STEP: Partial<Record<WizardStepSpec['id'], ProbeKind>> = {
+  embedding: 'embedding',
+  search: 'search',
+  weather: 'weather',
 };
 
 type PetBridge = { chooseModel?: () => Promise<{ ok: boolean; modelUrl?: string; error?: string }> };
@@ -195,6 +233,7 @@ export function mountSetupWizard(root: HTMLElement, opts: { preview?: boolean } 
   const steps = wizardSteps();
   const nav = createWizardNav(steps.length);
   const values = new Map<string, string>();
+  const probeStates = new Map<string, ProbeState>(); // per-step; reset to 'none' when its fields change
   let voiceBackend = 'browser';
   let busy = false;
 
@@ -296,7 +335,23 @@ export function mountSetupWizard(root: HTMLElement, opts: { preview?: boolean } 
         body.appendChild(note);
       }
     } else {
-      for (const f of step.fields) fieldRow(body, t(f.labelKey), f, values);
+      const probeKind = PROBE_STEP[step.id];
+      const inputs = step.fields.map((f) => fieldRow(body, t(f.labelKey), f, values));
+      if (probeKind) {
+        for (const input of inputs)
+          input.addEventListener('input', () => probeStates.set(step.id, 'none'));
+      }
+      if (step.id === 'weather') {
+        const note = doc.createElement('div');
+        note.className = 'setup-sub wizard-provider-note';
+        const updateNote = (): void => {
+          const hasKey = (values.get('LUNA_WEATHER_API_KEY') ?? '').trim() !== '';
+          note.textContent = t(hasKey ? 'step.weather.provider.qweather' : 'step.weather.provider.openmeteo');
+        };
+        updateNote();
+        for (const input of inputs) input.addEventListener('input', updateNote);
+        body.appendChild(note);
+      }
     }
 
     const status = doc.createElement('div');
@@ -345,6 +400,27 @@ export function mountSetupWizard(root: HTMLElement, opts: { preview?: boolean } 
       });
     }
 
+    const probeKind = PROBE_STEP[step.id];
+    const runProbe = (kind: ProbeKind, onDone: (v: SetupVerdict) => void): void => {
+      const pf = probeFieldsFor(kind, values);
+      if (!pf) return setStatus(t('wizard.nothingToTest'), 'info');
+      if (!setup?.probeProvider) return;
+      busy = true;
+      setStatus(t('wizard.testing'), 'info');
+      void setup.probeProvider(kind, pf).then((v) => {
+        busy = false;
+        probeStates.set(step.id, v.ok ? 'ok' : 'fail');
+        onDone(v);
+      });
+    };
+    if (probeKind && setup?.probeProvider) {
+      const testBtn = mkBtn(t('wizard.test'), 'setup-btn ghost wizard-test');
+      testBtn.disabled = busy || !live;
+      testBtn.addEventListener('click', () => {
+        runProbe(probeKind, (v) => setStatus(v.ok ? t('wizard.test.ok') : (v.error ?? ''), v.ok ? 'ok' : 'error'));
+      });
+    }
+
     if (step.optional && !s.atLast) {
       const skipBtn = mkBtn(t('wizard.skip'), 'setup-btn ghost wizard-skip');
       skipBtn.disabled = busy;
@@ -355,10 +431,30 @@ export function mountSetupWizard(root: HTMLElement, opts: { preview?: boolean } 
       });
     }
 
-    const nextBtn = mkBtn(t(s.atLast ? 'wizard.finish' : 'wizard.next'), 'setup-btn wizard-next');
+    const nextBtn = mkBtn(
+      t(probeKind ? nextLabelKey(probeStates.get(step.id) ?? 'none', s.atLast) : s.atLast ? 'wizard.finish' : 'wizard.next'),
+      'setup-btn wizard-next',
+    );
     nextBtn.disabled = busy || (s.atLast && !live);
     nextBtn.addEventListener('click', () => {
       if (step.id === 'chat' && !chatFields()) return setStatus(t('wizard.chat.required'), 'error');
+      // v0.35.1: an optional step with a filled, untested key auto-probes on Next — pass advances,
+      // fail shows the verdict and arms "continue anyway" (this same button, second click).
+      if (probeKind && setup?.probeProvider && !s.atLast) {
+        const pf = probeFieldsFor(probeKind, values);
+        if (probeGateAction(pf !== null, probeStates.get(step.id) ?? 'none') === 'probe') {
+          runProbe(probeKind, (v) => {
+            if (v.ok) {
+              nav.next();
+              render();
+            } else {
+              nextBtn.textContent = t('wizard.continueAnyway');
+              setStatus(v.error ?? '', 'error');
+            }
+          });
+          return;
+        }
+      }
       if (!s.atLast) {
         nav.next();
         render();

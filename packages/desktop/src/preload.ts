@@ -57,4 +57,14 @@ contextBridge.exposeInMainWorld('lunaSetup', {
   openSetup: (): void => {
     ipcRenderer.send('luna:open-setup');
   },
+  // v0.35.1: optional-step probes (embedding / search / weather). The kind is pinned to three fixed
+  // channels here — the renderer cannot aim this at an arbitrary IPC name.
+  probeProvider: (
+    kind: 'embedding' | 'search' | 'weather',
+    fields: Record<string, string>,
+  ): Promise<SetupVerdict> => {
+    const channel =
+      kind === 'embedding' ? 'luna:probe-embedding' : kind === 'search' ? 'luna:probe-search' : 'luna:probe-weather';
+    return ipcRenderer.invoke(channel, fields);
+  },
 });
