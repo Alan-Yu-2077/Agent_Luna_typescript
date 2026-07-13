@@ -17,9 +17,7 @@
 
 [English](README.md) · **简体中文**
 
-<img src="docs/assets/wizard-chat.png" width="760" alt="Luna 的引导式配置向导" />
-
-*首次启动即进入中英双语引导向导——不用碰配置文件,不用翻文档。*
+<img src="docs/assets/moment-fries.png" width="820" alt="Luna,一个 Live2D 桌面伙伴,在玩梗" />
 
 </div>
 
@@ -53,8 +51,12 @@ cd Luna-ts
 bun run app        # 装依赖 → 构建 → 打包 → Luna.app 出现在桌面 → 自动启动
 ```
 
-首次启动就是上图的向导。唯一*必填*的是聊天 API key(Anthropic 或任意兼容网关)——其余每一步
-都可跳过,以后在设置里随时重开。
+<div align="center">
+<img src="docs/assets/wizard-chat.png" width="640" alt="中英双语引导向导" /><br/>
+<sub>首次启动即进入中英双语引导向导——不用碰配置文件,不用翻文档。</sub>
+</div>
+
+唯一*必填*的是聊天 API key(Anthropic 或任意兼容网关)——其余每一步都可跳过,以后在设置里随时重开。
 
 想在浏览器里跑,或者不在 macOS:
 
@@ -87,6 +89,29 @@ graph LR
 的改动是*编译错误*而不是运行时漂移)、[`server`](packages/server)(大脑,持有全部状态与模型调用)、
 [`web`](packages/web)(轻薄响应式视图)、[`desktop`](packages/desktop)(可选 Electron 外壳)。
 深入细节见 [`ARCHITECTURE.md`](ARCHITECTURE.md)。
+
+## 🎬 一些瞬间
+
+真实对话——她会玩梗、会联网查、会翻自己的代码、会记住。
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/assets/moment-fries.png" alt="持续的薯条梗" /></td>
+    <td width="50%"><img src="docs/assets/moment-empathy.png" alt="一起算考试分数" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub><b>她有幽默感。</b>一个薯条梗一本正经地接住了——情绪泡翻成 <i>Playful</i>。</sub></td>
+    <td align="center"><sub><b>她是真的在帮忙。</b>算清了分数,还把情绪落点接对了("是那条分数线本身,不是你的紧张")。</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/assets/moment-skill.png" alt="给未来的自己存一条技能,随后就用上了" /></td>
+    <td><img src="docs/assets/moment-code.png" alt="翻自己的代码库确认技能系统" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub><b>她在自我叠加。</b>存下一条技能"留给一个我还没遇见的自己",几分钟后就用上了(<code>ran a command → shell exit 0</code>)。</sub></td>
+    <td align="center"><sub><b>她能读自己的代码。</b>搜遍仓库(<code>103 of 103 matches</code>)来回答自己的技能系统是怎么运作的。</sub></td>
+  </tr>
+</table>
 
 ## 📚 文档
 

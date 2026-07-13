@@ -17,9 +17,7 @@ code-agent capability — embodied as a Live2D avatar with lip-synced custom voi
 
 **English** · [简体中文](README.zh-CN.md)
 
-<img src="docs/assets/wizard-chat.png" width="760" alt="Luna's guided setup wizard" />
-
-*First launch opens a bilingual guided setup — no env files, no docs required.*
+<img src="docs/assets/moment-fries.png" width="820" alt="Luna, a Live2D companion, sharing a joke" />
 
 </div>
 
@@ -57,8 +55,13 @@ cd Luna-ts
 bun run app        # installs deps → builds → packages → puts Luna.app on your Desktop → launches
 ```
 
-First launch opens the setup wizard (screenshot above). The only *required* thing is a chat API key
-(Anthropic, or any compatible gateway) — every other step is optional and re-runnable from Settings.
+<div align="center">
+<img src="docs/assets/wizard-chat.png" width="640" alt="The bilingual guided setup wizard" /><br/>
+<sub>First launch opens a bilingual guided setup — no env files, no docs required.</sub>
+</div>
+
+The only *required* thing is a chat API key (Anthropic, or any compatible gateway) — every other
+step is optional and re-runnable from Settings.
 
 Prefer the browser, or not on macOS?
 
@@ -92,6 +95,29 @@ shared wire contract — a wire change that isn't reflected on both sides is a *
 [`server`](packages/server) (the brain; owns all state and model calls),
 [`web`](packages/web) (a thin reactive view), and [`desktop`](packages/desktop) (an optional
 Electron shell). The deep dive lives in [`ARCHITECTURE.md`](ARCHITECTURE.md).
+
+## 🎬 Moments
+
+Real conversations — she jokes, she looks things up, she reads her own codebase, she remembers.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/assets/moment-fries.png" alt="A running fries joke" /></td>
+    <td width="50%"><img src="docs/assets/moment-empathy.png" alt="Working out an exam-grade problem together" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub><b>She has a sense of humor.</b> A running fries bit, played straight — mood pill flips to <i>Playful</i>.</sub></td>
+    <td align="center"><sub><b>She actually helps.</b> Does the grade math, and gets the emotional register right ("the cutoff itself, not your nerves").</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/assets/moment-skill.png" alt="Saving a skill for her future self, then using it" /></td>
+    <td><img src="docs/assets/moment-code.png" alt="Reading her own codebase to check the skill system" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub><b>She builds on herself.</b> Saves a skill "for a version of myself I haven't met yet," then uses it minutes later (<code>ran a command → shell exit 0</code>).</sub></td>
+    <td align="center"><sub><b>She can read her own code.</b> Searches the repo (<code>103 of 103 matches</code>) to answer how her own skill system works.</sub></td>
+  </tr>
+</table>
 
 ## 📚 Documentation
 
