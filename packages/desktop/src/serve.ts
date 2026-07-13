@@ -20,6 +20,7 @@ const MIME: Record<string, string> = {
   '.webp': 'image/webp',
   '.wav': 'audio/wav',
   '.moc3': 'application/octet-stream',
+  '.woff2': 'font/woff2', // v0.36.0: Bun emits a hashed ZCOOLKuaiLe woff2 into dist root
 };
 
 export const WEB_PORT = 5177; // pinned — a floating port would silently reset every luna:* setting

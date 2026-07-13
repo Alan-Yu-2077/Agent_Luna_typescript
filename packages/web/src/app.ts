@@ -51,14 +51,9 @@ async function boot(): Promise<void> {
     else mountSetupView(root);
     return;
   }
-  // v0.25.2 review fix: the class also honors OS-level prefers-reduced-motion (CSS @media overrides
-  // already did; JS consumers of the class must see the same truth).
-  if (
-    localStorage.getItem('luna:reduce-motion') === '1' ||
-    matchMedia('(prefers-reduced-motion: reduce)').matches
-  ) {
-    root.classList.add('reduce-motion');
-  }
+  // v0.36.0: Reduce-motion is gone (Initiative 26 constitution — the app is always alive). Clean up
+  // the stale persisted key so a previously-on instance doesn't carry a dead flag forever.
+  localStorage.removeItem('luna:reduce-motion');
 
   const refs = buildLayout(root);
   const windowView = new CuteBubbleView(refs.chatLog, refs.scrollPill);
@@ -172,6 +167,7 @@ async function boot(): Promise<void> {
     }
   }
 
+  let lastMoodKey: string | undefined;
   function updateMood(key: Parameters<typeof moodOf>[0]): void {
     const m = moodOf(key);
     const emoji = refs.moodPip.querySelector('.emoji');
@@ -179,6 +175,13 @@ async function boot(): Promise<void> {
     if (emoji) emoji.textContent = m.emoji;
     if (label) label.textContent = m.label;
     refs.moodPip.classList.add('on');
+    // v0.36.0: a mood *change* pops the pill (retrigger the animation by clearing then re-adding on
+    // the next frame). No pop on a repeat of the same mood.
+    if (key !== lastMoodKey) {
+      lastMoodKey = key;
+      refs.moodPip.classList.remove('mood-pop');
+      requestAnimationFrame(() => refs.moodPip.classList.add('mood-pop'));
+    }
   }
 
   const updateReconfigure = mountReconfigureButton(
@@ -235,17 +238,55 @@ async function boot(): Promise<void> {
   // window into a bottom input bar) + persists the choice; a resize re-fits the model into the
   // resized region (v0.25.2 turns that re-fit into a glide). In collapsed mode Luna's replies mirror
   // to the beside-model speech stack via the RouterBubbleView's live `() => isCollapsed`.
-  const applyCollapsed = (): void => {
-    const mutate = (): void => {
+  // v0.36.0 关窗户: collapse is a two-phase sash close. Phase 1 keeps the panel in the flow and
+  // squeezes the body shut top-to-bottom (CSS `.collapsing` animates grid-rows 1fr→0fr); after
+  // --m-soft, phase 2 docks the panel as the fixed bottom bar (`.collapsed`) and the model FLIP-
+  // glides into the freed width. Expand runs it in reverse: un-dock (model glides back) with the body
+  // still shut, then a frame later remove `.collapsing` so the rows glide 0fr→1fr (sash opens). A
+  // generation counter cancels stale phase callbacks when the user toggles rapidly.
+  const COLLAPSE_MS = 300; // ≈ --m-soft (0.28s) + a little slack
+  let collapseGen = 0;
+  let collapseTimer = 0;
+  const applyCollapsed = (animate = true): void => {
+    const gen = ++collapseGen;
+    clearTimeout(collapseTimer);
+    refs.collapseBtn.textContent = isCollapsed ? '⌃' : '⌄';
+    refs.collapseBtn.setAttribute('aria-label', isCollapsed ? 'Expand chat' : 'Collapse chat');
+
+    if (!animate) {
+      root.classList.remove('collapsing');
       root.classList.toggle('collapsed', isCollapsed);
-      refs.collapseBtn.textContent = isCollapsed ? '⌃' : '⌄';
-      refs.collapseBtn.setAttribute('aria-label', isCollapsed ? 'Expand chat' : 'Collapse chat');
       globalThis.dispatchEvent(new Event('resize'));
-    };
-    // v0.25.2: with a real Live2D sink, the layout change rides a FLIP glide (she slides to her new
-    // home instead of snapping); the console/no-WebGL fallback just applies it.
-    if (live2d.glideLayout) live2d.glideLayout(mutate);
-    else mutate();
+      return;
+    }
+
+    if (isCollapsed) {
+      root.classList.add('collapsing'); // phase 1: sash-close, still in flow
+      collapseTimer = window.setTimeout(() => {
+        if (gen !== collapseGen) return;
+        const dock = (): void => {
+          root.classList.remove('collapsing');
+          root.classList.add('collapsed'); // phase 2: fixed bar; model-stage grows
+        };
+        if (live2d.glideLayout) live2d.glideLayout(dock);
+        else dock();
+        globalThis.dispatchEvent(new Event('resize'));
+      }, COLLAPSE_MS);
+    } else {
+      const undock = (): void => {
+        root.classList.remove('collapsed');
+        root.classList.add('collapsing'); // back in flow, body still shut (rows at 0fr)
+      };
+      if (live2d.glideLayout) live2d.glideLayout(undock);
+      else undock();
+      // Force a reflow so the shut (0fr) state is committed, THEN release it — the rows transition
+      // 0fr→1fr and the sash opens. A rAF here would STALL while the tab is hidden (document.hidden
+      // freezes rAF), leaving the chat stuck shut; a synchronous reflow fires regardless of
+      // visibility, so expand can never wedge.
+      void root.offsetHeight;
+      root.classList.remove('collapsing');
+      globalThis.dispatchEvent(new Event('resize'));
+    }
   };
   refs.collapseBtn.addEventListener('click', () => {
     isCollapsed = !isCollapsed;
@@ -256,7 +297,7 @@ async function boot(): Promise<void> {
     }
     applyCollapsed();
   });
-  applyCollapsed(); // boot in the persisted collapse state
+  applyCollapsed(false); // boot in the persisted collapse state — no animation
 
   // v0.26.2 (Initiative 19): pet mode — the desktop shell's transparent always-on-top window loads
   // with ?pet=1. Strip the room (stripes/lace/motifs go transparent), force the companion layout,
@@ -284,7 +325,7 @@ async function boot(): Promise<void> {
       } catch {
         /* storage unavailable — fine */
       }
-      applyCollapsed();
+      applyCollapsed(false); // pet boots collapsed — no sash animation on first paint
     }
     // v0.28.6: manual window drag replaces `-webkit-app-region: drag` (which swallowed every
     // mousedown before the DOM saw it — nothing inside the pet was clickable). A pointerdown ON HER
@@ -334,11 +375,6 @@ async function boot(): Promise<void> {
   refs.live2dToggle.addEventListener('change', () =>
     localStorage.setItem('luna:live2d', refs.live2dToggle.checked ? '1' : '0'),
   );
-  refs.motionToggle.addEventListener('change', () => {
-    const on = refs.motionToggle.checked;
-    localStorage.setItem('luna:reduce-motion', on ? '1' : '0');
-    root.classList.toggle('reduce-motion', on);
-  });
   refs.gazeToggle.addEventListener('change', () => {
     // gaze-follow takes effect live (no refresh) — toggles pixi autoFocus
     localStorage.setItem('luna:gaze-follow', refs.gazeToggle.checked ? '1' : '0');

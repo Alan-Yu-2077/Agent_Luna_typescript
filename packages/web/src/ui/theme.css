@@ -1,3 +1,18 @@
+/* v0.36.0: the cute type stack — Fredoka (Latin/digits, variable weight) + 站酷快乐体 (CJK).
+   Bundled woff2 (no runtime Google Fonts — offline + CN networks). Both SIL OFL. */
+@font-face {
+  font-family: "Fredoka";
+  src: url("../../public/fonts/Fredoka.woff2") format("woff2");
+  font-weight: 300 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: "ZCOOL KuaiLe";
+  src: url("../../public/fonts/ZCOOLKuaiLe.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+
 :root {
   --stripe-a: #e4eef9;
   --stripe-b: #f5f9fd;
@@ -27,8 +42,16 @@
   --muted: #a7b6c8;
   --ok: #5fb87f;
   --radius: 16px;
-  --font: "PingFang SC", "Hiragino Sans GB", ui-rounded, "Segoe UI", system-ui, sans-serif;
+  --font: "Fredoka", "ZCOOL KuaiLe", "PingFang SC", "Hiragino Sans GB", ui-rounded, "Segoe UI", system-ui, sans-serif;
+  /* v0.36.0: motion tokens — every animation/transition reads these, not ad-hoc numbers. */
+  --m-fast: 0.15s;
+  --m-soft: 0.28s;
+  --m-slow: 0.5s;
+  --ease-pop: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-glide: cubic-bezier(0.22, 0.8, 0.4, 1);
 }
+
+body { font-weight: 500; } /* 快乐体 renders single-weight; Fredoka Medium for body */
 
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; }
@@ -44,17 +67,11 @@ body {
 
 .luna-app { position: relative; height: 100vh; display: flex; flex-direction: column; }
 
-.lace-top {
-  height: 14px; flex: none;
-  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='14'%3E%3Cpath d='M0,0L20,0L10,14Z' fill='%23b9d4ef'/%3E%3C/svg%3E") repeat-x;
-}
-.lace-bottom {
-  height: 16px; flex: none;
-  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='16'%3E%3Cpath d='M0,16L0,8Q12,-2,24,8L24,16Z' fill='%23b9d4ef'/%3E%3C/svg%3E") repeat-x;
-}
-
+/* v0.36.0 无边模式: the lace strips + vertical stage padding are gone — the model renders to the
+   true top/bottom edges (and the physics floor is the real window bottom). Horizontal padding stays
+   for the chat panel's breathing room. */
 .stage {
-  position: relative; flex: 1; display: flex; gap: 20px; padding: 22px; min-height: 0;
+  position: relative; flex: 1; display: flex; gap: 20px; padding: 0 22px; min-height: 0;
 }
 
 .status-badge {
@@ -84,9 +101,23 @@ body {
 
 .chat-panel {
   position: relative; z-index: 2; flex: 0 0 38%;
-  display: flex; flex-direction: column; min-height: 0;
+  /* v0.36.0: a two-row grid ([body 1fr][input auto]) instead of a flex column, so the collapse can
+     animate grid-template-rows 1fr→0fr and close the body top-to-bottom like a window sash.
+     align-content:end pins the shrinking rows to the bottom, so the body's TOP edge descends toward
+     the docked input bar (not the reverse). */
+  display: grid; grid-template-rows: minmax(0, 1fr) auto; align-content: end;
+  min-height: 0;
   background: var(--panel); border-radius: var(--radius);
   padding: 14px 14px 12px; box-shadow: 0 3px 0 var(--panel-edge);
+  transition: grid-template-rows var(--m-soft) var(--ease-glide);
+}
+.chat-body {
+  /* justify-content:flex-end keeps content bottom-anchored so the sash-close clips the header first
+     (top-to-bottom). In the open state the flex:1 log eats all free space, so nothing actually
+     shifts. */
+  display: flex; flex-direction: column; justify-content: flex-end;
+  min-height: 0; overflow: hidden;
+  transition: opacity var(--m-soft) ease;
 }
 .puff { position: absolute; background: var(--panel); border-radius: 50%; }
 .puff.l1 { top: -9px; left: 16px; width: 30px; height: 20px; }
@@ -107,6 +138,13 @@ body {
   padding: 12px; display: flex; flex-direction: column; gap: 10px;
 }
 
+/* v0.36.0 micro-motion: every new chat row and status card springs in from below. Transform/opacity
+   only; plays once on insert (CuteBubbleView appends the node). */
+.bubble-row, .card { animation: chat-in var(--m-soft) var(--ease-pop); }
+@keyframes chat-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
 .bubble-row { display: flex; flex-direction: column; max-width: 88%; }
 .bubble-row.user { align-self: flex-start; align-items: flex-start; }
 .bubble-row.luna { align-self: flex-end; align-items: flex-end; }
@@ -141,8 +179,10 @@ body {
   flex: none; width: 36px; height: 36px; border-radius: 50%; border: none;
   background: var(--sky-deep); color: #1f4c74; font-size: 16px; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
+  transition: transform var(--m-fast) var(--ease-pop), background var(--m-fast) ease;
 }
-.send-btn:active { transform: scale(0.94); }
+.send-btn:hover { transform: scale(1.08); background: var(--sky); }
+.send-btn:active { transform: scale(0.92); }
 
 .model-stage {
   position: relative; z-index: 1; flex: 1; min-width: 0;
@@ -172,10 +212,6 @@ body {
 .dream-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--lavender-deep); }
 
 @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
-
-@media (prefers-reduced-motion: reduce) {
-  .model-placeholder { animation: none; }
-}
 
 @media (max-width: 720px) {
   .stage { flex-direction: column; }
@@ -223,7 +259,20 @@ body {
   font-size: 12px; padding: 4px 10px; border-radius: 999px; box-shadow: 0 1px 4px rgba(90, 120, 160, 0.18);
 }
 .mood-pip.on { opacity: 1; }
-.mood-pip .emoji { font-size: 15px; }
+.mood-pip .emoji { font-size: 15px; display: inline-block; }
+/* v0.36.0: a mood *change* pops the pill (app.ts retriggers by removing then re-adding on rAF). */
+.mood-pip.mood-pop { animation: mood-pop var(--m-soft) var(--ease-pop); }
+.mood-pip.mood-pop .emoji { animation: mood-pop-emoji var(--m-slow) var(--ease-pop); }
+@keyframes mood-pop {
+  0% { transform: scale(0.92); }
+  55% { transform: scale(1.06); }
+  100% { transform: scale(1); }
+}
+@keyframes mood-pop-emoji {
+  0% { transform: scale(0.6) rotate(-12deg); }
+  50% { transform: scale(1.25) rotate(8deg); }
+  100% { transform: scale(1) rotate(0); }
+}
 
 /* scroll-to-latest pill */
 .scroll-pill {
@@ -259,15 +308,6 @@ body {
 .setting-badge { font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; color: #b0802a; background: #fdf3dd; border-radius: 6px; padding: 1px 5px; }
 .setting-reset { border: none; background: none; cursor: pointer; color: var(--muted); font-size: 13px; padding: 0 2px; }
 .setting-reset:hover { color: var(--ink); }
-
-@media (prefers-reduced-motion: reduce) {
-  .model-placeholder, .dream-overlay .moon, .dream-stars span, .thinking i, .card.proactive { animation: none; }
-}
-.reduce-motion .model-placeholder,
-.reduce-motion .dream-overlay .moon,
-.reduce-motion .dream-stars span,
-.reduce-motion .thinking i,
-.reduce-motion .card.proactive { animation: none; }
 
 /* boot gate — voice warmup splash (blocks the page until GPT-SoVITS is warm) */
 .boot-gate {
@@ -323,8 +363,6 @@ body {
   transition: background 0.15s;
 }
 .boot-skip:hover { background: rgba(143, 183, 255, 0.45); }
-.reduce-motion .boot-moon, .reduce-motion .boot-spinner i { animation: none; }
-
 /* v0.25.0 (Initiative 18) + design review 2026-07-04: the beside-model speech bubbles. Each reply
    pops on a RANDOM side of her head — two head-anchored zones (left/right of --luna-head-x, which
    the sink republishes every frame in EVERY mode, so this works windowed / app / pet alike). Within
@@ -428,12 +466,6 @@ body {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
-.reduce-motion .speech-bubble,
-.reduce-motion .speech-bubble::after { animation: none; transition: none; }
-@media (prefers-reduced-motion: reduce) {
-  .speech-bubble,
-  .speech-bubble::after { animation: none; transition: none; }
-}
 
 /* v0.25.1 (Initiative 18): collapsed companion mode — the chat window folds into a floating bottom
    input bar; the chat-panel leaves the flex flow so .model-stage (flex:1) grows to full width and
@@ -449,10 +481,20 @@ body {
   padding: 4px 7px;
   border-radius: 999px;
 }
+.collapse-btn {
+  transition: transform var(--m-fast) var(--ease-pop), background var(--m-fast) ease, color var(--m-fast) ease;
+}
 .collapse-btn:hover {
   color: var(--ink);
   background: rgba(185, 212, 239, 0.35);
 }
+.collapse-btn:active { transform: scale(0.88); }
+/* v0.36.0 关窗户 phase 1: still in the flex flow, the body squeezes shut (grid rows → 0fr) and fades.
+   app.ts holds this class for --m-soft, THEN docks to the fixed bar below (phase 2). Reused in
+   reverse on expand: added instantly, removed a frame later so the rows glide 0fr→1fr (sash opens). */
+.luna-app.collapsing .chat-panel { grid-template-rows: minmax(0, 0fr) auto; }
+.luna-app.collapsing .chat-body { opacity: 0; }
+
 .luna-app.collapsed .chat-panel {
   position: fixed;
   left: 50%;
@@ -465,8 +507,7 @@ body {
   box-shadow: none;
   z-index: 6;
 }
-.luna-app.collapsed .chat-header,
-.luna-app.collapsed .chat-log,
+.luna-app.collapsed .chat-body,
 .luna-app.collapsed .scroll-pill,
 .luna-app.collapsed .chat-panel .puff {
   display: none;
@@ -484,24 +525,17 @@ body {
   border-radius: 999px;
   padding: 8px 10px;
   box-shadow: 0 8px 26px rgba(39, 73, 107, 0.2);
-  animation: bar-rise 0.34s ease;
+  animation: bar-rise var(--m-soft) var(--ease-glide);
 }
 @keyframes bar-rise {
   from { opacity: 0; transform: translateY(14px); }
   to { opacity: 1; transform: translateY(0); }
 }
-/* reduce-motion sits on the SAME root element as .luna-app — a compound selector, never a descendant */
-.luna-app.reduce-motion.collapsed .chat-input-row { animation: none; }
-@media (prefers-reduced-motion: reduce) {
-  .luna-app.collapsed .chat-input-row { animation: none; }
-}
 
 /* v0.26.2 (Initiative 19): pet mode — the desktop shell's transparent window. Only Luna, her
-   bubbles, and the pill bar exist; the room (stripes/lace/motifs/status) disappears so the
-   desktop shows through. */
+   bubbles, and the pill bar exist; the room (stripes/motifs/status) disappears so the desktop shows
+   through. (v0.36.0 无边模式 already removed the lace strips everywhere.) */
 body.pet { background: none; }
-.luna-app.pet .lace-top,
-.luna-app.pet .lace-bottom,
 .luna-app.pet .motif-layer,
 .luna-app.pet .status-badge {
   display: none;

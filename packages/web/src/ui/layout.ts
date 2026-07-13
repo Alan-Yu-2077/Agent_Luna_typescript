@@ -22,7 +22,6 @@ export type LayoutRefs = {
   settingsPanel: HTMLElement;
   ttsToggle: HTMLInputElement;
   live2dToggle: HTMLInputElement;
-  motionToggle: HTMLInputElement;
   gazeToggle: HTMLInputElement;
   idleSelect: HTMLSelectElement;
   petToggle: HTMLInputElement;
@@ -94,13 +93,10 @@ function selectRow(
 
 export function buildLayout(root: HTMLElement): LayoutRefs {
   const doc = root.ownerDocument;
-  // classList.add, NOT `className =`: boot adds `reduce-motion` to the root BEFORE buildLayout runs,
-  // and a plain assignment silently wiped it (pre-existing bug — persisted reduce-motion never
-  // applied on boot; the settings toggle only re-added it live).
+  // classList.add, NOT `className =`: other boot code may add classes to the root before buildLayout.
   root.classList.add('luna-app');
   while (root.firstChild) root.removeChild(root.firstChild);
 
-  add(root, 'div', 'lace-top');
   const stage = add(root, 'div', 'stage');
 
   const statusBadge = add(stage, 'div', 'status-badge', 'Connecting…');
@@ -114,7 +110,6 @@ export function buildLayout(root: HTMLElement): LayoutRefs {
   const settingsPanel = add(stage, 'div', 'settings-panel');
   const ttsToggle = toggleRow(settingsPanel, 'Voice', localStorage.getItem('luna:tts') !== '0');
   const live2dToggle = toggleRow(settingsPanel, 'Live2D model', localStorage.getItem('luna:live2d') !== '0');
-  const motionToggle = toggleRow(settingsPanel, 'Reduce motion', localStorage.getItem('luna:reduce-motion') === '1');
   const gazeToggle = toggleRow(settingsPanel, 'Gaze follow', localStorage.getItem('luna:gaze-follow') !== '0');
   const idleSelect = selectRow(
     settingsPanel,
@@ -141,15 +136,19 @@ export function buildLayout(root: HTMLElement): LayoutRefs {
 
   const panel = add(stage, 'div', 'chat-panel');
   for (const c of ['l1', 'l2', 'r1', 'r2']) add(panel, 'span', `puff ${c}`);
-  const header = add(panel, 'div', 'chat-header');
+  // v0.36.0: header + log + pill live in a .chat-body wrapper so the collapse can close it
+  // top-to-bottom (grid-row 1fr→0fr) into the input bar, like a window sash. The input row stays a
+  // direct panel child (always visible).
+  const chatBody = add(panel, 'div', 'chat-body');
+  const header = add(chatBody, 'div', 'chat-header');
   add(header, 'span', 'dot');
   add(header, 'span', undefined, 'Luna · online');
-  const chatLog = add(panel, 'div', 'chat-log');
+  const chatLog = add(chatBody, 'div', 'chat-log');
   const scrollPill = doc.createElement('button');
   scrollPill.className = 'scroll-pill';
   scrollPill.type = 'button';
   scrollPill.textContent = '↓ New messages';
-  panel.appendChild(scrollPill);
+  chatBody.appendChild(scrollPill);
 
   const inputRow = add(panel, 'div', 'chat-input-row');
   // v0.25.1 (Initiative 18): collapse ↔ expand toggle. Lives in the input-row (NOT the header) so it
@@ -187,8 +186,6 @@ export function buildLayout(root: HTMLElement): LayoutRefs {
   dreamBtn.textContent = '🌙 Dream';
   modelStage.appendChild(dreamBtn);
 
-  add(root, 'div', 'lace-bottom');
-
   const dreamOverlay = add(root, 'div', 'dream-overlay');
   const stars = add(dreamOverlay, 'div', 'dream-stars');
   for (const st of STARS) {
@@ -210,7 +207,7 @@ export function buildLayout(root: HTMLElement): LayoutRefs {
   return {
     statusBadge, chatLog, input, sendBtn, collapseBtn, dreamBtn, modelStage,
     moodPip, scrollPill, dreamOverlay, dreamWakeBtn, dreamCaption,
-    settingsBtn, settingsPanel, ttsToggle, live2dToggle, motionToggle, gazeToggle, idleSelect,
+    settingsBtn, settingsPanel, ttsToggle, live2dToggle, gazeToggle, idleSelect,
     petToggle, serverSettings,
   };
 }

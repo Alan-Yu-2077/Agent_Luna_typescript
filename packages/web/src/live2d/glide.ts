@@ -11,7 +11,7 @@ export type Glide = {
   start(deltaX: number, nowMs: number): void;
   // The offset for this frame, or null when idle. The final step returns exactly 0, then idle.
   step(nowMs: number): number | null;
-  // Cancel an in-flight tween (reduce-motion snap) — the next step() is null, no residual motion.
+  // Cancel an in-flight tween (snap to rest) — the next step() is null, no residual motion.
   stop(): void;
   active(): boolean;
 };

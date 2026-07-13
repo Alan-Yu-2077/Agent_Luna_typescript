@@ -41,14 +41,6 @@ function saveZoom(z: number): void {
 function gazeFollowEnabled(): boolean {
   return localStorage.getItem(GAZE_KEY) !== '0';
 }
-// v0.25.2 review fix: honor OS-level prefers-reduced-motion too — every CSS animation carries the
-// @media override, and the JS glide must match that contract, not just the app toggle.
-function reducedMotion(): boolean {
-  return (
-    localStorage.getItem('luna:reduce-motion') === '1' ||
-    (typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches)
-  );
-}
 function loadIdleProfile(): IdleProfileId {
   try {
     const v = localStorage.getItem(IDLE_KEY);
@@ -326,19 +318,12 @@ export async function createPixiLive2DSink(
     // v0.25.2: FLIP-style layout glide. Capture the model's screen-space x, run the layout change
     // (the caller toggles `.collapsed` + dispatches `resize`, which snaps fit() to the new center),
     // then set the mode offset so she APPEARS unmoved and ease it to 0 — she glides to her new home.
-    // `+ modeX` keeps a mid-glide retarget continuous (the stale offset cancels out of the rect
-    // math). Reduce-motion → snap (offset 0 immediately).
+    // `+ modeX` keeps a mid-glide retarget continuous (the stale offset cancels out of the rect math).
     glideLayout: (mutate: () => void) => {
       const beforeX = canvas.getBoundingClientRect().left + model.x;
       mutate();
       const afterX = canvas.getBoundingClientRect().left + model.x;
       const delta = beforeX - afterX + modeX;
-      if (reducedMotion()) {
-        // review fix: CANCEL any in-flight tween — else its next step() yanks her off the snap.
-        glide.stop();
-        setMode(0);
-        return;
-      }
       glide.start(delta, performance.now());
       const g = glide.step(performance.now());
       setMode(g ?? 0);

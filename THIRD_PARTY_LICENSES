@@ -32,5 +32,19 @@ components, which are licensed separately and are **not** covered by that MIT gr
 
 --------------------------------------------------------------------------------
 
+## Bundled fonts — `packages/web/public/fonts/*.woff2`
+
+- `Fredoka.woff2` — Fredoka (Latin/digits, variable weight). © The Fredoka Project
+  Authors. **SIL Open Font License 1.1** (full text: `Fredoka-OFL.txt`).
+  - https://github.com/hafontia-zz/Fredoka
+- `ZCOOLKuaiLe.woff2` — 站酷快乐体 / ZCOOL KuaiLe (CJK). © 汉仪字库 / The ZCOOL KuaiLe
+  Project Authors. **SIL Open Font License 1.1** (full text: `ZCOOLKuaiLe-OFL.txt`).
+  - https://github.com/googlefonts/zcool-kuaile
+- Bundled as offline woff2 (no runtime font CDN) and loaded via `@font-face` in
+  `packages/web/src/ui/theme.css`. The OFL permits bundling and redistribution; the
+  reserved font names must be preserved (they are).
+
+--------------------------------------------------------------------------------
+
 Runtime npm dependencies are licensed under their own terms (see each package and
 `bun.lock`); they are not redistributed in source here.

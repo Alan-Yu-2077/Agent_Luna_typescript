@@ -29,7 +29,7 @@ describe('createGlide (v0.25.2)', () => {
     expect(g.active()).toBe(false);
   });
 
-  test('stop() cancels an in-flight tween — no residual step (the reduce-motion snap path)', () => {
+  test('stop() cancels an in-flight tween — no residual step (snap to rest)', () => {
     const g = createGlide(500);
     g.start(200, 1000);
     expect(g.step(1100)).not.toBeNull(); // in flight
