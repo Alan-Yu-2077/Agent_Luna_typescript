@@ -27,6 +27,25 @@ export function shouldAttach(opts: { portListening: boolean; smoke: boolean }): 
   return opts.portListening && !opts.smoke;
 }
 
+// v0.35.5: the boot-mode decision, pure. Precedence: attach (a running backend owns the keys) →
+// SETUP (no key yet — the wizard must come BEFORE the dev launcher, or every `bun run app` user
+// boots straight into a keyless dev stack and never sees onboarding; the v0.35.4 default flip made
+// that hole user-visible) → dev launcher → self-contained sidecar. Smoke suppresses setup (the
+// probe needs the app window); its caller already suppresses dev under smoke.
+export type BootMode = 'attach' | 'setup' | 'dev' | 'sidecar';
+export function resolveBootMode(o: {
+  attached: boolean;
+  needsOnboarding: boolean;
+  smoke: boolean;
+  skipOnboarding: boolean;
+  devAvailable: boolean;
+}): BootMode {
+  if (o.attached) return 'attach';
+  if (o.needsOnboarding && !o.smoke && !o.skipOnboarding) return 'setup';
+  if (o.devAvailable) return 'dev';
+  return 'sidecar';
+}
+
 // v0.28.9 — when the app has to start the backend itself, prefer launching the WHOLE dev stack
 // (`bun scripts/dev-all.ts` = server 8787 + web 5173 + tts 8788) so one click brings everything up
 // and the browser can share the same Luna. Needs a source checkout (dev-all.ts present) + a bun

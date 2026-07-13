@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { resolveDevLauncher, resolveSidecarDb, shouldAttach } from './backend';
+import { resolveBootMode, resolveDevLauncher, resolveSidecarDb, shouldAttach } from './backend';
 
 const SHARED = '/repo/luna.sqlite';
 const USER = '/userData/luna.sqlite';
@@ -65,5 +65,31 @@ describe('resolveDevLauncher (v0.28.9)', () => {
       exists: (p) => p === SCRIPT || p === '/custom/bun',
     });
     expect(r?.bun).toBe('/custom/bun');
+  });
+});
+
+describe('resolveBootMode (v0.35.5)', () => {
+  const base = { attached: false, needsOnboarding: false, smoke: false, skipOnboarding: false, devAvailable: false };
+
+  test('THE regression: fresh machine WITH a checkout (every `bun run app` user) → setup, not dev', () => {
+    expect(resolveBootMode({ ...base, needsOnboarding: true, devAvailable: true })).toBe('setup');
+  });
+
+  test('attach wins over everything — a running backend already holds the keys', () => {
+    expect(resolveBootMode({ ...base, attached: true, needsOnboarding: true, devAvailable: true })).toBe('attach');
+  });
+
+  test('keys present + checkout → dev; keys present, no checkout → sidecar', () => {
+    expect(resolveBootMode({ ...base, devAvailable: true })).toBe('dev');
+    expect(resolveBootMode(base)).toBe('sidecar');
+  });
+
+  test('LUNA_SKIP_ONBOARDING bypasses setup (falls through to dev/sidecar)', () => {
+    expect(resolveBootMode({ ...base, needsOnboarding: true, skipOnboarding: true, devAvailable: true })).toBe('dev');
+    expect(resolveBootMode({ ...base, needsOnboarding: true, skipOnboarding: true })).toBe('sidecar');
+  });
+
+  test('smoke suppresses setup — the probe needs a window, never the form', () => {
+    expect(resolveBootMode({ ...base, needsOnboarding: true, smoke: true })).toBe('sidecar');
   });
 });

@@ -17,7 +17,7 @@ import { formatLatLon, resolveDesktopLocation } from './location';
 import { createPetDrag, type PetDrag } from './petDrag';
 import { petWindowOptions } from './petWindow';
 import { createSupervisor, waitForPort, type Supervisor } from './supervisor';
-import { resolveDevLauncher, resolveSidecarDb, shouldAttach } from './backend';
+import { resolveBootMode, resolveDevLauncher, resolveSidecarDb, shouldAttach } from './backend';
 import { probeEmbedding, probeSearch, probeWeather } from './probes';
 import { installModelFolder } from './modelInstall';
 import {
@@ -616,7 +616,20 @@ void app.whenReady().then(async () => {
   // forwards /api/tts to the configured api_v2 backend. The renderer connects to `?ws=${SERVER_PORT}`
   // either way, so both paths land on the same backend + DB.
   const attached = shouldAttach({ portListening: await waitForPort(SERVER_PORT, 800), smoke: SMOKE });
-  if (attached) {
+  const dev = SMOKE ? null : resolveDevLauncher({ repoRoot: REPO_ROOT, env: process.env });
+  // v0.35.5: ONE boot-mode decision, with SETUP ahead of the dev launcher. Before this, any machine
+  // where the app was built from a still-present checkout (i.e. every `bun run app` user) took the
+  // dev branch first and NEVER saw onboarding — a fresh clone booted a keyless dev stack instead of
+  // the wizard. Precedence: attach → setup → dev → sidecar (pure, tested in backend.test.ts).
+  const mode = resolveBootMode({
+    attached,
+    needsOnboarding: needsOnboarding(userEnv),
+    smoke: SMOKE,
+    skipOnboarding: process.env['LUNA_SKIP_ONBOARDING'] === '1',
+    devAvailable: dev !== null,
+  });
+
+  if (mode === 'attach') {
     attachedToExternal = true;
     console.log(`[luna-desktop] attaching to existing backend on 127.0.0.1:${SERVER_PORT}`);
     createWindow();
@@ -626,13 +639,20 @@ void app.whenReady().then(async () => {
     return;
   }
 
-  // v0.28.9: nothing is up — start the backend ourselves. On a source checkout with bun reachable,
-  // launch the WHOLE dev stack (`bun scripts/dev-all.ts` = server 8787 + web 5173) so one click brings
-  // everything up and the browser shares this same Luna. dev-all reads the repo `.env` for keys, so we
-  // skip onboarding here; LUNA_PROACTIVE follows luna.env (dev-all defaults it off). SMOKE + no-bun/
-  // no-repo fall through to the self-contained sidecar.
-  const dev = SMOKE ? null : resolveDevLauncher({ repoRoot: REPO_ROOT, env: process.env });
-  if (dev) {
+  // v0.28.0: no real key yet → the setup screen (the wizard since v0.35.4) instead of the app, and
+  // DON'T spawn a backend yet — the submit handler starts the sidecar once real keys land.
+  if (mode === 'setup') {
+    createWindow('setup');
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) createWindow('setup');
+    });
+    return;
+  }
+
+  // v0.28.9: keys exist and a source checkout + bun are present — launch the WHOLE dev stack
+  // (`bun scripts/dev-all.ts` = server 8787 + web 5173) so one click brings everything up and the
+  // browser shares this same Luna. LUNA_PROACTIVE follows luna.env (dev-all defaults it off).
+  if (mode === 'dev' && dev) {
     console.log(`[luna-desktop] launching full dev stack: ${dev.bun} ${dev.script}`);
     supervisor = createSupervisor({
       command: dev.bun,
@@ -656,22 +676,9 @@ void app.whenReady().then(async () => {
         detail: `No response on 127.0.0.1:${SERVER_PORT}. Check that bun + the repo are present (or set LUNA_BUN_PATH in ${p.envFile}).`,
       });
     }
-    createWindow(); // dev never runs under SMOKE (see the guard above), so no smoke probe here
+    createWindow(); // dev never runs under SMOKE (resolveBootMode caller), so no smoke probe here
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();
-    });
-    return;
-  }
-
-  // v0.28.0: first run with no real key → show the setup screen instead of the app, and DON'T spawn
-  // the sidecar yet (the submit handler starts it once real keys land). SMOKE + LUNA_SKIP_ONBOARDING
-  // bypass the gate (the smoke's placeholder key must reach the app, not the form).
-  const onboard =
-    needsOnboarding(userEnv) && !SMOKE && process.env['LUNA_SKIP_ONBOARDING'] !== '1';
-  if (onboard) {
-    createWindow('setup');
-    app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) createWindow('setup');
     });
     return;
   }
