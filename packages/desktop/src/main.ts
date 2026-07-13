@@ -47,6 +47,12 @@ const SERVER_PORT = Number(process.env['LUNA_DESKTOP_WS_PORT'] ?? (SMOKE ? 8790 
 // luna.env / the env is only the initial default. Windowed mode stays the fallback.
 let petMode = process.env['LUNA_PET_MODE'] === '1';
 
+// v0.35.7: an isolated-userData override for smokes/screenshots/tests — macOS ignores $HOME for
+// Application Support, so without this a "fresh machine" smoke silently reads the REAL profile
+// (and once put private chat history into a docs screenshot). Set before anything touches paths.
+const userDataOverride = process.env['LUNA_USER_DATA_DIR'];
+if (userDataOverride) app.setPath('userData', userDataOverride);
+
 type Paths = {
   userData: string;
   db: string;
@@ -732,8 +738,9 @@ void app.whenReady().then(async () => {
     }
   }
   // v0.35.4: LUNA_SMOKE_SETUP probes the WIZARD in the packaged shell (fresh-machine E2E for the
-  // default-on flip) instead of the app window.
-  const smokeSetup = SMOKE && process.env['LUNA_SMOKE_SETUP'] === '1';
+  // default-on flip) instead of the app window. '1' = step 1; 'voice' = walk to the voice step.
+  const setupMode = process.env['LUNA_SMOKE_SETUP'];
+  const smokeSetup = SMOKE && (setupMode === '1' || setupMode === 'voice');
   const win = createWindow(smokeSetup ? 'setup' : 'app');
   if (SMOKE) void (smokeSetup ? smokeSetupProbe(win) : smokeProbe(win));
   app.on('activate', () => {
@@ -743,8 +750,24 @@ void app.whenReady().then(async () => {
 
 // The wizard go/no-go: the packaged setup window mounts the six-step wizard (default-on flag), the
 // first step is the chat card, and the language toggle is live. Asserted from the real bundle.
+// LUNA_SMOKE_SETUP=voice additionally walks to the voice step (http mode) before probing, and
+// LUNA_SMOKE_OUT captures a PNG — the docs/README screenshots come from the real packaged wizard.
 async function smokeSetupProbe(win: BrowserWindow): Promise<void> {
   await new Promise((r) => setTimeout(r, 4000));
+  if (process.env['LUNA_SMOKE_SETUP'] === 'voice') {
+    await win.webContents.executeJavaScript(
+      `(() => {
+        const click = (txt) => { const b = [...document.querySelectorAll('button')].find(x => x.textContent === txt); if (b) b.click(); return !!b; };
+        const key = [...document.querySelectorAll('input')].find(i => i.type === 'password');
+        if (key) { key.value = 'sk-preview'; key.dispatchEvent(new Event('input')); }
+        click('Next') || click('下一步');
+        for (let i = 0; i < 4; i++) click('Skip') || click('跳过');
+        const http = [...document.querySelectorAll('.wizard-radio-row input')].find(i => i.value === 'http');
+        if (http) http.click();
+      })()`,
+    );
+    await new Promise((r) => setTimeout(r, 600));
+  }
   const probe = (await win.webContents.executeJavaScript(
     `(() => JSON.stringify({
       wizard: !!document.querySelector('.setup-card.wizard'),
@@ -754,6 +777,11 @@ async function smokeSetupProbe(win: BrowserWindow): Promise<void> {
       langBtn: !!document.querySelector('.setup-lang-btn'),
     }))()`,
   )) as string;
+  const shotPath = process.env['LUNA_SMOKE_OUT'];
+  if (shotPath) {
+    const shot = await win.webContents.capturePage();
+    writeFileSync(shotPath, shot.toPNG());
+  }
   const p = JSON.parse(probe) as { wizard: boolean; dots: number; step: string | null; guide: boolean; langBtn: boolean };
   const ok = p.wizard && p.dots === 6 && !!p.step && p.guide && p.langBtn;
   console.log(JSON.stringify({ ok, ...p }));
