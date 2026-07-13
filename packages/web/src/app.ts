@@ -12,6 +12,7 @@ import { buildLayout } from './ui/layout';
 import { renderServerSettings } from './ui/settingsView';
 import { mountSetupView } from './ui/setupView';
 import { mountSetupWizard } from './ui/setupWizard';
+import { mountReconfigureButton } from './ui/reconfigure';
 import { startTimestampRefresh } from './ui/time';
 import { moodOf } from './ui/mood';
 import { createPixiLive2DSink } from './live2d/pixiLive2DSink';
@@ -180,6 +181,11 @@ async function boot(): Promise<void> {
     refs.moodPip.classList.add('on');
   }
 
+  const updateReconfigure = mountReconfigureButton(
+    refs.statusBadge,
+    (globalThis as { lunaSetup?: { openSetup?: () => void } }).lunaSetup?.openSetup,
+  );
+
   const client = new LunaWsClient({
     url: WS_URL,
     onEvent: (e) => {
@@ -199,6 +205,9 @@ async function boot(): Promise<void> {
     onStatus: (s) => {
       refs.statusBadge.textContent = STATUS_TEXT[s];
       refs.statusBadge.dataset['status'] = s;
+      // v0.35.6: a broken config (dead backend, reconnect loop) surfaces the way back to the
+      // wizard right on the badge — no hunting through Settings while nothing works.
+      updateReconfigure(s);
       // Re-send the cached GPS fix on every (re)connect so a server restart still
       // gets the location (the server holds it in-memory).
       if (s === 'open') {

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, session, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, session, shell } from 'electron';
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join, sep } from 'node:path';
 import { defaultDistDir, startWebHost, WEB_PORT } from './serve';
@@ -332,16 +332,40 @@ ipcMain.on('luna:wizard-enabled', (event) => {
   event.returnValue = wizardEnabled();
 });
 
-// v0.35.0: re-enter setup from the Settings panel. One setup window at most — focus an existing one
-// instead of stacking a second.
-ipcMain.on('luna:open-setup', () => {
+// v0.35.0: re-enter setup — one setup window at most, focus an existing one instead of stacking.
+// v0.35.6: extracted so the native menu + failure dialogs share it: the wizard must stay reachable
+// even when a bad config leaves the renderer broken or the backend dead (no irreversible states).
+function openSetupWindow(): void {
   const existing = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().includes('setup=1'));
   if (existing) {
     existing.focus();
     return;
   }
   createWindow('setup');
+}
+
+ipcMain.on('luna:open-setup', () => {
+  openSetupWindow();
 });
+
+// v0.35.6: the always-available escape hatch — a NATIVE menu item (⌘,) opens the setup wizard even
+// if the renderer is a white screen. Standard roles keep copy/paste/devtools working.
+function installAppMenu(): void {
+  const setupItem = {
+    label: 'Setup Wizard… / 重新配置',
+    accelerator: 'CmdOrCtrl+,',
+    click: (): void => openSetupWindow(),
+  };
+  const template: Electron.MenuItemConstructorOptions[] = [
+    ...(process.platform === 'darwin' ? [{ role: 'appMenu' as const }] : []),
+    { role: 'fileMenu' },
+    { role: 'editMenu' },
+    { role: 'viewMenu' },
+    { role: 'windowMenu' },
+    { label: 'Setup', submenu: [setupItem] },
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
 
 // v0.35.0: the wizard's wide submit — every step's collected fields in ONE call, whitelisted
 // (filterWizardFields drops anything the wizard doesn't manage), chat probe-first when chat fields
@@ -562,6 +586,7 @@ void app.whenReady().then(async () => {
   const p = resolvePaths();
   paths = p;
   const userEnv = ensureUserConfig(p);
+  installAppMenu(); // before any window — the ⌘, escape hatch must exist from the first frame
 
   // v0.33.0: our window loads ONLY Luna's own pinned-loopback bundle, so permission requests come
   // from trusted local content — grant them. Crucially geolocation, which Electron denies by
@@ -670,11 +695,17 @@ void app.whenReady().then(async () => {
     supervisor.start();
     const up = await waitForPort(SERVER_PORT);
     if (!up) {
-      dialog.showMessageBoxSync({
+      const choice = dialog.showMessageBoxSync({
         type: 'warning',
         message: 'Luna\'s dev stack did not start',
         detail: `No response on 127.0.0.1:${SERVER_PORT}. Check that bun + the repo are present (or set LUNA_BUN_PATH in ${p.envFile}).`,
+        buttons: ['Open Setup', 'Close'],
+        defaultId: 0,
       });
+      if (choice === 0) {
+        openSetupWindow();
+        return;
+      }
     }
     createWindow(); // dev never runs under SMOKE (resolveBootMode caller), so no smoke probe here
     app.on('activate', () => {
@@ -686,11 +717,19 @@ void app.whenReady().then(async () => {
   supervisor.start();
   const up = await waitForPort(SERVER_PORT);
   if (!up && !SMOKE) {
-    dialog.showMessageBoxSync({
+    // v0.35.6: the classic "bad config bricked the backend" moment — hand the user the way back
+    // to the wizard right here instead of pointing at a file path.
+    const choice = dialog.showMessageBoxSync({
       type: 'warning',
       message: 'Luna\'s server did not start',
-      detail: `No response on 127.0.0.1:${SERVER_PORT}. Check ${p.envFile} and the logs.`,
+      detail: `No response on 127.0.0.1:${SERVER_PORT}. Check ${p.envFile} and the logs — or re-run the setup wizard to fix the configuration.`,
+      buttons: ['Open Setup', 'Close'],
+      defaultId: 0,
     });
+    if (choice === 0) {
+      openSetupWindow();
+      return;
+    }
   }
   // v0.35.4: LUNA_SMOKE_SETUP probes the WIZARD in the packaged shell (fresh-machine E2E for the
   // default-on flip) instead of the app window.

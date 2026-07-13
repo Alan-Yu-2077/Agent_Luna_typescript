@@ -64,6 +64,15 @@ body {
   padding: 4px 11px; border-radius: 999px;
   box-shadow: 0 1px 4px rgba(90, 120, 160, 0.18);
 }
+/* v0.35.6: the way back to the wizard when the backend is broken — sits beside the badge */
+.reconfigure-btn {
+  position: absolute; top: 8px; left: 130px; z-index: 3;
+  font: inherit; font-size: 11px; font-weight: 600; color: #4a7cb8;
+  background: #fff; border: 1px solid rgba(90, 120, 160, 0.35); border-radius: 999px;
+  padding: 4px 11px; cursor: pointer; box-shadow: 0 2px 8px rgba(90, 120, 160, 0.15);
+}
+.reconfigure-btn:hover { border-color: #7fa8d8; background: #f0f6fc; }
+
 .status-badge::before {
   content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--muted);
 }
