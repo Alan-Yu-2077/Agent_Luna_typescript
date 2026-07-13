@@ -564,7 +564,7 @@ async function smokeProbe(win: BrowserWindow): Promise<void> {
   };
   const shotPath = process.env['LUNA_SMOKE_OUT'];
   if (shotPath) {
-    await new Promise((r) => setTimeout(r, 200)); // let the just-opened settings panel paint
+    await new Promise((r) => setTimeout(r, 500)); // let the v0.36.4 settings panel finish gliding in (--m-soft)
     const shot = await win.webContents.capturePage();
     writeFileSync(shotPath, shot.toPNG());
   }

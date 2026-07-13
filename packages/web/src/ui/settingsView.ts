@@ -17,13 +17,45 @@ export function groupByCategory(settings: Setting[]): Array<[string, Setting[]]>
   return groups;
 }
 
+// v0.36.4: the value chip beside a slider. Snap the raw string to a tidy number (fall back to the
+// raw string if it isn't numeric) so a dragged 3.5000001 reads "3.5".
+export function formatSliderValue(raw: string): string {
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return raw;
+  return String(Math.round(n * 100) / 100);
+}
+
 function controlFor(doc: Document, s: Setting, send: SettingsSend): HTMLElement {
   if (s.kind === 'boolean') {
     const input = doc.createElement('input');
     input.type = 'checkbox';
+    input.className = 'setting-switch'; // v0.36.4: CSS-only iOS switch; the real checkbox stays for a11y
     input.checked = s.value === '1';
     input.addEventListener('change', () => send(s.key, input.checked ? '1' : '0'));
     return input;
+  }
+  // v0.36.4: a bounded number becomes a slider + live value chip; unbounded numbers + text stay
+  // fields. Either way the commit contract (blur/Enter for fields, release for the slider) is intact.
+  if (s.kind === 'number' && s.min !== undefined && s.max !== undefined) {
+    const wrap = doc.createElement('span');
+    wrap.className = 'setting-slider';
+    const range = doc.createElement('input');
+    range.type = 'range';
+    range.min = String(s.min);
+    range.max = String(s.max);
+    range.step = 'any';
+    range.value = s.value;
+    const chip = doc.createElement('span');
+    chip.className = 'slider-chip';
+    chip.textContent = formatSliderValue(s.value);
+    range.addEventListener('input', () => {
+      chip.textContent = formatSliderValue(range.value); // live while dragging, no commit
+    });
+    range.addEventListener('change', () => {
+      if (range.value !== s.value) send(s.key, range.value); // commit on release
+    });
+    wrap.append(range, chip);
+    return wrap;
   }
   const input = doc.createElement('input');
   input.className = 'setting-input';

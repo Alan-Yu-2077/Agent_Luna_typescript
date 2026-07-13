@@ -21,6 +21,7 @@ export type LayoutRefs = {
   dreamCaption: HTMLElement;
   settingsBtn: HTMLButtonElement;
   settingsPanel: HTMLElement;
+  settingsBackdrop: HTMLElement;
   ttsToggle: HTMLInputElement;
   live2dToggle: HTMLInputElement;
   gazeToggle: HTMLInputElement;
@@ -71,6 +72,40 @@ function toggleRow(parent: Element, labelText: string, checked: boolean): HTMLIn
   return input;
 }
 
+// v0.36.4: one settings tab pane. The active one is shown; the rest are display:none (CSS).
+function tabPane(parent: Element, name: string, active: boolean): HTMLElement {
+  const pane = add(parent, 'div', `settings-tab${active ? ' active' : ''}`);
+  pane.dataset['tab'] = name;
+  return pane;
+}
+
+// v0.36.4: one icon button in the left rail. `data-tab` links it to its pane.
+function railBtn(rail: Element, icon: string, label: string, name: string, active: boolean): HTMLButtonElement {
+  const doc = rail.ownerDocument;
+  const btn = doc.createElement('button');
+  btn.type = 'button';
+  btn.className = `rail-btn${active ? ' active' : ''}`;
+  btn.dataset['tab'] = name;
+  btn.title = label;
+  btn.setAttribute('aria-label', label);
+  btn.textContent = icon;
+  rail.appendChild(btn);
+  return btn;
+}
+
+// v0.36.4: click a rail icon → activate its pane + button (pure show/hide, no app state).
+function wireTabs(rail: HTMLElement, panes: HTMLElement[]): void {
+  rail.addEventListener('click', (e) => {
+    const target = e.target;
+    if (!(target instanceof HTMLElement)) return;
+    const btn = target.closest('.rail-btn');
+    if (!(btn instanceof HTMLElement)) return;
+    const name = btn.dataset['tab'];
+    for (const b of rail.querySelectorAll('.rail-btn')) b.classList.toggle('active', b === btn);
+    for (const p of panes) p.classList.toggle('active', p.dataset['tab'] === name);
+  });
+}
+
 function selectRow(
   parent: Element,
   labelText: string,
@@ -108,23 +143,46 @@ export function buildLayout(root: HTMLElement): LayoutRefs {
   settingsBtn.setAttribute('aria-label', 'Settings');
   settingsBtn.textContent = '⚙';
   stage.appendChild(settingsBtn);
+
+  // v0.36.4 (Initiative 26): VTube-Studio-style settings — a click-to-close backdrop + a panel that
+  // glides in from the right, with a left icon rail switching between grouped tabs. Every control
+  // keeps its exact semantics/refs; only the container structure + skin changed. The `.settings-panel`
+  // + `.on` open contract and the `label`/`.server-settings .setting-row` selectors are preserved
+  // (the packaged smoke asserts them).
+  const settingsBackdrop = add(stage, 'div', 'settings-backdrop');
   const settingsPanel = add(stage, 'div', 'settings-panel');
-  const ttsToggle = toggleRow(settingsPanel, 'Voice', localStorage.getItem('luna:tts') !== '0');
-  const live2dToggle = toggleRow(settingsPanel, 'Live2D model', localStorage.getItem('luna:live2d') !== '0');
-  const gazeToggle = toggleRow(settingsPanel, 'Gaze follow', localStorage.getItem('luna:gaze-follow') !== '0');
+  const settingsRail = add(settingsPanel, 'div', 'settings-rail');
+  const settingsBody = add(settingsPanel, 'div', 'settings-body');
+  const generalTab = tabPane(settingsBody, 'general', true);
+  const avatarTab = tabPane(settingsBody, 'avatar', false);
+  const serverTab = tabPane(settingsBody, 'server', false);
+  railBtn(settingsRail, '🎚', 'General', 'general', true);
+  railBtn(settingsRail, '✨', 'Avatar', 'avatar', false);
+  railBtn(settingsRail, '☁️', 'Server', 'server', false);
+  wireTabs(settingsRail, [generalTab, avatarTab, serverTab]);
+
+  const generalCard = add(generalTab, 'div', 'settings-card');
+  const ttsToggle = toggleRow(generalCard, 'Voice', localStorage.getItem('luna:tts') !== '0');
+  // Desktop-shell only: app.ts hides the row when no lunaPet bridge exists (plain browser) and
+  // sets checked from the actual mode (?pet=1). The Setup wizard re-run row is inserted right after
+  // it by app.ts (petRow.after), so it lands in this same card.
+  const petToggle = toggleRow(generalCard, 'Desktop pet', false);
+  petToggle.closest('label')?.classList.add('pet-mode-row');
+  add(generalTab, 'div', 'hint', 'Voice / model changes need a refresh · scroll to zoom · double-click to reset');
+
+  const avatarCard = add(avatarTab, 'div', 'settings-card');
+  const live2dToggle = toggleRow(avatarCard, 'Live2D model', localStorage.getItem('luna:live2d') !== '0');
+  const gazeToggle = toggleRow(avatarCard, 'Gaze follow', localStorage.getItem('luna:gaze-follow') !== '0');
   const idleSelect = selectRow(
-    settingsPanel,
+    avatarCard,
     'Idle animation',
     IDLE_PROFILES,
     localStorage.getItem('luna:idle-profile') ?? DEFAULT_IDLE_PROFILE,
   );
-  // Desktop-shell only: app.ts hides the row when no lunaPet bridge exists (plain browser) and
-  // sets checked from the actual mode (?pet=1) — layout stays pure DOM.
-  const petToggle = toggleRow(settingsPanel, 'Desktop pet', false);
-  petToggle.closest('label')?.classList.add('pet-mode-row');
+
   // v0.27.1: the server-driven half — settingsView.ts fills this from settings.state.
-  const serverSettings = add(settingsPanel, 'div', 'server-settings');
-  add(settingsPanel, 'div', 'hint', 'Voice / model changes need a refresh · scroll to zoom · double-click to reset');
+  const serverSettings = add(serverTab, 'div', 'server-settings');
+  add(serverTab, 'div', 'hint server-empty', 'No server settings yet — Luna is still connecting.');
 
   const motifLayer = add(stage, 'div', 'motif-layer');
   for (const m of MOTIFS) {
@@ -208,7 +266,7 @@ export function buildLayout(root: HTMLElement): LayoutRefs {
   return {
     statusBadge, chatLog, input, inputRow, sendBtn, collapseBtn, dreamBtn, modelStage,
     moodPip, scrollPill, dreamOverlay, dreamWakeBtn, dreamCaption,
-    settingsBtn, settingsPanel, ttsToggle, live2dToggle, gazeToggle, idleSelect,
+    settingsBtn, settingsPanel, settingsBackdrop, ttsToggle, live2dToggle, gazeToggle, idleSelect,
     petToggle, serverSettings,
   };
 }

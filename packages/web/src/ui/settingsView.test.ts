@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import type { Setting } from '@luna/protocol';
-import { groupByCategory } from './settingsView';
+import { formatSliderValue, groupByCategory } from './settingsView';
 
 function s(key: string, category: string): Setting {
   return {
@@ -29,5 +29,18 @@ describe('settingsView grouping', () => {
 
   test('empty input renders no groups', () => {
     expect(groupByCategory([])).toEqual([]);
+  });
+});
+
+describe('formatSliderValue (v0.36.4 slider chip)', () => {
+  test('passes a clean integer through', () => {
+    expect(formatSliderValue('7')).toBe('7');
+  });
+  test('rounds a long fractional drag to 2 dp', () => {
+    expect(formatSliderValue('3.500001')).toBe('3.5');
+    expect(formatSliderValue('0.6666666')).toBe('0.67');
+  });
+  test('non-numeric text falls through unchanged', () => {
+    expect(formatSliderValue('auto')).toBe('auto');
   });
 });

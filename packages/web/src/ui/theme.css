@@ -288,26 +288,117 @@ body {
   position: absolute; top: 8px; right: 14px; z-index: 7; width: 30px; height: 30px; border-radius: 50%;
   border: none; cursor: pointer; background: #fff; color: #5b7fa6; font-size: 15px;
   box-shadow: 0 1px 4px rgba(90, 120, 160, 0.18);
+  transition: transform var(--m-fast) var(--ease-pop), background var(--m-fast) ease;
 }
+.settings-btn:hover { transform: rotate(30deg) scale(1.06); }
+.settings-btn:active { transform: scale(0.9); }
+
+/* v0.36.4 (Initiative 26): VTube-Studio-style settings — a click-to-close backdrop + a panel that
+   glides in from the right with a left icon rail. */
+.settings-backdrop {
+  position: fixed; inset: 0; z-index: 7; background: rgba(30, 45, 70, 0.26);
+  -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+  opacity: 0; pointer-events: none; transition: opacity var(--m-soft) ease;
+}
+.settings-backdrop.on { opacity: 1; pointer-events: auto; }
 .settings-panel {
-  position: absolute; top: 44px; right: 14px; z-index: 8; display: none; flex-direction: column; gap: 9px;
-  background: #fff; border-radius: 14px; padding: 12px 14px; min-width: 168px; font-size: 13px; color: var(--ink);
-  box-shadow: 0 4px 16px rgba(90, 120, 160, 0.25);
+  position: absolute; top: 44px; right: 14px; z-index: 8;
+  display: flex; /* always laid out; visibility is transform/opacity so it glides both ways */
+  width: min(344px, 84vw); max-height: 78vh; color: var(--ink); font-size: 13px;
+  background: #fff; border-radius: 18px; overflow: hidden;
+  box-shadow: 0 16px 44px rgba(40, 60, 90, 0.3);
+  transform: translateX(calc(100% + 28px)); opacity: 0; pointer-events: none;
+  transition: transform var(--m-soft) var(--ease-glide), opacity var(--m-soft) ease;
 }
-.settings-panel.on { display: flex; }
-.settings-panel label { display: flex; align-items: center; justify-content: space-between; gap: 10px; cursor: pointer; }
-.settings-panel .hint { font-size: 11px; color: var(--muted); }
-/* v0.27.1: the server-driven section — grows with the registry, so it scrolls, the panel doesn't */
-.server-settings { display: flex; flex-direction: column; gap: 8px; max-height: 46vh; overflow-y: auto; margin-top: 2px; padding-top: 6px; border-top: 1px dashed rgba(90, 120, 160, 0.25); }
-.server-settings:empty { display: none; }
-.settings-section { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-top: 4px; }
+.settings-panel.on { transform: none; opacity: 1; pointer-events: auto; }
+
+.settings-rail {
+  flex: none; display: flex; flex-direction: column; gap: 4px; padding: 12px 9px;
+  background: var(--inner); border-right: 1px solid var(--inner-border);
+}
+.rail-btn {
+  width: 40px; height: 40px; border-radius: 12px; border: none; cursor: pointer; background: transparent;
+  font-size: 17px; line-height: 1; color: var(--ink-soft);
+  display: flex; align-items: center; justify-content: center;
+  transition: background var(--m-fast) ease, transform var(--m-fast) var(--ease-pop);
+}
+.rail-btn:hover { background: rgba(185, 212, 239, 0.4); }
+.rail-btn.active { background: var(--sky); color: var(--sky-text); transform: scale(1.06); }
+.rail-btn:focus-visible { outline: 2px solid var(--sky-deep); outline-offset: 2px; }
+
+.settings-body { flex: 1; min-width: 0; padding: 14px; overflow-y: auto; }
+.settings-tab { display: none; flex-direction: column; gap: 10px; }
+.settings-tab.active { display: flex; animation: tab-in var(--m-soft) var(--ease-glide); }
+@keyframes tab-in {
+  from { opacity: 0; transform: translateX(12px); }
+  to { opacity: 1; transform: none; }
+}
+.settings-card {
+  display: flex; flex-direction: column;
+  background: var(--inner); border: 1px solid var(--inner-border); border-radius: 12px; padding: 2px 12px;
+}
+
+/* rows (client toggles + server rows) */
+.settings-panel label,
+.setting-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 8px 0; cursor: pointer;
+}
+.settings-card label + label,
+.setting-row + .setting-row { border-top: 1px solid rgba(90, 120, 160, 0.1); }
 .setting-row span:first-child { display: flex; align-items: center; gap: 6px; }
-.setting-control { display: flex; align-items: center; gap: 6px; }
-.setting-input { width: 108px; font-size: 12px; padding: 3px 6px; border: 1px solid rgba(90, 120, 160, 0.35); border-radius: 8px; color: var(--ink); background: #fff; }
-.setting-input[type='number'] { width: 64px; }
-.setting-badge { font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; color: #b0802a; background: #fdf3dd; border-radius: 6px; padding: 1px 5px; }
-.setting-reset { border: none; background: none; cursor: pointer; color: var(--muted); font-size: 13px; padding: 0 2px; }
-.setting-reset:hover { color: var(--ink); }
+.setting-control { display: flex; align-items: center; gap: 8px; }
+
+/* iOS-style switch — the real <input type=checkbox> stays (focusable, a11y), skinned as a track+knob */
+.settings-panel input[type='checkbox'] {
+  appearance: none; -webkit-appearance: none; margin: 0; flex: none;
+  position: relative; width: 40px; height: 22px; border-radius: 999px; background: #cdd7e4; cursor: pointer;
+  transition: background var(--m-fast) ease;
+}
+.settings-panel input[type='checkbox']::after {
+  content: ''; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 3px rgba(30, 50, 80, 0.3);
+  transition: transform var(--m-fast) var(--ease-pop);
+}
+.settings-panel input[type='checkbox']:checked { background: var(--ok); }
+.settings-panel input[type='checkbox']:checked::after { transform: translateX(18px); }
+.settings-panel input[type='checkbox']:focus-visible { outline: 2px solid var(--sky-deep); outline-offset: 2px; }
+
+.settings-panel select {
+  font: inherit; font-size: 12px; color: var(--ink); background: #fff;
+  border: 1px solid var(--inner-border); border-radius: 8px; padding: 4px 8px; cursor: pointer;
+}
+
+/* server-driven rows */
+.server-settings { display: flex; flex-direction: column; }
+.server-settings:empty { display: none; }
+.settings-tab:has(.server-settings:not(:empty)) .server-empty { display: none; }
+.settings-section {
+  font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted);
+  margin: 10px 0 2px;
+}
+.setting-input {
+  width: 108px; font-size: 12px; padding: 4px 8px; border: 1px solid var(--inner-border);
+  border-radius: 8px; color: var(--ink); background: #fff;
+}
+.setting-input[type='number'] { width: 68px; }
+.setting-slider { display: flex; align-items: center; gap: 8px; }
+.setting-slider input[type='range'] { width: 100px; accent-color: var(--sky-deep); cursor: pointer; }
+.slider-chip {
+  min-width: 34px; text-align: center; font-size: 11px; font-variant-numeric: tabular-nums;
+  background: var(--sky); color: var(--sky-text); border-radius: 8px; padding: 1px 6px;
+}
+.setting-badge {
+  font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; color: #b0802a;
+  background: #fdf3dd; border-radius: 6px; padding: 1px 5px;
+}
+.setting-reset {
+  border: none; background: rgba(90, 120, 160, 0.1); cursor: pointer; color: var(--ink-soft);
+  font-size: 12px; border-radius: 999px; padding: 2px 9px;
+  transition: background var(--m-fast) ease, color var(--m-fast) ease;
+}
+.setting-reset:hover { color: var(--ink); background: rgba(90, 120, 160, 0.2); }
+.settings-panel .hint { font-size: 11px; color: var(--muted); padding: 2px 2px 0; }
 
 /* boot gate — voice warmup splash (blocks the page until GPT-SoVITS is warm) */
 .boot-gate {

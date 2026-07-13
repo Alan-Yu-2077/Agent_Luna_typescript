@@ -393,7 +393,18 @@ async function boot(): Promise<void> {
   refs.dreamBtn.addEventListener('click', () => client.send({ type: 'dream.enter' }));
   refs.dreamWakeBtn.addEventListener('click', () => client.send({ type: 'dream.wake' }));
 
-  refs.settingsBtn.addEventListener('click', () => refs.settingsPanel.classList.toggle('on'));
+  // v0.36.4: the VTS panel glides in with a click-to-close backdrop; Escape closes it too.
+  const setSettingsOpen = (open: boolean): void => {
+    refs.settingsPanel.classList.toggle('on', open);
+    refs.settingsBackdrop.classList.toggle('on', open);
+  };
+  refs.settingsBtn.addEventListener('click', () =>
+    setSettingsOpen(!refs.settingsPanel.classList.contains('on')),
+  );
+  refs.settingsBackdrop.addEventListener('click', () => setSettingsOpen(false));
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && refs.settingsPanel.classList.contains('on')) setSettingsOpen(false);
+  });
   refs.ttsToggle.addEventListener('change', () =>
     localStorage.setItem('luna:tts', refs.ttsToggle.checked ? '1' : '0'),
   );
