@@ -22,6 +22,7 @@ import { WebAudioSink } from './audio/webAudioSink';
 import { WebSpeechSink } from './audio/webSpeechSink';
 import { resolveTtsBackend } from './audio/ttsBackend';
 import { createBootGate, warmUpTts } from './ui/bootGate';
+import { mountPhysicsDevHarness } from './physics/devHarness';
 
 // Browser entry — builds the cute UI shell + the live Live2D avatar + voice, and
 // wires the v0.12.0 consumption controller plus the v0.13.4 polish chrome (dream
@@ -509,6 +510,25 @@ function buildDevPanel(live2d: Live2DSink): void {
     note.style.cssText = 'color:#8b93a7;';
     panel.appendChild(note);
   }
+
+  // v0.36.1: physics substrate probe (temporary — removed when v0.36.2 wires real bubbles).
+  const harness = mountPhysicsDevHarness();
+  (globalThis as { lunaPhysics?: typeof harness }).lunaPhysics = harness; // dev inspection hook
+  const ptitle = document.createElement('div');
+  ptitle.textContent = '🧪 physics';
+  ptitle.style.cssText = 'color:#8fd0ff;font-weight:600;margin-top:2px;';
+  panel.appendChild(ptitle);
+  const prow = document.createElement('div');
+  prow.style.cssText = 'display:flex;gap:4px;';
+  for (const [label, kind] of [['💬 Fall', 'falling'], ['🫧 Rise', 'rising']] as const) {
+    const b = document.createElement('button');
+    b.textContent = label;
+    b.style.cssText = btn;
+    b.addEventListener('click', () => harness.spawn(kind));
+    prow.appendChild(b);
+  }
+  panel.appendChild(prow);
+
   document.body.appendChild(panel);
 }
 
