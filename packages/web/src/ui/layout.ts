@@ -9,6 +9,7 @@ export type LayoutRefs = {
   statusBadge: HTMLElement;
   chatLog: HTMLElement;
   input: HTMLInputElement;
+  inputRow: HTMLElement;
   sendBtn: HTMLButtonElement;
   collapseBtn: HTMLButtonElement;
   dreamBtn: HTMLButtonElement;
@@ -205,7 +206,7 @@ export function buildLayout(root: HTMLElement): LayoutRefs {
   dreamOverlay.appendChild(dreamWakeBtn);
 
   return {
-    statusBadge, chatLog, input, sendBtn, collapseBtn, dreamBtn, modelStage,
+    statusBadge, chatLog, input, inputRow, sendBtn, collapseBtn, dreamBtn, modelStage,
     moodPip, scrollPill, dreamOverlay, dreamWakeBtn, dreamCaption,
     settingsBtn, settingsPanel, ttsToggle, live2dToggle, gazeToggle, idleSelect,
     petToggle, serverSettings,

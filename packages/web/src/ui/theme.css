@@ -459,6 +459,27 @@ body {
   overflow: hidden;
 }
 .physics-layer .speech-bubble { will-change: transform; }
+
+/* v0.36.3: your sent message as a buoyant bubble (collapsed / pet mode) — styled like the USER chat
+   bubble, physics-driven so no transform transition. pointer-events:none: departing words aren't
+   catchable and the input bar stays usable mid-flight. */
+.rise-bubble {
+  position: absolute;
+  top: 0;
+  left: 0;
+  max-width: 240px;
+  background: var(--user-bubble);
+  color: var(--user-text);
+  border-radius: 13px 13px 13px 4px;
+  font-size: 13px;
+  line-height: 1.4;
+  padding: 8px 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  box-shadow: 0 4px 16px rgba(39, 73, 107, 0.2);
+  pointer-events: none;
+  will-change: transform;
+}
 @keyframes speech-rise {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }

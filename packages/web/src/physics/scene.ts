@@ -13,10 +13,17 @@ export interface FallenBubble {
   remove(): void;
 }
 
+export interface RisingBubble {
+  onExit(cb: () => void): void;
+  remove(): void;
+}
+
 export interface PhysicsScene {
   // Re-home a hanging DOM bubble into the world at its current viewport position (zero jump) and let
   // it fall. Returns null if the element isn't measurable (e.g. detached from layout).
   detachFalling(el: HTMLElement, angle?: number): FallenBubble | null;
+  // Float a fresh DOM bubble UP from an anchor point (bottom-center) until it exits the ceiling.
+  spawnRising(el: HTMLElement, opts: { anchorX: number; anchorBottomY: number; angle?: number }): RisingBubble;
   interactiveRects(): Rect[];
   dispose(): void;
 }
@@ -118,6 +125,39 @@ export function mountPhysicsScene(): PhysicsScene {
     };
   }
 
+  function spawnRising(
+    el: HTMLElement,
+    opts: { anchorX: number; anchorBottomY: number; angle?: number },
+  ): RisingBubble {
+    el.style.position = 'absolute';
+    el.style.top = '0';
+    el.style.left = '0';
+    el.style.margin = '0';
+    el.style.pointerEvents = 'none'; // your departing words aren't catchable + the bar stays usable
+    el.style.willChange = 'transform';
+    el.style.visibility = 'hidden'; // hide the pre-spawn frame at (0,0) until the transform lands it
+    layer.appendChild(el);
+    const rect = el.getBoundingClientRect();
+    const layerRect = layer.getBoundingClientRect();
+    const w = rect.width;
+    const h = rect.height;
+    const x = opts.anchorX - w / 2 - layerRect.left; // bottom-center at the anchor
+    const y = opts.anchorBottomY - h - layerRect.top;
+    const handle = world.spawn(el, { x, y, w, h, kind: 'rising', angle: opts.angle ?? 0 });
+    el.style.visibility = '';
+
+    let removed = false;
+    return {
+      onExit: (cb) => handle.onExit(cb),
+      remove: () => {
+        if (removed) return;
+        removed = true;
+        handle.remove();
+        el.remove();
+      },
+    };
+  }
+
   function interactiveRects(): Rect[] {
     const out: Rect[] = [];
     for (const el of tracked) {
@@ -135,5 +175,5 @@ export function mountPhysicsScene(): PhysicsScene {
     layer.remove();
   }
 
-  return { detachFalling, interactiveRects, dispose };
+  return { detachFalling, spawnRising, interactiveRects, dispose };
 }

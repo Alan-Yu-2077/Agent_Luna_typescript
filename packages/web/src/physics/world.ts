@@ -193,12 +193,17 @@ export function createPhysicsWorld(opts: WorldOpts): PhysicsWorld {
   function spawn(el: Transformable, o: SpawnOpts): BodyHandle {
     const cx = o.x + o.w / 2;
     const cy = o.y + o.h / 2;
-    const body = Bodies.rectangle(cx, cy, o.w, o.h, {
+    const bodyOpts: Matter.IChamferableBodyDefinition = {
       restitution: o.restitution ?? 0.45,
       frictionAir: o.kind === 'rising' ? 0.02 : 0.01,
       angle: o.angle ?? 0,
       sleepThreshold: 40,
-    });
+    };
+    // Risers collide with NOTHING (mask 0) — they're departing words, not room objects: no bouncing
+    // off walls or the other bubbles, they just drift up and out. Fallers keep default collision
+    // (walls + each other → they pile).
+    if (o.kind === 'rising') bodyOpts.collisionFilter = { group: 0, category: 0x0002, mask: 0x0000 };
+    const body = Bodies.rectangle(cx, cy, o.w, o.h, bodyOpts);
     Composite.add(engine.world, body);
     const entry: Entry = {
       body,

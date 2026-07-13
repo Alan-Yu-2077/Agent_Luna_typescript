@@ -96,6 +96,32 @@ describe('physics world — rising', () => {
     expect(exited).toBe(true);
     expect(rested).toBe(false);
   });
+
+  test('a riser exits within a sane time band and drifts sideways (the sway is real)', () => {
+    const { world } = makeWorld();
+    const el = new FakeEl();
+    const startX = 200;
+    let exited = false;
+    let exitFrame = -1;
+    let maxDrift = 0;
+    const handle = world.spawn(el, { x: startX - 32, y: 600 - 120, w: 64, h: 64, kind: 'rising' });
+    handle.onExit(() => {
+      exited = true;
+    });
+    for (let i = 0; i < 400; i++) {
+      world.step(16);
+      if (!exited) {
+        const { x } = parseCenter(el, 64, 64);
+        if (!Number.isNaN(x)) maxDrift = Math.max(maxDrift, Math.abs(x - startX));
+      } else if (exitFrame < 0) {
+        exitFrame = i;
+      }
+    }
+    expect(exited).toBe(true);
+    expect(exitFrame).toBeGreaterThan(10); // not instant — it climbs
+    expect(exitFrame).toBeLessThan(400); // ≤ ~6.4s
+    expect(maxDrift).toBeGreaterThan(0.5); // it swayed, didn't rise dead straight
+  });
 });
 
 describe('physics world — fixed timestep', () => {

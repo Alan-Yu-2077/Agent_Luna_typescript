@@ -23,6 +23,7 @@ import { WebSpeechSink } from './audio/webSpeechSink';
 import { resolveTtsBackend } from './audio/ttsBackend';
 import { createBootGate, warmUpTts } from './ui/bootGate';
 import { mountPhysicsScene } from './physics/scene';
+import { createRiseBubbles } from './ui/riseBubble';
 
 // Browser entry — builds the cute UI shell + the live Live2D avatar + voice, and
 // wires the v0.12.0 consumption controller plus the v0.13.4 polish chrome (dream
@@ -120,6 +121,15 @@ async function boot(): Promise<void> {
   const physicsScene = mountPhysicsScene();
   const speechStack = new SpeechStackView(refs.modelStage, {
     detach: (el, angle) => physicsScene.detachFalling(el, angle),
+  });
+  // v0.36.3: when the log is hidden, your sent message rises off the input bar and out the ceiling.
+  const riseBubbles = createRiseBubbles({
+    doc: document,
+    scene: physicsScene,
+    barRect: () => {
+      const r = refs.inputRow.getBoundingClientRect();
+      return { left: r.left, right: r.right, top: r.top };
+    },
   });
   let isCollapsed = localStorage.getItem('luna:collapsed') === '1';
   const view = new RouterBubbleView(windowView, speechStack);
@@ -243,6 +253,8 @@ async function boot(): Promise<void> {
     if (!text || dreaming) return;
     windowView.userMessage(text);
     client.send({ type: 'chat.send', text });
+    // Collapsed (log hidden) → the message would otherwise vanish; let it float up and out instead.
+    if (isCollapsed) riseBubbles.spawn(text);
     refs.input.value = '';
   }
   refs.sendBtn.addEventListener('click', send);
