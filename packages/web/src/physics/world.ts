@@ -228,6 +228,7 @@ export function createPhysicsWorld(opts: WorldOpts): PhysicsWorld {
       grab() {
         if (entry.removed) return;
         entry.grabbed = true;
+        entry.restFired = false; // picking it up re-arms rest → onRest fires again when it re-settles
         Body.setStatic(body, true); // ignore gravity/forces while held; still collides as an obstacle
       },
       release(vx, vy) {

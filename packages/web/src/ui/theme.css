@@ -426,42 +426,39 @@ body {
   transition: opacity 0.5s ease, transform 0.5s ease;
   animation: speech-rise 0.28s ease;
 }
-/* The comic tail pokes from the bottom CORNER on the HEAD-facing side: bottom-right for a left-side
-   bubble (her head is to its right), bottom-left for a right-side bubble. Visible only on .latest —
-   dropping the class transitions the tail away as the bubble becomes history. */
-.speech-bubble::after {
-  content: '';
-  position: absolute;
-  bottom: -0.28em;
-  width: 0.9em;
-  height: 0.9em;
-  background: rgba(255, 255, 255, 0.82);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
-  border-radius: 0 0 0.2em 0;
-  transform-origin: center;
-  transform: rotate(45deg) scale(0.3);
-  opacity: 0;
-  transition: opacity 0.25s ease, transform 0.25s ease;
-}
-.speech-bubble.side-left::after {
-  right: -0.28em;
-  border-right: 1px solid var(--lace);
-  border-bottom: 1px solid var(--lace);
-}
-.speech-bubble.side-right::after {
-  left: -0.28em;
-  border-left: 1px solid var(--lace);
-  border-bottom: 1px solid var(--lace);
-}
-.speech-bubble.latest::after {
-  opacity: 1;
-  transform: rotate(45deg) scale(1);
+/* v0.36.2: the comic tail (小角) is gone — the owner found it 不美观. The newest hanging bubble keeps a
+   subtle emphasis (a hair larger + a stronger shadow) instead of a pointer, and drops it as it
+   becomes history / detaches. */
+.speech-bubble.latest {
+  transform: scale(1.03);
+  box-shadow: 0 8px 26px rgba(39, 73, 107, 0.24);
 }
 .speech-bubble.fading {
   opacity: 0;
   transform: translateY(-6px);
 }
+/* v0.36.2: a fallen bubble is a physics body — its transform is written every frame by the engine,
+   so the hang-phase transform transition + entrance animation must not fight it. Only opacity still
+   transitions (the 30s dissolve). */
+.speech-bubble.fallen {
+  transition: opacity 0.5s ease;
+  animation: none;
+  box-shadow: 0 8px 22px rgba(39, 73, 107, 0.22);
+}
+.speech-bubble.fallen.fading {
+  transform: none; /* let the physics transform stand; just fade out */
+}
+
+/* v0.36.2: the shared physics layer — one fixed, full-window overlay for falling/rising bubbles. It
+   passes the pointer through (empty space stays click-through in pet mode); each body opts back in. */
+.physics-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  overflow: hidden;
+}
+.physics-layer .speech-bubble { will-change: transform; }
 @keyframes speech-rise {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }

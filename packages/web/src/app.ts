@@ -22,7 +22,7 @@ import { WebAudioSink } from './audio/webAudioSink';
 import { WebSpeechSink } from './audio/webSpeechSink';
 import { resolveTtsBackend } from './audio/ttsBackend';
 import { createBootGate, warmUpTts } from './ui/bootGate';
-import { mountPhysicsDevHarness } from './physics/devHarness';
+import { mountPhysicsScene } from './physics/scene';
 
 // Browser entry — builds the cute UI shell + the live Live2D avatar + voice, and
 // wires the v0.12.0 consumption controller plus the v0.13.4 polish chrome (dream
@@ -115,7 +115,12 @@ async function boot(): Promise<void> {
   // v0.25.0 (Initiative 18): the beside-model speech stack + a router that mirrors Luna's replies to
   // it in collapsed companion mode. v0.25.1: `collapsed` now reads the real collapse state (persisted
   // in localStorage, toggled by the header collapse button + applied as a `.collapsed` class).
-  const speechStack = new SpeechStackView(refs.modelStage);
+  // v0.36.2: one physics scene, shared by falling speech bubbles (here) + rising send bubbles
+  // (v0.36.3). Injected into the stack as its detach seam so her finished replies fall into the room.
+  const physicsScene = mountPhysicsScene();
+  const speechStack = new SpeechStackView(refs.modelStage, {
+    detach: (el, angle) => physicsScene.detachFalling(el, angle),
+  });
   let isCollapsed = localStorage.getItem('luna:collapsed') === '1';
   const view = new RouterBubbleView(windowView, speechStack);
 
@@ -126,13 +131,20 @@ async function boot(): Promise<void> {
     audio = new WebSpeechSink({ onMouth: (frame) => live2d.setMouth(frame) });
   }
   // Speech-gate the stack: when Luna actually begins speaking a reply, restart the newest bubble's
-  // life so its ~10s aligns with the utterance (playback is serialized, so emit ≠ speak time).
+  // life so its ~10s aligns with the utterance (playback is serialized, so emit ≠ speak time). When
+  // she FINISHES speaking (the speak promise resolves), that bubble detaches and falls (v0.36.2).
+  // Only wired for real voice backends — the voiceless noop sink resolves instantly, so it relies on
+  // the hang TTL to trigger the fall instead of dropping the bubble the moment it appears.
+  const hasVoice = ttsBackend === 'http' || ttsBackend === 'browser';
   const speechGatedAudio: AudioSink = {
-    speak: (text, voice, onStart) =>
-      audio.speak(text, voice, () => {
+    speak: (text, voice, onStart) => {
+      const p = audio.speak(text, voice, () => {
         speechStack.noteSpeechStart();
         onStart?.();
-      }),
+      });
+      if (hasVoice) void p.then(() => speechStack.noteSpeechEnd()).catch(() => {});
+      return p;
+    },
     stop: () => audio.stop(),
   };
 
@@ -510,24 +522,6 @@ function buildDevPanel(live2d: Live2DSink): void {
     note.style.cssText = 'color:#8b93a7;';
     panel.appendChild(note);
   }
-
-  // v0.36.1: physics substrate probe (temporary — removed when v0.36.2 wires real bubbles).
-  const harness = mountPhysicsDevHarness();
-  (globalThis as { lunaPhysics?: typeof harness }).lunaPhysics = harness; // dev inspection hook
-  const ptitle = document.createElement('div');
-  ptitle.textContent = '🧪 physics';
-  ptitle.style.cssText = 'color:#8fd0ff;font-weight:600;margin-top:2px;';
-  panel.appendChild(ptitle);
-  const prow = document.createElement('div');
-  prow.style.cssText = 'display:flex;gap:4px;';
-  for (const [label, kind] of [['💬 Fall', 'falling'], ['🫧 Rise', 'rising']] as const) {
-    const b = document.createElement('button');
-    b.textContent = label;
-    b.style.cssText = btn;
-    b.addEventListener('click', () => harness.spawn(kind));
-    prow.appendChild(b);
-  }
-  panel.appendChild(prow);
 
   document.body.appendChild(panel);
 }

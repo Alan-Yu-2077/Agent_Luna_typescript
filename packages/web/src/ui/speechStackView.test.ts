@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { SpeechStackView, type StackScheduler } from './speechStackView';
+import { SpeechStackView, type StackScheduler, type DetachFn } from './speechStackView';
 
 // bun test has no DOM, so a minimal fake element — enough for the stack's create/append/remove/fade.
 class FakeEl {
@@ -189,5 +189,116 @@ describe('SpeechStackView (v0.25.0 + 2026-07-04 random-side)', () => {
     expect(el.className).toContain('side-left');
     expect(el.style['marginTop']).toBe('6px'); // 2 + 0.5 × 8
     expect(calls).toBe(2); // one rng for the side, one for the jitter
+  });
+});
+
+// ── v0.36.2: detach → fall → dissolve lifecycle (injected physics seam) ──
+type DetachRec = { el: FakeEl; angle: number; removed: boolean; fireRest: () => void; fireGrab: () => void };
+function physicsStackOf(opts: {
+  ttlMs?: number;
+  fadeMs?: number;
+  maxVisible?: number;
+  maxFallen?: number;
+  dissolveMs?: number;
+} = {}): { view: SpeechStackView; container: FakeEl; fireAll: () => void; detached: DetachRec[] } {
+  const host = new FakeEl();
+  const { schedule, fireAll } = manualScheduler();
+  const detached: DetachRec[] = [];
+  const detach: DetachFn = (el, angle) => {
+    let restCb = (): void => {};
+    let grabCb = (): void => {};
+    const rec: DetachRec = {
+      el: el as unknown as FakeEl,
+      angle,
+      removed: false,
+      fireRest: () => restCb(),
+      fireGrab: () => grabCb(),
+    };
+    detached.push(rec);
+    return {
+      onRest: (cb) => {
+        restCb = cb;
+      },
+      onGrab: (cb) => {
+        grabCb = cb;
+      },
+      remove: () => {
+        rec.removed = true;
+        rec.el.remove();
+      },
+    };
+  };
+  // rng 0.9 → all bubbles to the LEFT zone (deterministic single column).
+  const view = new SpeechStackView(host as unknown as HTMLElement, { ...opts, schedule, rng: () => 0.9, detach });
+  const container = host.children[0]!.children[0]!; // outer → left zone
+  return { view, container, fireAll, detached };
+}
+
+describe('SpeechStackView (v0.36.2 fall lifecycle)', () => {
+  test('noteSpeechEnd detaches the OLDEST hanging bubble (FIFO — playback is serialized)', () => {
+    const { view, detached } = physicsStackOf();
+    view.finalize('a', 'first');
+    view.finalize('b', 'second');
+    expect(detached.length).toBe(0); // both still hanging
+    view.noteSpeechEnd();
+    expect(detached.length).toBe(1);
+    expect(detached[0]!.el.textContent).toBe('first');
+    expect(detached[0]!.el.classList.contains('fallen')).toBe(true);
+  });
+
+  test('voiceless: the hang TTL expires into a fall (detach), not a fade', () => {
+    const { view, detached, fireAll } = physicsStackOf({ ttlMs: 100 });
+    view.finalize('a', 'hi');
+    fireAll(); // ttl fires → detachOrFade → detach
+    expect(detached.length).toBe(1);
+    expect(detached[0]!.el.classList.contains('fading')).toBe(false); // it fell, it did not fade
+  });
+
+  test('a fallen bubble dissolves after dissolveMs at rest, then removes', () => {
+    const { view, detached, fireAll } = physicsStackOf({ dissolveMs: 30_000, fadeMs: 50 });
+    view.finalize('a', 'hi');
+    view.noteSpeechEnd();
+    const rec = detached[0]!;
+    rec.fireRest(); // onRest → arm the 30s dissolve
+    fireAll(); // dissolve fires → fading + schedule removal
+    expect(rec.el.classList.contains('fading')).toBe(true);
+    fireAll(); // removal fires → physics handle removed
+    expect(rec.removed).toBe(true);
+  });
+
+  test('picking up a resting bubble cancels its pending dissolve (drag re-arms on release)', () => {
+    const { view, detached, fireAll } = physicsStackOf({ dissolveMs: 30_000, fadeMs: 50 });
+    view.finalize('a', 'hi');
+    view.noteSpeechEnd();
+    const rec = detached[0]!;
+    rec.fireRest(); // arm dissolve
+    rec.fireGrab(); // picked up → cancel the pending dissolve
+    fireAll();
+    expect(rec.el.classList.contains('fading')).toBe(false);
+    expect(rec.removed).toBe(false);
+  });
+
+  test('the resting pile caps at maxFallen — the oldest fast-dissolves', () => {
+    const { view, detached } = physicsStackOf({ maxFallen: 2 });
+    for (const t of ['a', 'b', 'c']) view.finalize(t, t);
+    view.noteSpeechEnd(); // a falls
+    view.noteSpeechEnd(); // b falls
+    view.noteSpeechEnd(); // c falls → 3 > 2 → oldest (a) dissolves
+    const a = detached.find((d) => d.el.textContent === 'a')!;
+    expect(a.el.classList.contains('fading')).toBe(true);
+    const c = detached.find((d) => d.el.textContent === 'c')!;
+    expect(c.el.classList.contains('fading')).toBe(false);
+  });
+
+  test('barge-in clears HANGING bubbles but spares fallen floor objects', () => {
+    const { view, container, detached } = physicsStackOf();
+    view.finalize('a', 'a');
+    view.noteSpeechEnd(); // a → fallen
+    view.finalize('b', 'b'); // b → hanging
+    view.clearAll();
+    const a = detached[0]!;
+    expect(a.el.classList.contains('fading')).toBe(false); // floor object survives
+    const b = container.children.find((c) => c.textContent === 'b')!;
+    expect(b.classList.contains('fading')).toBe(true); // spoken-over hanging bubble cleared
   });
 });
