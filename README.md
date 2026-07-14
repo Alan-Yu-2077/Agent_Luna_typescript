@@ -39,8 +39,10 @@ code-agent capability — embodied as a Live2D avatar with lip-synced custom voi
   distills herself.
 - 🎭 **Embodied** — a Live2D avatar with emotion-driven expressions, gaze follow, idle animation
   profiles, phoneme lip-sync, and a transparent always-on-top **desktop pet mode**.
-- 🗣 **Your voice** — zero-setup browser TTS out of the box, or bring a GPT-SoVITS voice: drag the
-  weights folder into the wizard and it writes the config and hands you the exact launch command.
+- 🗣 **Your voice** — zero-setup browser TTS out of the box, or a GPT-SoVITS custom voice with no
+  terminal anywhere: the wizard downloads & deploys the runtime in one click, you drag a voice pack
+  in, and Luna starts + supervises the voice server herself. Drop a new pack onto the running app
+  to swap voices.
 - 🧙 **Guided onboarding** — a six-step bilingual (中文/English) wizard with *live* key validation
   against the real vendors, drag-and-drop avatar/voice installs, and escape hatches everywhere
   (status-bar button, native `⌘,` menu, failure dialogs) so a bad config can never strand you.
@@ -74,7 +76,7 @@ bun run dev            # server + web at http://localhost:5173
 <div align="center">
 <table>
   <tr>
-    <td align="center"><img src="docs/assets/wizard-voice.png" width="420" alt="Voice step: drag a GPT-SoVITS pack in" /><br/><sub>Drag a voice pack in — config + launch command generated, live health badge</sub></td>
+    <td align="center"><img src="docs/assets/wizard-voice.png" width="420" alt="Voice step: drag a GPT-SoVITS pack in" /><br/><sub>Voice step — one-click GPT-SoVITS deploy, drag a voice pack in, live health badge</sub></td>
     <td align="center"><img src="docs/assets/app-first-run.png" width="420" alt="First run: settings panel over the bring-your-own-avatar empty state" /><br/><sub>First run — she ships with no body; you bring the avatar and the voice</sub></td>
   </tr>
 </table>

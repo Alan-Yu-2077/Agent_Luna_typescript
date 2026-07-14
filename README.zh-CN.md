@@ -36,8 +36,8 @@
   带能力闸门的代码代理(仓库地图、符号检索、编辑),以及她自己蒸馏的技能架。
 - 🎭 **有身体** —— Live2D 立绘:情绪驱动表情、视线跟随、待机动画方案、音素级口型同步,以及
   透明置顶的**桌宠模式**。
-- 🗣 **你的声音** —— 开箱即用浏览器语音;想要定制音色就带一个 GPT-SoVITS 权重包:把文件夹拖进
-  向导,配置自动写好,启动命令直接生成。
+- 🗣 **你的声音** —— 开箱即用浏览器语音;要定制音色也全程不用开终端:向导一键下载并部署
+  GPT-SoVITS,拖入音色权重包,语音服务由 Luna 自己启动并看护;运行中把新音色包拖到界面上即可换声。
 - 🧙 **引导式上手** —— 六步中英双语向导:每把 key 都对真实服务商**在线验证**、立绘与音色包
   拖入即装,并且处处有退路(状态栏按钮、原生 `⌘,` 菜单、失败弹窗)——配坏了永远一键回到向导。
 - 🔒 **本地优先** —— 记忆是本地 SQLite,密钥只存本机配置文件,服务默认只绑回环地址。
@@ -69,7 +69,7 @@ bun run dev            # server + web,http://localhost:5173
 <div align="center">
 <table>
   <tr>
-    <td align="center"><img src="docs/assets/wizard-voice.png" width="420" alt="语音步骤:拖入 GPT-SoVITS 音色包" /><br/><sub>音色包拖进来——配置与启动命令自动生成,徽章实时报告语音服务状态</sub></td>
+    <td align="center"><img src="docs/assets/wizard-voice.png" width="420" alt="语音步骤:拖入 GPT-SoVITS 音色包" /><br/><sub>语音步骤——一键部署 GPT-SoVITS,拖入音色包,徽章实时报告语音服务状态</sub></td>
     <td align="center"><img src="docs/assets/app-first-run.png" width="420" alt="首次运行:设置面板与自带立绘空状态" /><br/><sub>首启界面——她不自带身体;立绘和声音由你来定</sub></td>
   </tr>
 </table>
