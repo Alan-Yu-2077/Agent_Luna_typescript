@@ -50,6 +50,10 @@ const SMOKE = process.env['LUNA_SMOKE'] === '1';
 // only when nothing is listening does it spawn its own, now against the shared repo DB. The packaged
 // SMOKE keeps its own port (8790) so a verification run never collides with a live dev server.
 const SERVER_PORT = Number(process.env['LUNA_DESKTOP_WS_PORT'] ?? (SMOKE ? 8790 : 8787));
+// v0.37.5: the loopback web host needs the same smoke isolation as the WS port — WEB_PORT (5177) is
+// pinned for localStorage stability, so a smoke run while the real app is open hit EADDRINUSE and
+// wedged before the probe (found the first time a smoke ran alongside a live instance).
+const DESKTOP_WEB_PORT = Number(process.env['LUNA_DESKTOP_WEB_PORT'] ?? (SMOKE ? 5178 : WEB_PORT));
 // v0.26.2: pet mode — transparent, frameless, always-on-top, region click-through. v0.27.0: the
 // settings-panel toggle (persisted in settings.json) is the authority once used; LUNA_PET_MODE in
 // luna.env / the env is only the initial default. Windowed mode stays the fallback.
@@ -294,8 +298,8 @@ function createWindow(mode: 'app' | 'setup' = 'app'): BrowserWindow {
   }
   const url =
     mode === 'setup'
-      ? `http://127.0.0.1:${WEB_PORT}/?setup=1`
-      : `http://127.0.0.1:${WEB_PORT}/?ws=${SERVER_PORT}${usePet ? '&pet=1' : ''}`;
+      ? `http://127.0.0.1:${DESKTOP_WEB_PORT}/?setup=1`
+      : `http://127.0.0.1:${DESKTOP_WEB_PORT}/?ws=${SERVER_PORT}${usePet ? '&pet=1' : ''}`;
   void win.loadURL(url);
   return win;
 }
@@ -776,7 +780,7 @@ void app.whenReady().then(async () => {
   // runs voiceless / with browser voice. It also serves any picker-installed model from userData/models.
   startWebHost(
     p.webDist,
-    WEB_PORT,
+    DESKTOP_WEB_PORT,
     () => readTtsEnv({ ...process.env, ...parseEnvFile(readFileSync(p.envFile, 'utf8')) }),
     p.userModelsDir,
     () => (ttsSupervisor ? ttsProcState : null),
