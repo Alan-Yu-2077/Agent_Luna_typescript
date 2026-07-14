@@ -109,6 +109,22 @@ export const SETUP_COPY: CopyTable = {
   'step.voice.badge.up': { zh: '语音服务已就绪 ✓', en: 'Voice server ready ✓' },
   'step.voice.test': { zh: '试听一句', en: 'Test voice' },
   'step.voice.test.failed': { zh: '试听失败——确认语音服务已启动。', en: 'Test failed — is the voice server running?' },
+
+  // v0.37.2 (标准 1): the one-click GPT-SoVITS installer
+  'step.voice.provision.button': { zh: '一键下载并部署 GPT-SoVITS', en: 'Download & deploy GPT-SoVITS' },
+  'step.voice.provision.hint': {
+    zh: '自动下载语音运行时(约 2 GB;Windows 整合包约 5.7 GB),可断点续传。装好后拖入音色包即可用 GPT 音色。',
+    en: 'Downloads the voice runtime (~2 GB; ~5.7 GB Windows package), resumable. Drop a voice pack afterwards to enable the GPT voice.',
+  },
+  'step.voice.provision.preflight': { zh: '检查磁盘空间…', en: 'Checking disk space…' },
+  'step.voice.provision.downloading': { zh: '正在下载语音组件…', en: 'Downloading voice components…' },
+  'step.voice.provision.extracting': { zh: '正在解压…', en: 'Extracting…' },
+  'step.voice.provision.materializing': { zh: '正在安放模型文件…', en: 'Placing model files…' },
+  'step.voice.provision.venv': { zh: '正在安装 Python 依赖(几分钟)…', en: 'Installing Python deps (a few minutes)…' },
+  'step.voice.provision.validating': { zh: '正在校验运行时…', en: 'Validating the runtime…' },
+  'step.voice.provision.ready': { zh: '运行时已就绪 ✓ — 拖入音色包即可用 GPT 音色', en: 'Runtime ready ✓ — drop a voice pack to enable the GPT voice' },
+  'step.voice.provision.failed': { zh: '安装失败——点按钮重试(会从断点继续)', en: 'Install failed — click to retry (resumes where it left off)' },
+  'step.voice.provision.paused': { zh: '安装已暂停——点按钮继续', en: 'Install paused — click to continue' },
 };
 
 export function makeT(lang: SetupLang): (key: string) => string {

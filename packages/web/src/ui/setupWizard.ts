@@ -159,7 +159,19 @@ export type WizardBridge = {
   scanVoicePack?(file: File): Promise<Record<string, unknown>>;
   installVoicePack?(args: Record<string, string>): Promise<Record<string, unknown>>;
   chooseTtsRuntime?(): Promise<Record<string, unknown>>;
+  // v0.37.2: the one-click GPT-SoVITS installer (标准 1) — start kicks/resumes it, status polls it.
+  provisionStart?(): Promise<Record<string, unknown>>;
+  provisionStatus?(): Promise<Record<string, unknown>>;
 };
+
+// v0.37.2: provision stage → copy key (pure so it unit-tests; the wizard label rides makeT).
+export function provisionCopyKey(stage: string, inFlight: boolean): string {
+  if (stage === 'ready') return 'step.voice.provision.ready';
+  if (stage === 'failed') return 'step.voice.provision.failed';
+  if (stage === 'idle') return 'step.voice.provision.hint';
+  if (!inFlight) return 'step.voice.provision.paused'; // resumable — a quit mid-install parks here
+  return `step.voice.provision.${stage}`;
+}
 
 // v0.35.1: the probe gate for optional steps. Next with an untested filled key runs the probe
 // first; a failed probe arms "continue anyway" (the second click advances). Pure so it unit-tests.
@@ -306,6 +318,7 @@ export function mountSetupWizard(root: HTMLElement, opts: { preview?: boolean } 
   let busy = false;
   const voice: VoiceState = { picks: {}, transcript: '', promptLang: 'en' };
   let healthTimer: ReturnType<typeof setInterval> | null = null;
+  let provisionTimer: ReturnType<typeof setInterval> | null = null;
 
   const card = doc.createElement('div');
   card.className = 'setup-card wizard';
@@ -321,6 +334,10 @@ export function mountSetupWizard(root: HTMLElement, opts: { preview?: boolean } 
     if (healthTimer !== null) {
       clearInterval(healthTimer);
       healthTimer = null;
+    }
+    if (provisionTimer !== null) {
+      clearInterval(provisionTimer);
+      provisionTimer = null;
     }
     while (card.firstChild) card.removeChild(card.firstChild);
 
@@ -412,6 +429,54 @@ export function mountSetupWizard(root: HTMLElement, opts: { preview?: boolean } 
       body.appendChild(radio);
       if (voiceBackend === 'http') {
         for (const f of step.fields) fieldRow(body, t(f.labelKey), f, values);
+
+        // v0.37.2 (标准 1): the one-click installer — download + deploy the GPT-SoVITS runtime and
+        // mark it ready, resumable across quits. Renders only in the desktop shell (bridge present).
+        const provisionStart = setup?.provisionStart;
+        const provisionStatus = setup?.provisionStatus;
+        if (provisionStart && provisionStatus) {
+          const box = doc.createElement('div');
+          box.className = 'wizard-provision';
+          const row = doc.createElement('div');
+          row.className = 'wizard-actions';
+          const btn = doc.createElement('button');
+          btn.type = 'button';
+          btn.className = 'setup-btn';
+          btn.textContent = t('step.voice.provision.button');
+          const line = doc.createElement('div');
+          line.className = 'wizard-provision-status';
+          line.textContent = t('step.voice.provision.hint');
+          row.appendChild(btn);
+          box.append(row, line);
+          body.appendChild(box);
+
+          const paint = (snap: Record<string, unknown>): void => {
+            const stage = typeof snap['stage'] === 'string' ? snap['stage'] : 'idle';
+            const inFlight = snap['inFlight'] === true;
+            const pct = typeof snap['pct'] === 'number' ? snap['pct'] : 0;
+            const err = typeof snap['error'] === 'string' ? ` — ${snap['error']}` : '';
+            const pctTxt = stage === 'downloading' && pct > 0 ? ` ${pct}%` : '';
+            line.textContent = `${t(provisionCopyKey(stage, inFlight))}${pctTxt}${stage === 'failed' ? err : ''}`;
+            btn.disabled = inFlight || stage === 'ready';
+            if ((stage === 'ready' || stage === 'failed') && provisionTimer !== null) {
+              clearInterval(provisionTimer);
+              provisionTimer = null;
+            }
+          };
+          const poll = (): void => {
+            void provisionStatus().then(paint);
+          };
+          poll(); // hydrate a resumed/parked install on step entry
+          btn.addEventListener('click', () => {
+            void provisionStart().then((r) => {
+              if (r['ok'] !== true) {
+                line.textContent = typeof r['error'] === 'string' ? r['error'] : t('step.voice.provision.failed');
+                return;
+              }
+              if (provisionTimer === null) provisionTimer = setInterval(poll, 800);
+            });
+          });
+        }
 
         // v0.35.3: drop the downloaded GPT-SoVITS pack → scan → confirm picks/transcript → install
         // (weights copied, luna.env written, api_v2 yaml + launch command generated). BYO boundary:

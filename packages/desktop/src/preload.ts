@@ -79,4 +79,7 @@ contextBridge.exposeInMainWorld('lunaSetup', {
   installVoicePack: (args: Record<string, string>): Promise<Record<string, unknown>> =>
     ipcRenderer.invoke('luna:install-voice-pack', args),
   chooseTtsRuntime: (): Promise<Record<string, unknown>> => ipcRenderer.invoke('luna:choose-tts-runtime'),
+  // v0.37.2 (标准 1): the one-click GPT-SoVITS installer — start kicks/resumes, status polls.
+  provisionStart: (): Promise<Record<string, unknown>> => ipcRenderer.invoke('luna:provision-start'),
+  provisionStatus: (): Promise<Record<string, unknown>> => ipcRenderer.invoke('luna:provision-status'),
 });

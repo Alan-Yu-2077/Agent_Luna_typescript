@@ -5,10 +5,11 @@ import {
   nextLabelKey,
   probeFieldsFor,
   probeGateAction,
+  provisionCopyKey,
   STEP_GUIDES,
   wizardSteps,
 } from './setupWizard';
-import { SETUP_COPY } from './setupCopy';
+import { makeT, SETUP_COPY } from './setupCopy';
 
 describe('wizardSteps (v0.35.0)', () => {
   test('six steps in onboarding order, chat first and required', () => {
@@ -145,5 +146,38 @@ describe('collectValues', () => {
       ['LUNA_TTS_BACKEND', 'http'],
     ]);
     expect(Object.keys(collectValues(values)).length).toBe(3);
+  });
+});
+
+// v0.37.2 (标准 1): the one-click installer's stage → copy-key mapping (drives the wizard label).
+describe('provisionCopyKey', () => {
+  test('terminal + idle states map to their own keys regardless of inFlight', () => {
+    expect(provisionCopyKey('ready', false)).toBe('step.voice.provision.ready');
+    expect(provisionCopyKey('failed', false)).toBe('step.voice.provision.failed');
+    expect(provisionCopyKey('idle', false)).toBe('step.voice.provision.hint');
+  });
+  test('a parked mid-install (not in flight) reads as paused — the button continues it', () => {
+    expect(provisionCopyKey('downloading', false)).toBe('step.voice.provision.paused');
+  });
+  test('in-flight stages map to their stage keys', () => {
+    for (const st of ['preflight', 'downloading', 'extracting', 'materializing', 'venv', 'validating']) {
+      expect(provisionCopyKey(st, true)).toBe(`step.voice.provision.${st}`);
+    }
+  });
+});
+
+describe('provision copy keys exist in both languages', () => {
+  test('every stage key resolves to real zh + en strings (no key-echo fallbacks)', () => {
+    const zh = makeT('zh');
+    const en = makeT('en');
+    for (const st of ['preflight', 'downloading', 'extracting', 'materializing', 'venv', 'validating']) {
+      const key = provisionCopyKey(st, true);
+      expect(zh(key)).not.toBe(key);
+      expect(en(key)).not.toBe(key);
+    }
+    for (const key of ['step.voice.provision.button', 'step.voice.provision.ready', 'step.voice.provision.failed', 'step.voice.provision.paused', 'step.voice.provision.hint']) {
+      expect(zh(key)).not.toBe(key);
+      expect(en(key)).not.toBe(key);
+    }
   });
 });

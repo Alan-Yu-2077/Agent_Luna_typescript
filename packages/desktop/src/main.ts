@@ -29,6 +29,7 @@ import {
   validateVoicePack,
 } from './voicePack';
 import { buildTtsArgv, resolveManagedRuntime, type VoiceProcState } from './ttsRuntime';
+import { buildManifest, realSeams, runProvision, type ProvisionStatus } from './ttsProvision';
 
 // v0.26.1 (Initiative 19): the single-machine app. The shell OWNS the whole runtime: it reads the
 // user's keys from app-data (never the bundle), spawns the compiled luna-server sidecar against an
@@ -153,6 +154,31 @@ let paths: Paths | null = null;
 // (it is only consulted while the upstream is unreachable, so a stale value never masks a live one).
 let ttsSupervisor: Supervisor | null = null;
 let ttsProcState: VoiceProcState = 'idle';
+
+// v0.37.2 (标准 1): the one-click installer's live snapshot. `inFlight` distinguishes "running" from
+// a resumable parked state after a quit/failure — the wizard's button continues either.
+let provisionStatus: ProvisionStatus = { stage: 'idle', pct: 0, bytesDone: 0, bytesTotal: 0 };
+let provisionInFlight = false;
+
+function freshUserEnv(p: Paths): Record<string, string | undefined> {
+  return { ...process.env, ...parseEnvFile(readFileSync(p.envFile, 'utf8')) };
+}
+
+function hydrateProvisionStatus(p: Paths): void {
+  if (provisionInFlight || provisionStatus.stage !== 'idle') return;
+  const marker = join(p.userData, 'tts', 'provision.json');
+  if (!existsSync(marker)) return;
+  try {
+    const m = JSON.parse(readFileSync(marker, 'utf8')) as { state?: string; error?: string };
+    if (m.state === 'ready') provisionStatus = { stage: 'ready', pct: 100, bytesDone: 0, bytesTotal: 0 };
+    else if (m.state === 'failed')
+      provisionStatus = { stage: 'failed', pct: 0, bytesDone: 0, bytesTotal: 0, ...(m.error ? { error: m.error } : {}) };
+    else if (typeof m.state === 'string' && m.state !== 'idle')
+      provisionStatus = { stage: 'downloading', pct: 0, bytesDone: 0, bytesTotal: 0 }; // parked mid-install
+  } catch {
+    /* unreadable marker — stay idle */
+  }
+}
 
 async function maybeStartManagedTts(p: Paths): Promise<void> {
   if (SMOKE) return; // smokes are voiceless — a python child would wedge the headless run
@@ -557,6 +583,41 @@ ipcMain.handle('luna:install-voice-pack', async (_event, raw: VoiceInstallRaw) =
     );
   }
   return { ok: true, refAudio: installed.refAudio, command, yamlPath };
+});
+
+// v0.37.2 (标准 1): the one-click GPT-SoVITS installer. Start kicks (or resumes — the engine skips
+// complete artifacts and finishes .part files) and returns immediately; the wizard polls status.
+ipcMain.handle('luna:provision-status', () => {
+  if (paths) hydrateProvisionStatus(paths);
+  return { ...provisionStatus, inFlight: provisionInFlight };
+});
+ipcMain.handle('luna:provision-start', () => {
+  if (!paths) return { ok: false, error: 'Not ready — try again in a moment.' };
+  const p = paths;
+  const env = freshUserEnv(p);
+  if (env['LUNA_TTS_PROVISION'] !== '1')
+    return { ok: false, error: 'Provisioning is off — set LUNA_TTS_PROVISION=1 in luna.env (preview flag).' };
+  if (provisionInFlight) return { ok: true };
+  provisionInFlight = true;
+  const ttsDir = join(p.userData, 'tts');
+  const dirs = { ttsDir, runtimeDir: join(ttsDir, 'runtime'), downloadsDir: join(ttsDir, 'downloads') };
+  const mirror = (env['LUNA_TTS_HF_MIRROR'] ?? '').trim();
+  const manifest = buildManifest({ platform: process.platform, ...(mirror !== '' ? { hfBase: mirror } : {}) });
+  void runProvision(dirs, manifest, realSeams(), (s) => {
+    provisionStatus = s;
+  })
+    .then((final) => {
+      provisionStatus = final;
+      if (final.stage === 'ready') {
+        // Arm managed mode so the FIRST pack drop can spawn the voice. The backend deliberately stays
+        // browser until a pack lands — a runtime with no pack has no timbre to speak with (Open Q4).
+        writeFileSync(p.envFile, mergeEnvFile(readFileSync(p.envFile, 'utf8'), { LUNA_TTS_MANAGED: '1' }));
+      }
+    })
+    .finally(() => {
+      provisionInFlight = false;
+    });
+  return { ok: true };
 });
 
 async function smokeProbe(win: BrowserWindow): Promise<void> {

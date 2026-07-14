@@ -109,21 +109,21 @@ export function resolveManagedRuntime(
   }
   if (kind === null) return null;
 
-  // The voice to load: the most recently installed pack's yaml; a fresh runtime with no pack yet
-  // falls back to the checkout's stock config (base voice — the wizard tells the no-pack truth).
+  // The voice to load = the most recently installed pack's yaml. NO pack → NO launch (v0.37.2,
+  // Open Q4): GPT-SoVITS is zero-shot — without a pack there are no custom weights, and the stock
+  // config points at pretrained checkpoints the lean provisioned runtime deliberately omits. The app
+  // keeps the browser voice until the first pack drops; the wizard says so plainly.
   const packYamls = fs.listPackYamls(ttsDir).sort((a, b) => b.mtimeMs - a.mtimeMs);
-  const stockYaml = join(checkout, 'GPT_SoVITS', 'configs', 'tts_infer.yaml');
-  const yamlPath = packYamls[0]?.path ?? stockYaml;
-  if (packYamls.length === 0 && !fs.exists(stockYaml)) return null;
+  const yamlPath = packYamls[0]?.path;
+  if (yamlPath === undefined) return null;
 
-  return {
-    kind,
-    checkout,
-    python: venvPython(checkout, platform, fs) ?? 'python3',
-    yamlPath,
-    host: target.host,
-    port: target.port,
-  };
+  // The 整合包 (provisioned win32) ships its own embedded python instead of a venv.
+  const embeddedWin = join(checkout, 'runtime', 'python.exe');
+  const python =
+    venvPython(checkout, platform, fs) ??
+    (platform === 'win32' && fs.exists(embeddedWin) ? embeddedWin : 'python3');
+
+  return { kind, checkout, python, yamlPath, host: target.host, port: target.port };
 }
 
 // Argv for the supervisor — the one true launch form (api_v2.py argparse: -a/-p/-c), same shape the
