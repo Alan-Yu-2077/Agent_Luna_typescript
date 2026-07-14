@@ -783,8 +783,8 @@ Inference:
 - This closes the owner's original literal ask end-to-end: 一键部署 (v0.37.2) → 拖包 → 说话,
   with zero terminals. The first-pack chicken-and-egg (the runtime resolver requires a yaml; the
   yaml needs a checkout) is what `resolveManagedCheckout` exists for.
-- The adopt-if-external guard in the swap is the owner-instance safety: his own api_v2 on 9880 is
-  never killed or restarted by a pack drop — the pack installs, and HIS server stays his.
+- The adopt-if-external guard in the swap is the owner-instance safety: their own api_v2 on 9880 is
+  never killed or restarted by a pack drop — the pack installs, and THEIR server stays theirs.
 
 ### `v0.37.2` — 2026-07-14 — 一键下载并部署: the wizard installs GPT-SoVITS itself (Initiative 27, 3/5 — 标准 1)
 
@@ -802,7 +802,7 @@ Fact:
   `statfsSync` disk preflight, 10 GB floor). Resume: complete artifacts skip, `.part`s continue from
   their byte offset, a size-mismatched "complete" file is demoted to a partial; a rerun after failure
   finishes only the remainder.
-- **The mac manifest is the owner's verified lean recipe** (grounded on his working install): code
+- **The mac manifest is the owner's verified lean recipe** (grounded on their working install): code
   tag `20240821v2` (matches the 整合包 generation) + roberta (7 files, 1.31 GB bin) + hubert (3
   files, 189 MB) + G2PW (bcebos zip, CN-native) + `lid.176.bin` — **≈2 GB, no gsv pretrained**
   checkpoints (api_v2 with a custom yaml loads only the custom weights). Windows = the official
@@ -914,7 +914,7 @@ Inference:
   refused" from an ambiguous BYO-down into a typed "wait, it's coming" exactly and only when Luna
   owns the child — the boot gate's semantic switch keys on this one field.
 - Flag off (the default) is byte-identical to v0.36.10, so shipping this is riskless; the owner can
-  flip `LUNA_TTS_MANAGED=1` on his instance and his existing 9880 api_v2 is simply adopted.
+  flip `LUNA_TTS_MANAGED=1` on their instance and their existing 9880 api_v2 is simply adopted.
 
 ### `v0.36.10` — 2026-07-14 — Collapse closes downward (owner correction of v0.36.7)
 
