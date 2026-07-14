@@ -86,6 +86,11 @@ export function buildManifest(o: { platform: NodeJS.Platform; hfBase?: string })
         url: `${hf}/lj1995/GPT-SoVITS-windows-package/resolve/main/GPT-SoVITS-v2pro-20250604.7z`,
         dest: '.',
         sizeBytes: 8_185_086_602,
+        // From HuggingFace's LFS etag, which IS the sha256 — cross-checked against a file I hashed
+        // myself (roberta's 651 MB bin: HF's etag matched byte-for-byte), so this is trustworthy
+        // even though 8.19 GB was never downloaded here. The rest of the Windows path (7z layout,
+        // 7-Zip's presence) remains genuinely unverified — see the changelog.
+        sha256: 'bd60d0796553ff05d8568136e199c13e0dc22ebe2ed24273134e34ed6f215cd6',
         archive: '7z',
         stripPrefix: 'GPT-SoVITS-v2pro-20250604',
       },
@@ -130,6 +135,35 @@ export function buildManifest(o: { platform: NodeJS.Platform; hfBase?: string })
       dest: 'GPT_SoVITS/text',
       sizeBytes: 588_856_634,
       sha256: '46292be0374a49308069233cd5c147ae4c41806558e4781a2467a31a4d8099da',
+      archive: 'zip',
+    },
+    // v0.37.12: g2p_en's corpora. Without cmudict, the FIRST English utterance dies with
+    // `LookupError: Resource 'cmudict' not found` — nltk does not even auto-download it. The
+    // clean-room install missed this entirely because it inherited the reference machine's
+    // ~/nltk_data (downloaded back in June). Shipped as artifacts, not as an nltk.download() call:
+    // resumable, checksummed, and the voice then works offline.
+    {
+      name: 'nltk/cmudict',
+      url: `${NLTK_BASE}/corpora/cmudict.zip`,
+      dest: 'nltk_data/corpora',
+      sizeBytes: 896_069,
+      sha256: 'd07cca47fd72ad32ea9d8ad1219f85301eeaf4568f8b6b73747506a71fb5afd6',
+      archive: 'zip',
+    },
+    {
+      name: 'nltk/averaged_perceptron_tagger_eng',
+      url: `${NLTK_BASE}/taggers/averaged_perceptron_tagger_eng.zip`,
+      dest: 'nltk_data/taggers',
+      sizeBytes: 1_539_115,
+      sha256: '6025f530624335c67d6547d44757b357b4e79bae030a0383e9887a92c1718f0b',
+      archive: 'zip',
+    },
+    {
+      name: 'nltk/averaged_perceptron_tagger',
+      url: `${NLTK_BASE}/taggers/averaged_perceptron_tagger.zip`,
+      dest: 'nltk_data/taggers',
+      sizeBytes: 2_526_731,
+      sha256: 'e1f13cf2532daadfd6f3bc481a49859f0b8ea6432ccdcd83e6a49a5f19008de9',
       archive: 'zip',
     },
     {
@@ -317,6 +351,8 @@ python-mecab-ko; sys_platform != 'win32'
 
 export const FFMPEG_HINT =
   'GPT-SoVITS decodes your reference clip with FFmpeg, which is not installed. Get it — macOS: `brew install ffmpeg`; Linux: `apt install ffmpeg` (or your package manager) — then click retry.';
+const NLTK_BASE = 'https://raw.githubusercontent.com/nltk/nltk_data/gh-pages/packages';
+
 export const PYTHON_HINT =
   'GPT-SoVITS needs Python 3.9-3.11 (3.11 recommended); none was found. Install it — macOS: `brew install python@3.11`; Windows: python.org 3.11; Linux: your package manager — then click retry.';
 
@@ -474,6 +510,12 @@ export async function runProvision(
       const reqPath = join(dirs.runtimeDir, 'luna-requirements.txt');
       fs.writeText(reqPath, INFERENCE_REQUIREMENTS);
       await seams.exec(pip, ['-m', 'pip', 'install', '-r', reqPath], dirs.runtimeDir);
+      // v0.37.12: pyopenjtalk fetches its 22.6 MB dictionary on FIRST USE — i.e. mid-conversation, over
+      // the network, or not at all. Force it here, inside the install. (The nltk corpora, whose absence
+      // is even worse — English G2P raises LookupError rather than downloading — are manifest artifacts
+      // instead: checksummed, resumable, mirrorable, and visible in the progress bar.)
+      push({ stage: 'venv', artifact: 'language data' });
+      await seams.exec(pip, ['-c', 'import pyopenjtalk; pyopenjtalk.g2p("テスト")'], dirs.runtimeDir);
       venvDone = true;
       persist('venv');
     }
@@ -490,8 +532,11 @@ export async function runProvision(
       ['hubert', join(pre, 'chinese-hubert-base', 'pytorch_model.bin')],
       ['G2PWModel', join(dirs.runtimeDir, 'GPT_SoVITS', 'text', 'G2PWModel')],
     ];
-    if (seams.platform !== 'win32')
+    if (seams.platform !== 'win32') {
       required.push(['python venv', join(dirs.runtimeDir, '.venv', 'bin', 'python')]);
+      // Without cmudict, English synthesis raises LookupError on the FIRST utterance.
+      required.push(['English pronunciation data', join(dirs.runtimeDir, 'nltk_data', 'corpora', 'cmudict')]);
+    }
     const missing = required.filter(([, path]) => !fs.exists(path)).map(([name]) => name);
     if (missing.length > 0)
       return fail('validating', `Runtime incomplete after install (missing: ${missing.join(', ')}) — retry.`);

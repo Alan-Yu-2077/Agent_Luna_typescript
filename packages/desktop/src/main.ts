@@ -199,6 +199,9 @@ function createTtsSupervisor(rt: ManagedRuntime): Supervisor {
   // Discover ffmpeg the same way the installer does and put its directory on the child's PATH, or the
   // voice installs perfectly and then 400s on every single utterance.
   const ffmpeg = realSeams().findFfmpeg();
+  // nltk looks in $HOME and the venv, never in the checkout — point it at the corpora the installer
+  // put IN the runtime, or English G2P raises LookupError on a machine that has no ~/nltk_data.
+  const nltkData = join(rt.checkout, 'nltk_data');
   const childPath = [
     ...(ffmpeg ? [dirname(ffmpeg)] : []),
     process.env['PATH'] ?? '',
@@ -211,7 +214,11 @@ function createTtsSupervisor(rt: ManagedRuntime): Supervisor {
     command: argv.command,
     args: argv.args,
     cwd: argv.cwd,
-    env: { ...(process.env as Record<string, string>), PATH: childPath },
+    env: {
+      ...(process.env as Record<string, string>),
+      PATH: childPath,
+      ...(existsSync(nltkData) ? { NLTK_DATA: nltkData } : {}),
+    },
     onEvent: (e) => {
       if (e === 'started') ttsProcState = 'starting';
       else if (e === 'restarting') ttsProcState = 'restarting';

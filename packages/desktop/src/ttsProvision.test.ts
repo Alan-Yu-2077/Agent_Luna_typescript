@@ -23,9 +23,12 @@ function fakeWorld(o: {
   python?: string | null; // null = no 3.9-3.11 interpreter on this machine
   ffmpeg?: boolean; // the SYSTEM ffmpeg binary (torchcodec decodes through it)
   hashes?: Record<string, string>; // path → the sha256 the fake reports for it
+  manifest?: Artifact[]; // so the fake can honour the REAL manifest's declared hashes
 }) {
   const files = new Map<string, number>(Object.entries(o.preFiles ?? {}));
   const texts = new Map<string, string>();
+  // path → the sha the ARTIFACT declares, so a fake download of the real manifest verifies cleanly.
+  const shaByPath = new Map<string, string>();
   const calls = { downloads: [] as Array<{ url: string; resumeFrom: number }>, extracts: [] as string[], execs: [] as string[] };
   let failedOnce = false;
   const seams: ProvisionSeams = {
@@ -33,7 +36,7 @@ function fakeWorld(o: {
     freeDiskBytes: () => o.freeDisk ?? 50_000_000_000,
     findPython: () => (o.python === undefined ? 'python3.11' : o.python),
     findFfmpeg: () => (o.ffmpeg === false ? null : '/opt/homebrew/bin/ffmpeg'),
-    sha256: (p) => o.hashes?.[p] ?? 'GOODHASH',
+    sha256: (p) => o.hashes?.[p] ?? shaByPath.get(p) ?? 'GOODHASH',
     fs: {
       exists: (p) => files.has(p) || texts.has(p),
       remove: (p) => {
@@ -46,6 +49,11 @@ function fakeWorld(o: {
         const s = files.get(from) ?? 0;
         files.delete(from);
         files.set(to, s);
+        const sha = shaByPath.get(from);
+        if (sha) {
+          shaByPath.delete(from);
+          shaByPath.set(to, sha); // a cached file re-verifies against the same hash
+        }
       },
       copy: (from, to) => files.set(to, files.get(from) ?? 0),
       writeText: (p, s) => texts.set(p, s),
@@ -57,6 +65,8 @@ function fakeWorld(o: {
     },
     download: (url, partPath, resumeFrom, onBytes) => {
       calls.downloads.push({ url, resumeFrom });
+      const declared = (o.manifest ?? MINI).find((a) => a.url === url)?.sha256;
+      if (declared) shaByPath.set(partPath, declared);
       if (o.failDownloadOnce && url.includes(o.failDownloadOnce) && !failedOnce) {
         failedOnce = true;
         return Promise.reject(new Error('network reset'));
@@ -77,6 +87,7 @@ function fakeWorld(o: {
       files.set(join(pre, 'chinese-roberta-wwm-ext-large', 'pytorch_model.bin'), 1);
       files.set(join(pre, 'chinese-hubert-base', 'pytorch_model.bin'), 1);
       files.set(join(DIRS.runtimeDir, 'GPT_SoVITS', 'text', 'G2PWModel'), 1);
+      files.set(join(DIRS.runtimeDir, 'nltk_data', 'corpora', 'cmudict'), 1);
       return Promise.resolve();
     },
     exec: (command, args) => {
@@ -188,8 +199,8 @@ describe('runProvision — stage machine', () => {
   });
 
   test('win32: single 整合包 artifact, no venv stage', async () => {
-    const world = fakeWorld({ platform: 'win32' });
     const manifest = buildManifest({ platform: 'win32' });
+    const world = fakeWorld({ platform: 'win32', manifest });
     expect(manifest.length).toBe(1);
     expect(manifest[0]!.archive).toBe('7z');
     const { final, stages } = await run(world, manifest);
@@ -384,5 +395,32 @@ describe('validating checks every load-bearing piece (v0.37.12)', () => {
     expect(final.stage).toBe('failed');
     expect(final.failedStage).toBe('validating');
     expect(final.error).toContain('python venv');
+  });
+});
+
+// v0.37.13: the "clean room" wasn't. It inherited the reference machine's ~/nltk_data (June) and
+// pyopenjtalk's cached dictionary, so English synthesis appeared to work. Under a FAKE HOME it dies:
+//   g2p_en → LookupError: Resource 'cmudict' not found   (nltk does not even auto-download it)
+describe('language data (v0.37.13 — the fake-HOME findings)', () => {
+  test('the corpora ship as CHECKSUMMED artifacts, not an opaque nltk.download() at install time', () => {
+    const m = buildManifest({ platform: 'darwin' });
+    const nltk = m.filter((a) => a.name.startsWith('nltk/'));
+    expect(nltk.map((a) => a.name)).toContain('nltk/cmudict'); // without it English G2P raises
+    expect(nltk.every((a) => a.sha256 && a.archive === 'zip')).toBe(true);
+    expect(nltk.find((a) => a.name === 'nltk/cmudict')!.dest).toBe('nltk_data/corpora');
+  });
+  test('EVERY artifact carries a sha256 — no unverifiable download remains', () => {
+    for (const p of ['darwin', 'linux', 'win32'] as const) {
+      for (const a of buildManifest({ platform: p })) expect(a.sha256).toBeTruthy();
+    }
+  });
+  test('validating fails if the English corpus is missing — it is not optional', async () => {
+    const world = fakeWorld({});
+    const seams = world.seams;
+    const realExists = seams.fs.exists;
+    seams.fs.exists = (p: string) => (p.includes('cmudict') ? false : realExists(p));
+    const { final } = await run(world);
+    expect(final.stage).toBe('failed');
+    expect(final.error).toContain('English');
   });
 });
