@@ -54,7 +54,11 @@
 body { font-weight: 500; } /* 快乐体 renders single-weight; Fredoka Medium for body */
 
 * { box-sizing: border-box; }
-html, body { height: 100%; margin: 0; }
+/* v0.36.5: the app is a FIXED single screen — never a scrolling page. overflow:hidden at the root
+   clips off-screen chrome (the closed settings panel glides in from beyond the right edge) and any
+   physics bubble that exits the viewport (a riser leaving through the ceiling), so neither can grow
+   a horizontal/vertical scrollbar. */
+html, body { height: 100%; margin: 0; overflow: hidden; }
 body {
   font-family: var(--font);
   color: var(--ink);
@@ -65,7 +69,7 @@ body {
   );
 }
 
-.luna-app { position: relative; height: 100vh; display: flex; flex-direction: column; }
+.luna-app { position: relative; height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
 
 /* v0.36.0 无边模式: the lace strips + vertical stage padding are gone — the model renders to the
    true top/bottom edges (and the physics floor is the real window bottom). Horizontal padding stays
