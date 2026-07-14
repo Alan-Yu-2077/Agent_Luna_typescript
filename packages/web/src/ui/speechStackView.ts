@@ -37,7 +37,7 @@ export type SpeechStackOptions = {
   fadeMs?: number; // the fade-out transition before DOM removal (must match the CSS)
   maxVisible?: number; // hanging overflow cap — the oldest fast-fades past this
   maxFallen?: number; // resting-pile cap — the oldest fallen fast-dissolves past this
-  dissolveMs?: number; // time at rest before a fallen bubble dissolves (default 30s)
+  dissolveMs?: number; // time AT REST before a fallen bubble dissolves (default 10s; a drag re-arms it)
   detach?: DetachFn; // physics seam; absent → old fade-in-place behavior
   schedule?: StackScheduler;
   rng?: () => number; // injected for deterministic tests (side pick, jitter, fall tilt)
@@ -71,7 +71,7 @@ export class SpeechStackView implements BubbleView {
     this.fadeMs = opts.fadeMs ?? 600;
     this.maxVisible = opts.maxVisible ?? 4;
     this.maxFallen = opts.maxFallen ?? 6;
-    this.dissolveMs = opts.dissolveMs ?? 30_000;
+    this.dissolveMs = opts.dissolveMs ?? 10_000;
     this.detach = opts.detach ?? null;
     this.schedule = opts.schedule ?? realScheduler;
     this.rng = opts.rng ?? Math.random;

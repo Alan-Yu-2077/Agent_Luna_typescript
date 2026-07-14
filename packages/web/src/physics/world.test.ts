@@ -144,14 +144,14 @@ describe('physics world — fixed timestep', () => {
 });
 
 describe('physics world — drag & throw', () => {
-  test('grab() freezes gravity; release(vx,vy) carries that velocity', () => {
+  test('a held body stays put (pinned, dynamic — never frozen); release carries the throw velocity', () => {
     const { world } = makeWorld();
     const el = new FakeEl();
     const handle = world.spawn(el, { x: 100, y: 100, w: 64, h: 64, kind: 'falling' });
     drive(world, 6); // fall a little
     handle.grab();
     const held = parseCenter(el, 64, 64);
-    drive(world, 40); // gravity must not move a held body
+    drive(world, 40); // gravity must not move a held body (v0.36.8: pinned each tick, not setStatic)
     const afterHold = parseCenter(el, 64, 64);
     expect(Math.abs(afterHold.y - held.y)).toBeLessThan(0.5);
     expect(Math.abs(afterHold.x - held.x)).toBeLessThan(0.5);
@@ -162,6 +162,35 @@ describe('physics world — drag & throw', () => {
     const moved = parseCenter(el, 64, 64);
     expect(moved.x).toBeGreaterThan(atRelease.x); // carried +x
     expect(moved.y).toBeLessThan(atRelease.y); // carried −y (upward) before gravity wins
+  });
+
+  test('a held bubble never counts as at rest — onRest cannot fire (its dissolve timer) while grabbed', () => {
+    const { world } = makeWorld();
+    const el = new FakeEl();
+    let restCount = 0;
+    const handle = world.spawn(el, { x: 168, y: 400, w: 64, h: 64, kind: 'falling' });
+    handle.onRest(() => {
+      restCount++;
+    });
+    handle.grab(); // pick it up before it ever rests
+    drive(world, 160); // pinned + velocity 0 → matter would sleep it, but grabbed blocks onRest
+    expect(restCount).toBe(0);
+    handle.release(0, 0); // drop it
+    drive(world, 400); // falls, lands, rests
+    expect(restCount).toBe(1); // onRest fires once it actually settles, after release
+  });
+
+  test('each bubble is a separate entity — two falling bodies collide and separate, never fully overlap', () => {
+    const { world } = makeWorld();
+    const a = new FakeEl();
+    const b = new FakeEl();
+    world.spawn(a, { x: 168, y: 300, w: 64, h: 64, kind: 'falling' });
+    world.spawn(b, { x: 168, y: 300, w: 64, h: 64, kind: 'falling' }); // spawned ON TOP of each other
+    drive(world, 240); // fall + resolve the overlap + settle
+    const ca = parseCenter(a, 64, 64);
+    const cb = parseCenter(b, 64, 64);
+    // two 64px bodies that don't overlap are separated by ~a body in at least one axis
+    expect(Math.max(Math.abs(ca.x - cb.x), Math.abs(ca.y - cb.y))).toBeGreaterThan(50);
   });
 
   test('setPointer moves a grabbed body exactly where told', () => {

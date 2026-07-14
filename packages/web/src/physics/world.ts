@@ -5,7 +5,7 @@ import Matter from 'matter-js';
 // hand-rolled integrator is a one-file change. DOM elements are rigid bodies; a fixed-timestep
 // accumulator makes motion frame-rate independent; the runner pauses when the tab is hidden.
 
-const { Engine, Bodies, Body, Composite, Events } = Matter;
+const { Engine, Bodies, Body, Composite, Events, Sleeping } = Matter;
 
 export interface RectSize {
   readonly width: number;
@@ -65,6 +65,7 @@ interface Entry {
   kind: BodyKind;
   ageMs: number;
   grabbed: boolean;
+  pointer: { x: number; y: number } | null; // where a grabbed body is held (world coords)
   restFired: boolean;
   onRest?: () => void;
   onExit?: () => void;
@@ -139,6 +140,16 @@ export function createPhysicsWorld(opts: WorldOpts): PhysicsWorld {
       }
     }
     Engine.update(engine, FIXED);
+    // v0.36.8: a grabbed body is never frozen (no setStatic) — it stays a live dynamic body and is
+    // re-pinned to the pointer AFTER the step (overriding the gravity the step just applied) and kept
+    // awake, so it keeps colliding with + shoving the pile instead of tunnelling through it.
+    for (const e of entries.values()) {
+      if (e.grabbed && e.pointer) {
+        Body.setPosition(e.body, e.pointer);
+        Body.setVelocity(e.body, { x: 0, y: 0 });
+        Sleeping.set(e.body, false);
+      }
+    }
   }
 
   function cullAndSync(): void {
@@ -213,13 +224,15 @@ export function createPhysicsWorld(opts: WorldOpts): PhysicsWorld {
       kind: o.kind,
       ageMs: 0,
       grabbed: false,
+      pointer: null,
       restFired: false,
       removed: false,
     };
     entries.set(body.id, entry);
-    // Rest = matter sleep. Risers never sleep (constant force keeps them awake until they exit).
+    // Rest = matter sleep. Risers never sleep (constant force keeps them awake until they exit). A
+    // held body never counts as "at rest" — so its dissolve timer can't arm while you're holding it.
     Events.on(body, 'sleepStart', () => {
-      if (entry.removed || entry.restFired || entry.kind !== 'falling') return;
+      if (entry.removed || entry.restFired || entry.grabbed || entry.kind !== 'falling') return;
       entry.restFired = true;
       entry.onRest?.();
     });
@@ -228,18 +241,20 @@ export function createPhysicsWorld(opts: WorldOpts): PhysicsWorld {
     return {
       setPointer(x, y) {
         if (entry.removed) return;
+        entry.pointer = { x, y };
         Body.setPosition(body, { x, y });
       },
       grab() {
         if (entry.removed) return;
         entry.grabbed = true;
         entry.restFired = false; // picking it up re-arms rest → onRest fires again when it re-settles
-        Body.setStatic(body, true); // ignore gravity/forces while held; still collides as an obstacle
+        entry.pointer = { x: body.position.x, y: body.position.y }; // hold in place until dragged
+        Sleeping.set(body, false); // stay a live, colliding body while held — never frozen
       },
       release(vx, vy) {
         if (entry.removed) return;
         entry.grabbed = false;
-        Body.setStatic(body, false);
+        entry.pointer = null;
         Body.setVelocity(body, { x: vx * THROW_SCALE, y: vy * THROW_SCALE });
       },
       onRest(cb) {
