@@ -148,6 +148,9 @@ async function boot(): Promise<void> {
   let isCollapsed = localStorage.getItem('luna:collapsed') === '1';
   const view = new RouterBubbleView(windowView, speechStack);
 
+  // v0.37.12: an explicit browser-voice choice, e.g. localStorage['luna:voice'] = 'Ting-Ting'.
+  // Unset → voicePick chooses (language-matched, female-preferred, never the OS default man).
+  const preferredVoice = localStorage.getItem('luna:voice') ?? undefined;
   let audio: AudioSink = noopAudioSink;
   if (ttsBackend === 'http') {
     // v0.37.4: the two-rung ladder — an utterance the GPT voice can't speak (hard failure / the
@@ -159,12 +162,12 @@ async function boot(): Promise<void> {
       onMouth: (frame) => live2d.setMouth(frame),
       onUnspoken: (text, voice) => {
         console.warn('[voice] GPT voice unavailable — speaking via the browser voice this once');
-        fallbackVoice ??= new WebSpeechSink({ onMouth: (frame) => live2d.setMouth(frame) });
+        fallbackVoice ??= new WebSpeechSink({ onMouth: (frame) => live2d.setMouth(frame), ...(preferredVoice ? { preferredVoice } : {}) });
         void fallbackVoice.speak(text, voice);
       },
     });
   } else if (ttsBackend === 'browser') {
-    audio = new WebSpeechSink({ onMouth: (frame) => live2d.setMouth(frame) });
+    audio = new WebSpeechSink({ onMouth: (frame) => live2d.setMouth(frame), ...(preferredVoice ? { preferredVoice } : {}) });
   }
   // Speech-gate the stack: when Luna actually begins speaking a reply, restart the newest bubble's
   // life so its ~10s aligns with the utterance (playback is serialized, so emit ≠ speak time). When

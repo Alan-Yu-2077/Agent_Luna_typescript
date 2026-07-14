@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
 import {
   buildManifest,
+  INFERENCE_REQUIREMENTS,
   runProvision,
   type Artifact,
   type ProvisionDirs,
@@ -19,6 +20,9 @@ function fakeWorld(o: {
   platform?: NodeJS.Platform;
   truncate?: number; // the server promises this many bytes…
   shortBytes?: number; // …but only this many land (a truncated transfer)
+  python?: string | null; // null = no 3.9-3.11 interpreter on this machine
+  ffmpeg?: boolean; // the SYSTEM ffmpeg binary (torchcodec decodes through it)
+  hashes?: Record<string, string>; // path → the sha256 the fake reports for it
 }) {
   const files = new Map<string, number>(Object.entries(o.preFiles ?? {}));
   const texts = new Map<string, string>();
@@ -27,8 +31,15 @@ function fakeWorld(o: {
   const seams: ProvisionSeams = {
     platform: o.platform ?? 'darwin',
     freeDiskBytes: () => o.freeDisk ?? 50_000_000_000,
+    findPython: () => (o.python === undefined ? 'python3.11' : o.python),
+    findFfmpeg: () => (o.ffmpeg === false ? null : '/opt/homebrew/bin/ffmpeg'),
+    sha256: (p) => o.hashes?.[p] ?? 'GOODHASH',
     fs: {
       exists: (p) => files.has(p) || texts.has(p),
+      remove: (p) => {
+        files.delete(p);
+        texts.delete(p);
+      },
       size: (p) => files.get(p) ?? 0,
       mkdirp: () => {},
       rename: (from, to) => {
@@ -59,14 +70,18 @@ function fakeWorld(o: {
     },
     extract: (archive) => {
       calls.extracts.push(archive);
-      // extraction "creates" the runtime tree the validator checks
+      // Extraction "creates" the runtime tree — every path `validating` now checks (v0.37.12: it
+      // checks the model FILES and G2PW and the venv, not just two directory names).
       files.set(join(DIRS.runtimeDir, 'api_v2.py'), 1);
-      files.set(join(DIRS.runtimeDir, 'GPT_SoVITS', 'pretrained_models', 'chinese-roberta-wwm-ext-large'), 1);
-      files.set(join(DIRS.runtimeDir, 'GPT_SoVITS', 'pretrained_models', 'chinese-hubert-base'), 1);
+      const pre = join(DIRS.runtimeDir, 'GPT_SoVITS', 'pretrained_models');
+      files.set(join(pre, 'chinese-roberta-wwm-ext-large', 'pytorch_model.bin'), 1);
+      files.set(join(pre, 'chinese-hubert-base', 'pytorch_model.bin'), 1);
+      files.set(join(DIRS.runtimeDir, 'GPT_SoVITS', 'text', 'G2PWModel'), 1);
       return Promise.resolve();
     },
     exec: (command, args) => {
       calls.execs.push(`${command} ${args.join(' ')}`);
+      if (args.includes('venv')) files.set(join(DIRS.runtimeDir, '.venv', 'bin', 'python'), 1);
       return Promise.resolve();
     },
   };
@@ -74,9 +89,15 @@ function fakeWorld(o: {
 }
 
 const MINI: Artifact[] = [
-  { name: 'code', url: 'https://x/code.tar.gz', dest: '.', sizeBytes: 0, archive: 'tar.gz', stripPrefix: 'c' },
-  { name: 'model.bin', url: 'https://x/model.bin', dest: 'GPT_SoVITS/pretrained_models/m/model.bin', sizeBytes: 100 },
+  { name: 'code', url: 'https://x/code.tar.gz', dest: '.', sizeBytes: 0, sha256: 'GOODHASH', archive: 'tar.gz', stripPrefix: 'c' },
+  { name: 'model.bin', url: 'https://x/model.bin', dest: 'GPT_SoVITS/pretrained_models/m/model.bin', sizeBytes: 100, sha256: 'GOODHASH' },
 ];
+// The real code keys the cache on name+URL — tests that pre-seed downloads must use the same name.
+const cached = (a: Artifact): string => {
+  let h = 5381;
+  for (let i = 0; i < a.url.length; i++) h = ((h * 33) ^ a.url.charCodeAt(i)) >>> 0;
+  return join(DIRS.downloadsDir, `${a.name.replace(/[/\\ ]/g, '_')}.${h.toString(36)}`);
+};
 
 async function run(world: ReturnType<typeof fakeWorld>, manifest = MINI) {
   const stages: string[] = [];
@@ -95,9 +116,12 @@ describe('runProvision — stage machine', () => {
     expect(stages[stages.length - 1]).toBe('ready');
     // provision.json ends ready — the marker ttsRuntime's provisionReady reads
     expect(JSON.parse(world.texts.get(join(DIRS.ttsDir, 'provision.json'))!).state).toBe('ready');
-    // the venv recipe ran in the runtime dir with vetted commands only
-    expect(world.calls.execs[0]).toContain('python3 -m venv');
-    expect(world.calls.execs[1]).toContain('pip install -r requirements.txt');
+    // the venv is built with the DISCOVERED 3.9-3.11 interpreter, never a bare `python3`
+    expect(world.calls.execs[0]).toBe('python3.11 -m venv .venv');
+    // v0.37.12: OUR inference list, never the upstream requirements.txt (numba==0.56.4 refuses py3.11)
+    expect(world.calls.execs.some((c) => c.includes('luna-requirements.txt'))).toBe(true);
+    expect(world.calls.execs.every((c) => !c.includes(' requirements.txt'))).toBe(true);
+    expect(world.calls.execs.some((c) => c.includes('pip install torch torchaudio'))).toBe(true);
   });
 
   test('preflight fails fast on low disk — nothing downloads', async () => {
@@ -111,8 +135,8 @@ describe('runProvision — stage machine', () => {
   test('resume: a complete artifact is skipped; a .part resumes from its byte offset', async () => {
     const world = fakeWorld({
       preFiles: {
-        [join(DIRS.downloadsDir, 'model.bin')]: 100, // already complete (size matches)
-        [join(DIRS.downloadsDir, 'code') + '.part']: 40, // half-downloaded archive
+        [cached(MINI[1]!)]: 100, // already complete
+        [cached(MINI[0]!) + '.part']: 40, // half-downloaded archive
       },
     });
     const { final } = await run(world);
@@ -131,12 +155,12 @@ describe('runProvision — stage machine', () => {
     expect(final.stage).toBe('failed');
     expect(final.failedStage).toBe('downloading');
     expect(final.error).toContain('truncated');
-    expect(world.files.has(join(DIRS.downloadsDir, 'code'))).toBe(false); // never renamed → never trusted
+    expect(world.files.has(cached(MINI[0]!))).toBe(false); // never renamed → never trusted
   });
 
   test('a file already at its final path is trusted — the rename IS the commit', async () => {
     const world = fakeWorld({
-      preFiles: { [join(DIRS.downloadsDir, 'code')]: 100, [join(DIRS.downloadsDir, 'model.bin')]: 100 },
+      preFiles: { [cached(MINI[0]!)]: 100, [cached(MINI[1]!)]: 100 },
     });
     const { final } = await run(world);
     expect(final.stage).toBe('ready');
@@ -215,5 +239,150 @@ describe('buildManifest', () => {
     for (const a of [...buildManifest({ platform: 'darwin' }), ...buildManifest({ platform: 'win32' })]) {
       expect(a.sizeBytes === 0 || a.sizeBytes > 1000).toBe(true);
     }
+  });
+});
+
+// v0.37.12: the venv needs python 3.9-3.11. The reference machine's own `python3` is 3.14 (no torch
+// wheels), so a hardcoded `python3` was a guaranteed failure — AFTER a ~1.6 GB download.
+describe('runProvision — the python gate', () => {
+  test('no compatible python → fails in PREFLIGHT, before a single byte is downloaded', async () => {
+    const world = fakeWorld({ python: null });
+    const { final } = await run(world);
+    expect(final.stage).toBe('failed');
+    expect(final.failedStage).toBe('preflight');
+    expect(final.error).toContain('3.9');
+    expect(world.calls.downloads.length).toBe(0); // the whole point: nothing downloaded
+    expect(world.calls.execs.length).toBe(0);
+  });
+
+  test('the discovered interpreter is the one the venv is built with (never `python3`)', async () => {
+    const world = fakeWorld({ python: 'python3.10' });
+    const { final } = await run(world);
+    expect(final.stage).toBe('ready');
+    expect(world.calls.execs[0]).toBe('python3.10 -m venv .venv');
+    expect(world.calls.execs.every((c) => !c.startsWith('python3 '))).toBe(true);
+  });
+
+  test('win32 needs no system python — the 整合包 ships its own', async () => {
+    const world = fakeWorld({ platform: 'win32', python: null });
+    const { final } = await run(world);
+    expect(final.stage).toBe('ready'); // not blocked by the python gate
+    expect(world.calls.execs.length).toBe(0);
+  });
+});
+
+describe('the venv recipe (v0.37.12)', () => {
+  test('linux takes the CPU torch index — PyPI\'s linux torch is a ~2.5 GB CUDA build', async () => {
+    const world = fakeWorld({ platform: 'linux' });
+    await run(world);
+    const torchCmd = world.calls.execs.find((c) => c.includes('torch'))!;
+    expect(torchCmd).toContain('--index-url https://download.pytorch.org/whl/cpu');
+  });
+  test('macOS does NOT use the CPU index (PyPI already ships the right wheel)', async () => {
+    const world = fakeWorld({ platform: 'darwin' });
+    await run(world);
+    const torchCmd = world.calls.execs.find((c) => c.includes('torch'))!;
+    expect(torchCmd).not.toContain('index-url');
+  });
+  // Both halves of this were settled by a REAL install, not by reading requirements.txt: the excluded
+  // ones never appear in api_v2's import chain, and gradio — which looks like pure WebUI weight — is
+  // load-bearing (tools/my_utils.py imports it, and TTS.py imports tools). Guessing got it backwards.
+  test('the list excludes the training-only weight, and keeps the deps a real boot proved necessary', () => {
+    for (const dead of ['funasr', 'modelscope', 'faster', 'tensorboard']) {
+      expect(INFERENCE_REQUIREMENTS.toLowerCase()).not.toContain(dead);
+    }
+    for (const needed of [
+      'transformers', 'librosa', 'pyopenjtalk', 'onnxruntime', 'fastapi',
+      'gradio', // not optional, despite appearances
+      'matplotlib', // AR/modules/lr_schedulers.py imports pyplot at module scope
+      'split-lang', // text/LangSegmenter
+      'torchcodec', // torchaudio >=2.9 decodes through it — without it every synth 400s
+      'huggingface-hub>=0.26,<1', // gradio's latest pulls hub 1.x, which transformers rejects
+    ]) {
+      expect(INFERENCE_REQUIREMENTS).toContain(needed);
+    }
+    expect(INFERENCE_REQUIREMENTS).toContain('numba>=0.59'); // NOT the py3.11-hostile 0.56.4
+  });
+});
+
+// v0.37.12: found by SYNTHESIZING — the install "succeeded" and then every synth 400'd with
+// "TorchCodec is required". torchcodec decodes through the system ffmpeg binary.
+describe('runProvision — the ffmpeg gate', () => {
+  test('no system ffmpeg → fails in PREFLIGHT, before downloading', async () => {
+    const world = fakeWorld({ ffmpeg: false });
+    const { final } = await run(world);
+    expect(final.stage).toBe('failed');
+    expect(final.failedStage).toBe('preflight');
+    expect(final.error).toContain('FFmpeg');
+    expect(world.calls.downloads.length).toBe(0);
+  });
+  test('win32 needs no system ffmpeg — the 整合包 bundles one', async () => {
+    const world = fakeWorld({ platform: 'win32', ffmpeg: false });
+    expect((await run(world)).final.stage).toBe('ready');
+  });
+  test('torchcodec is in the list (torchaudio >=2.9 cannot decode without it)', () => {
+    expect(INFERENCE_REQUIREMENTS).toContain('torchcodec');
+  });
+});
+
+// v0.37.12 (adversarial audit): HuggingFace GZIPS the small JSONs, so content-length is ABSENT and
+// the length check silently no-ops. A 200 that is a sign-in page would be committed as tokenizer.json
+// and cached FOREVER (an existing file was never re-verified), pass validating (which only stats
+// directories), report `ready`, and crash api_v2 on a parse error with no way back.
+describe('download integrity (the cache-poisoning hole)', () => {
+  test('a 200 whose CONTENT is wrong fails loudly and is never committed — even with no content-length', async () => {
+    const world = fakeWorld({ hashes: {} }); // sha256() returns 'GOODHASH' by default…
+    // …so make the fake report a DIFFERENT hash for whatever lands: an HTML sign-in page.
+    const seams = world.seams;
+    const realSha = seams.sha256;
+    seams.sha256 = (p: string) => (p.endsWith('.part') ? 'HTML-SIGNIN-PAGE' : realSha(p));
+    const { final } = await run(world);
+    expect(final.stage).toBe('failed');
+    expect(final.failedStage).toBe('downloading');
+    expect(final.error).toContain('checksum');
+    expect(world.files.has(cached(MINI[0]!))).toBe(false); // NOT cached — retry can actually recover
+  });
+
+  test('a cached file whose hash no longer matches is re-downloaded, not trusted', async () => {
+    const world = fakeWorld({ preFiles: { [cached(MINI[1]!)]: 100 } });
+    const seams = world.seams;
+    let firstLook = true;
+    seams.sha256 = (p: string) => {
+      if (p === cached(MINI[1]!) && firstLook) {
+        firstLook = false;
+        return 'STALE-GARBAGE'; // the poisoned cache entry
+      }
+      return 'GOODHASH';
+    };
+    const { final } = await run(world);
+    expect(final.stage).toBe('ready');
+    expect(world.calls.downloads.some((d) => d.url === 'https://x/model.bin')).toBe(true); // re-fetched
+  });
+
+  test('the cache key includes the URL — a manifest that repoints a name cannot reuse the old file', async () => {
+    const moved: Artifact[] = [{ ...MINI[1]!, url: 'https://NEW-HOST/model.bin' }];
+    const world = fakeWorld({ preFiles: { [cached(MINI[1]!)]: 100 } }); // the OLD host's file
+    await run(world, moved);
+    expect(world.calls.downloads.some((d) => d.url === 'https://NEW-HOST/model.bin')).toBe(true);
+  });
+
+  test('a .part at or past the remote size restarts instead of retrying into a 416 forever', async () => {
+    const world = fakeWorld({ preFiles: { [cached(MINI[1]!) + '.part']: 500 } }); // > sizeBytes 100
+    await run(world);
+    const dl = world.calls.downloads.find((d) => d.url === 'https://x/model.bin');
+    expect(dl?.resumeFrom).toBe(0); // NOT 500 (a Range beyond EOF is a permanent 416)
+  });
+});
+
+describe('validating checks every load-bearing piece (v0.37.12)', () => {
+  test('a marker that claims ready with no venv is caught, not spawned into a crash-loop', async () => {
+    const world = fakeWorld({});
+    const seams = world.seams;
+    const realExists = seams.fs.exists;
+    seams.fs.exists = (p: string) => (p.includes('.venv') ? false : realExists(p));
+    const { final } = await run(world);
+    expect(final.stage).toBe('failed');
+    expect(final.failedStage).toBe('validating');
+    expect(final.error).toContain('python venv');
   });
 });

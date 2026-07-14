@@ -1,6 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, session, shell } from 'electron';
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { join, sep } from 'node:path';
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { dirname, join, sep } from 'node:path';
 import { defaultDistDir, startWebHost, WEB_PORT } from './serve';
 import { readTtsEnv } from '../../web/src/tts/apiV2';
 import { ENV_TEMPLATE, parseEnvFile } from './envfile';
@@ -194,11 +194,24 @@ function hydrateProvisionStatus(p: Paths): void {
 function createTtsSupervisor(rt: ManagedRuntime): Supervisor {
   const argv = buildTtsArgv(rt);
   console.log(`[luna-desktop] managed tts (${rt.kind}): ${argv.command} ${argv.args.join(' ')}`);
+  // v0.37.12: api_v2 decodes the reference clip through torchcodec, which SHELLS OUT to ffmpeg — and a
+  // Finder-launched .app hands its children a minimal PATH (/usr/bin:/bin) with no /opt/homebrew/bin.
+  // Discover ffmpeg the same way the installer does and put its directory on the child's PATH, or the
+  // voice installs perfectly and then 400s on every single utterance.
+  const ffmpeg = realSeams().findFfmpeg();
+  const childPath = [
+    ...(ffmpeg ? [dirname(ffmpeg)] : []),
+    process.env['PATH'] ?? '',
+    '/opt/homebrew/bin',
+    '/usr/local/bin',
+  ]
+    .filter(Boolean)
+    .join(':');
   return createSupervisor({
     command: argv.command,
     args: argv.args,
     cwd: argv.cwd,
-    env: { ...(process.env as Record<string, string>) },
+    env: { ...(process.env as Record<string, string>), PATH: childPath },
     onEvent: (e) => {
       if (e === 'started') ttsProcState = 'starting';
       else if (e === 'restarting') ttsProcState = 'restarting';
@@ -637,6 +650,37 @@ ipcMain.handle('luna:install-voice-pack', async (_event, raw: VoiceInstallRaw) =
   return { ok: true, refAudio: installed.refAudio, command, yamlPath };
 });
 
+// v0.37.12: write the runtime yaml for every installed pack that has none, then start the voice.
+// Called when provisioning completes, because a pack installed before the runtime existed left only
+// its weights behind — no yaml, hence no launchable runtime, hence no voice, with nothing to tell
+// the user why.
+async function adoptInstalledPacks(p: Paths): Promise<void> {
+  const env = freshUserEnv(p);
+  const co = resolveManagedCheckout(env, { userData: p.userData });
+  if (!co) return;
+  const ttsDir = join(p.userData, 'tts');
+  if (!existsSync(ttsDir)) return;
+  for (const entry of readdirSync(ttsDir, { withFileTypes: true })) {
+    if (!entry.isDirectory() || entry.name === 'runtime' || entry.name === 'downloads') continue;
+    const packDir = join(ttsDir, entry.name);
+    const yamlPath = join(packDir, 'tts_infer.runtime.yaml');
+    if (existsSync(yamlPath)) continue; // already adopted
+    const gptCkpt = firstFileIn(join(packDir, 'GPT'));
+    const sovitsPth = firstFileIn(join(packDir, 'SoVITS'));
+    if (!gptCkpt || !sovitsPth) continue;
+    writeFileSync(yamlPath, generateTtsYaml({ checkout: co.checkout, gptCkpt, sovitsPth }));
+    console.log(`[luna-desktop] adopted the voice pack installed before the runtime: ${entry.name}`);
+  }
+  const rt = resolveManagedRuntime(freshUserEnv(p), { userData: p.userData });
+  if (rt) await swapManagedTts(rt);
+}
+
+function firstFileIn(dir: string): string | undefined {
+  if (!existsSync(dir)) return undefined;
+  const f = readdirSync(dir).find((n) => !n.startsWith('.'));
+  return f ? join(dir, f) : undefined;
+}
+
 // v0.37.8: what is already configured, so "Re-run setup" preserves it instead of overwriting it
 // with the stock defaults. Secret VALUES never cross the bridge — only their key names do.
 ipcMain.handle('luna:wizard-prefill', () => {
@@ -673,6 +717,11 @@ ipcMain.handle('luna:provision-start', () => {
         // Arm managed mode so the FIRST pack drop can spawn the voice. The backend deliberately stays
         // browser until a pack lands — a runtime with no pack has no timbre to speak with (Open Q4).
         writeFileSync(p.envFile, mergeEnvFile(readFileSync(p.envFile, 'utf8'), { LUNA_TTS_MANAGED: '1' }));
+        // v0.37.12: the drop-zone sits right next to the deploy button, so a pack is very often
+        // installed BEFORE the runtime exists. Its yaml could not be written then (there was no
+        // checkout to point at) — and nothing ever wrote it afterwards, so the voice would never
+        // start, silently, forever. Adopt any already-installed pack now that a runtime exists.
+        void adoptInstalledPacks(p);
       }
     })
     .finally(() => {
