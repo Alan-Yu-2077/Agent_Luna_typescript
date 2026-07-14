@@ -654,8 +654,10 @@ ipcMain.handle('luna:provision-start', () => {
   if (!paths) return { ok: false, error: 'Not ready — try again in a moment.' };
   const p = paths;
   const env = freshUserEnv(p);
-  if (env['LUNA_TTS_PROVISION'] !== '1')
-    return { ok: false, error: 'Provisioning is off — set LUNA_TTS_PROVISION=1 in luna.env (preview flag).' };
+  // v0.37.9: ON by default. A one-click install that first needs you to hand-edit a config file is
+  // not one-click — it is the terminal step this initiative exists to delete, wearing a disguise.
+  // LUNA_TTS_PROVISION=0 is the opt-OUT.
+  if (env['LUNA_TTS_PROVISION'] === '0') return { ok: false, error: 'One-click deploy is disabled (LUNA_TTS_PROVISION=0).' };
   if (provisionInFlight) return { ok: true };
   provisionInFlight = true;
   const ttsDir = join(p.userData, 'tts');

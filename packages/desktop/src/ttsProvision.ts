@@ -28,7 +28,12 @@ export type Artifact = {
   url: string;
   // where the payload lands inside the runtime checkout; archives extract here, plain files copy here
   dest: string;
-  sizeBytes: number; // 0 = unknown (discovered from content-length; no pre-check)
+  // v0.37.9: a PROGRESS HINT ONLY (measured from the real hosts 2026-07-14), never an integrity gate.
+  // 0 = unknown. Completion is verified against the SERVER's content-length for that download, so a
+  // hint that rots only skews the bar. (v0.37.2 hard-failed on a hardcoded-size mismatch, and the
+  // roberta constant had been copied from the reference instance's fp32 file — 1.3 GB — while this
+  // host serves 651 MB: the very first real run would have failed forever.)
+  sizeBytes: number;
   archive?: ArchiveKind;
   stripPrefix?: string; // top-level dir inside the archive to strip while extracting
 };
@@ -41,7 +46,7 @@ const CODE_TAG = '20240821v2'; // matches the Windows 整合包 v2-240821 genera
 // pretrained checkpoints are NOT needed — a custom voice supplies its own t2s/vits weights.
 const ROBERTA_FILES: Array<[string, number]> = [
   ['config.json', 0],
-  ['pytorch_model.bin', 1_306_484_351],
+  ['pytorch_model.bin', 651_225_145],
   ['tokenizer.json', 0],
   ['tokenizer_config.json', 0],
   ['special_tokens_map.json', 0],
@@ -62,7 +67,7 @@ export function buildManifest(o: { platform: NodeJS.Platform; hfBase?: string })
         name: 'GPT-SoVITS 整合包 (v2-240821)',
         url: `${hf}/lj1995/GPT-SoVITS-windows-package/resolve/main/GPT-SoVITS-v2-240821.7z`,
         dest: '.',
-        sizeBytes: 0,
+        sizeBytes: 5_744_891_255,
         archive: '7z',
         stripPrefix: 'GPT-SoVITS-v2-240821',
       },
@@ -96,18 +101,20 @@ export function buildManifest(o: { platform: NodeJS.Platform; hfBase?: string })
     ),
     {
       name: 'G2PWModel',
-      // CN-native origin (bcebos) — the piece HF mirrors don't carry
-      url: 'https://paddlespeech.cdn.bcebos.com/Parakeet/released_models/g2p/G2PWModel_1.1.zip',
-      dest: 'GPT_SoVITS/text/G2PWModel',
-      sizeBytes: 0,
+      // v0.37.9: the URL GPT-SoVITS' own install docs point at. (v0.37.2 used a paddlespeech bcebos
+      // path that is simply DEAD — it never resolved, so the install could not have completed. This
+      // one is an HF URL, so LUNA_TTS_HF_MIRROR covers it for CN networks too.) The zip's top-level
+      // IS `G2PWModel/`, so it extracts into text/ with no prefix to strip.
+      url: `${hf}/XXXXRT/GPT-SoVITS-Pretrained/resolve/main/G2PWModel.zip`,
+      dest: 'GPT_SoVITS/text',
+      sizeBytes: 588_856_634,
       archive: 'zip',
-      stripPrefix: 'G2PWModel_1.1',
     },
     {
       name: 'lid.176.bin',
       url: 'https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.bin',
       dest: `${models}/fast_langdetect/lid.176.bin`,
-      sizeBytes: 0,
+      sizeBytes: 131_266_198,
     },
   ];
 }
@@ -219,30 +226,34 @@ export async function runProvision(
     if (seams.freeDiskBytes(dirs.ttsDir) < MIN_FREE_BYTES)
       return fail('preflight', `Need ~${Math.round(MIN_FREE_BYTES / 1e9)} GB free disk for the voice runtime.`);
 
-    // ── download (resumable: finish .part files, skip complete artifacts) ──
+    // ── download (resumable). The rename .part → final IS the commit: a file at `finalPath` is, by
+    // construction, one that finished and matched what the server promised. v0.37.9: completion is
+    // checked against the SERVER's content-length for this download, never against a hardcoded size
+    // (which was wrong for roberta and would have failed every real install forever). A chunked
+    // response (GitHub archives send no content-length) reports total 0 → nothing to check.
     persist('downloading');
     push({ stage: 'downloading' });
     let doneBytes = 0;
     for (const a of manifest) {
       const finalPath = join(dirs.downloadsDir, a.name.replace(/[/\\ ]/g, '_'));
-      const complete = fs.exists(finalPath) && (a.sizeBytes === 0 || fs.size(finalPath) === a.sizeBytes);
-      if (!complete) {
-        if (fs.exists(finalPath)) fs.rename(finalPath, `${finalPath}.part`); // size mismatch → treat as partial
+      if (!fs.exists(finalPath)) {
         const part = `${finalPath}.part`;
         const resumeFrom = fs.exists(part) ? fs.size(part) : 0;
         push({ artifact: a.name });
+        let served = 0; // the server's own content-length for this transfer
         await seams.download(a.url, part, resumeFrom, (got, total) => {
+          served = total;
           push({
             bytesDone: doneBytes + got,
             bytesTotal: Math.max(st.bytesTotal, doneBytes + total),
             pct: st.bytesTotal > 0 ? Math.min(99, Math.round(((doneBytes + got) / st.bytesTotal) * 100)) : 0,
           });
         });
-        if (a.sizeBytes > 0 && fs.size(part) !== a.sizeBytes)
-          return fail('downloading', `${a.name}: size mismatch after download — mirror problem? Retry.`);
+        if (served > 0 && fs.size(part) !== served)
+          return fail('downloading', `${a.name}: truncated (${fs.size(part)} of ${served} bytes) — retry to resume.`);
         fs.rename(part, finalPath);
       }
-      doneBytes += a.sizeBytes > 0 ? a.sizeBytes : fs.size(finalPath);
+      doneBytes += fs.size(finalPath);
       push({ bytesDone: doneBytes });
     }
 
@@ -391,7 +402,10 @@ export function realSeams(): ProvisionSeams {
           if (!(e instanceof Error) || !e.message.includes('ENOENT')) throw e;
         }
       }
-      throw new Error('7-Zip not found — install 7-Zip, or download + extract the 整合包 manually.');
+      throw new Error(
+        'The Windows package needs 7-Zip to unpack. Install it from 7-zip.org and click retry — ' +
+          'the download is already saved, so it resumes instantly.',
+      );
     },
     exec: (command, args, cwd) => runProc(command, args, cwd),
   };

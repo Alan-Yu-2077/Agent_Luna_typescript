@@ -55,9 +55,9 @@ LUNA_TTS_URL=
 # v0.37.0: 1 = Luna spawns + supervises the GPT-SoVITS api_v2 server herself (from the wizard-
 # provisioned runtime or LUNA_TTS_RUNTIME_DIR) — no terminal. Unset/0 = bring-your-own (you run it).
 LUNA_TTS_MANAGED=
-# v0.37.2: 1 = enable the wizard's one-click GPT-SoVITS download & deploy (preview flag while the
-# per-OS installer is validated). LUNA_TTS_HF_MIRROR overrides the HuggingFace host for CN networks
-# (e.g. https://hf-mirror.com).
+# v0.37.9: the wizard's one-click GPT-SoVITS download & deploy is ON by default; set 0 to hide it.
+# LUNA_TTS_HF_MIRROR overrides the HuggingFace host for CN networks (e.g. https://hf-mirror.com) —
+# it covers every model download, including G2PW.
 LUNA_TTS_PROVISION=
 LUNA_TTS_HF_MIRROR=
 

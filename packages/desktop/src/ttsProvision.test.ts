@@ -17,6 +17,8 @@ function fakeWorld(o: {
   freeDisk?: number;
   failDownloadOnce?: string; // artifact url substring that fails on its FIRST attempt
   platform?: NodeJS.Platform;
+  truncate?: number; // the server promises this many bytes…
+  shortBytes?: number; // …but only this many land (a truncated transfer)
 }) {
   const files = new Map<string, number>(Object.entries(o.preFiles ?? {}));
   const texts = new Map<string, string>();
@@ -48,9 +50,11 @@ function fakeWorld(o: {
         failedOnce = true;
         return Promise.reject(new Error('network reset'));
       }
-      const total = 100;
-      onBytes(total - resumeFrom, total - resumeFrom);
-      files.set(partPath, 100); // the finished .part
+      // `total` is the FULL final size (what the server's content-length implies), not the remainder —
+      // same contract realSeams honours: total = resumeFrom + content-length.
+      const total = o.truncate ?? 100;
+      onBytes(total, total);
+      files.set(partPath, o.shortBytes ?? 100); // what actually landed on disk
       return Promise.resolve();
     },
     extract: (archive) => {
@@ -119,12 +123,24 @@ describe('runProvision — stage machine', () => {
     expect(code?.resumeFrom).toBe(40); // resumed, not restarted
   });
 
-  test('a size mismatch on a "complete" file re-downloads it as a partial', async () => {
-    const world = fakeWorld({ preFiles: { [join(DIRS.downloadsDir, 'model.bin')]: 55 } });
+  // v0.37.9: integrity is checked against the SERVER's content-length, never a hardcoded size (the
+  // hardcoded roberta size was WRONG and would have failed every real install forever).
+  test('a truncated transfer fails loudly and does NOT commit the file', async () => {
+    const world = fakeWorld({ truncate: 100, shortBytes: 60 }); // server promised 100, only 60 landed
+    const { final } = await run(world);
+    expect(final.stage).toBe('failed');
+    expect(final.failedStage).toBe('downloading');
+    expect(final.error).toContain('truncated');
+    expect(world.files.has(join(DIRS.downloadsDir, 'code'))).toBe(false); // never renamed → never trusted
+  });
+
+  test('a file already at its final path is trusted — the rename IS the commit', async () => {
+    const world = fakeWorld({
+      preFiles: { [join(DIRS.downloadsDir, 'code')]: 100, [join(DIRS.downloadsDir, 'model.bin')]: 100 },
+    });
     const { final } = await run(world);
     expect(final.stage).toBe('ready');
-    const dl = world.calls.downloads.find((d) => d.url === 'https://x/model.bin');
-    expect(dl?.resumeFrom).toBe(55); // the stale file became the .part and resumed
+    expect(world.calls.downloads.length).toBe(0); // nothing re-downloaded
   });
 
   test('a network failure fails the run with a persisted marker; a rerun completes the remainder', async () => {
@@ -172,11 +188,20 @@ describe('buildManifest', () => {
     expect(names).not.toContain('gsv'); // the lean recipe — custom voices bring their own weights
   });
 
-  test('the HF mirror override swaps the host for HF artifacts only', () => {
+  test('the CN mirror override covers every HF download — including G2PW', () => {
     const m = buildManifest({ platform: 'darwin', hfBase: 'https://hf-mirror.com' });
     const roberta = m.find((a) => a.name.startsWith('roberta/'))!;
     expect(roberta.url.startsWith('https://hf-mirror.com/')).toBe(true);
+    // v0.37.9: G2PW moved from a DEAD bcebos path to the URL GPT-SoVITS' own docs use — an HF one,
+    // so the mirror now reaches it too (it did not before, and the old URL did not resolve at all).
     const g2pw = m.find((a) => a.name === 'G2PWModel')!;
-    expect(g2pw.url).toContain('bcebos.com'); // CN-native origin untouched
+    expect(g2pw.url).toBe('https://hf-mirror.com/XXXXRT/GPT-SoVITS-Pretrained/resolve/main/G2PWModel.zip');
+    expect(m.some((a) => a.url.includes('bcebos'))).toBe(false); // the dead host is gone
+  });
+
+  test('every size hint is either 0 (unknown) or a real measured length — never a guess', () => {
+    for (const a of [...buildManifest({ platform: 'darwin' }), ...buildManifest({ platform: 'win32' })]) {
+      expect(a.sizeBytes === 0 || a.sizeBytes > 1000).toBe(true);
+    }
   });
 });

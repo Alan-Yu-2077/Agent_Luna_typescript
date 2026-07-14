@@ -113,8 +113,8 @@ export const SETUP_COPY: CopyTable = {
   // v0.37.2 (标准 1): the one-click GPT-SoVITS installer
   'step.voice.provision.button': { zh: '一键下载并部署 GPT-SoVITS', en: 'Download & deploy GPT-SoVITS' },
   'step.voice.provision.hint': {
-    zh: '自动下载语音运行时(约 2 GB;Windows 整合包约 5.7 GB),可断点续传。装好后拖入音色包即可用 GPT 音色。',
-    en: 'Downloads the voice runtime (~2 GB; ~5.7 GB Windows package), resumable. Drop a voice pack afterwards to enable the GPT voice.',
+    zh: '自动下载语音运行时(约 2 GB;Windows 整合包约 5.7 GB,需装有 7-Zip),可断点续传、可重试。装好后拖入音色包即可用 GPT 音色。',
+    en: 'Downloads the voice runtime (~2 GB; ~5.7 GB Windows package, which needs 7-Zip). Resumable and retryable. Drop a voice pack afterwards to enable the GPT voice.',
   },
   'step.voice.provision.preflight': { zh: '检查磁盘空间…', en: 'Checking disk space…' },
   'step.voice.provision.downloading': { zh: '正在下载语音组件…', en: 'Downloading voice components…' },

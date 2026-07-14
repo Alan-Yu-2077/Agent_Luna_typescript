@@ -78,8 +78,8 @@ The highest-quality option, and since v0.37 the desktop wizard can do ALL of it 
 
 1. **Voice step → "Download & deploy GPT-SoVITS"** — Luna downloads the runtime (≈2 GB on
    macOS/Linux; the official ~5.7 GB 整合包 on Windows), resumable across quits, and validates it.
-   On CN networks set `LUNA_TTS_HF_MIRROR=https://hf-mirror.com` in `luna.env` first. (While the
-   per-OS installer is being validated this button is behind `LUNA_TTS_PROVISION=1`.)
+   On CN networks set `LUNA_TTS_HF_MIRROR=https://hf-mirror.com` in `luna.env` first — it covers
+   every model download. (`LUNA_TTS_PROVISION=0` hides the button if you'd rather install by hand.)
 2. **Drag your voice pack in** (the weights + reference-clip folder, e.g. from a creator's netdisk
    link) — Luna installs it, writes the api_v2 config, and **starts + supervises the voice server
    herself** (`LUNA_TTS_MANAGED=1`): crash-restart, clean shutdown, no orphaned process. The badge
