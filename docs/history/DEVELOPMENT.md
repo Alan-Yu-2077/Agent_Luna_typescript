@@ -200,6 +200,7 @@ during the rewrite. Its version log is unrelated to this one — `v0.1` here is 
 | `v0.36.5` | 2026-07-14 | **Fixed single screen — no scrollbars (Initiative 26 polish)** — the closed VTS settings panel glides in from off-screen right (`translateX(100%+28px)`), and being unclipped it grew a horizontal scrollbar that pushed the whole page and clipped the left chat panel's top (owner-reported #4/#5). `overflow: hidden` on `html, body` and `.luna-app` makes the app a truly fixed single screen — off-screen chrome and any physics bubble that exits the viewport (a riser through the ceiling) are clipped, never scrolled. CSS only; suite 1278 green. | _working tree_ |
 | `v0.36.6` | 2026-07-14 | **Lace trim back + chat panel breathing room (Initiative 26 polish)** — removing the lace in v0.36.0 was for the MODEL (edge-to-edge), not license for the chat box to fill the whole screen. The lace strips return (top zigzag / bottom scallop, `#b9d4ef`) as absolute decoration at `z-index:0` — BEHIND the model (z-1) and chat panel (z-2), so they frame the room and peek around Luna without ever cropping her — and the chat panel gains a `16px` top/bottom margin so it no longer touches top/bottom (owner #6-adjacent). Model stays edge-to-edge (stage keeps horizontal-only padding). Pet mode hides the lace; the collapsed bar zeroes the margin. Suite 1278 green. | _working tree_ |
 | `v0.37.9` | 2026-07-14 | **One-click deploy is ON by default — and its three fatal bugs are fixed (owner-caught)** — the owner asked why a one-click install needed you to hand-edit `luna.env` first. It doesn't any more: `LUNA_TTS_PROVISION` defaults **on** (`=0` opts out). Flipping it forced the honest validation I'd deferred, and **every manifest URL was HEAD-checked against the real hosts** — which found the button would have failed 100% of the time: (1) the `G2PWModel` URL (paddlespeech/bcebos) is **dead** — it never resolved, so the install could never finish; replaced with the URL GPT-SoVITS' own docs use, which is an HF one, so `LUNA_TTS_HF_MIRROR` now reaches it too; (2) the roberta size constant was copied from the reference instance's **fp32** file (1.3 GB) while the host serves **651 MB** → the hardcoded-size gate would have hard-failed the download forever; integrity now checks the **server's own content-length**, and sizes are progress hints only; (3) the G2PW zip's top level is `G2PWModel/`, so the `dest`/`stripPrefix` were wrong. Windows 7-Zip error made actionable. +2 tests, 3 rewritten. Suite 1345 green. | _working tree_ |
+| `v0.37.10` | 2026-07-14 | **The voice install could never finish — four roberta files that do not exist (new-user test)** — a clean-machine new-user run died at `chinese-roberta-wwm-ext-large/tokenizer_config.json: HTTP 404`. `ROBERTA_FILES` listed **7** files; the host publishes exactly **3** (`config.json`, `pytorch_model.bin`, `tokenizer.json`). The four BERT companions (`tokenizer_config.json`, `special_tokens_map.json`, `added_tokens.json`, `vocab.txt`) all 404, and the installer stops at the first — so **every fresh install failed here, 100% of the time**, and "click to retry (resumes where it left off)" is a lie for a 404: there is nothing to resume and retrying can never succeed. v0.37.9 recorded that "every manifest URL was HEAD-checked against the real hosts", but only the **size-bearing binaries** were actually probed — the four **zero-size** JSON entries never were, which is exactly where this survived. This time the check was driven from `buildManifest({ platform: 'darwin' })`'s real output rather than a hand-written list: **9/9 → 200**. `tokenizer.json` is the fast tokenizer's self-contained definition (vocab embedded), so nothing removed is needed at runtime. +1 test pinning the roberta set to what the host serves. Suite 1346 green. | _working tree_ |
 | `v0.37.8` | 2026-07-14 | **Re-running setup preserves what is configured (owner-caught)** — re-entering the wizard didn't just show blank fields, it **destroyed config**: every field with a static `initial` (`ANTHROPIC_BASE_URL`, `LUNA_MODEL`, `LUNA_EMBEDDING_*`) wrote that default into the submit map at render, so clicking through a re-run overwrote a custom gateway URL and model with the stock ones; `voiceBackend` hard-started at `browser`, so a re-run also reset a configured GPT-SoVITS voice back to the browser voice. New `luna:wizard-prefill` IPC hydrates the wizard from `luna.env` — **secret VALUES never cross the bridge** (the four API keys come back as NAMES; their fields render "已配置 · 留空即保持不变" and stay EMPTY, and an empty field is dropped at submit so `mergeEnvFile` preserves the stored key). Saved values now beat static initials; the voice backend hydrates too. +8 tests. Suite 1343 green. | _working tree_ |
 | `v0.37.7` | 2026-07-14 | **They, not he** — three passages in the changelog used he/his for the repo owner, whose pronouns were never stated. Public docs should not guess. Docs only. | `630f5fb` |
 | `v0.37.6` | 2026-07-14 | **README voice copy synced to the one-click reality (owner-caught)** — both public READMEs still taught the v0.35.3 flow ("drag the pack in and it **hands you the exact launch command**" / "启动命令直接生成") and the `wizard-voice.png` asset showed the old command-block voice step. Feature bullet + screenshot caption rewritten in EN + 中文 around v0.37.x (one-click deploy → drag pack → Luna runs the server herself → drop-anywhere swap); the asset replaced with the fresh isolated-userData smoke capture of the new step (one-click button + rewritten guide visible). Docs only. | _working tree_ |
@@ -677,6 +678,49 @@ Inference:
   and gives the owner the variety they remembered, now as a first-class setting rather than a buried constant.
 
 ## Detailed records
+
+### `v0.37.10` — 2026-07-14 — The voice install could never finish: four roberta files that do not exist (new-user test)
+
+Status:
+
+- working tree
+
+Fact:
+
+- **`ttsProvision.ts`**: `ROBERTA_FILES` listed **7** files. `lj1995/GPT-SoVITS` publishes exactly
+  **3** under `chinese-roberta-wwm-ext-large/`: `config.json`, `pytorch_model.bin`, `tokenizer.json`.
+  The other four — `tokenizer_config.json`, `special_tokens_map.json`, `added_tokens.json`,
+  `vocab.txt` — are the usual BERT companions and **do not exist on the host**. All four 404.
+- **Symptom**: a new-user run on a clean machine died at
+  `.../chinese-roberta-wwm-ext-large/tokenizer_config.json: HTTP 404`. The manifest is walked in
+  order and stops at the first failure, so the install never reached the other three — every fresh
+  install failed at the same file, **100% of the time**, since the recipe shipped.
+- **The retry hint is wrong for this class of failure**: `Install failed — click to retry (resumes
+  where it left off)`. A 404 has nothing to resume and cannot succeed on retry; a new user is left
+  clicking forever. (Not fixed here — the manifest was the bug; the 4xx/transient split is its own
+  change.)
+- **Why v0.37.9's validation missed it**: that entry records "every manifest URL HEAD-checked against
+  the real hosts", but the check was driven from the entries that carried a **size constant** — the
+  binaries. The four roberta companions are `sizeBytes: 0` (unknown), and were never probed. The
+  zero-size entries are precisely the ones a hand-written check skims past.
+- **Validation this time was driven from the code, not from a list**: `buildManifest({ platform:
+  'darwin' })` was executed and every URL it emits was HEAD-checked — **9/9 → 200** (code archive,
+  roberta ×3, hubert ×3, `G2PWModel.zip`, `lid.176.bin`).
+- **Runtime**: `tokenizer.json` is the fast tokenizer's self-contained definition (the vocab is
+  embedded), which is why upstream ships only these three and the reference instance loads roberta
+  from them. Nothing removed is needed at load time.
+- **Tests**: +1 pinning the roberta request set to exactly the three files the host serves, so the
+  companions cannot creep back. Suite 1345 → **1346 pass / 0 fail**; desktop tsc clean.
+
+Inference:
+
+- This was not an intermittent or host-specific failure: the one-click voice install was broken for
+  **every** new user from the moment it shipped. It survived because the only people who ran it had
+  already populated `pretrained_models/` by hand, so the download path never actually executed for
+  them — the owner's own machines were the worst possible test bed for it.
+- The durable lesson is about *how* the URLs get checked, not *which* ones were wrong: a manifest
+  audit has to enumerate `buildManifest`'s real output. Any check assembled by hand re-introduces the
+  same blind spot — the entries with no size, no ceremony, and no apparent risk.
 
 ### `v0.37.9` — 2026-07-14 — One-click deploy on by default, and the three bugs that would have broken it (owner-caught)
 

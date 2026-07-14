@@ -44,14 +44,14 @@ const CODE_TAG = '20240821v2'; // matches the Windows 整合包 v2-240821 genera
 // The scripted recipe's model set is exactly what the reference instance loads for a CUSTOM voice:
 // roberta + hubert (yaml custom section) + G2PW + lid.176 (text frontend). The multi-GB gsv
 // pretrained checkpoints are NOT needed — a custom voice supplies its own t2s/vits weights.
+// These three are the ENTIRE roberta directory upstream publishes; tokenizer.json is the fast
+// tokenizer's self-contained definition (vocab included), so the usual BERT companions
+// (tokenizer_config / special_tokens_map / added_tokens / vocab.txt) do not exist on the host and
+// 404 — listing them hard-failed every install at the first one.
 const ROBERTA_FILES: Array<[string, number]> = [
   ['config.json', 0],
   ['pytorch_model.bin', 651_225_145],
   ['tokenizer.json', 0],
-  ['tokenizer_config.json', 0],
-  ['special_tokens_map.json', 0],
-  ['added_tokens.json', 0],
-  ['vocab.txt', 0],
 ];
 const HUBERT_FILES: Array<[string, number]> = [
   ['config.json', 0],

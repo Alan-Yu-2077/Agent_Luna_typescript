@@ -188,6 +188,18 @@ describe('buildManifest', () => {
     expect(names).not.toContain('gsv'); // the lean recipe — custom voices bring their own weights
   });
 
+  // v0.37.10: the roberta dir upstream publishes is EXACTLY these three. v0.37.9 claimed every
+  // manifest URL was HEAD-checked, but only the size-bearing binaries were — the four zero-size BERT
+  // companions (tokenizer_config / special_tokens_map / added_tokens / vocab.txt) were never probed,
+  // and all four 404, hard-failing the install at the first one. Pin the set so they cannot creep back.
+  test('roberta requests only the three files the host actually serves', () => {
+    const roberta = buildManifest({ platform: 'darwin' })
+      .filter((a) => a.name.startsWith('roberta/'))
+      .map((a) => a.name.slice('roberta/'.length))
+      .sort();
+    expect(roberta).toEqual(['config.json', 'pytorch_model.bin', 'tokenizer.json']);
+  });
+
   test('the CN mirror override covers every HF download — including G2PW', () => {
     const m = buildManifest({ platform: 'darwin', hfBase: 'https://hf-mirror.com' });
     const roberta = m.find((a) => a.name.startsWith('roberta/'))!;
