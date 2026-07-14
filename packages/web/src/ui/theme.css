@@ -129,10 +129,13 @@ body {
      align-content:end pins the shrinking rows to the bottom, so the body's TOP edge descends toward
      the docked input bar (not the reverse). */
   display: grid; grid-template-rows: minmax(0, 1fr) auto; align-content: end;
-  min-height: 0;
+  min-height: 0; max-height: 100vh;
   background: var(--panel); border-radius: var(--radius);
   padding: 14px 14px 12px; box-shadow: 0 3px 0 var(--panel-edge);
-  transition: grid-template-rows var(--m-soft) var(--ease-glide);
+  /* v0.36.7: the WHOLE grey panel closes top-to-bottom — grid-rows shuts the body AND max-height
+     shrinks the grey container down to the docked bar, so grey + white collapse together (not just
+     the inner white). Slower (--m-slow) per the owner. */
+  transition: grid-template-rows var(--m-slow) var(--ease-glide), max-height var(--m-slow) var(--ease-glide);
 }
 .chat-body {
   /* justify-content:flex-end keeps content bottom-anchored so the sash-close clips the header first
@@ -140,7 +143,7 @@ body {
      shifts. */
   display: flex; flex-direction: column; justify-content: flex-end;
   min-height: 0; overflow: hidden;
-  transition: opacity var(--m-soft) ease;
+  transition: opacity var(--m-slow) ease;
 }
 .puff { position: absolute; background: var(--panel); border-radius: 50%; }
 .puff.l1 { top: -9px; left: 16px; width: 30px; height: 20px; }
@@ -624,7 +627,9 @@ body {
 /* v0.36.0 关窗户 phase 1: still in the flex flow, the body squeezes shut (grid rows → 0fr) and fades.
    app.ts holds this class for --m-soft, THEN docks to the fixed bar below (phase 2). Reused in
    reverse on expand: added instantly, removed a frame later so the rows glide 0fr→1fr (sash opens). */
-.luna-app.collapsing .chat-panel { grid-template-rows: minmax(0, 0fr) auto; }
+/* v0.36.7: overflow:hidden ONLY while collapsing (so the expanded panel's puffs still poke above);
+   max-height drags the grey container down to the docked-bar height as the body row shuts. */
+.luna-app.collapsing .chat-panel { grid-template-rows: minmax(0, 0fr) auto; max-height: 80px; overflow: hidden; }
 .luna-app.collapsing .chat-body { opacity: 0; }
 
 .luna-app.collapsed .chat-panel {

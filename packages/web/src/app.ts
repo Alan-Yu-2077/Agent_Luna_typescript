@@ -269,7 +269,7 @@ async function boot(): Promise<void> {
   // glides into the freed width. Expand runs it in reverse: un-dock (model glides back) with the body
   // still shut, then a frame later remove `.collapsing` so the rows glide 0fr→1fr (sash opens). A
   // generation counter cancels stale phase callbacks when the user toggles rapidly.
-  const COLLAPSE_MS = 300; // ≈ --m-soft (0.28s) + a little slack
+  const COLLAPSE_MS = 540; // v0.36.7: ≈ --m-slow (0.5s) + slack — the owner wanted the close slower
   let collapseGen = 0;
   let collapseTimer = 0;
   const applyCollapsed = (animate = true): void => {
