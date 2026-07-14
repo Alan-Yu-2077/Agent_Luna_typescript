@@ -74,9 +74,22 @@ async function boot(): Promise<void> {
       skipped = true;
       gate.done();
     });
-    void warmUpTts('/api/tts', (s) => {
-      if (!skipped) gate.setStatus(s);
+    // v0.37.1 (标准 2): during a MANAGED cold start (Luna spawned the voice child herself — health
+    // says starting/restarting) the gate is real: skip hides for the first ~20s. It reveals on time,
+    // and instantly when warm-up resolves (failure included) — never strands anyone (v0.35.6 rule).
+    const gateStart = performance.now();
+    let skipDelayArmed = false;
+    void warmUpTts('/api/tts', (s, state) => {
+      if (skipped) return;
+      gate.setStatus(s);
+      if (!skipDelayArmed && (state === 'starting' || state === 'restarting')) {
+        skipDelayArmed = true;
+        gate.setSkipHidden(true);
+        const remaining = Math.max(0, 20_000 - (performance.now() - gateStart));
+        globalThis.setTimeout(() => gate.setSkipHidden(false), remaining);
+      }
     }).then((res) => {
+      gate.setSkipHidden(false);
       if (skipped) return;
       gate.setStatus(
         res === 'unavailable'
