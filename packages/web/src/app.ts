@@ -150,7 +150,19 @@ async function boot(): Promise<void> {
 
   let audio: AudioSink = noopAudioSink;
   if (ttsBackend === 'http') {
-    audio = new WebAudioSink({ onMouth: (frame) => live2d.setMouth(frame) });
+    // v0.37.4: the two-rung ladder — an utterance the GPT voice can't speak (hard failure / the
+    // 60s mute window) falls to the browser voice instead of being silently dropped; the next
+    // utterance retries http, so recovery re-promotes by itself. Never a silent downgrade: each
+    // fallback is logged with the reason surface (the console is the desktop shell's log).
+    let fallbackVoice: WebSpeechSink | null = null;
+    audio = new WebAudioSink({
+      onMouth: (frame) => live2d.setMouth(frame),
+      onUnspoken: (text, voice) => {
+        console.warn('[voice] GPT voice unavailable — speaking via the browser voice this once');
+        fallbackVoice ??= new WebSpeechSink({ onMouth: (frame) => live2d.setMouth(frame) });
+        void fallbackVoice.speak(text, voice);
+      },
+    });
   } else if (ttsBackend === 'browser') {
     audio = new WebSpeechSink({ onMouth: (frame) => live2d.setMouth(frame) });
   }

@@ -11,7 +11,15 @@ import { fetchSpeech } from './ttsClient';
 // (no overlapping voices). `onMouth(frame|null)` is wired to live2dSink.setMouth by
 // the app; null releases the mouth back to the emotion/idle layer.
 
-export type WebAudioSinkOpts = { onMouth: (frame: LipSyncFrame | null) => void; apiBase?: string };
+export type WebAudioSinkOpts = {
+  onMouth: (frame: LipSyncFrame | null) => void;
+  apiBase?: string;
+  // v0.37.4: the fallback rung — called (serialized, in playback order) with an utterance the http
+  // voice could NOT speak (hard failure / the mute window). The app wires this to the browser voice
+  // so words are never silently dropped; a barge-in abort is NOT "unspoken".
+  onUnspoken?: (text: string, voice?: VoiceParams) => void;
+  fetchSpeechFn?: typeof fetchSpeech; // injectable for tests (no AudioContext in bun)
+};
 
 export class WebAudioSink implements AudioSink {
   private readonly player = new WebAudioPlayer();
@@ -37,14 +45,25 @@ export class WebAudioSink implements AudioSink {
   }
 
   speak(text: string, voice?: VoiceParams, onStart?: () => void): Promise<void> {
-    if (Date.now() < this.mutedUntil || !text.trim()) return Promise.resolve();
+    if (!text.trim()) return Promise.resolve();
     const signal = this.aborter.signal;
+    if (Date.now() < this.mutedUntil) {
+      // The mute window IS the fallback-voice window: http is known-bad, so hand the words to the
+      // fallback rung (still serialized) instead of dropping them for 60s.
+      return this.queue.run(async () => {
+        if (!signal.aborted) this.opts.onUnspoken?.(text, voice);
+      });
+    }
     // Prefetch the audio now (concurrent), but gate PLAYBACK on the serial queue so
     // the next utterance only starts after the previous one has fully ended.
     const audio = this.fetch(text, voice, signal);
     return this.queue.run(async () => {
       if (signal.aborted) return; // barged-in while waiting in the queue
       const data = await audio;
+      if (data === 'failed') {
+        this.opts.onUnspoken?.(text, voice); // v0.37.4: never silently dropped
+        return;
+      }
       if (data && !signal.aborted) await this.playToEnd(data, signal, onStart);
     });
   }
@@ -66,9 +85,15 @@ export class WebAudioSink implements AudioSink {
     );
   }
 
-  private async fetch(text: string, voice?: VoiceParams, signal?: AbortSignal): Promise<ArrayBuffer | null> {
+  // null = barge-in abort (say nothing); 'failed' = the voice could not speak it (fallback rung).
+  private async fetch(
+    text: string,
+    voice?: VoiceParams,
+    signal?: AbortSignal,
+  ): Promise<ArrayBuffer | 'failed' | null> {
     try {
-      const data = await fetchSpeech(text, { voice, apiBase: this.opts.apiBase, signal });
+      const fetchFn = this.opts.fetchSpeechFn ?? fetchSpeech;
+      const data = await fetchFn(text, { voice, apiBase: this.opts.apiBase, signal });
       this.fails = 0; // recovered
       return data;
     } catch (e) {
@@ -84,7 +109,7 @@ export class WebAudioSink implements AudioSink {
         this.mutedUntil = Date.now() + 60_000; // mute 60s, then re-attempt
         this.fails = 0; // fresh window after the mute
       }
-      return null;
+      return 'failed';
     }
   }
 
