@@ -16,10 +16,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # ripgrep is required by the code-agent symbol locator (Initiative 8); the
-      # hosted runner doesn't ship it by default.
-      - name: Install ripgrep
-        run: sudo apt-get update && sudo apt-get install -y ripgrep
+      # ripgrep: the code-agent symbol locator (Initiative 8). zsh: the shell tool's real spawner
+      # execs `/bin/zsh -lc` (shellCore.ts) — without it the two zsh-path invariant tests ENOENT'd
+      # in under a millisecond, which kept this workflow red on every push since it first ran.
+      - name: Install ripgrep + zsh
+        run: sudo apt-get update && sudo apt-get install -y ripgrep zsh
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -36,6 +37,10 @@ jobs:
 
       - name: Type-check (web)
         run: bun x tsc --noEmit -p packages/web/tsconfig.json
+
+      # the workflow predates packages/desktop — its types were never checked in CI
+      - name: Type-check (desktop)
+        run: bun x tsc --noEmit -p packages/desktop/tsconfig.json
 
       - name: Test
         run: bun test

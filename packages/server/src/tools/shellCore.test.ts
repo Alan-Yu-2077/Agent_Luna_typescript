@@ -1,4 +1,10 @@
 import { describe, expect, test } from 'bun:test';
+import { existsSync } from 'node:fs';
+
+// The real spawner's `command` path execs /bin/zsh -lc (shellCore.ts) — on a machine without zsh
+// those tests would ENOENT instantly and read as failures. Skip them there (CI installs zsh, so
+// the invariants stay enforced where it matters); the argv-path tests run everywhere.
+const hasZsh = existsSync('/bin/zsh');
 import {
   capOutput,
   clampTimeout,
@@ -66,13 +72,13 @@ describe('realSpawner argv path (no shell interpretation — v0.20.0)', () => {
     expect(r.stdout).not.toContain('INJECTED\n'); // i.e. not the substituted form
   });
 
-  test('the zsh `command` path DOES interpret $() — proving argv is the safe difference', async () => {
+  test.skipIf(!hasZsh)('the zsh `command` path DOES interpret $() — proving argv is the safe difference', async () => {
     const r = await realSpawner(req({ command: 'echo $(echo INJECTED)' }));
     expect(r.stdout.trim()).toBe('INJECTED');
   });
 });
 
-describe('realSpawner process-tree kill (v0.20.2 — no leaked grandchildren)', () => {
+describe.skipIf(!hasZsh)('realSpawner process-tree kill (v0.20.2 — no leaked grandchildren)', () => {
   const isAlive = (pid: number): boolean => {
     try {
       process.kill(pid, 0);
