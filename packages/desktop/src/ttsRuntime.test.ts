@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
-import { buildTtsArgv, parseLoopbackUrl, resolveManagedRuntime, type RuntimeFs } from './ttsRuntime';
+import { buildTtsArgv, parseLoopbackUrl, resolveManagedCheckout, resolveManagedRuntime, type RuntimeFs } from './ttsRuntime';
 
 const UD = '/ud';
 const TTS = join(UD, 'tts');
@@ -193,5 +193,22 @@ describe('buildTtsArgv', () => {
     expect(argv.command).toBe(join(BYO, '.venv', 'bin', 'python'));
     expect(argv.args).toEqual(['api_v2.py', '-a', '127.0.0.1', '-p', '9881', '-c', PACK_YAML.path]);
     expect(argv.cwd).toBe(BYO);
+  });
+});
+
+// v0.37.3: the checkout-only resolver — what a FIRST pack install writes its yaml against.
+describe('resolveManagedCheckout', () => {
+  test('flag off → null; managed BYO resolves without any pack yaml', () => {
+    const fs = fakeFs({ files: byoCheckoutFiles, packYamls: [] });
+    expect(resolveManagedCheckout({ LUNA_TTS_RUNTIME_DIR: BYO }, { userData: UD, fs })).toBeNull();
+    expect(
+      resolveManagedCheckout({ LUNA_TTS_MANAGED: '1', LUNA_TTS_RUNTIME_DIR: BYO }, { userData: UD, fs }),
+    ).toEqual({ kind: 'byo', checkout: BYO });
+  });
+  test('a ready provisioned runtime wins here too', () => {
+    const fs = fakeFs({ files: [...provisionedFiles, ...byoCheckoutFiles], provisionState: 'ready', packYamls: [] });
+    expect(resolveManagedCheckout({ LUNA_TTS_MANAGED: '1', LUNA_TTS_RUNTIME_DIR: BYO }, { userData: UD, fs })).toEqual(
+      { kind: 'provisioned', checkout: RUNTIME },
+    );
   });
 });

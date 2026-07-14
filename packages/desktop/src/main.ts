@@ -28,7 +28,13 @@ import {
   validateRuntimeDir,
   validateVoicePack,
 } from './voicePack';
-import { buildTtsArgv, resolveManagedRuntime, type VoiceProcState } from './ttsRuntime';
+import {
+  buildTtsArgv,
+  resolveManagedCheckout,
+  resolveManagedRuntime,
+  type ManagedRuntime,
+  type VoiceProcState,
+} from './ttsRuntime';
 import { buildManifest, realSeams, runProvision, type ProvisionStatus } from './ttsProvision';
 
 // v0.26.1 (Initiative 19): the single-machine app. The shell OWNS the whole runtime: it reads the
@@ -180,22 +186,10 @@ function hydrateProvisionStatus(p: Paths): void {
   }
 }
 
-async function maybeStartManagedTts(p: Paths): Promise<void> {
-  if (SMOKE) return; // smokes are voiceless — a python child would wedge the headless run
-  const env: Record<string, string | undefined> = {
-    ...process.env,
-    ...parseEnvFile(readFileSync(p.envFile, 'utf8')),
-  };
-  const rt = resolveManagedRuntime(env, { userData: p.userData });
-  if (!rt) return;
-  // An api_v2 already on the port (the owner's own instance, another app) is adopted, never doubled.
-  if (await waitForPort(rt.port, 800)) {
-    console.log(`[luna-desktop] managed tts: adopting external api_v2 on 127.0.0.1:${rt.port}`);
-    return;
-  }
+function createTtsSupervisor(rt: ManagedRuntime): Supervisor {
   const argv = buildTtsArgv(rt);
   console.log(`[luna-desktop] managed tts (${rt.kind}): ${argv.command} ${argv.args.join(' ')}`);
-  ttsSupervisor = createSupervisor({
+  return createSupervisor({
     command: argv.command,
     args: argv.args,
     cwd: argv.cwd,
@@ -207,7 +201,38 @@ async function maybeStartManagedTts(p: Paths): Promise<void> {
       console.log(`[luna-desktop] managed tts: ${e}`);
     },
   });
+}
+
+async function maybeStartManagedTts(p: Paths): Promise<void> {
+  if (SMOKE) return; // smokes are voiceless — a python child would wedge the headless run
+  const rt = resolveManagedRuntime(freshUserEnv(p), { userData: p.userData });
+  if (!rt) return;
+  // An api_v2 already on the port (the owner's own instance, another app) is adopted, never doubled.
+  if (await waitForPort(rt.port, 800)) {
+    console.log(`[luna-desktop] managed tts: adopting external api_v2 on 127.0.0.1:${rt.port}`);
+    return;
+  }
+  ttsSupervisor = createTtsSupervisor(rt);
   ttsSupervisor.start();
+}
+
+// v0.37.3: hot-swap the managed voice onto a freshly installed pack. The supervisor's argv is fixed
+// at creation (the yaml path changed), so swap = stop the old child + create a new supervisor.
+// Returns whether the new voice came up within the wait (the wizard badge keeps polling either way).
+async function swapManagedTts(rt: ManagedRuntime): Promise<boolean> {
+  if (SMOKE) return false;
+  ttsSupervisor?.stop();
+  ttsSupervisor = null;
+  ttsProcState = 'idle';
+  // Still listening after our stop = an EXTERNAL api_v2 owns the port (the owner's own instance) —
+  // adopt it; its weights are its owner's business, never ours to restart.
+  if (await waitForPort(rt.port, 800)) {
+    console.log(`[luna-desktop] managed tts: external api_v2 on 127.0.0.1:${rt.port} — pack installed, not restarting it`);
+    return true;
+  }
+  ttsSupervisor = createTtsSupervisor(rt);
+  ttsSupervisor.start();
+  return await waitForPort(rt.port, 60_000);
 }
 // v0.35.0: true when we ATTACHED to an already-running backend (bun run dev) — the wizard submit
 // must not "restart" a sidecar we never started (it would race the external server for the port).
@@ -561,6 +586,28 @@ ipcMain.handle('luna:install-voice-pack', async (_event, raw: VoiceInstallRaw) =
     textLang: asStr(raw?.['textLang']),
   });
   if (!installed.ok || !installed.packDir || !installed.gptCkpt || !installed.sovitsPth) return installed;
+
+  // v0.37.3 (managed): generate the yaml against the MANAGED checkout and hot-swap the voice child —
+  // no runtime picker, no copy-paste command. Not managed → the legacy BYO command path below.
+  const envNow = freshUserEnv(paths);
+  if (envNow['LUNA_TTS_MANAGED'] === '1') {
+    const co = resolveManagedCheckout(envNow, { userData: paths.userData });
+    if (co) {
+      const managedYaml = join(installed.packDir, 'tts_infer.runtime.yaml');
+      writeFileSync(
+        managedYaml,
+        generateTtsYaml({ checkout: co.checkout, gptCkpt: installed.gptCkpt, sovitsPth: installed.sovitsPth }),
+      );
+      const rt = resolveManagedRuntime(envNow, { userData: paths.userData });
+      if (rt) {
+        const ready = await swapManagedTts(rt);
+        return { ok: true, refAudio: installed.refAudio, managed: true, ready };
+      }
+    }
+    // Managed but no launchable runtime yet (provision mid-flight / gone): the weights + env are in;
+    // the provision flow's copy tells the order. Deliberately no command in managed mode.
+    return { ok: true, refAudio: installed.refAudio, managed: true, ready: false };
+  }
 
   // With a validated GPT-SoVITS checkout we can produce the exact runtime config + launch command
   // (the reference-instance form). Without one, the weights are installed and luna.env is set —

@@ -24,6 +24,7 @@ import { resolveTtsBackend } from './audio/ttsBackend';
 import { createBootGate, warmUpTts } from './ui/bootGate';
 import { mountPhysicsScene } from './physics/scene';
 import { createRiseBubbles } from './ui/riseBubble';
+import { mountPackDrop } from './ui/packDrop';
 
 // Browser entry — builds the cute UI shell + the live Live2D avatar + voice, and
 // wires the v0.12.0 consumption controller plus the v0.13.4 polish chrome (dream
@@ -467,6 +468,22 @@ async function boot(): Promise<void> {
     g.lunaLive2D = live2d;
     g.lunaAudio = audio;
     buildDevPanel(live2d);
+  }
+
+  // v0.37.3: drop a voice pack anywhere on the RUNNING app to swap her voice — no re-entering setup.
+  // Desktop only (needs the lunaSetup scan/install bridges); a plain browser has no drop surface.
+  const voiceBridge = (
+    globalThis as {
+      lunaSetup?: {
+        scanVoicePack?: (f: File) => Promise<Record<string, unknown>>;
+        installVoicePack?: (a: Record<string, string>) => Promise<Record<string, unknown>>;
+      };
+    }
+  ).lunaSetup;
+  if (voiceBridge?.scanVoicePack && voiceBridge.installVoicePack) {
+    const scan = voiceBridge.scanVoicePack.bind(voiceBridge);
+    const install = voiceBridge.installVoicePack.bind(voiceBridge);
+    mountPackDrop(document, { scanVoicePack: scan, installVoicePack: install });
   }
 
   startTimestampRefresh(refs.chatLog);

@@ -579,6 +579,23 @@ body {
 }
 .physics-layer .speech-bubble { will-change: transform; }
 
+/* v0.37.3: the drop-a-voice-pack confirm chip (running app) */
+.pack-drop-chip {
+  position: fixed; right: 18px; bottom: 76px; z-index: 9;
+  display: flex; align-items: center; gap: 10px;
+  background: #fff; color: var(--ink); font-size: 12px;
+  border-radius: 999px; padding: 8px 14px;
+  box-shadow: 0 8px 26px rgba(39, 73, 107, 0.25);
+  animation: chat-in var(--m-soft) var(--ease-pop);
+}
+.pack-drop-chip button {
+  border: none; cursor: pointer; font: inherit; font-size: 12px;
+  border-radius: 999px; padding: 3px 10px; background: var(--sky); color: var(--sky-text);
+  transition: transform var(--m-fast) var(--ease-pop);
+}
+.pack-drop-chip button:active { transform: scale(0.92); }
+.pack-drop-chip button:last-child { background: rgba(90, 120, 160, 0.12); color: var(--ink-soft); }
+
 /* v0.36.3: your sent message as a buoyant bubble (collapsed / pet mode) — styled like the USER chat
    bubble, physics-driven so no transform transition. pointer-events:none: departing words aren't
    catchable and the input bar stays usable mid-flight. */

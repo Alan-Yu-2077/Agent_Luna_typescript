@@ -83,31 +83,36 @@ function provisionReady(runtimeDir: string, fs: RuntimeFs): boolean {
   }
 }
 
+// The launchable checkout alone (no yaml requirement) — what a FIRST pack install writes its yaml
+// against, before any pack exists to make the full runtime resolvable.
+export function resolveManagedCheckout(
+  env: Record<string, string | undefined>,
+  opts: { userData: string; fs?: RuntimeFs },
+): { kind: ManagedRuntime['kind']; checkout: string } | null {
+  if (env['LUNA_TTS_MANAGED'] !== '1') return null;
+  const fs = opts.fs ?? realFs;
+  const ttsDir = join(opts.userData, 'tts');
+  const provisionedDir = join(ttsDir, 'runtime');
+  if (provisionReady(provisionedDir, fs) && launchableCheckout(provisionedDir, fs))
+    return { kind: 'provisioned', checkout: provisionedDir };
+  const byo = (env['LUNA_TTS_RUNTIME_DIR'] ?? '').trim();
+  if (byo !== '' && launchableCheckout(byo, fs)) return { kind: 'byo', checkout: byo };
+  return null;
+}
+
 export function resolveManagedRuntime(
   env: Record<string, string | undefined>,
   opts: { userData: string; platform?: NodeJS.Platform; fs?: RuntimeFs },
 ): ManagedRuntime | null {
-  if (env['LUNA_TTS_MANAGED'] !== '1') return null;
   const fs = opts.fs ?? realFs;
   const platform = opts.platform ?? process.platform;
   const target = parseLoopbackUrl(env['LUNA_TTS_URL']);
   if (!target) return null;
 
+  const co = resolveManagedCheckout(env, { userData: opts.userData, fs });
+  if (co === null) return null;
+  const { kind, checkout } = co;
   const ttsDir = join(opts.userData, 'tts');
-  const provisionedDir = join(ttsDir, 'runtime');
-  let kind: ManagedRuntime['kind'] | null = null;
-  let checkout = '';
-  if (provisionReady(provisionedDir, fs) && launchableCheckout(provisionedDir, fs)) {
-    kind = 'provisioned';
-    checkout = provisionedDir;
-  } else {
-    const byo = (env['LUNA_TTS_RUNTIME_DIR'] ?? '').trim();
-    if (byo !== '' && launchableCheckout(byo, fs)) {
-      kind = 'byo';
-      checkout = byo;
-    }
-  }
-  if (kind === null) return null;
 
   // The voice to load = the most recently installed pack's yaml. NO pack → NO launch (v0.37.2,
   // Open Q4): GPT-SoVITS is zero-shot — without a pack there are no custom weights, and the stock
