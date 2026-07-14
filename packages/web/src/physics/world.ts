@@ -64,6 +64,7 @@ interface Entry {
   h: number;
   kind: BodyKind;
   ageMs: number;
+  swayPhase: number; // per-body phase so risers wander out of sync (cloud-like), not in lockstep
   grabbed: boolean;
   pointer: { x: number; y: number } | null; // where a grabbed body is held (world coords)
   restFired: boolean;
@@ -74,9 +75,12 @@ interface Entry {
 
 const WALL = 200; // static wall thickness — thick enough that fast bodies can't tunnel through
 const MAX_FRAME_MS = 64; // clamp a long stall (tab restore) so we don't spiral the accumulator
-const BUOYANCY = 1.9; // rising bodies: applied up-force as a multiple of their weight (net = up)
-const SWAY_AMP = 0.00006; // lateral sway force amplitude for risers (× mass)
-const SWAY_HZ = 0.6;
+// v0.36.9: risers rise ~2× slower + wander like a cloud. Lower buoyancy → gentler net-up force (a
+// slower climb); wider/slower sway + a per-body phase → a meandering, out-of-sync drift, not a
+// straight vertical shot.
+const BUOYANCY = 1.4; // applied up-force as a multiple of weight (net up = weight × (B−1))
+const SWAY_AMP = 0.00015; // lateral sway force amplitude for risers (× mass)
+const SWAY_HZ = 0.45;
 // A grabbed pointer velocity is px/ms; matter velocity is px per baseline 16.666ms tick. Convert on
 // release so a throw carries a believable speed.
 const THROW_SCALE = 16.666;
@@ -133,9 +137,11 @@ export function createPhysicsWorld(opts: WorldOpts): PhysicsWorld {
       if (e.grabbed) continue;
       e.ageMs += FIXED;
       if (e.kind === 'rising') {
-        // Buoyancy (net upward) + a gentle lateral sway — so risers drift, not shoot straight up.
+        // Buoyancy (net upward) + a lateral sway with a per-body phase — so risers drift like clouds,
+        // out of sync, not a straight vertical shot.
         const up = -e.body.mass * engine.gravity.y * engine.gravity.scale * BUOYANCY;
-        const sway = Math.sin((e.ageMs / 1000) * SWAY_HZ * Math.PI * 2) * SWAY_AMP * e.body.mass;
+        const sway =
+          Math.sin((e.ageMs / 1000) * SWAY_HZ * Math.PI * 2 + e.swayPhase) * SWAY_AMP * e.body.mass;
         Body.applyForce(e.body, e.body.position, { x: sway, y: up });
       }
     }
@@ -223,6 +229,7 @@ export function createPhysicsWorld(opts: WorldOpts): PhysicsWorld {
       h: o.h,
       kind: o.kind,
       ageMs: 0,
+      swayPhase: (body.id % 1000) / 1000 * Math.PI * 2, // deterministic-but-varied per body
       grabbed: false,
       pointer: null,
       restFired: false,

@@ -108,7 +108,7 @@ describe('physics world — rising', () => {
     handle.onExit(() => {
       exited = true;
     });
-    for (let i = 0; i < 400; i++) {
+    for (let i = 0; i < 700; i++) {
       world.step(16);
       if (!exited) {
         const { x } = parseCenter(el, 64, 64);
@@ -118,9 +118,9 @@ describe('physics world — rising', () => {
       }
     }
     expect(exited).toBe(true);
-    expect(exitFrame).toBeGreaterThan(10); // not instant — it climbs
-    expect(exitFrame).toBeLessThan(400); // ≤ ~6.4s
-    expect(maxDrift).toBeGreaterThan(0.5); // it swayed, didn't rise dead straight
+    expect(exitFrame).toBeGreaterThan(30); // v0.36.9: a slow, unhurried climb — not a fast shot
+    expect(exitFrame).toBeLessThan(700); // still exits the ceiling within a sane window
+    expect(maxDrift).toBeGreaterThan(3); // v0.36.9: a real cloud-like wander, not a near-straight line
   });
 });
 

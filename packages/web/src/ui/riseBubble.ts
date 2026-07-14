@@ -46,7 +46,9 @@ export function createRiseBubbles(opts: RiseBubbleOptions): RiseBubbles {
   const { doc, scene, barRect } = opts;
   const schedule = opts.schedule ?? realScheduler;
   const rng = opts.rng ?? Math.random;
-  const maxChars = opts.maxChars ?? 64;
+  // v0.36.9: show the message IN FULL — the bubble wraps (max-width + pre-wrap) and grows taller, so
+  // even a long send rises complete. The high cap only guards against a pathological outlier.
+  const maxChars = opts.maxChars ?? 4000;
   const maxVisible = opts.maxVisible ?? 5;
   const safetyMs = opts.safetyMs ?? 8000;
   const live: Riser[] = [];
