@@ -52,6 +52,9 @@ LUNA_WEB_SEARCH_API_KEY=
 LUNA_MODEL_URL=
 LUNA_TTS_BACKEND=browser
 LUNA_TTS_URL=
+# v0.37.0: 1 = Luna spawns + supervises the GPT-SoVITS api_v2 server herself (from the wizard-
+# provisioned runtime or LUNA_TTS_RUNTIME_DIR) — no terminal. Unset/0 = bring-your-own (you run it).
+LUNA_TTS_MANAGED=
 
 # Pet mode: 1 = a transparent, always-on-top Luna floating over the desktop (region click-through).
 # Initial default only — the in-app settings toggle ("Desktop pet") wins once used (settings.json).

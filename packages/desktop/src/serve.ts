@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { createReadStream, existsSync, statSync } from 'node:fs';
 import { extname, join, resolve } from 'node:path';
 import { planTtsForward, readTtsEnv, type TtsEnv } from '../../web/src/tts/apiV2';
+import type { VoiceProcState } from './ttsRuntime';
 
 // v0.26.0 (Initiative 19): the pinned loopback static host for the packages/web production build.
 // A REAL http origin (not file:// / a custom protocol) so the app's absolute-root asset fetches
@@ -33,6 +34,9 @@ export function startWebHost(
   // TtsEnv still works (tests, dev callers); the v0.34.15 stale-process.env class dies here.
   ttsEnv: TtsEnv | (() => TtsEnv) = readTtsEnv(process.env),
   userModelsDir?: string,
+  // v0.37.0: the managed-voice supervisor's state — lets /api/tts/health answer "starting" (wait,
+  // Luna owns the child and it's coming) instead of a bare 502 while api_v2 loads. null = not managed.
+  voiceState: () => VoiceProcState | null = () => null,
 ): Server {
   const root = resolve(distDir);
   const currentTtsEnv = typeof ttsEnv === 'function' ? ttsEnv : (): TtsEnv => ttsEnv;
@@ -46,7 +50,7 @@ export function startWebHost(
       // The forward CONSTRUCTS the api_v2 target from a fixed path (never from the request path), so a
       // traversal like `/api/tts/..%2fadmin` decodes to an unknown subpath → 404, never reaching the
       // upstream. No path-based SSRF surface remains.
-      void forwardTts(req, res, pathname.slice('/api/tts/'.length), currentTtsEnv());
+      void forwardTts(req, res, pathname.slice('/api/tts/'.length), currentTtsEnv(), voiceState);
       return;
     }
     if (modelsRoot && pathname.startsWith('/models/') && serveModel(modelsRoot, pathname, res)) return;
@@ -75,6 +79,7 @@ async function forwardTts(
   res: ServerResponse,
   subpath: string,
   ttsEnv: TtsEnv,
+  voiceState: () => VoiceProcState | null = () => null,
 ): Promise<void> {
   const body = req.method === 'GET' || req.method === 'HEAD' ? '' : (await readBody(req)).toString('utf8');
   const plan = planTtsForward(subpath, body, ttsEnv);
@@ -84,9 +89,23 @@ async function forwardTts(
   }
   try {
     if (plan.kind === 'health') {
-      await fetch(plan.url, { signal: AbortSignal.timeout(5000) }); // reachable? any response = alive
-      res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ backend: { ready: true, state: 'ready' } }));
+      // Any upstream response = alive-and-loaded (api_v2 loads its models BEFORE binding the port —
+      // verified on the reference instance). Unreachable + a MANAGED child in flight = "starting":
+      // the boot gate should wait, not enter muted (v0.37.0/v0.37.1 — the 'unavailable' semantic
+      // switch). Unreachable + not managed stays a bare 502 (BYO: a server may never come).
+      try {
+        await fetch(plan.url, { signal: AbortSignal.timeout(5000) });
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ backend: { ready: true, state: 'ready' } }));
+      } catch {
+        const vs = voiceState();
+        if (vs === 'starting' || vs === 'restarting' || vs === 'gave-up') {
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ backend: { ready: false, state: vs } }));
+        } else {
+          res.writeHead(502).end('tts upstream unreachable');
+        }
+      }
       return;
     }
     // Bound the upstream wait — server.requestTimeout does NOT abort an in-flight fetch. 600s covers a

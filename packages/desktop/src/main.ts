@@ -28,6 +28,7 @@ import {
   validateRuntimeDir,
   validateVoicePack,
 } from './voicePack';
+import { buildTtsArgv, resolveManagedRuntime, type VoiceProcState } from './ttsRuntime';
 
 // v0.26.1 (Initiative 19): the single-machine app. The shell OWNS the whole runtime: it reads the
 // user's keys from app-data (never the bundle), spawns the compiled luna-server sidecar against an
@@ -146,6 +147,42 @@ function sidecarEnv(p: Paths, userEnv: Record<string, string>): Record<string, s
 
 let supervisor: Supervisor | null = null;
 let paths: Paths | null = null;
+// v0.37.0 (Initiative 27): the managed-voice child — Luna spawns + supervises GPT-SoVITS api_v2
+// herself when LUNA_TTS_MANAGED=1. Separate from the server sidecar supervisor; killed on the same
+// quit paths. `ttsProcState` feeds /api/tts/health so the boot gate can tell "starting" from "down"
+// (it is only consulted while the upstream is unreachable, so a stale value never masks a live one).
+let ttsSupervisor: Supervisor | null = null;
+let ttsProcState: VoiceProcState = 'idle';
+
+async function maybeStartManagedTts(p: Paths): Promise<void> {
+  if (SMOKE) return; // smokes are voiceless — a python child would wedge the headless run
+  const env: Record<string, string | undefined> = {
+    ...process.env,
+    ...parseEnvFile(readFileSync(p.envFile, 'utf8')),
+  };
+  const rt = resolveManagedRuntime(env, { userData: p.userData });
+  if (!rt) return;
+  // An api_v2 already on the port (the owner's own instance, another app) is adopted, never doubled.
+  if (await waitForPort(rt.port, 800)) {
+    console.log(`[luna-desktop] managed tts: adopting external api_v2 on 127.0.0.1:${rt.port}`);
+    return;
+  }
+  const argv = buildTtsArgv(rt);
+  console.log(`[luna-desktop] managed tts (${rt.kind}): ${argv.command} ${argv.args.join(' ')}`);
+  ttsSupervisor = createSupervisor({
+    command: argv.command,
+    args: argv.args,
+    cwd: argv.cwd,
+    env: { ...(process.env as Record<string, string>) },
+    onEvent: (e) => {
+      if (e === 'started') ttsProcState = 'starting';
+      else if (e === 'restarting') ttsProcState = 'restarting';
+      else if (e === 'gave-up') ttsProcState = 'gave-up';
+      console.log(`[luna-desktop] managed tts: ${e}`);
+    },
+  });
+  ttsSupervisor.start();
+}
 // v0.35.0: true when we ATTACHED to an already-running backend (bun run dev) — the wizard submit
 // must not "restart" a sidecar we never started (it would race the external server for the port).
 let attachedToExternal = false;
@@ -634,6 +671,7 @@ void app.whenReady().then(async () => {
     WEB_PORT,
     () => readTtsEnv({ ...process.env, ...parseEnvFile(readFileSync(p.envFile, 'utf8')) }),
     p.userModelsDir,
+    () => (ttsSupervisor ? ttsProcState : null),
   );
   supervisor = createSupervisor({
     command: p.serverBin,
@@ -659,6 +697,11 @@ void app.whenReady().then(async () => {
     skipOnboarding: process.env['LUNA_SKIP_ONBOARDING'] === '1',
     devAvailable: dev !== null,
   });
+
+  // v0.37.0: the managed voice child starts in every APP mode (attach/dev/sidecar) but never during
+  // setup (no config to manage yet) and never under SMOKE. Non-blocking — the boot gate covers the
+  // model-load wait on the web side.
+  if (mode !== 'setup') void maybeStartManagedTts(p);
 
   if (mode === 'attach') {
     attachedToExternal = true;
@@ -789,11 +832,14 @@ async function smokeSetupProbe(win: BrowserWindow): Promise<void> {
   app.exit(ok ? 0 : 1);
 }
 
-// Kill the sidecar on every exit path — an orphan luna-server would hold the port + the DB lock.
+// Kill the sidecar on every exit path — an orphan luna-server would hold the port + the DB lock,
+// and an orphan api_v2 would hold 9880 (v0.37.0: the managed voice child dies on the same paths).
 app.on('before-quit', () => {
   supervisor?.stop();
+  ttsSupervisor?.stop();
 });
 app.on('window-all-closed', () => {
   supervisor?.stop();
+  ttsSupervisor?.stop();
   app.quit();
 });

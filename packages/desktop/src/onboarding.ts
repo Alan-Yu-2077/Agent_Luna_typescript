@@ -76,6 +76,7 @@ export const WIZARD_KEYS = [
   'LUNA_TTS_PROMPT_LANG',
   'LUNA_TTS_TEXT_LANG',
   'LUNA_TTS_RUNTIME_DIR', // v0.35.3: the user's GPT-SoVITS checkout — wizard-managed, server never reads it
+  'LUNA_TTS_MANAGED', // v0.37.0: Luna spawns + supervises api_v2 herself (the never-spawn escape hatch)
 ] as const;
 
 export function filterWizardFields(raw: unknown): Record<string, string> {

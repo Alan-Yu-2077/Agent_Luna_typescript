@@ -107,6 +107,40 @@ describe('startWebHost /api/tts → api_v2 forwarding', () => {
     expect(res.status).toBe(502);
   });
 
+  // v0.37.0: unreachable + a MANAGED child in flight answers "starting" (200) — the boot gate's cue
+  // to WAIT — while unmanaged keeps the bare 502 (BYO: a server may never come).
+  it('health answers {state:"starting"} when unreachable but the managed child is coming', async () => {
+    const env = { url: 'http://127.0.0.1:1', refAudio: '/r.wav' };
+    const web = await portOf(startWebHost(mkDist(), 0, env, undefined, () => 'starting'));
+    const res = await fetch(`http://127.0.0.1:${web}/api/tts/health`);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ backend: { ready: false, state: 'starting' } });
+  });
+
+  it('health surfaces a managed gave-up (the gate fails fast instead of burning its deadline)', async () => {
+    const env = { url: 'http://127.0.0.1:1', refAudio: '/r.wav' };
+    const web = await portOf(startWebHost(mkDist(), 0, env, undefined, () => 'gave-up'));
+    const res = await fetch(`http://127.0.0.1:${web}/api/tts/health`);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ backend: { ready: false, state: 'gave-up' } });
+  });
+
+  it('health stays a bare 502 when unreachable and NOT managed (voiceState idle/null)', async () => {
+    const env = { url: 'http://127.0.0.1:1', refAudio: '/r.wav' };
+    const web = await portOf(startWebHost(mkDist(), 0, env, undefined, () => 'idle'));
+    expect((await fetch(`http://127.0.0.1:${web}/api/tts/health`)).status).toBe(502);
+    const web2 = await portOf(startWebHost(mkDist(), 0, env, undefined, () => null));
+    expect((await fetch(`http://127.0.0.1:${web2}/api/tts/health`)).status).toBe(502);
+  });
+
+  it('health still reports ready from a REACHABLE upstream even while managed says restarting', async () => {
+    const ttsPort = await portOf(startFakeApiV2());
+    const web = await portOf(startWebHost(mkDist(), 0, envFor(ttsPort), undefined, () => 'restarting'));
+    expect(await (await fetch(`http://127.0.0.1:${web}/api/tts/health`)).json()).toEqual({
+      backend: { ready: true, state: 'ready' },
+    });
+  });
+
   it('serves an installed model from userModelsDir (ahead of webDist), traversal-guarded', async () => {
     const models = mkdtempSync(join(tmpdir(), 'luna-models-'));
     writeFileSync(join(models, 'hana.model3.json'), '{"ok":true}');
