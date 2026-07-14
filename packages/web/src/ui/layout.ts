@@ -133,6 +133,10 @@ export function buildLayout(root: HTMLElement): LayoutRefs {
   root.classList.add('luna-app');
   while (root.firstChild) root.removeChild(root.firstChild);
 
+  // v0.36.6: lace trim back as top/bottom decoration (absolute, z-0 behind the model — never crops it).
+  add(root, 'div', 'lace-top');
+  add(root, 'div', 'lace-bottom');
+
   const stage = add(root, 'div', 'stage');
 
   const statusBadge = add(stage, 'div', 'status-badge', 'Connecting…');

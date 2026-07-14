@@ -78,6 +78,22 @@ body {
   position: relative; flex: 1; display: flex; gap: 20px; padding: 0 22px; min-height: 0;
 }
 
+/* v0.36.6: the lace trim is back as top/bottom decoration — but at z-index 0, BEHIND the model
+   (z-1) and chat panel (z-2), so it frames the room's edges and peeks around Luna without ever
+   cropping her (the v0.36.0 无边模式 kept the model edge-to-edge; this only restores the trim). */
+.lace-top,
+.lace-bottom {
+  position: absolute; left: 0; right: 0; z-index: 0; pointer-events: none;
+}
+.lace-top {
+  top: 0; height: 14px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='14'%3E%3Cpath d='M0,0L20,0L10,14Z' fill='%23b9d4ef'/%3E%3C/svg%3E") repeat-x;
+}
+.lace-bottom {
+  bottom: 0; height: 16px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='16'%3E%3Cpath d='M0,16L0,8Q12,-2,24,8L24,16Z' fill='%23b9d4ef'/%3E%3C/svg%3E") repeat-x;
+}
+
 .status-badge {
   position: absolute; top: 8px; left: 14px; z-index: 3;
   display: inline-flex; align-items: center; gap: 6px;
@@ -105,6 +121,9 @@ body {
 
 .chat-panel {
   position: relative; z-index: 2; flex: 0 0 38%;
+  /* v0.36.6: the chat box breathes — top/bottom gaps so it doesn't fill the whole screen height. The
+     MODEL stays edge-to-edge (无边模式); only this panel is inset. */
+  margin: 16px 0;
   /* v0.36.0: a two-row grid ([body 1fr][input auto]) instead of a flex column, so the collapse can
      animate grid-template-rows 1fr→0fr and close the body top-to-bottom like a window sash.
      align-content:end pins the shrinking rows to the bottom, so the body's TOP edge descends toward
@@ -614,6 +633,7 @@ body {
   bottom: 18px;
   transform: translateX(-50%);
   flex: none;
+  margin: 0; /* v0.36.6: the expanded top/bottom gap must not offset the docked bar */
   width: min(560px, 92vw);
   padding: 0;
   background: none;
@@ -649,6 +669,8 @@ body {
    bubbles, and the pill bar exist; the room (stripes/motifs/status) disappears so the desktop shows
    through. (v0.36.0 无边模式 already removed the lace strips everywhere.) */
 body.pet { background: none; }
+.luna-app.pet .lace-top,
+.luna-app.pet .lace-bottom,
 .luna-app.pet .motif-layer,
 .luna-app.pet .status-badge {
   display: none;

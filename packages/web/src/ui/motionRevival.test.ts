@@ -56,11 +56,13 @@ describe('v0.36.0 motion revival — replacements are in place', () => {
     expect(layout).toContain("'chat-body'");
   });
 
-  test('无边模式: the lace letterbox strips are removed', () => {
-    expect(css).not.toContain('lace-top');
-    expect(css).not.toContain('lace-bottom');
-    expect(layout).not.toContain('lace-top');
-    expect(layout).not.toContain('lace-bottom');
+  // v0.36.6: the lace trim is back as decoration, but the model still renders edge-to-edge — the
+  // stage keeps horizontal-only padding (no vertical letterbox) and the lace sits behind the model.
+  test('无边模式 preserved: lace is decorative, the model is not letterboxed', () => {
+    expect(css).toContain('.lace-top');
+    expect(css).toContain('.lace-bottom');
+    expect(layout).toContain("'lace-top'");
+    expect(css).toContain('padding: 0 22px'); // stage: horizontal padding only, model edge-to-edge
   });
 
   test('Fredoka + 快乐体 fonts are declared and bundled', () => {
