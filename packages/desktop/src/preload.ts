@@ -82,4 +82,8 @@ contextBridge.exposeInMainWorld('lunaSetup', {
   // v0.37.2 (标准 1): the one-click GPT-SoVITS installer — start kicks/resumes, status polls.
   provisionStart: (): Promise<Record<string, unknown>> => ipcRenderer.invoke('luna:provision-start'),
   provisionStatus: (): Promise<Record<string, unknown>> => ipcRenderer.invoke('luna:provision-status'),
+  // v0.37.8: re-running setup preserves what is configured. Values for non-secret keys only —
+  // secrets come back as NAMES (`configured`), never as values.
+  wizardPrefill: (): Promise<{ values?: Record<string, string>; configured?: string[] }> =>
+    ipcRenderer.invoke('luna:wizard-prefill'),
 });

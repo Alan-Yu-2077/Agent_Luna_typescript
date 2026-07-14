@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   collectValues,
   createWizardNav,
+  hydrateWizardValues,
   nextLabelKey,
   probeFieldsFor,
   probeGateAction,
@@ -179,5 +180,48 @@ describe('provision copy keys exist in both languages', () => {
       expect(zh(key)).not.toBe(key);
       expect(en(key)).not.toBe(key);
     }
+  });
+});
+
+// v0.37.8: re-running setup must PRESERVE what is configured, not overwrite it with the defaults.
+describe('hydrateWizardValues', () => {
+  const specs = wizardSteps().flatMap((s) => s.fields);
+
+  test('a saved custom value beats the field\'s static initial (the config-destroying bug)', () => {
+    const { values } = hydrateWizardValues(
+      { ANTHROPIC_BASE_URL: 'https://my-gateway.example', LUNA_MODEL: 'claude-opus-4-8' },
+      [],
+      specs,
+    );
+    expect(values.get('ANTHROPIC_BASE_URL')).toBe('https://my-gateway.example');
+    expect(values.get('LUNA_MODEL')).toBe('claude-opus-4-8'); // NOT the stock claude-sonnet-4-6
+  });
+
+  test('a fresh install still gets the stock defaults', () => {
+    const { values } = hydrateWizardValues({}, [], specs);
+    expect(values.get('ANTHROPIC_BASE_URL')).toBe('https://api.anthropic.com');
+    expect(values.get('LUNA_MODEL')).toBe('claude-sonnet-4-6');
+  });
+
+  test('a configured secret is a NAME, never a value — and its field stays empty', () => {
+    const { values, configured } = hydrateWizardValues({}, ['ANTHROPIC_API_KEY'], specs);
+    expect(configured.has('ANTHROPIC_API_KEY')).toBe(true);
+    expect(values.has('ANTHROPIC_API_KEY')).toBe(false); // empty → dropped at submit → env preserved
+  });
+
+  test('an empty field is never collected, so a skipped step cannot clobber luna.env', () => {
+    const { values } = hydrateWizardValues({ LUNA_WEATHER_API_HOST: '  ' }, [], specs);
+    expect(values.has('LUNA_WEATHER_API_HOST')).toBe(false);
+    expect(collectValues(values)['LUNA_WEATHER_API_HOST']).toBeUndefined();
+  });
+
+  test('round-trip: hydrate → collect gives back the saved config unchanged', () => {
+    const saved = { ANTHROPIC_BASE_URL: 'https://gw.example', LUNA_MODEL: 'm-1', LUNA_TTS_URL: 'http://127.0.0.1:9880' };
+    const { values } = hydrateWizardValues(saved, ['ANTHROPIC_API_KEY'], specs);
+    const out = collectValues(values);
+    expect(out['ANTHROPIC_BASE_URL']).toBe('https://gw.example');
+    expect(out['LUNA_MODEL']).toBe('m-1');
+    expect(out['LUNA_TTS_URL']).toBe('http://127.0.0.1:9880');
+    expect(out['ANTHROPIC_API_KEY']).toBeUndefined(); // untouched secret → mergeEnvFile keeps it
   });
 });

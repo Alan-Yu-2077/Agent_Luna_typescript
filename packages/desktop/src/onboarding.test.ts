@@ -1,12 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import {
-  classifyProbe,
-  filterWizardFields,
-  mergeEnvFile,
-  needsOnboarding,
-  WIZARD_KEYS,
-  wizardFlagEnabled,
-} from './onboarding';
+import { WIZARD_KEYS, classifyProbe, filterWizardFields, mergeEnvFile, needsOnboarding, wizardFlagEnabled, wizardPrefill } from './onboarding';
 import { parseEnvFile } from './envfile';
 
 describe('wizardFlagEnabled (v0.35.4 default flip)', () => {
@@ -184,5 +177,34 @@ LUNA_MODEL=claude-sonnet-4-6
     expect(parsed['ANTHROPIC_BASE_URL']).toBe(baseUrl);
     expect(parsed['ANTHROPIC_API_KEY']).toBe(apiKey);
     expect(parsed['LUNA_MODEL']).toBe(model);
+  });
+});
+
+// v0.37.8: the prefill's secret custody — the renderer learns THAT a key is set, never WHAT it is.
+describe('wizardPrefill', () => {
+  test('returns non-secret values verbatim and secrets as names only', () => {
+    const { values, configured } = wizardPrefill({
+      ANTHROPIC_API_KEY: 'sk-super-secret',
+      ANTHROPIC_BASE_URL: 'https://gw.example',
+      LUNA_MODEL: 'claude-opus-4-8',
+      LUNA_TTS_BACKEND: 'http',
+    });
+    expect(values['ANTHROPIC_BASE_URL']).toBe('https://gw.example');
+    expect(values['LUNA_MODEL']).toBe('claude-opus-4-8');
+    expect(values['LUNA_TTS_BACKEND']).toBe('http');
+    expect(configured).toContain('ANTHROPIC_API_KEY');
+    expect(JSON.stringify({ values, configured })).not.toContain('sk-super-secret');
+  });
+
+  test('an unset key appears nowhere (a fresh install prefills nothing)', () => {
+    const { values, configured } = wizardPrefill({ ANTHROPIC_API_KEY: '   ' });
+    expect(Object.keys(values).length).toBe(0);
+    expect(configured.length).toBe(0);
+  });
+
+  test('a key outside the wizard whitelist is never leaked', () => {
+    const { values } = wizardPrefill({ LUNA_SECRET_INTERNAL: 'x', LUNA_MODEL: 'm' });
+    expect(values['LUNA_SECRET_INTERNAL']).toBeUndefined();
+    expect(values['LUNA_MODEL']).toBe('m');
   });
 });

@@ -125,6 +125,9 @@ export const SETUP_COPY: CopyTable = {
   'step.voice.provision.ready': { zh: '运行时已就绪 ✓ — 拖入音色包即可用 GPT 音色', en: 'Runtime ready ✓ — drop a voice pack to enable the GPT voice' },
   'step.voice.provision.failed': { zh: '安装失败——点按钮重试(会从断点继续)', en: 'Install failed — click to retry (resumes where it left off)' },
   'step.voice.provision.paused': { zh: '安装已暂停——点按钮继续', en: 'Install paused — click to continue' },
+
+  // v0.37.8: a stored secret is shown as "already set" — leaving it blank keeps it.
+  'wizard.configured': { zh: '已配置 · 留空即保持不变', en: 'Already set · leave blank to keep' },
 };
 
 export function makeT(lang: SetupLang): (key: string) => string {

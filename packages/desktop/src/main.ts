@@ -11,6 +11,7 @@ import {
   mergeEnvFile,
   needsOnboarding,
   wizardFlagEnabled,
+  wizardPrefill,
   type ProbeVerdict,
 } from './onboarding';
 import { formatLatLon, resolveDesktopLocation } from './location';
@@ -634,6 +635,13 @@ ipcMain.handle('luna:install-voice-pack', async (_event, raw: VoiceInstallRaw) =
     );
   }
   return { ok: true, refAudio: installed.refAudio, command, yamlPath };
+});
+
+// v0.37.8: what is already configured, so "Re-run setup" preserves it instead of overwriting it
+// with the stock defaults. Secret VALUES never cross the bridge — only their key names do.
+ipcMain.handle('luna:wizard-prefill', () => {
+  if (!paths) return { values: {}, configured: [] };
+  return wizardPrefill(parseEnvFile(readFileSync(paths.envFile, 'utf8')));
 });
 
 // v0.37.2 (标准 1): the one-click GPT-SoVITS installer. Start kicks (or resumes — the engine skips

@@ -81,6 +81,32 @@ export const WIZARD_KEYS = [
   'LUNA_TTS_HF_MIRROR', // v0.37.2: HuggingFace host override for CN networks
 ] as const;
 
+// v0.37.8: the keys whose VALUE must never leave the main process. The wizard is told only that
+// they are SET (by name), so re-running setup can say "already configured" without the renderer
+// ever holding a secret — and an untouched (empty) field is dropped at submit, so mergeEnvFile
+// preserves what is stored.
+export const SECRET_KEYS: readonly string[] = [
+  'ANTHROPIC_API_KEY',
+  'LUNA_EMBEDDING_API_KEY',
+  'LUNA_WEB_SEARCH_API_KEY',
+  'LUNA_WEATHER_API_KEY',
+];
+
+export function wizardPrefill(env: Record<string, string>): {
+  values: Record<string, string>;
+  configured: string[];
+} {
+  const values: Record<string, string> = {};
+  const configured: string[] = [];
+  for (const key of WIZARD_KEYS) {
+    const v = (env[key] ?? '').trim();
+    if (v === '') continue;
+    if (SECRET_KEYS.includes(key)) configured.push(key);
+    else values[key] = v;
+  }
+  return { values, configured };
+}
+
 export function filterWizardFields(raw: unknown): Record<string, string> {
   const out: Record<string, string> = {};
   if (typeof raw !== 'object' || raw === null) return out;

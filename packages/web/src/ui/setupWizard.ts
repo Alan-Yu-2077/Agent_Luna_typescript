@@ -162,6 +162,9 @@ export type WizardBridge = {
   // v0.37.2: the one-click GPT-SoVITS installer (标准 1) — start kicks/resumes it, status polls it.
   provisionStart?(): Promise<Record<string, unknown>>;
   provisionStatus?(): Promise<Record<string, unknown>>;
+  // v0.37.8: what is ALREADY configured, so re-running setup preserves it. Secrets are never
+  // returned — a configured key comes back as a NAME in `configured`, never as a value.
+  wizardPrefill?(): Promise<{ values?: Record<string, string>; configured?: string[] }>;
 };
 
 // v0.37.2: provision stage → copy key (pure so it unit-tests; the wizard label rides makeT).
@@ -280,11 +283,32 @@ function bridges(): { setup?: WizardBridge & { wizard?: boolean }; pet?: PetBrid
   return { setup: g.lunaSetup, pet: g.lunaPet };
 }
 
+// v0.37.8: re-running setup must NOT destroy what is already configured. Saved values win over a
+// field's static `initial` (before this, re-running the wizard and clicking through overwrote a
+// custom gateway URL / model with the stock defaults). Secrets never leave the main process — a
+// configured key arrives as a name in `configured`, its input stays EMPTY, and an empty field is
+// dropped on submit (mergeEnvFile then preserves the stored value). Pure so it unit-tests.
+export function hydrateWizardValues(
+  saved: Record<string, string>,
+  configured: readonly string[],
+  specs: readonly WizardFieldSpec[],
+): { values: Map<string, string>; configured: Set<string> } {
+  const values = new Map<string, string>();
+  const conf = new Set(configured);
+  for (const spec of specs) {
+    const savedValue = (saved[spec.key] ?? '').trim();
+    if (savedValue !== '') values.set(spec.key, savedValue);
+    else if (!conf.has(spec.key) && spec.initial) values.set(spec.key, spec.initial);
+  }
+  return { values, configured: conf };
+}
+
 function fieldRow(
   parent: HTMLElement,
   label: string,
   spec: WizardFieldSpec,
   values: Map<string, string>,
+  opts: { configuredHint?: string } = {},
 ): HTMLInputElement {
   const doc = parent.ownerDocument;
   const row = doc.createElement('label');
@@ -293,8 +317,9 @@ function fieldRow(
   span.textContent = label;
   const input = doc.createElement('input');
   input.type = spec.type;
-  input.placeholder = spec.placeholder;
-  input.value = values.get(spec.key) ?? spec.initial ?? '';
+  // A configured secret shows "already set — leave blank to keep" instead of its value.
+  input.placeholder = opts.configuredHint ?? spec.placeholder;
+  input.value = values.get(spec.key) ?? (opts.configuredHint ? '' : (spec.initial ?? ''));
   if (input.value !== '') values.set(spec.key, input.value);
   input.autocomplete = 'off';
   input.spellcheck = false;
@@ -302,6 +327,17 @@ function fieldRow(
   row.append(span, input);
   parent.appendChild(row);
   return input;
+}
+
+// A password field whose key is already stored: show "already set" and keep the input empty.
+function secretHintFor(
+  spec: WizardFieldSpec,
+  configured: Set<string>,
+  t: (k: string) => string,
+): { configuredHint?: string } {
+  return spec.type === 'password' && configured.has(spec.key)
+    ? { configuredHint: t('wizard.configured') }
+    : {};
 }
 
 export function mountSetupWizard(root: HTMLElement, opts: { preview?: boolean } = {}): void {
@@ -312,7 +348,8 @@ export function mountSetupWizard(root: HTMLElement, opts: { preview?: boolean } 
   let lang: SetupLang = detectSetupLang();
   const steps = wizardSteps();
   const nav = createWizardNav(steps.length);
-  const values = new Map<string, string>();
+  let values = new Map<string, string>();
+  let configuredSecrets = new Set<string>();
   const probeStates = new Map<string, ProbeState>(); // per-step; reset to 'none' when its fields change
   let voiceBackend = 'browser';
   let busy = false;
@@ -329,6 +366,8 @@ export function mountSetupWizard(root: HTMLElement, opts: { preview?: boolean } 
 
   const render = (): void => {
     const t = makeT(lang);
+    const secretHint = (f: WizardFieldSpec, tt: (k: string) => string): { configuredHint?: string } =>
+      secretHintFor(f, configuredSecrets, tt);
     const s = nav.state();
     const step = steps[s.index]!;
     if (healthTimer !== null) {
@@ -428,7 +467,8 @@ export function mountSetupWizard(root: HTMLElement, opts: { preview?: boolean } 
       }
       body.appendChild(radio);
       if (voiceBackend === 'http') {
-        for (const f of step.fields) fieldRow(body, t(f.labelKey), f, values);
+        for (const f of step.fields)
+          fieldRow(body, t(f.labelKey), f, values, secretHint(f, t));
 
         // v0.37.2 (标准 1): the one-click installer — download + deploy the GPT-SoVITS runtime and
         // mark it ready, resumable across quits. Renders only in the desktop shell (bridge present).
@@ -764,7 +804,7 @@ export function mountSetupWizard(root: HTMLElement, opts: { preview?: boolean } 
       }
     } else {
       const probeKind = PROBE_STEP[step.id];
-      const inputs = step.fields.map((f) => fieldRow(body, t(f.labelKey), f, values));
+      const inputs = step.fields.map((f) => fieldRow(body, t(f.labelKey), f, values, secretHint(f, t)));
       if (probeKind) {
         for (const input of inputs)
           input.addEventListener('input', () => probeStates.set(step.id, 'none'));
@@ -918,6 +958,22 @@ export function mountSetupWizard(root: HTMLElement, opts: { preview?: boolean } 
     if (!baseUrl || !apiKey) return null;
     return { baseUrl, apiKey, model };
   };
+
+  // v0.37.8: hydrate from what is ALREADY in luna.env, so "Re-run setup" preserves the config
+  // instead of overwriting it with the stock defaults. Secrets come back as names only.
+  const prefill = setup?.wizardPrefill;
+  if (live && prefill) {
+    void prefill().then((r) => {
+      const specs = steps.flatMap((st) => st.fields);
+      const saved = r.values ?? {};
+      const h = hydrateWizardValues(saved, r.configured ?? [], specs);
+      values = h.values;
+      configuredSecrets = h.configured;
+      const backend = (saved['LUNA_TTS_BACKEND'] ?? '').trim();
+      if (backend !== '') voiceBackend = backend; // a saved http voice must survive a re-run
+      render();
+    });
+  }
 
   render();
 }
