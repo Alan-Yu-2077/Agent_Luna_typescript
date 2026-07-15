@@ -140,3 +140,10 @@ export function buildTtsArgv(rt: ManagedRuntime): { command: string; args: strin
     cwd: rt.checkout,
   };
 }
+
+// v0.37.13: pick a pack's weight by EXTENSION. installVoicePack writes exactly one .ckpt into GPT/
+// and one .pth into SoVITS/, but a stray readme.txt or a macOS AppleDouble (._) fork must never be
+// mistaken for it. Pure so adoptInstalledPacks's file choice is unit-tested without a filesystem.
+export function pickWeight(names: string[], ext: string): string | undefined {
+  return names.find((n) => !n.startsWith('.') && !n.startsWith('._') && n.toLowerCase().endsWith(ext));
+}

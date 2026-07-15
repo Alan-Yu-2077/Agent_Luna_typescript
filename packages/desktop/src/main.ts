@@ -31,6 +31,7 @@ import {
 } from './voicePack';
 import {
   buildTtsArgv,
+  pickWeight,
   resolveManagedCheckout,
   resolveManagedRuntime,
   type ManagedRuntime,
@@ -191,6 +192,14 @@ function hydrateProvisionStatus(p: Paths): void {
   }
 }
 
+// findFfmpeg spawns `ffmpeg -version`; a swap re-creates the supervisor, so memoize the probe rather
+// than re-spawning on the UI thread each time (the path does not change within a session).
+let ffmpegPath: string | null | undefined;
+function cachedFfmpeg(): string | null {
+  if (ffmpegPath === undefined) ffmpegPath = realSeams().findFfmpeg();
+  return ffmpegPath;
+}
+
 function createTtsSupervisor(rt: ManagedRuntime): Supervisor {
   const argv = buildTtsArgv(rt);
   console.log(`[luna-desktop] managed tts (${rt.kind}): ${argv.command} ${argv.args.join(' ')}`);
@@ -198,7 +207,7 @@ function createTtsSupervisor(rt: ManagedRuntime): Supervisor {
   // Finder-launched .app hands its children a minimal PATH (/usr/bin:/bin) with no /opt/homebrew/bin.
   // Discover ffmpeg the same way the installer does and put its directory on the child's PATH, or the
   // voice installs perfectly and then 400s on every single utterance.
-  const ffmpeg = realSeams().findFfmpeg();
+  const ffmpeg = cachedFfmpeg();
   // nltk looks in $HOME and the venv, never in the checkout — point it at the corpora the installer
   // put IN the runtime, or English G2P raises LookupError on a machine that has no ~/nltk_data.
   const nltkData = join(rt.checkout, 'nltk_data');
@@ -672,8 +681,8 @@ async function adoptInstalledPacks(p: Paths): Promise<void> {
     const packDir = join(ttsDir, entry.name);
     const yamlPath = join(packDir, 'tts_infer.runtime.yaml');
     if (existsSync(yamlPath)) continue; // already adopted
-    const gptCkpt = firstFileIn(join(packDir, 'GPT'));
-    const sovitsPth = firstFileIn(join(packDir, 'SoVITS'));
+    const gptCkpt = firstFileByExt(join(packDir, 'GPT'), '.ckpt');
+    const sovitsPth = firstFileByExt(join(packDir, 'SoVITS'), '.pth');
     if (!gptCkpt || !sovitsPth) continue;
     writeFileSync(yamlPath, generateTtsYaml({ checkout: co.checkout, gptCkpt, sovitsPth }));
     console.log(`[luna-desktop] adopted the voice pack installed before the runtime: ${entry.name}`);
@@ -682,9 +691,9 @@ async function adoptInstalledPacks(p: Paths): Promise<void> {
   if (rt) await swapManagedTts(rt);
 }
 
-function firstFileIn(dir: string): string | undefined {
+function firstFileByExt(dir: string, ext: string): string | undefined {
   if (!existsSync(dir)) return undefined;
-  const f = readdirSync(dir).find((n) => !n.startsWith('.'));
+  const f = pickWeight(readdirSync(dir), ext);
   return f ? join(dir, f) : undefined;
 }
 

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
-import { buildTtsArgv, parseLoopbackUrl, resolveManagedCheckout, resolveManagedRuntime, type RuntimeFs } from './ttsRuntime';
+import { buildTtsArgv, parseLoopbackUrl, pickWeight, resolveManagedCheckout, resolveManagedRuntime, type RuntimeFs } from './ttsRuntime';
 
 const UD = '/ud';
 const TTS = join(UD, 'tts');
@@ -210,5 +210,23 @@ describe('resolveManagedCheckout', () => {
     expect(resolveManagedCheckout({ LUNA_TTS_MANAGED: '1', LUNA_TTS_RUNTIME_DIR: BYO }, { userData: UD, fs })).toEqual(
       { kind: 'provisioned', checkout: RUNTIME },
     );
+  });
+});
+
+// v0.37.13 (audit): a pack dir's weight is picked by EXTENSION — a stray readme.txt or an AppleDouble
+// resource fork must never be mistaken for the .ckpt/.pth.
+describe('pickWeight', () => {
+  test('picks the .ckpt even when a non-weight file sorts first', () => {
+    expect(pickWeight(['readme.txt', 'Neuro-e24.ckpt'], '.ckpt')).toBe('Neuro-e24.ckpt');
+  });
+  test('skips dotfiles and AppleDouble (._) forks', () => {
+    expect(pickWeight(['.DS_Store', '._Neuro.pth', 'Neuro.pth'], '.pth')).toBe('Neuro.pth');
+  });
+  test('no matching extension → undefined (adopt skips the pack rather than yaml-ing garbage)', () => {
+    expect(pickWeight(['readme.txt', 'notes.md'], '.ckpt')).toBeUndefined();
+    expect(pickWeight([], '.pth')).toBeUndefined();
+  });
+  test('case-insensitive extension', () => {
+    expect(pickWeight(['Model.CKPT'], '.ckpt')).toBe('Model.CKPT');
   });
 });
