@@ -747,16 +747,24 @@ export function mountSetupWizard(root: HTMLElement, opts: { preview?: boolean } 
         });
         body.appendChild(testBtn);
         const pollHealth = (): void => {
+          // v0.37.15 (audit): res.ok is TRUE for the managed 200s {state:'starting'|'gave-up'}, so the
+          // badge went green while api_v2 was still loading (~13 s) or had crash-looped out — and Test
+          // then 502'd. Read the body like bootGate does: green only on real readiness, a distinct
+          // "warming" state while it loads, down on gave-up/unreachable.
           void fetch('/api/tts/health', { signal: AbortSignal.timeout(2500) })
-            .then((res) => {
-              const up = res.ok;
-              badge.classList.toggle('up', up);
-              badge.classList.toggle('down', !up);
-              badge.textContent = t(up ? 'step.voice.badge.up' : 'step.voice.badge.down');
-              testBtn.disabled = !up;
+            .then(async (res) => {
+              const body = (await res.json().catch(() => null)) as { backend?: { ready?: boolean; state?: string } } | null;
+              const state = body?.backend?.state;
+              const ready = res.ok && (body?.backend?.ready === true || state === 'ready');
+              const warming = res.ok && (state === 'starting' || state === 'restarting');
+              badge.classList.toggle('up', ready);
+              badge.classList.toggle('warming', warming);
+              badge.classList.toggle('down', !ready && !warming);
+              badge.textContent = t(ready ? 'step.voice.badge.up' : warming ? 'step.voice.badge.warming' : 'step.voice.badge.down');
+              testBtn.disabled = !ready;
             })
             .catch(() => {
-              badge.classList.remove('up');
+              badge.classList.remove('up', 'warming');
               badge.classList.add('down');
               badge.textContent = t('step.voice.badge.down');
               testBtn.disabled = true;

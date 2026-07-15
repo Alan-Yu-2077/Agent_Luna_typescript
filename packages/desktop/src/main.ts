@@ -37,7 +37,7 @@ import {
   type ManagedRuntime,
   type VoiceProcState,
 } from './ttsRuntime';
-import { buildManifest, realSeams, runProvision, type ProvisionStatus } from './ttsProvision';
+import { buildManifest, killProvisioners, realSeams, runProvision, type ProvisionStatus } from './ttsProvision';
 
 // v0.26.1 (Initiative 19): the single-machine app. The shell OWNS the whole runtime: it reads the
 // user's keys from app-data (never the bundle), spawns the compiled luna-server sidecar against an
@@ -534,6 +534,14 @@ ipcMain.handle('luna:wizard-submit', async (_event, raw: unknown): Promise<Probe
 // wizard's drag-and-drop are just two entrances. On success, reload only NON-setup windows: the
 // app window must re-inject lunaConfig so the model renders, but reloading the setup window would
 // blow the wizard back to step 1 (a v0.35.0 flow bug this version fixes).
+// Reload every NON-setup window so the renderer re-reads lunaConfig (model/voice backend) and
+// rebuilds. The setup window is left alone — it swaps itself when onboarding finishes.
+function reloadAppWindows(): void {
+  for (const w of BrowserWindow.getAllWindows()) {
+    if (!w.webContents.getURL().includes('setup=1')) w.reload();
+  }
+}
+
 function installModelAndReload(src: string): { ok: boolean; modelUrl?: string; error?: string } {
   if (!paths) return { ok: false, error: 'Not ready — try again in a moment.' };
   const result = installModelFolder(src, { modelsDir: paths.userModelsDir, envFile: paths.envFile });
@@ -635,6 +643,12 @@ ipcMain.handle('luna:install-voice-pack', async (_event, raw: VoiceInstallRaw) =
       const rt = resolveManagedRuntime(envNow, { userData: paths.userData });
       if (rt) {
         const ready = await swapManagedTts(rt);
+        // v0.37.15 (audit): the renderer built its audio sink from LUNA_TTS_BACKEND at load. Arming
+        // MANAGED + starting api_v2 is invisible to a window still on the browser voice — the cloned
+        // voice runs but nothing plays it, while packDrop cheerfully says "✓ Voice swapped". Switch
+        // the backend and reload the running (non-setup) windows so they rebuild as the http sink.
+        writeFileSync(paths.envFile, mergeEnvFile(readFileSync(paths.envFile, 'utf8'), { LUNA_TTS_BACKEND: 'http' }));
+        reloadAppWindows();
         return { ok: true, refAudio: installed.refAudio, managed: true, ready };
       }
     }
@@ -1024,9 +1038,11 @@ async function smokeSetupProbe(win: BrowserWindow): Promise<void> {
 app.on('before-quit', () => {
   supervisor?.stop();
   ttsSupervisor?.stop();
+  killProvisioners(); // v0.37.15: don't orphan a pip/torch download mid-install
 });
 app.on('window-all-closed', () => {
   supervisor?.stop();
   ttsSupervisor?.stop();
+  killProvisioners();
   app.quit();
 });

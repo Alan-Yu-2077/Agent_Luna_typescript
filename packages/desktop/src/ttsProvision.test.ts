@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import {
   buildManifest,
   INFERENCE_REQUIREMENTS,
+  PYTHON_CANDIDATES,
   runProvision,
   type Artifact,
   type ProvisionDirs,
@@ -132,7 +133,7 @@ describe('runProvision — stage machine', () => {
     // v0.37.12: OUR inference list, never the upstream requirements.txt (numba==0.56.4 refuses py3.11)
     expect(world.calls.execs.some((c) => c.includes('luna-requirements.txt'))).toBe(true);
     expect(world.calls.execs.every((c) => !c.includes(' requirements.txt'))).toBe(true);
-    expect(world.calls.execs.some((c) => c.includes('pip install torch torchaudio'))).toBe(true);
+    expect(world.calls.execs.some((c) => c.includes('pip install torch>=2.4,<2.14'))).toBe(true);
   });
 
   test('preflight fails fast on low disk — nothing downloads', async () => {
@@ -307,7 +308,6 @@ describe('the venv recipe (v0.37.12)', () => {
       'gradio', // not optional, despite appearances
       'matplotlib', // AR/modules/lr_schedulers.py imports pyplot at module scope
       'split-lang', // text/LangSegmenter
-      'torchcodec', // torchaudio >=2.9 decodes through it — without it every synth 400s
       'huggingface-hub>=0.26,<1', // gradio's latest pulls hub 1.x, which transformers rejects
     ]) {
       expect(INFERENCE_REQUIREMENTS).toContain(needed);
@@ -331,8 +331,8 @@ describe('runProvision — the ffmpeg gate', () => {
     const world = fakeWorld({ platform: 'win32', ffmpeg: false });
     expect((await run(world)).final.stage).toBe('ready');
   });
-  test('torchcodec is in the list (torchaudio >=2.9 cannot decode without it)', () => {
-    expect(INFERENCE_REQUIREMENTS).toContain('torchcodec');
+  test('torchcodec is installed WITH the torch trio (ceilinged), not left unpinned in the list', () => {
+    expect(INFERENCE_REQUIREMENTS).not.toContain('torchcodec'); // moved to the torch install command
   });
 });
 
@@ -422,5 +422,37 @@ describe('language data (v0.37.13 — the fake-HOME findings)', () => {
     const { final } = await run(world);
     expect(final.stage).toBe('failed');
     expect(final.error).toContain('English');
+  });
+});
+
+
+// v0.37.15 (re-audit): python floor 3.10 + torch ceilings + candidate list hygiene.
+describe('re-audit fixes', () => {
+  test('the venv uses the DISCOVERED interpreter, and torch is CEILINGED (was unpinned)', async () => {
+    const world = fakeWorld({ python: 'python3.10' });
+    await run(world);
+    expect(world.calls.execs[0]).toBe('python3.10 -m venv .venv');
+    const torch = world.calls.execs.find((c) => c.includes('pip install torch'))!;
+    expect(torch).toContain('torch>=2.4,<2.14');
+    expect(torch).toContain('torchcodec>=0.4,<0.16');
+  });
+
+  test('a 3.9-only machine fails preflight (modern torch dropped 3.9) — no half-built venv', async () => {
+    const world = fakeWorld({ python: null });
+    const { final } = await run(world);
+    expect(final.stage).toBe('failed');
+    expect(final.failedStage).toBe('preflight');
+    expect(final.error).toContain('3.10');
+    expect(world.calls.execs.length).toBe(0);
+  });
+
+  test('PYTHON_CANDIDATES never offers 3.9 nor the bare system python3', () => {
+    for (const c of PYTHON_CANDIDATES) {
+      expect(c).not.toContain('3.9');
+      expect(c).not.toBe('/usr/bin/python3');
+      expect(c).not.toBe('python3');
+    }
+    expect(PYTHON_CANDIDATES.some((c) => c.includes('3.11'))).toBe(true);
+    expect(PYTHON_CANDIDATES.some((c) => c.includes('3.10'))).toBe(true);
   });
 });

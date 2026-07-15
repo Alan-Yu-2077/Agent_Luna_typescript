@@ -107,6 +107,7 @@ export const SETUP_COPY: CopyTable = {
   'step.voice.copied': { zh: '已复制 ✓', en: 'Copied ✓' },
   'step.voice.badge.down': { zh: '语音服务未运行', en: 'Voice server not running' },
   'step.voice.badge.up': { zh: '语音服务已就绪 ✓', en: 'Voice server ready ✓' },
+  'step.voice.badge.warming': { zh: '语音引擎加载中…', en: 'Voice engine warming up…' },
   'step.voice.test': { zh: '试听一句', en: 'Test voice' },
   'step.voice.test.failed': { zh: '试听失败——确认语音服务已启动。', en: 'Test failed — is the voice server running?' },
 

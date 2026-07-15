@@ -259,22 +259,23 @@ const MIN_FREE_BYTES_WIN = 25_000_000_000;
 // /opt/homebrew/bin is NOT on it. Probing bare names would ENOENT on a machine that HAS python 3.11,
 // and fall through to the system python3 (3.9.6 on macOS). Probe absolute locations first, exactly
 // as resolveDevLauncher already does for the bun binary. Bare names last, for a PATH-rich launch.
+// v0.37.15 (audit): 3.11 is what the reference instance runs and what the proven venv was built on.
+// 3.10 is accepted (torch/transformers/tokenizers/numba all still ship >=3.10 wheels). 3.9 is NOT:
+// modern torch/transformers/tokenizers dropped it, so a 3.9 venv silently resolves DOWNGRADED
+// versions (torch 2.8 + numpy 2.0 in a real test) that were never validated against the 2025 code
+// tag. `/usr/bin/python3` (3.9.6 on macOS) is dropped for the same reason — better to fail preflight
+// with a clear hint than to build a runtime that installs 'ready' and crash-loops.
 export const PYTHON_CANDIDATES = [
   '/opt/homebrew/bin/python3.11',
   '/opt/homebrew/bin/python3.10',
-  '/opt/homebrew/bin/python3.9',
   '/usr/local/bin/python3.11',
   '/usr/local/bin/python3.10',
-  '/usr/local/bin/python3.9',
   '/Library/Frameworks/Python.framework/Versions/3.11/bin/python3',
   '/Library/Frameworks/Python.framework/Versions/3.10/bin/python3',
   '/usr/bin/python3.11',
   '/usr/bin/python3.10',
   'python3.11',
   'python3.10',
-  'python3.9',
-  '/usr/bin/python3',
-  'python3',
 ] as const;
 
 // Same story for ffmpeg — and the api_v2 CHILD needs it on ITS path too (torchcodec shells out to
@@ -317,9 +318,6 @@ x-transformers
 rotary-embedding-torch
 sentencepiece
 onnxruntime
-# torchaudio >=2.9 delegates decoding to torchcodec: without it every synth 400s with
-# "TorchCodec is required for load_with_torchcodec". Found only by actually synthesizing.
-torchcodec
 # NOT optional, however much it looks it: tools/my_utils.py imports gradio, and TTS.py imports tools.
 gradio>=4.44,<5
 fastapi
@@ -354,7 +352,7 @@ export const FFMPEG_HINT =
 const NLTK_BASE = 'https://raw.githubusercontent.com/nltk/nltk_data/gh-pages/packages';
 
 export const PYTHON_HINT =
-  'GPT-SoVITS needs Python 3.9-3.11 (3.11 recommended); none was found. Install it — macOS: `brew install python@3.11`; Windows: python.org 3.11; Linux: your package manager — then click retry.';
+  'GPT-SoVITS needs Python 3.10 or 3.11 (3.11 recommended; 3.9 no longer works — modern torch dropped it). Install it — macOS: `brew install python@3.11`; Windows: python.org 3.11; Linux: your package manager — then click retry.';
 
 type Marker = { state: string; stage?: ProvisionStage; error?: string; extracted?: string[]; venvDone?: boolean };
 
@@ -501,10 +499,15 @@ export async function runProvision(
       const pip = join(dirs.runtimeDir, '.venv', 'bin', 'python');
       await seams.exec(pip, ['-m', 'pip', 'install', '--upgrade', 'pip'], dirs.runtimeDir);
       // torch on its own: PyPI's linux torch is a ~2.5 GB CUDA build, and Luna runs api_v2 on CPU.
+      // v0.37.15 (audit): CEILINGS. These were unpinned, so the next torch major (which can drop an API
+      // the pinned 20250606v2pro tag or torchcodec relies on) would land on every fresh install with
+      // nothing to stop it. The floor/ceiling brackets the proven combo (torch 2.13 / torchaudio 2.11
+      // / torchcodec 0.14) without freezing to an exact build that will vanish from the CPU index.
+      const torchPkgs = ['torch>=2.4,<2.14', 'torchaudio>=2.4,<2.14', 'torchcodec>=0.4,<0.16'];
       const torchArgs =
         seams.platform === 'linux'
-          ? ['-m', 'pip', 'install', '--index-url', 'https://download.pytorch.org/whl/cpu', 'torch', 'torchaudio']
-          : ['-m', 'pip', 'install', 'torch', 'torchaudio'];
+          ? ['-m', 'pip', 'install', '--index-url', 'https://download.pytorch.org/whl/cpu', ...torchPkgs]
+          : ['-m', 'pip', 'install', ...torchPkgs];
       await seams.exec(pip, torchArgs, dirs.runtimeDir);
       // …then OUR inference list, never the upstream requirements.txt (see INFERENCE_REQUIREMENTS).
       const reqPath = join(dirs.runtimeDir, 'luna-requirements.txt');
@@ -560,6 +563,22 @@ type ProcLike = {
   on(ev: 'exit', cb: (code: number | null) => void): unknown;
 };
 
+// v0.37.15 (audit): the provisioner's pip/torch children run for 10-30 min. If the user quits during
+// the install they were orphaned — kept downloading to userData with the app gone, and the leftover
+// half-built venv collided with the next launch's resume. Track live children; main.ts kills them on
+// quit alongside the supervisors.
+const liveProcs = new Set<ReturnType<typeof spawn>>();
+export function killProvisioners(): void {
+  for (const c of liveProcs) {
+    try {
+      c.kill();
+    } catch {
+      /* already gone */
+    }
+  }
+  liveProcs.clear();
+}
+
 function runProc(cmd: string, args: string[], cwd?: string): Promise<void> {
   return new Promise((res, rej) => {
     // v0.37.12: capture BOTH streams. pip prints its real diagnosis on stdout ("Cannot install on
@@ -567,12 +586,18 @@ function runProc(cmd: string, args: string[], cwd?: string): Promise<void> {
     // stderr — this used to `ignore` stdout and truncate stderr to 300 chars, so the single most
     // likely failure of the whole flow surfaced to the user as an unactionable stub.
     // WHY as unknown as: bun-types' child_process shim gap; the runtime shape is correct.
-    const c = spawn(cmd, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] }) as unknown as ProcLike;
+    const child = spawn(cmd, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] });
+    liveProcs.add(child);
+    const c = child as unknown as ProcLike;
     let out = '';
     c.stdout?.on('data', (d) => (out += d.toString()));
     c.stderr?.on('data', (d) => (out += d.toString()));
-    c.on('error', (e) => rej(new Error(`${cmd}: ${e.message}`)));
+    c.on('error', (e) => {
+      liveProcs.delete(child);
+      rej(new Error(`${cmd}: ${e.message}`));
+    });
     c.on('exit', (code) => {
+      liveProcs.delete(child);
       if (code === 0) {
         res();
         return;
@@ -631,7 +656,7 @@ export function realSeams(): ProvisionSeams {
             timeout: 5000,
           });
           const v = (out.stdout ?? '').trim();
-          if (out.status === 0 && /^3\.(9|10|11)$/.test(v)) return cand;
+          if (out.status === 0 && /^3\.(10|11)$/.test(v)) return cand;
         } catch {
           /* not on PATH — try the next */
         }
