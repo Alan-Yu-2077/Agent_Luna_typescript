@@ -103,7 +103,12 @@ export function buildManifest(o: { platform: NodeJS.Platform; hfBase?: string })
       url: `https://github.com/RVC-Boss/GPT-SoVITS/archive/refs/tags/${CODE_TAG}.tar.gz`,
       dest: '.',
       sizeBytes: 0,
-      sha256: '85f23be6d8a91d75caba2df2a335297a1963d663641e5bb84578ae6facc8f479',
+      // v0.37.16 (re-audit): NO sha256 here on purpose. GitHub does NOT guarantee byte-stability of
+      // auto-generated source tarballs — its Jan-2023 gzip change flipped every such checksum and
+      // broke Homebrew and Go's module cache. A pinned hash would be a time bomb: the day GitHub
+      // recompresses, every new install hard-fails at this first artifact. Integrity is enforced
+      // structurally instead — a wrong body (an HTML page) is not a valid gzip, so `tar -xzf` fails
+      // loudly at the extract stage, and a failed extract deletes the cached file so retry re-fetches.
       archive: 'tar.gz',
       stripPrefix: `GPT-SoVITS-${CODE_TAG}`,
     },
@@ -237,6 +242,12 @@ export type ProvisionSeams = {
   // does not, and every synth would fail at decode time — after the whole install "succeeded".
   // Returns its absolute path (null = absent) so the api_v2 child can be given it on PATH.
   findFfmpeg(): string | null;
+  // v0.37.16 (re-audit): jieba_fast AND pyopenjtalk are sdist-only on PyPI (zero wheels, every
+  // version) — pip MUST compile them. A clean machine with no Xcode CLT / build-essential passes
+  // every other check, downloads ~1.6 GB, then dies at the venv stage. The reference machine had CLT
+  // (cc/clang), so the e2e never saw it. Probe non-invasively (xcode-select on mac — it does NOT
+  // trigger the install popup that `cc` would). Windows' 整合包 ships prebuilt, so it needs none.
+  hasCompiler(): boolean;
   sha256(path: string): string; // '' when unreadable
   platform: NodeJS.Platform;
 };
@@ -347,6 +358,8 @@ ToJyutping
 python-mecab-ko; sys_platform != 'win32'
 `;
 
+export const COMPILER_HINT =
+  'GPT-SoVITS has two dependencies (jieba_fast, pyopenjtalk) that pip must compile from source, and no C compiler was found. Install one — macOS: `xcode-select --install`; Debian/Ubuntu: `sudo apt install build-essential`; Fedora: `sudo dnf groupinstall "Development Tools"` — then click retry.';
 export const FFMPEG_HINT =
   'GPT-SoVITS decodes your reference clip with FFmpeg, which is not installed. Get it — macOS: `brew install ffmpeg`; Linux: `apt install ffmpeg` (or your package manager) — then click retry.';
 const NLTK_BASE = 'https://raw.githubusercontent.com/nltk/nltk_data/gh-pages/packages';
@@ -415,6 +428,7 @@ export async function runProvision(
     if (python === null) return fail('preflight', PYTHON_HINT);
     // The 整合包 bundles its own ffmpeg; the scripted platforms need the system one.
     if (seams.platform !== 'win32' && seams.findFfmpeg() === null) return fail('preflight', FFMPEG_HINT);
+    if (seams.platform !== 'win32' && !seams.hasCompiler()) return fail('preflight', COMPILER_HINT);
 
     // ── download (resumable). The rename .part → final IS the commit: a file at `finalPath` is, by
     // construction, one that finished and matched what the server promised. v0.37.9: completion is
@@ -477,7 +491,12 @@ export async function runProvision(
       const destDir = a.dest === '.' ? dirs.runtimeDir : join(dirs.runtimeDir, a.dest);
       fs.mkdirp(destDir);
       push({ artifact: a.name });
-      await seams.extract(finalPath, a.archive, destDir, a.stripPrefix);
+      try {
+        await seams.extract(finalPath, a.archive, destDir, a.stripPrefix);
+      } catch {
+        fs.remove(finalPath); // a file that won't extract is useless cached — force a fresh download
+        return fail('extracting', `${a.name}: could not extract (corrupt or wrong download) — retry.`);
+      }
       extracted.add(a.name);
       persist('extracting');
     }
@@ -647,6 +666,18 @@ export function realSeams(): ProvisionSeams {
         }
       }
       return null;
+    },
+    hasCompiler: () => {
+      try {
+        if (process.platform === 'darwin') {
+          // `xcode-select -p` exits 0 only when the CLT (or Xcode) is installed — and, unlike `cc`,
+          // it never triggers the OS "install command line developer tools" popup on a bare machine.
+          return spawnSync('xcode-select', ['-p'], { encoding: 'utf8', timeout: 5000 }).status === 0;
+        }
+        return spawnSync('cc', ['--version'], { encoding: 'utf8', timeout: 5000 }).status === 0;
+      } catch {
+        return false;
+      }
     },
     findPython: () => {
       for (const cand of PYTHON_CANDIDATES) {

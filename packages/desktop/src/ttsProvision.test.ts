@@ -23,6 +23,7 @@ function fakeWorld(o: {
   shortBytes?: number; // …but only this many land (a truncated transfer)
   python?: string | null; // null = no 3.9-3.11 interpreter on this machine
   ffmpeg?: boolean; // the SYSTEM ffmpeg binary (torchcodec decodes through it)
+  compiler?: boolean; // a C compiler (jieba_fast/pyopenjtalk are sdist-only)
   hashes?: Record<string, string>; // path → the sha256 the fake reports for it
   manifest?: Artifact[]; // so the fake can honour the REAL manifest's declared hashes
 }) {
@@ -37,6 +38,7 @@ function fakeWorld(o: {
     freeDiskBytes: () => o.freeDisk ?? 50_000_000_000,
     findPython: () => (o.python === undefined ? 'python3.11' : o.python),
     findFfmpeg: () => (o.ffmpeg === false ? null : '/opt/homebrew/bin/ffmpeg'),
+    hasCompiler: () => o.compiler !== false,
     sha256: (p) => o.hashes?.[p] ?? shaByPath.get(p) ?? 'GOODHASH',
     fs: {
       exists: (p) => files.has(p) || texts.has(p),
@@ -409,9 +411,12 @@ describe('language data (v0.37.13 — the fake-HOME findings)', () => {
     expect(nltk.every((a) => a.sha256 && a.archive === 'zip')).toBe(true);
     expect(nltk.find((a) => a.name === 'nltk/cmudict')!.dest).toBe('nltk_data/corpora');
   });
-  test('EVERY artifact carries a sha256 — no unverifiable download remains', () => {
-    for (const p of ['darwin', 'linux', 'win32'] as const) {
-      for (const a of buildManifest({ platform: p })) expect(a.sha256).toBeTruthy();
+  test('every artifact carries a sha256 EXCEPT the GitHub tarball (GitHub does not guarantee byte-stability)', () => {
+    for (const plat of ['darwin', 'linux', 'win32'] as const) {
+      for (const a of buildManifest({ platform: plat })) {
+        if (a.url.includes('github.com/RVC-Boss')) expect(a.sha256).toBeUndefined(); // structural check instead
+        else expect(a.sha256).toBeTruthy();
+      }
     }
   });
   test('validating fails if the English corpus is missing — it is not optional', async () => {
@@ -454,5 +459,39 @@ describe('re-audit fixes', () => {
     }
     expect(PYTHON_CANDIDATES.some((c) => c.includes('3.11'))).toBe(true);
     expect(PYTHON_CANDIDATES.some((c) => c.includes('3.10'))).toBe(true);
+  });
+});
+
+// v0.37.16 (re-audit): the two blockers the completed audit confirmed past v0.37.15.
+describe('compiler preflight + GitHub-tarball resilience', () => {
+  test('no C compiler → fails in PREFLIGHT, before the ~1.6 GB download (jieba_fast/pyopenjtalk are sdist-only)', async () => {
+    const world = fakeWorld({ compiler: false });
+    const { final } = await run(world);
+    expect(final.stage).toBe('failed');
+    expect(final.failedStage).toBe('preflight');
+    expect(final.error).toMatch(/compile|xcode-select|build-essential/i);
+    expect(world.calls.downloads.length).toBe(0);
+  });
+
+  test('win32 needs no compiler — the 整合包 ships prebuilt', async () => {
+    const world = fakeWorld({ platform: 'win32', compiler: false });
+    expect((await run(world)).final.stage).toBe('ready');
+  });
+
+  test('the GitHub source tarball is NOT sha256-pinned (GitHub recompression would flip it)', () => {
+    const tarball = buildManifest({ platform: 'darwin' }).find((a) => a.url.includes('github.com/RVC-Boss'))!;
+    expect(tarball.sha256).toBeUndefined();
+    expect(tarball.archive).toBe('tar.gz'); // integrity is structural: a non-gzip body fails extract
+  });
+
+  test('a failed extract deletes the cached archive so retry re-downloads (no permanent wedge)', async () => {
+    const world = fakeWorld({});
+    world.seams.extract = () => Promise.reject(new Error('not in gzip format'));
+    const codePath = cached(MINI[0]!);
+    world.files.set(codePath, 100); // pretend the tarball is already downloaded
+    const { final } = await run(world);
+    expect(final.stage).toBe('failed');
+    expect(final.failedStage).toBe('extracting');
+    expect(world.files.has(codePath)).toBe(false); // deleted → a retry re-fetches, not re-fails
   });
 });
