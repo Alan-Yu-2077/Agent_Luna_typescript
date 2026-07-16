@@ -3,7 +3,7 @@ import { createController } from './controller';
 import { LunaWsClient, type WsStatus } from './wsClient';
 import { resolveWsUrl } from './wsUrl';
 import { isInteractivePoint, modelRectFromVars } from './ui/petHitTest';
-import { lastGeoFix, requestGeolocation } from './geo';
+import { lastGeoFix, requestGeolocation, setGeoFix } from './geo';
 import { consoleLive2DSink, noopAudioSink, type AudioSink, type Live2DSink, type Live2DState } from './sinks';
 import { CuteBubbleView } from './ui/cuteBubbleView';
 import { SpeechStackView } from './ui/speechStackView';
@@ -272,9 +272,10 @@ async function boot(): Promise<void> {
     },
   });
   client.connect();
-  // Ask the browser for the user's location (one-time permission prompt). On a fix,
-  // send it (v0.21.3 GPS auto-location); onStatus re-sends on later reconnects.
-  // Silently no-ops if denied/unavailable → the LUNA_LAT_LON env fallback.
+  // Watch the browser for the user's location (one-time permission prompt). Fires on the
+  // initial fix AND every real move (v0.37.17 — the old one-shot froze at page-load time);
+  // onStatus re-sends the newest fix on later reconnects. Silently no-ops if
+  // denied/unavailable → the LUNA_LAT_LON env fallback.
   requestGeolocation((fix) => client.send({ type: 'client.geo', lat: fix.lat, lon: fix.lon }));
 
   function send(): void {
@@ -366,9 +367,17 @@ async function boot(): Promise<void> {
         dragStart?(): void;
         dragMove?(dx: number, dy: number): void;
         dragEnd?(): void;
+        onGeoFix?(cb: (fix: { lat: number; lon: number }) => void): void;
       };
     }
   ).lunaPet;
+  // v0.37.17: the desktop shell re-polls CoreLocation and pushes a moved fix here — the
+  // webview has no browser GPS, so this is the desktop's only live-location channel. Cache
+  // it (reconnects re-send the newest) and forward it as client.geo.
+  bridge?.onGeoFix?.((fix) => {
+    setGeoFix(fix);
+    client.send({ type: 'client.geo', lat: fix.lat, lon: fix.lon });
+  });
   if (isPet) {
     document.body.classList.add('pet');
     root.classList.add('pet');

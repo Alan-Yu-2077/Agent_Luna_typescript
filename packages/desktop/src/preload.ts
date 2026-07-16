@@ -31,6 +31,11 @@ contextBridge.exposeInMainWorld('lunaPet', {
   // (webUtils needs the preload context) and only the path string crosses IPC.
   installModelFile: (file: File): Promise<{ ok: boolean; modelUrl?: string; error?: string }> =>
     ipcRenderer.invoke('luna:install-model-path', webUtils.getPathForFile(file)),
+  // v0.37.17: the shell's CoreLocation re-poll pushes a moved fix here; the renderer forwards it
+  // over its WS as client.geo (the desktop webview has no browser GPS of its own).
+  onGeoFix: (cb: (fix: { lat: number; lon: number }) => void): void => {
+    ipcRenderer.on('luna:geo-fix', (_e, fix: { lat: number; lon: number }) => cb(fix));
+  },
 });
 
 // Inject the desktop-resolved config (LUNA_MODEL_URL / LUNA_TTS_BACKEND / LUNA_TTS_URL) so the renderer

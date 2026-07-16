@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 import {
   coreLocationFix,
+  coreLocationFixAsync,
   formatLatLon,
+  movedBeyond,
   parseLatLon,
   resolveDesktopLocation,
   timezoneFix,
@@ -106,6 +108,94 @@ describe('resolveDesktopLocation (the chain)', () => {
       {},
       { platform: 'darwin', tz: 'Antarctica/South_Pole', exec: () => DENIED },
     );
+    expect(fix).toBeNull();
+  });
+
+  // v0.37.17 — the un-freeze. Our own persisted cache (LUNA_LAT_LON_AUTO) must never read as a
+  // manual pin: fresh acquisition always runs, the cache only backstops its failure.
+  test('a persisted AUTO cache never blocks acquisition — fresh CoreLocation wins', () => {
+    const fix = resolveDesktopLocation(
+      { LUNA_LAT_LON_AUTO: '34.373533,108.906581' },
+      { platform: 'darwin', tz: 'Asia/Shanghai', exec: () => '30.25,120.17' },
+    );
+    expect(fix).toEqual({ lat: 30.25, lon: 120.17, source: 'corelocation', persist: true });
+  });
+  test('CoreLocation denied → the AUTO cache (last accurate fix) beats the timezone city', () => {
+    const fix = resolveDesktopLocation(
+      { LUNA_LAT_LON_AUTO: '34.373533,108.906581' },
+      { platform: 'darwin', tz: 'Asia/Shanghai', exec: () => DENIED },
+    );
+    expect(fix).toEqual({ lat: 34.373533, lon: 108.906581, source: 'cached', persist: false });
+  });
+  test('an invalid AUTO cache falls through to the timezone city', () => {
+    const fix = resolveDesktopLocation(
+      { LUNA_LAT_LON_AUTO: 'garbage' },
+      { platform: 'darwin', tz: 'Asia/Shanghai', exec: () => DENIED },
+    );
+    expect(fix).toEqual({ lat: 31.23, lon: 121.47, source: 'timezone', persist: false });
+  });
+  test('a manual pin still silences the whole chain, AUTO cache or not', () => {
+    const fix = resolveDesktopLocation(
+      { LUNA_LAT_LON: '1.0,2.0', LUNA_LAT_LON_AUTO: '34.37,108.91' },
+      { platform: 'darwin', tz: 'Asia/Shanghai', exec: () => '30.25,120.17' },
+    );
+    expect(fix).toBeNull();
+  });
+});
+
+describe('movedBeyond', () => {
+  test('no prior fix → always a move', () => {
+    expect(movedBeyond(null, { lat: 31.23, lon: 121.47 })).toBe(true);
+  });
+  test('Wi-Fi jitter (<~55 m) is not a move', () => {
+    expect(movedBeyond({ lat: 31.23, lon: 121.47 }, { lat: 31.2303, lon: 121.4703 })).toBe(false);
+  });
+  test('a real move (a few blocks) registers', () => {
+    expect(movedBeyond({ lat: 31.23, lon: 121.47 }, { lat: 31.24, lon: 121.47 })).toBe(true);
+    expect(movedBeyond({ lat: 31.23, lon: 121.47 }, { lat: 31.23, lon: 121.48 })).toBe(true);
+  });
+});
+
+describe('coreLocationFixAsync', () => {
+  test('non-darwin → null without execing', async () => {
+    let called = false;
+    const fix = await coreLocationFixAsync({
+      platform: 'linux',
+      execAsync: () => {
+        called = true;
+        return Promise.resolve('1,1');
+      },
+    });
+    expect(fix).toBeNull();
+    expect(called).toBe(false);
+  });
+  test('a coordinate line → the fix', async () => {
+    const fix = await coreLocationFixAsync({
+      platform: 'darwin',
+      cliPaths: ['/x'],
+      execAsync: () => Promise.resolve('31.23,121.47'),
+    });
+    expect(fix).toEqual({ lat: 31.23, lon: 121.47 });
+  });
+  test('a rejecting path (ENOENT / denied / timeout) → tries the next one', async () => {
+    const seen: string[] = [];
+    const fix = await coreLocationFixAsync({
+      platform: 'darwin',
+      cliPaths: ['/a', '/b'],
+      execAsync: (file) => {
+        seen.push(file);
+        return file === '/a' ? Promise.reject(new Error('ENOENT')) : Promise.resolve('10,20');
+      },
+    });
+    expect(fix).toEqual({ lat: 10, lon: 20 });
+    expect(seen).toEqual(['/a', '/b']);
+  });
+  test('all paths fail → null', async () => {
+    const fix = await coreLocationFixAsync({
+      platform: 'darwin',
+      cliPaths: ['/a'],
+      execAsync: () => Promise.reject(new Error('denied')),
+    });
     expect(fix).toBeNull();
   });
 });

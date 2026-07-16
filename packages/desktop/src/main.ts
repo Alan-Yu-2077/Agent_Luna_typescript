@@ -14,7 +14,14 @@ import {
   wizardPrefill,
   type ProbeVerdict,
 } from './onboarding';
-import { formatLatLon, resolveDesktopLocation } from './location';
+import {
+  coreLocationFixAsync,
+  formatLatLon,
+  movedBeyond,
+  parseLatLon,
+  resolveDesktopLocation,
+  type LatLon,
+} from './location';
 import { createPetDrag, type PetDrag } from './petDrag';
 import { petWindowOptions } from './petWindow';
 import { createSupervisor, waitForPort, type Supervisor } from './supervisor';
@@ -841,8 +848,10 @@ void app.whenReady().then(async () => {
 
   // v0.33.0: the desktop webview has no browser GPS, so resolve a location from the Mac itself
   // (CoreLocationCLI → system timezone) and inject it as LUNA_LAT_LON before the sidecar spawns, so
-  // weather mounts at boot. A manual luna.env value is respected (returns null); an accurate
-  // CoreLocation fix is persisted so it sticks + shows in the settings panel.
+  // weather mounts at boot. A manual luna.env value is respected (returns null). v0.37.17: the
+  // accurate fix persists to LUNA_LAT_LON_AUTO — persisting into LUNA_LAT_LON itself made our own
+  // cache read as a manual pin on the next boot, freezing the location after the first fix.
+  const manualPin = parseLatLon(userEnv['LUNA_LAT_LON'] ?? '') != null;
   const loc = resolveDesktopLocation(userEnv);
   if (loc) {
     userEnv['LUNA_LAT_LON'] = formatLatLon(loc);
@@ -851,12 +860,35 @@ void app.whenReady().then(async () => {
       try {
         writeFileSync(
           p.envFile,
-          mergeEnvFile(readFileSync(p.envFile, 'utf8'), { LUNA_LAT_LON: userEnv['LUNA_LAT_LON'] }),
+          mergeEnvFile(readFileSync(p.envFile, 'utf8'), { LUNA_LAT_LON_AUTO: userEnv['LUNA_LAT_LON'] }),
         );
       } catch (e) {
         console.warn('[luna-desktop] could not persist location to luna.env:', e);
       }
     }
+  }
+
+  // v0.37.17: keep the location LIVE while the app runs. Every 10 minutes re-ask CoreLocation
+  // (async — the sync exec would freeze all windows for up to 3s); a real move (>~55 m) is pushed
+  // to every window, whose renderer forwards it over its WS as client.geo — the server's runtime
+  // location beats the env fallback, so weather follows the machine without a restart. Never runs
+  // over a manual pin (the operator's word stays final).
+  if (!manualPin && process.platform === 'darwin') {
+    let lastFix: LatLon | null = loc && loc.source !== 'timezone' ? { lat: loc.lat, lon: loc.lon } : null;
+    setInterval(() => {
+      void coreLocationFixAsync().then((fix) => {
+        if (!fix || !movedBeyond(lastFix, fix)) return;
+        lastFix = fix;
+        const s = formatLatLon(fix);
+        console.log(`[luna-desktop] location moved → ${s}`);
+        for (const w of BrowserWindow.getAllWindows()) w.webContents.send('luna:geo-fix', fix);
+        try {
+          writeFileSync(p.envFile, mergeEnvFile(readFileSync(p.envFile, 'utf8'), { LUNA_LAT_LON_AUTO: s }));
+        } catch {
+          // best-effort cache — the push above already delivered the fix
+        }
+      });
+    }, 600_000).unref();
   }
 
   if (userEnv['LUNA_PET_MODE'] === '1') petMode = true;

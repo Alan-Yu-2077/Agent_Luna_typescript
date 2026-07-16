@@ -1,17 +1,21 @@
-import { execFileSync } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
 
 // Desktop-native location acquisition (v0.33.0). The desktop webview has no browser GPS, so weather
 // needs LUNA_LAT_LON present at the sidecar's boot (the weather tool mount is boot-frozen). This
 // resolves a location from the Mac itself, best-first:
 //   1. a manual luna.env LUNA_LAT_LON — always respected, never overridden (the operator's word)
 //   2. CoreLocationCLI — accurate, but needs the Homebrew tool + macOS Location Services granted
-//   3. the system timezone → a representative city — coarse, but zero-permission, offline and
+//   3. LUNA_LAT_LON_AUTO — the last CoreLocation fix WE persisted. Our cache, not the operator's
+//      word: it backstops a CoreLocation outage but never blocks fresh acquisition. (v0.33.0
+//      persisted into LUNA_LAT_LON itself, so our own cache masqueraded as a manual pin and froze
+//      the location after the first fix — the v0.37.17 bug.)
+//   4. the system timezone → a representative city — coarse, but zero-permission, offline and
 //      VPN-proof, so desktop weather is never fully dark
-// Only an accurate (CoreLocation) fix is persisted back to luna.env; the timezone fallback stays
-// ephemeral so a later CoreLocation grant auto-upgrades it.
+// Only an accurate (CoreLocation) fix is persisted (to LUNA_LAT_LON_AUTO); the timezone fallback
+// stays ephemeral so a later CoreLocation grant auto-upgrades it.
 
 export type LatLon = { lat: number; lon: number };
-export type LocationSource = 'corelocation' | 'timezone';
+export type LocationSource = 'corelocation' | 'cached' | 'timezone';
 export type LocationFix = { lat: number; lon: number; source: LocationSource; persist: boolean };
 
 const COORD_RE = /^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/;
@@ -56,6 +60,41 @@ export function coreLocationFix(
     }
   }
   return null;
+}
+
+type ExecAsync = (file: string, args: string[]) => Promise<string>;
+const defaultExecAsync: ExecAsync = (file, args) =>
+  new Promise((resolve, reject) => {
+    execFile(file, args, { timeout: CLI_TIMEOUT_MS, encoding: 'utf8' }, (err, stdout) => {
+      if (err) reject(err);
+      else resolve(stdout);
+    });
+  });
+
+// The in-session re-poll variant (v0.37.17). Async because it runs on a timer inside Electron's
+// main process — the sync exec's 3s worst case would freeze every window's event loop.
+export async function coreLocationFixAsync(
+  opts: { platform?: string; execAsync?: ExecAsync; cliPaths?: string[] } = {},
+): Promise<LatLon | null> {
+  if ((opts.platform ?? process.platform) !== 'darwin') return null;
+  const exec = opts.execAsync ?? defaultExecAsync;
+  for (const p of opts.cliPaths ?? CLI_PATHS) {
+    try {
+      const fix = parseLatLon(await exec(p, ['--format', '%latitude,%longitude']));
+      if (fix) return fix;
+    } catch {
+      // same ladder as the sync variant — try the next path
+    }
+  }
+  return null;
+}
+
+// ~55 m at the equator: registers a real move, swallows Wi-Fi positioning jitter.
+export const MOVE_EPSILON_DEG = 0.0005;
+
+export function movedBeyond(from: LatLon | null, to: LatLon, epsilon = MOVE_EPSILON_DEG): boolean {
+  if (from == null) return true;
+  return Math.abs(from.lat - to.lat) > epsilon || Math.abs(from.lon - to.lon) > epsilon;
 }
 
 // Curated IANA zone → representative city coords. Coarse by design (region-level); extend freely.
@@ -134,6 +173,9 @@ export function resolveDesktopLocation(
   if (manual != null && parseLatLon(manual) != null) return null; // operator's word is final
   const cl = coreLocationFix({ platform: opts.platform, exec: opts.exec });
   if (cl) return { ...cl, source: 'corelocation', persist: true };
+  const auto = userEnv['LUNA_LAT_LON_AUTO'];
+  const cached = auto != null ? parseLatLon(auto) : null;
+  if (cached) return { ...cached, source: 'cached', persist: false };
   const tz = timezoneFix(opts.tz ?? systemTimezone());
   if (tz) return { ...tz, source: 'timezone', persist: false };
   return null;
