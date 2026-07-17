@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { createSupervisor, type SpawnedChild, type SpawnFn } from './supervisor';
+import { createSupervisor, killPlan, type KillFn, type SpawnedChild, type SpawnFn } from './supervisor';
 
 type FakeChild = SpawnedChild & { exit: () => void; error: () => void; killed: boolean };
 
@@ -127,5 +127,43 @@ describe('createSupervisor (v0.26.1)', () => {
     children[2]!.exit(); // crash → should restart again (budget reset)
     expect(children.length).toBe(4);
     expect(s.running()).toBe(true);
+  });
+
+  // v0.38.0: stop()/restart() route the kill through the injectable killFn (win32 needs a tree kill,
+  // not TerminateProcess on the direct child). Verify the seam actually receives the live child.
+  test('stop() routes the kill through killFn (the win32 tree-kill seam)', () => {
+    const { spawnFn, children } = fakeSpawner();
+    const killed: SpawnedChild[] = [];
+    const killFn: KillFn = (c) => killed.push(c);
+    const s = createSupervisor({ command: 'x', env: {}, spawnFn, killFn });
+    s.start();
+    s.stop();
+    expect(killed).toEqual([children[0]!]);
+    children[0]!.exit(); // stop disarmed restarts → no respawn
+    expect(children.length).toBe(1);
+  });
+
+  test('restart() routes the old child through killFn before spawning anew', () => {
+    const { spawnFn, children } = fakeSpawner();
+    const killed: SpawnedChild[] = [];
+    const s = createSupervisor({ command: 'x', env: {}, spawnFn, killFn: (c) => killed.push(c) });
+    s.start();
+    s.restart({ K: '1' });
+    expect(killed).toEqual([children[0]!]); // the OLD child was killed via the seam
+    expect(children.length).toBe(2);
+    expect(s.running()).toBe(true);
+  });
+});
+
+describe('killPlan (v0.38.0)', () => {
+  test('win32 with a pid → taskkill /pid N /T /F (whole tree, force)', () => {
+    expect(killPlan('win32', 4321)).toEqual({ kind: 'taskkill', args: ['/pid', '4321', '/T', '/F'] });
+  });
+  test('win32 without a pid → falls back to signal (nothing to taskkill)', () => {
+    expect(killPlan('win32', undefined)).toEqual({ kind: 'signal' });
+  });
+  test('darwin/linux → signal (SIGTERM + escalation handled by the caller)', () => {
+    expect(killPlan('darwin', 4321)).toEqual({ kind: 'signal' });
+    expect(killPlan('linux', 4321)).toEqual({ kind: 'signal' });
   });
 });

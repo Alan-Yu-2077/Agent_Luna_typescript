@@ -605,7 +605,7 @@ function runProc(cmd: string, args: string[], cwd?: string): Promise<void> {
     // stderr — this used to `ignore` stdout and truncate stderr to 300 chars, so the single most
     // likely failure of the whole flow surfaced to the user as an unactionable stub.
     // WHY as unknown as: bun-types' child_process shim gap; the runtime shape is correct.
-    const child = spawn(cmd, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(cmd, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
     liveProcs.add(child);
     const c = child as unknown as ProcLike;
     let out = '';
@@ -660,7 +660,8 @@ export function realSeams(): ProvisionSeams {
     findFfmpeg: () => {
       for (const cand of FFMPEG_CANDIDATES) {
         try {
-          if (spawnSync(cand, ['-version'], { encoding: 'utf8', timeout: 5000 }).status === 0) return cand;
+          if (spawnSync(cand, ['-version'], { encoding: 'utf8', timeout: 5000, windowsHide: true }).status === 0)
+            return cand;
         } catch {
           /* not here — next */
         }
@@ -672,9 +673,9 @@ export function realSeams(): ProvisionSeams {
         if (process.platform === 'darwin') {
           // `xcode-select -p` exits 0 only when the CLT (or Xcode) is installed — and, unlike `cc`,
           // it never triggers the OS "install command line developer tools" popup on a bare machine.
-          return spawnSync('xcode-select', ['-p'], { encoding: 'utf8', timeout: 5000 }).status === 0;
+          return spawnSync('xcode-select', ['-p'], { encoding: 'utf8', timeout: 5000, windowsHide: true }).status === 0;
         }
-        return spawnSync('cc', ['--version'], { encoding: 'utf8', timeout: 5000 }).status === 0;
+        return spawnSync('cc', ['--version'], { encoding: 'utf8', timeout: 5000, windowsHide: true }).status === 0;
       } catch {
         return false;
       }
@@ -685,6 +686,7 @@ export function realSeams(): ProvisionSeams {
           const out = spawnSync(cand, ['-c', 'import sys;print("%d.%d"%sys.version_info[:2])'], {
             encoding: 'utf8',
             timeout: 5000,
+            windowsHide: true,
           });
           const v = (out.stdout ?? '').trim();
           if (out.status === 0 && /^3\.(10|11)$/.test(v)) return cand;

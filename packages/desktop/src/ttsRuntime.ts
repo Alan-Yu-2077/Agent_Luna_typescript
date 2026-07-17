@@ -122,11 +122,12 @@ export function resolveManagedRuntime(
   const yamlPath = packYamls[0]?.path;
   if (yamlPath === undefined) return null;
 
-  // The 整合包 (provisioned win32) ships its own embedded python instead of a venv.
+  // The 整合包 (provisioned win32) ships its own embedded python instead of a venv. Last-resort bare
+  // name is 'python' on win32 (python.org installs python.exe; 'python3' usually doesn't exist there).
   const embeddedWin = join(checkout, 'runtime', 'python.exe');
   const python =
     venvPython(checkout, platform, fs) ??
-    (platform === 'win32' && fs.exists(embeddedWin) ? embeddedWin : 'python3');
+    (platform === 'win32' ? (fs.exists(embeddedWin) ? embeddedWin : 'python') : 'python3');
 
   return { kind, checkout, python, yamlPath, host: target.host, port: target.port };
 }

@@ -232,6 +232,32 @@ describe('runtime dir + yaml + command (the canonical standard)', () => {
     expect(spaced).toContain("'/opt/my dir/G'\\''S'");
   });
 
+  // v0.38.0 — win32 branches (display-only copy-paste surface).
+  test('validateRuntimeDir on win32 detects the Scripts\\python.exe venv layout', () => {
+    const dir = join(tmp(), 'GPT-SoVITS-win');
+    mkdirSync(join(dir, 'GPT_SoVITS', 'pretrained_models', 'chinese-roberta-wwm-ext-large'), { recursive: true });
+    mkdirSync(join(dir, 'GPT_SoVITS', 'pretrained_models', 'chinese-hubert-base'), { recursive: true });
+    writeFileSync(join(dir, 'api_v2.py'), '# api');
+    mkdirSync(join(dir, '.venv', 'Scripts'), { recursive: true });
+    writeFileSync(join(dir, '.venv', 'Scripts', 'python.exe'), '');
+    expect(validateRuntimeDir(dir, 'win32')).toEqual({
+      ok: true,
+      venvPython: join(dir, '.venv', 'Scripts', 'python.exe'),
+    });
+    // the same checkout has no POSIX venv → win32 must NOT report the bin/python one
+    expect(validateRuntimeDir(dir, 'darwin').venvPython).toBeUndefined();
+  });
+
+  test('startCommand on win32 is PowerShell-form with the Scripts venv (or bare python)', () => {
+    const venv = startCommand(
+      { checkout: 'C:\\tts\\GPT-SoVITS', venvPython: 'C:\\tts\\GPT-SoVITS\\.venv\\Scripts\\python.exe', yamlPath: 'C:\\tts\\v.yaml' },
+      'win32',
+    );
+    expect(venv).toBe('cd "C:\\tts\\GPT-SoVITS"; & .\\.venv\\Scripts\\python.exe api_v2.py -a 127.0.0.1 -p 9880 -c "C:\\tts\\v.yaml"');
+    const bare = startCommand({ checkout: 'C:\\g', yamlPath: 'C:\\v.yaml' }, 'win32');
+    expect(bare).toBe('cd "C:\\g"; & python api_v2.py -a 127.0.0.1 -p 9880 -c "C:\\v.yaml"');
+  });
+
   test('no-execute contract: this module never touches child_process', () => {
     const src = readFileSync(join(import.meta.dir, 'voicePack.ts'), 'utf8');
     expect(src).not.toContain('child_process');

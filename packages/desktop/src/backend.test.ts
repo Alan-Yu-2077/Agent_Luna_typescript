@@ -66,6 +66,25 @@ describe('resolveDevLauncher (v0.28.9)', () => {
     });
     expect(r?.bun).toBe('/custom/bun');
   });
+
+  // v0.38.0: win32 has no HOME (USERPROFILE is the real one) and bun installs as bun.exe.
+  test('win32: USERPROFILE + bun.exe under .bun\\bin is found', () => {
+    const r = resolveDevLauncher({
+      repoRoot: REPO,
+      env: { USERPROFILE: '/users/a' },
+      exists: (p) => p === SCRIPT || p === '/users/a/.bun/bin/bun.exe',
+    });
+    expect(r?.bun).toBe('/users/a/.bun/bin/bun.exe');
+  });
+
+  test('HOME still takes precedence over USERPROFILE when both are set', () => {
+    const r = resolveDevLauncher({
+      repoRoot: REPO,
+      env: { HOME: '/home/a', USERPROFILE: '/users/a' },
+      exists: (p) => p === SCRIPT || p === '/home/a/.bun/bin/bun',
+    });
+    expect(r?.bun).toBe('/home/a/.bun/bin/bun');
+  });
 });
 
 describe('resolveBootMode (v0.35.5)', () => {

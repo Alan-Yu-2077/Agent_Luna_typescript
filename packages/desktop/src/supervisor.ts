@@ -10,7 +10,7 @@ import { connect } from 'node:net';
 export type SpawnedChild = {
   pid?: number | undefined;
   on(event: 'exit' | 'error', cb: () => void): unknown;
-  kill(): unknown;
+  kill(signal?: NodeJS.Signals): unknown;
 };
 export type SpawnFn = (
   cmd: string,
@@ -18,6 +18,23 @@ export type SpawnFn = (
   env: Record<string, string>,
   cwd?: string,
 ) => SpawnedChild;
+export type KillFn = (child: SpawnedChild) => void;
+
+// v0.38.0: how to kill a child, resolved from platform + pid. On win32 `child.kill()` is
+// TerminateProcess on the DIRECT child only — a `bun scripts/dev-all.ts` or a pip/python tree
+// leaves grandchildren holding the port + DB lock. `taskkill /T` kills the whole tree. On POSIX we
+// keep SIGTERM but arm a SIGKILL escalation so a child that ignores SIGTERM (a wedged python) still
+// dies. Pure so the win32 argv is unit-testable off-platform.
+export function killPlan(
+  platform: NodeJS.Platform,
+  pid: number | undefined,
+): { kind: 'taskkill'; args: string[] } | { kind: 'signal' } {
+  if (platform === 'win32' && pid != null)
+    return { kind: 'taskkill', args: ['/pid', String(pid), '/T', '/F'] };
+  return { kind: 'signal' };
+}
+
+const KILL_GRACE_MS = 4000;
 
 export type SupervisorOpts = {
   command: string;
@@ -29,6 +46,7 @@ export type SupervisorOpts = {
   maxRestarts?: number; // bounded — a config error must not crash-loop forever
   onEvent?: (e: 'started' | 'exited' | 'restarting' | 'gave-up') => void;
   spawnFn?: SpawnFn;
+  killFn?: KillFn; // v0.38.0: injectable so the win32 tree-kill path is testable off-platform
 };
 
 export type Supervisor = {
@@ -43,12 +61,44 @@ export type Supervisor = {
 
 // WHY as unknown as: bun-types' node:child_process shim doesn't surface EventEmitter's `on` on the
 // ChildProcess type; the runtime object satisfies SpawnedChild structurally.
+// windowsHide: a GUI Electron parent spawning a console executable (bun/python/tar) allocates a
+// visible console window on win32 unless this is set.
 const defaultSpawn: SpawnFn = (cmd, args, env, cwd) =>
-  spawn(cmd, args, { env, cwd, stdio: ['ignore', 'inherit', 'inherit'] }) as unknown as SpawnedChild;
+  spawn(cmd, args, {
+    env,
+    cwd,
+    stdio: ['ignore', 'inherit', 'inherit'],
+    windowsHide: true,
+  }) as unknown as SpawnedChild;
+
+const defaultKill: KillFn = (child) => {
+  const plan = killPlan(process.platform, child.pid);
+  if (plan.kind === 'taskkill') {
+    try {
+      spawn('taskkill', plan.args, { stdio: 'ignore', windowsHide: true });
+    } catch {
+      child.kill(); // taskkill unavailable — best-effort direct kill
+    }
+    return;
+  }
+  child.kill(); // SIGTERM
+  const pid = child.pid;
+  if (pid != null) {
+    const t = setTimeout(() => {
+      try {
+        child.kill('SIGKILL');
+      } catch {
+        /* already gone */
+      }
+    }, KILL_GRACE_MS);
+    (t as { unref?: () => void }).unref?.();
+  }
+};
 
 export function createSupervisor(opts: SupervisorOpts): Supervisor {
   const maxRestarts = opts.maxRestarts ?? 3;
   const doSpawn = opts.spawnFn ?? defaultSpawn;
+  const doKill = opts.killFn ?? defaultKill;
   let child: SpawnedChild | null = null;
   let restarts = 0;
   let stopped = false;
@@ -89,7 +139,7 @@ export function createSupervisor(opts: SupervisorOpts): Supervisor {
     start,
     stop() {
       stopped = true;
-      child?.kill();
+      if (child) doKill(child);
       child = null;
     },
     restart(env: Record<string, string>) {
@@ -98,7 +148,7 @@ export function createSupervisor(opts: SupervisorOpts): Supervisor {
       stopped = false; // re-arm (covers the first-run case where the sidecar was never started)
       const old = child;
       child = null; // detach first: `old`'s exit handler sees child !== old → no-op
-      old?.kill();
+      if (old) doKill(old);
       start();
     },
     running: () => child !== null,

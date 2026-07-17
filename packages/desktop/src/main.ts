@@ -25,6 +25,7 @@ import {
 import { createPetDrag, type PetDrag } from './petDrag';
 import { petWindowOptions } from './petWindow';
 import { createSupervisor, waitForPort, type Supervisor } from './supervisor';
+import { childPathValue, pathKeyFor, serverBinName } from './childEnv';
 import { resolveBootMode, resolveDevLauncher, resolveSidecarDb, shouldAttach } from './backend';
 import { probeEmbedding, probeSearch, probeWeather } from './probes';
 import { installModelFolder } from './modelInstall';
@@ -101,7 +102,9 @@ function resolvePaths(): Paths {
     // inlined at build as packages/desktop/src, so three up is the repo root.
     sharedDb: join(__dirname, '..', '..', '..', 'luna.sqlite'),
     envFile: join(userData, 'luna.env'),
-    serverBin: app.isPackaged ? join(res, 'luna-server') : join(res, 'bin', 'luna-server'),
+    serverBin: app.isPackaged
+      ? join(res, serverBinName(process.platform))
+      : join(res, 'bin', serverBinName(process.platform)),
     migrationsDir: app.isPackaged
       ? join(res, 'migrations')
       : join(repo, 'server', 'src', 'migrations'),
@@ -218,21 +221,18 @@ function createTtsSupervisor(rt: ManagedRuntime): Supervisor {
   // nltk looks in $HOME and the venv, never in the checkout — point it at the corpora the installer
   // put IN the runtime, or English G2P raises LookupError on a machine that has no ~/nltk_data.
   const nltkData = join(rt.checkout, 'nltk_data');
-  const childPath = [
-    ...(ffmpeg ? [dirname(ffmpeg)] : []),
-    process.env['PATH'] ?? '',
-    '/opt/homebrew/bin',
-    '/usr/local/bin',
-  ]
-    .filter(Boolean)
-    .join(':');
+  // v0.38.0: win32's PATH separator is ';' and its env key is 'Path' (case-variant) — a hardcoded
+  // ':' fused the ffmpeg dir onto the first real entry, and a separate 'PATH' key left the child
+  // with two conflicting vars. childEnv assembles the value + resolves the one true key per platform.
+  const pathKey = pathKeyFor(process.platform, process.env);
+  const childPath = childPathValue(process.platform, process.env, ffmpeg ? dirname(ffmpeg) : null);
   return createSupervisor({
     command: argv.command,
     args: argv.args,
     cwd: argv.cwd,
     env: {
       ...(process.env as Record<string, string>),
-      PATH: childPath,
+      [pathKey]: childPath,
       ...(existsSync(nltkData) ? { NLTK_DATA: nltkData } : {}),
     },
     onEvent: (e) => {

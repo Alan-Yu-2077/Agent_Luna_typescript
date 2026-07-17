@@ -60,12 +60,15 @@ export function resolveDevLauncher(opts: {
   const exists = opts.exists ?? existsSync;
   const script = join(opts.repoRoot, 'scripts', 'dev-all.ts');
   if (!exists(script)) return null;
-  const home = opts.env['HOME'] ?? '';
+  // v0.38.0: HOME is normally unset on win32 (USERPROFILE is the real one), and bun installs as
+  // bun.exe there — without these a dev-checkout Windows machine silently skipped the dev launcher.
+  const home = opts.env['HOME'] ?? opts.env['USERPROFILE'] ?? '';
   const candidates = [
     opts.env['LUNA_BUN_PATH'],
     '/opt/homebrew/bin/bun',
     '/usr/local/bin/bun',
     home ? join(home, '.bun', 'bin', 'bun') : undefined,
+    home ? join(home, '.bun', 'bin', 'bun.exe') : undefined,
   ].filter((c): c is string => typeof c === 'string' && c.length > 0);
   const bun = candidates.find((c) => exists(c));
   return bun ? { bun, script, cwd: opts.repoRoot } : null;

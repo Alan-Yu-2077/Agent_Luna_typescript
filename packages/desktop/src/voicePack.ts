@@ -116,14 +116,16 @@ export function installVoicePack(
 export type RuntimeCheck = { ok: boolean; venvPython?: string; error?: string };
 
 // A GPT-SoVITS checkout per the reference instance: api_v2.py at the root, the two pretrained
-// model dirs under GPT_SoVITS/pretrained_models, optionally a .venv.
-export function validateRuntimeDir(dir: string): RuntimeCheck {
+// model dirs under GPT_SoVITS/pretrained_models, optionally a .venv. v0.38.0: the venv layout is
+// `.venv\Scripts\python.exe` on win32, `.venv/bin/python` elsewhere.
+export function validateRuntimeDir(dir: string, platform: NodeJS.Platform = process.platform): RuntimeCheck {
   if (!existsSync(join(dir, 'api_v2.py')))
     return { ok: false, error: 'api_v2.py not found — point at a GPT-SoVITS checkout (github.com/RVC-Boss/GPT-SoVITS).' };
   const pre = join(dir, 'GPT_SoVITS', 'pretrained_models');
   if (!existsSync(join(pre, 'chinese-roberta-wwm-ext-large')) || !existsSync(join(pre, 'chinese-hubert-base')))
     return { ok: false, error: 'Pretrained models missing under GPT_SoVITS/pretrained_models — finish the GPT-SoVITS setup first.' };
-  const venv = join(dir, '.venv', 'bin', 'python');
+  const venv =
+    platform === 'win32' ? join(dir, '.venv', 'Scripts', 'python.exe') : join(dir, '.venv', 'bin', 'python');
   return existsSync(venv) ? { ok: true, venvPython: venv } : { ok: true };
 }
 
@@ -147,8 +149,17 @@ function shellQuote(p: string): string {
 }
 
 // The one true launch form (verified against api_v2.py's argparse: -a/--bind_addr, -p/--port,
-// -c/--tts_config). venv when the checkout has one, else python3 + it's on the user to have deps.
-export function startCommand(o: { checkout: string; venvPython?: string; yamlPath: string }): string {
+// -c/--tts_config). venv when the checkout has one, else python3/python + it's on the user to have
+// deps. v0.38.0: this is a copy-paste display surface only (managed mode spawns argv directly), so
+// the win32 branch emits a PowerShell-form command with the Scripts\ venv layout.
+export function startCommand(
+  o: { checkout: string; venvPython?: string; yamlPath: string },
+  platform: NodeJS.Platform = process.platform,
+): string {
+  if (platform === 'win32') {
+    const py = o.venvPython ? '.\\.venv\\Scripts\\python.exe' : 'python';
+    return `cd "${o.checkout}"; & ${py} api_v2.py -a 127.0.0.1 -p 9880 -c "${o.yamlPath}"`;
+  }
   const py = o.venvPython ? '.venv/bin/python' : 'python3';
   return `cd ${shellQuote(o.checkout)} && ${py} api_v2.py -a 127.0.0.1 -p 9880 -c ${shellQuote(o.yamlPath)}`;
 }

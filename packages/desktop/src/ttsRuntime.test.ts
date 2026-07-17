@@ -142,6 +142,16 @@ describe('resolveManagedRuntime', () => {
     expect(rt?.python).toBe('python3');
   });
 
+  // v0.38.0: win32 has no `python3` — the bare fallback is `python` (python.org installs python.exe).
+  test('win32 BYO, no venv + no embedded → bare "python", not "python3"', () => {
+    const fs = fakeFs({ files: byoCheckoutFiles, packYamls: [PACK_YAML] });
+    const rt = resolveManagedRuntime(
+      { LUNA_TTS_MANAGED: '1', LUNA_TTS_RUNTIME_DIR: BYO },
+      { userData: UD, platform: 'win32', fs },
+    );
+    expect(rt?.python).toBe('python');
+  });
+
   test('a ready provisioned runtime wins over BYO', () => {
     const fs = fakeFs({
       files: [...provisionedFiles, ...byoCheckoutFiles],
