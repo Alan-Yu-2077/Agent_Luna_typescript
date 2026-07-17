@@ -14,8 +14,7 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "build": "rm -rf dist && bun build ./index.html --production --outdir=dist && bun run build:assets",
-    "build:assets": "cp public/live2dcubismcore.min.js dist/ && mkdir -p dist/models && cp -R public/models/. dist/models/ 2>/dev/null || true"
+    "build": "bun scripts/build.ts"
   },
   "dependencies": {
     "@luna/protocol": "workspace:*",

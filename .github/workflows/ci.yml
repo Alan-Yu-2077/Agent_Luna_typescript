@@ -12,15 +12,30 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # v0.38.1 (Initiative 28): the full suite runs on BOTH ubuntu and windows so the win32 platform
+    # branches (process tree-kill, PATH delimiter, .exe chain, Scripts\python.exe) are a continuous
+    # regression net, not a claim. fail-fast off so one leg's failure still shows the other's result.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
       # ripgrep: the code-agent symbol locator (Initiative 8). zsh: the shell tool's real spawner
       # execs `/bin/zsh -lc` (shellCore.ts) — without it the two zsh-path invariant tests ENOENT'd
-      # in under a millisecond, which kept this workflow red on every push since it first ran.
-      - name: Install ripgrep + zsh
+      # in under a millisecond, which kept this workflow red on every push since it first ran. On
+      # win32 there is no zsh, so those tests self-skip (shellCore.test.ts gates on existsSync('/bin/zsh')).
+      - name: Install ripgrep + zsh (Linux)
+        if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y ripgrep zsh
+
+      # ripgrep on Windows (best-effort — the rg-using tests inject a fake runner, so the suite passes
+      # without it; installed to match the Linux leg's environment). Chocolatey ships on the runner.
+      - name: Install ripgrep (Windows)
+        if: runner.os == 'Windows'
+        run: choco install ripgrep -y
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -41,6 +56,15 @@ jobs:
       # the workflow predates packages/desktop — its types were never checked in CI
       - name: Type-check (desktop)
         run: bun x tsc --noEmit -p packages/desktop/tsconfig.json
+
+      # v0.38.1: prove the portable web build (scripts/build.ts, node:fs) produces its artifact on
+      # both OSes — this is what the old rm/cp/mkdir one-liner couldn't guarantee off a POSIX shell.
+      - name: Build web (portable)
+        run: bun run --cwd packages/web build
+
+      # v0.38.1: keep the Windows cross-compile target valid — it emits luna-server.exe from either OS.
+      - name: Cross-compile the Windows sidecar
+        run: bun run --cwd packages/desktop compile:server:win
 
       - name: Test
         run: bun test
