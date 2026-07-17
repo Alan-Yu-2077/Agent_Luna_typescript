@@ -13,7 +13,8 @@
     "start": "bun run build && electron .",
     "smoke": "bun run build && electron dist/smoke.cjs",
     "pack": "bun run build && electron-builder --dir",
-    "pack:win": "bun run build && electron-builder --win nsis dir",
+    "fetch:7zr": "bun scripts/fetch-7zr.ts",
+    "pack:win": "bun run fetch:7zr && bun run build && electron-builder --win nsis dir",
     "smoke:packaged": "LUNA_SMOKE=1 release/mac-arm64/Luna.app/Contents/MacOS/Luna"
   },
   "devDependencies": {
@@ -48,7 +49,10 @@
         { "target": "dir", "arch": ["x64"] }
       ],
       "icon": "build/icon.png",
-      "extraResources": [{ "from": "bin/luna-server.exe", "to": "luna-server.exe" }]
+      "extraResources": [
+        { "from": "bin/luna-server.exe", "to": "luna-server.exe" },
+        { "from": "bin/7zr.exe", "to": "7zr.exe" }
+      ]
     },
     "nsis": {
       "oneClick": false,

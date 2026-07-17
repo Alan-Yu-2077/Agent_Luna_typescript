@@ -45,7 +45,14 @@ import {
   type ManagedRuntime,
   type VoiceProcState,
 } from './ttsRuntime';
-import { buildManifest, killProvisioners, realSeams, runProvision, type ProvisionStatus } from './ttsProvision';
+import {
+  buildManifest,
+  checkoutFfmpeg,
+  killProvisioners,
+  realSeams,
+  runProvision,
+  type ProvisionStatus,
+} from './ttsProvision';
 
 // v0.26.1 (Initiative 19): the single-machine app. The shell OWNS the whole runtime: it reads the
 // user's keys from app-data (never the bundle), spawns the compiled luna-server sidecar against an
@@ -217,7 +224,9 @@ function createTtsSupervisor(rt: ManagedRuntime): Supervisor {
   // Finder-launched .app hands its children a minimal PATH (/usr/bin:/bin) with no /opt/homebrew/bin.
   // Discover ffmpeg the same way the installer does and put its directory on the child's PATH, or the
   // voice installs perfectly and then 400s on every single utterance.
-  const ffmpeg = cachedFfmpeg();
+  // v0.38.4: prefer the 整合包's own bundled ffmpeg (win32 provisioned checkout) over a system one;
+  // falls back to system discovery for BYO mac/linux checkouts.
+  const ffmpeg = checkoutFfmpeg(rt.checkout, process.platform, existsSync) ?? cachedFfmpeg();
   // nltk looks in $HOME and the venv, never in the checkout — point it at the corpora the installer
   // put IN the runtime, or English G2P raises LookupError on a machine that has no ~/nltk_data.
   const nltkData = join(rt.checkout, 'nltk_data');
@@ -745,6 +754,9 @@ ipcMain.handle('luna:provision-start', () => {
   const dirs = { ttsDir, runtimeDir: join(ttsDir, 'runtime'), downloadsDir: join(ttsDir, 'downloads') };
   const mirror = (env['LUNA_TTS_HF_MIRROR'] ?? '').trim();
   const manifest = buildManifest({ platform: process.platform, ...(mirror !== '' ? { hfBase: mirror } : {}) });
+  // v0.38.4: where the bundled 7zr.exe lives (resourcesPath packaged / bin dev, same split as
+  // serverBin) so the .7z extractor is found without a system 7-Zip. Only the win32 manifest uses 7z.
+  process.env['LUNA_7ZR_DIR'] = app.isPackaged ? process.resourcesPath : join(__dirname, '..', 'bin');
   void runProvision(dirs, manifest, realSeams(), (s) => {
     provisionStatus = s;
   })

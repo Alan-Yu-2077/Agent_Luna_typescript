@@ -2,9 +2,11 @@ import { describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
 import {
   buildManifest,
+  checkoutFfmpeg,
   INFERENCE_REQUIREMENTS,
   PYTHON_CANDIDATES,
   runProvision,
+  sevenZipCandidates,
   type Artifact,
   type ProvisionDirs,
   type ProvisionSeams,
@@ -493,5 +495,48 @@ describe('compiler preflight + GitHub-tarball resilience', () => {
     expect(final.stage).toBe('failed');
     expect(final.failedStage).toBe('extracting');
     expect(world.files.has(codePath)).toBe(false); // deleted → a retry re-fetches, not re-fails
+  });
+});
+
+describe('sevenZipCandidates (v0.38.4 — the 整合包 .7z extractor ladder)', () => {
+  test('win32: bundled 7zr.exe leads, then ProgramFiles installs, then PATH', () => {
+    const cands = sevenZipCandidates(
+      { LUNA_7ZR_DIR: 'C:\\res', 'ProgramFiles': 'C:\\Program Files', 'ProgramFiles(x86)': 'C:\\Program Files (x86)' },
+      'win32',
+    );
+    expect(cands).toEqual([
+      join('C:\\res', '7zr.exe'),
+      join('C:\\Program Files', '7-Zip', '7z.exe'),
+      join('C:\\Program Files (x86)', '7-Zip', '7z.exe'),
+      '7z',
+      '7za',
+      '7zr',
+    ]);
+  });
+  test('win32 without the bundled dir → ProgramFiles + PATH only (no undefined path)', () => {
+    const cands = sevenZipCandidates({ 'ProgramFiles': 'C:\\PF' }, 'win32');
+    expect(cands).toEqual([join('C:\\PF', '7-Zip', '7z.exe'), '7z', '7za', '7zr']);
+  });
+  test('non-win32: no ProgramFiles probing; bundled dir uses the bare name', () => {
+    expect(sevenZipCandidates({ LUNA_7ZR_DIR: '/res' }, 'darwin')).toEqual([join('/res', '7zr'), '7z', '7za', '7zr']);
+    expect(sevenZipCandidates({}, 'linux')).toEqual(['7z', '7za', '7zr']);
+  });
+});
+
+describe('checkoutFfmpeg (v0.38.4 — the 整合包 ships its own ffmpeg)', () => {
+  const CO = join('C:', 'tts', 'runtime-checkout');
+  test('win32: prefers runtime\\ffmpeg.exe when present', () => {
+    const want = join(CO, 'runtime', 'ffmpeg.exe');
+    expect(checkoutFfmpeg(CO, 'win32', (p) => p === want)).toBe(want);
+  });
+  test('win32: falls back to the checkout-root ffmpeg.exe', () => {
+    const want = join(CO, 'ffmpeg.exe');
+    expect(checkoutFfmpeg(CO, 'win32', (p) => p === want)).toBe(want);
+  });
+  test('win32: none present → null (caller uses system discovery)', () => {
+    expect(checkoutFfmpeg(CO, 'win32', () => false)).toBeNull();
+  });
+  test('non-win32: always null — BYO mac/linux checkouts do not ship ffmpeg', () => {
+    expect(checkoutFfmpeg('/opt/g', 'darwin', () => true)).toBeNull();
   });
 });

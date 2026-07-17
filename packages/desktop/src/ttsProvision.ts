@@ -297,6 +297,42 @@ export const FFMPEG_CANDIDATES = [
   '/usr/bin/ffmpeg',
   'ffmpeg',
 ] as const;
+
+// v0.38.4: ordered 7-Zip binaries to try for the Windows 整合包 (.7z). The bundled 7zr.exe (shipped
+// as an extraResource, its dir passed via LUNA_7ZR_DIR) leads so a stock machine never needs a
+// system 7-Zip; then the default install locations (7-Zip's installer does NOT add itself to PATH);
+// then PATH. Pure so the ordering is testable off-platform.
+export function sevenZipCandidates(
+  env: Record<string, string | undefined>,
+  platform: NodeJS.Platform,
+): string[] {
+  const out: string[] = [];
+  const bundledDir = env['LUNA_7ZR_DIR'];
+  if (bundledDir) out.push(join(bundledDir, platform === 'win32' ? '7zr.exe' : '7zr'));
+  if (platform === 'win32') {
+    for (const pf of [env['ProgramFiles'], env['ProgramFiles(x86)']])
+      if (pf) out.push(join(pf, '7-Zip', '7z.exe'));
+  }
+  out.push('7z', '7za', '7zr'); // PATH
+  return out;
+}
+
+// v0.38.4: the api_v2 CHILD needs ffmpeg on its PATH (torchcodec shells out to it). The provisioned
+// win32 整合包 ships its own ffmpeg inside the checkout — prefer it over a system one. The exact
+// subpath inside the 整合包 is confirmed on the real machine (v0.38.4 full); these are the likely
+// locations and are simply skipped when absent, so a system-ffmpeg machine is unaffected.
+export function checkoutFfmpeg(
+  checkout: string,
+  platform: NodeJS.Platform,
+  exists: (p: string) => boolean,
+): string | null {
+  const names =
+    platform === 'win32'
+      ? [join(checkout, 'runtime', 'ffmpeg.exe'), join(checkout, 'ffmpeg.exe')]
+      : []; // BYO mac/linux checkouts don't ship ffmpeg; system discovery covers them
+  for (const n of names) if (exists(n)) return n;
+  return null;
+}
 // v0.37.12: Luna installs its OWN inference dependency set, NOT the upstream requirements.txt.
 // Why: that file pins `numba==0.56.4`, whose installer refuses Python 3.11 outright ("Cannot install
 // on Python version 3.11.15; only versions >=3.7,<3.11 are supported") — so `pip install -r
@@ -735,7 +771,9 @@ export function realSeams(): ProvisionSeams {
         return runProc('tar', ['-xf', archive, '-C', destDir, ...strip]); // bsdtar on mac + win
       }
       // 7z (the Windows 整合包). 7z has no --strip-components — hoist the top folder afterwards.
-      for (const bin of ['7z', '7za', '7zr']) {
+      // v0.38.4: the bundled 7zr.exe leads (see sevenZipCandidates) so a stock machine needs no
+      // system 7-Zip; PATH is the last resort.
+      for (const bin of sevenZipCandidates(process.env, process.platform)) {
         try {
           await runProc(bin, ['x', archive, `-o${destDir}`, '-y']);
           if (stripPrefix) {
