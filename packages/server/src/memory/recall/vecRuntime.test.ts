@@ -21,6 +21,7 @@ describe('resolveSqliteLib', () => {
 
   test('falls back to the first existing built-in candidate', () => {
     const got = resolveSqliteLib({
+      platform: 'linux', // the built-in list is unix-only; on a win runner the default has none
       exists: (p) => p === '/usr/lib/x86_64-linux-gnu/libsqlite3.so',
     });
     expect(got).toBe('/usr/lib/x86_64-linux-gnu/libsqlite3.so');

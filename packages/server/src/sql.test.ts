@@ -14,7 +14,14 @@ function makeTmp(): string {
 
 afterEach(() => {
   for (const d of tmpDirs.splice(0)) {
-    rmSync(d, { recursive: true, force: true });
+    // v0.38.7: Windows keeps a lock on the WAL/SHM files briefly after closeDb, so an immediate
+    // rmSync of the temp dir throws EBUSY. The DB itself is fine (WAL enabled, migrations applied);
+    // this is test cleanup only, so best-effort — the OS reaps the temp dir regardless.
+    try {
+      rmSync(d, { recursive: true, force: true });
+    } catch {
+      /* Windows file lock on the just-closed sqlite files — ignore */
+    }
   }
 });
 

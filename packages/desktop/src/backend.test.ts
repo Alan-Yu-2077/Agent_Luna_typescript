@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { join } from 'node:path';
 import { resolveBootMode, resolveDevLauncher, resolveSidecarDb, shouldAttach } from './backend';
 
 const SHARED = '/repo/luna.sqlite';
@@ -37,7 +38,9 @@ describe('shouldAttach (v0.28.8)', () => {
 
 describe('resolveDevLauncher (v0.28.9)', () => {
   const REPO = '/repo';
-  const SCRIPT = '/repo/scripts/dev-all.ts';
+  // join() so the fixture matches what resolveDevLauncher builds on the running OS (backslashes on
+  // win32) — a hardcoded '/repo/scripts/...' never matched the code's join() output on Windows.
+  const SCRIPT = join(REPO, 'scripts', 'dev-all.ts');
 
   test('returns bun + dev-all script + repo cwd when both are present', () => {
     const r = resolveDevLauncher({
@@ -69,21 +72,23 @@ describe('resolveDevLauncher (v0.28.9)', () => {
 
   // v0.38.0: win32 has no HOME (USERPROFILE is the real one) and bun installs as bun.exe.
   test('win32: USERPROFILE + bun.exe under .bun\\bin is found', () => {
+    const bunExe = join('/users/a', '.bun', 'bin', 'bun.exe');
     const r = resolveDevLauncher({
       repoRoot: REPO,
       env: { USERPROFILE: '/users/a' },
-      exists: (p) => p === SCRIPT || p === '/users/a/.bun/bin/bun.exe',
+      exists: (p) => p === SCRIPT || p === bunExe,
     });
-    expect(r?.bun).toBe('/users/a/.bun/bin/bun.exe');
+    expect(r?.bun).toBe(bunExe);
   });
 
   test('HOME still takes precedence over USERPROFILE when both are set', () => {
+    const homeBun = join('/home/a', '.bun', 'bin', 'bun');
     const r = resolveDevLauncher({
       repoRoot: REPO,
       env: { HOME: '/home/a', USERPROFILE: '/users/a' },
-      exists: (p) => p === SCRIPT || p === '/home/a/.bun/bin/bun',
+      exists: (p) => p === SCRIPT || p === homeBun,
     });
-    expect(r?.bun).toBe('/home/a/.bun/bin/bun');
+    expect(r?.bun).toBe(homeBun);
   });
 });
 

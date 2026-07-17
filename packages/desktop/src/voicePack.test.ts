@@ -183,11 +183,13 @@ describe('runtime dir + yaml + command (the canonical standard)', () => {
 
   test('validateRuntimeDir: venv detected; missing api_v2 / pretrained produce named errors', () => {
     const withVenv = makeCheckout(true);
-    expect(validateRuntimeDir(withVenv)).toEqual({
+    // 'darwin' explicitly: makeCheckout writes the POSIX .venv/bin/python layout, so the test must
+    // ask for that layout regardless of the host OS (on a win runner the default would seek Scripts\).
+    expect(validateRuntimeDir(withVenv, 'darwin')).toEqual({
       ok: true,
       venvPython: join(withVenv, '.venv', 'bin', 'python'),
     });
-    expect(validateRuntimeDir(makeCheckout(false)).venvPython).toBeUndefined();
+    expect(validateRuntimeDir(makeCheckout(false), 'darwin').venvPython).toBeUndefined();
     const empty = tmp();
     expect(validateRuntimeDir(empty).error).toContain('api_v2.py');
     const noPre = join(tmp(), 'half');
@@ -197,16 +199,20 @@ describe('runtime dir + yaml + command (the canonical standard)', () => {
   });
 
   test('generateTtsYaml is the reference instance shape, field for field', () => {
+    const checkout = '/opt/GPT-SoVITS';
     const yaml = generateTtsYaml({
-      checkout: '/opt/GPT-SoVITS',
+      checkout,
       gptCkpt: '/data/tts/Neo/GPT/Neo-e24.ckpt',
       sovitsPth: '/data/tts/Neo/SoVITS/Neo_e24.pth',
     });
+    // bert/cnhuhbert paths are join()'d inside generateTtsYaml → build the expectation the same way
+    // so it matches on any OS (backslashes on win32); the weight paths pass through verbatim.
+    const pre = join(checkout, 'GPT_SoVITS', 'pretrained_models');
     expect(yaml).toBe(
       [
         'custom:',
-        '  bert_base_path: /opt/GPT-SoVITS/GPT_SoVITS/pretrained_models/chinese-roberta-wwm-ext-large',
-        '  cnhuhbert_base_path: /opt/GPT-SoVITS/GPT_SoVITS/pretrained_models/chinese-hubert-base',
+        `  bert_base_path: ${join(pre, 'chinese-roberta-wwm-ext-large')}`,
+        `  cnhuhbert_base_path: ${join(pre, 'chinese-hubert-base')}`,
         '  device: cpu',
         '  is_half: false',
         '  version: v2',
@@ -218,17 +224,20 @@ describe('runtime dir + yaml + command (the canonical standard)', () => {
   });
 
   test('startCommand: venv → .venv/bin/python; none → python3; the one true -a/-p/-c form', () => {
-    const venvCmd = startCommand({
-      checkout: '/opt/GPT-SoVITS',
-      venvPython: '/opt/GPT-SoVITS/.venv/bin/python',
-      yamlPath: '/data/tts/Neo/tts_infer.runtime.yaml',
-    });
+    const venvCmd = startCommand(
+      {
+        checkout: '/opt/GPT-SoVITS',
+        venvPython: '/opt/GPT-SoVITS/.venv/bin/python',
+        yamlPath: '/data/tts/Neo/tts_infer.runtime.yaml',
+      },
+      'darwin', // the POSIX form regardless of the host OS
+    );
     expect(venvCmd).toBe(
       "cd '/opt/GPT-SoVITS' && .venv/bin/python api_v2.py -a 127.0.0.1 -p 9880 -c '/data/tts/Neo/tts_infer.runtime.yaml'",
     );
-    const bare = startCommand({ checkout: '/opt/G', yamlPath: '/y.yaml' });
+    const bare = startCommand({ checkout: '/opt/G', yamlPath: '/y.yaml' }, 'darwin');
     expect(bare).toContain('python3 api_v2.py -a 127.0.0.1 -p 9880 -c');
-    const spaced = startCommand({ checkout: "/opt/my dir/G'S", yamlPath: '/y.yaml' });
+    const spaced = startCommand({ checkout: "/opt/my dir/G'S", yamlPath: '/y.yaml' }, 'darwin');
     expect(spaced).toContain("'/opt/my dir/G'\\''S'");
   });
 

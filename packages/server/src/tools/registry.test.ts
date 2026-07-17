@@ -79,7 +79,7 @@ describe('LUNA_SHELL flag gates the shell + verify tools', () => {
   test('default (unset) → shell + verify tools mounted', () => {
     delete Bun.env['LUNA_SHELL'];
     expect(shellEnabled()).toBe(true);
-    const reg = withShell(builtinRegistry);
+    const reg = withShell(builtinRegistry, 'darwin'); // shell mounts where the spawner exists (not win32)
     expect(reg.shell).toBeDefined();
     expect(reg.typecheck).toBeDefined();
     expect(reg.run_tests).toBeDefined();

@@ -66,7 +66,9 @@ describe('createSupervisor (v0.26.1)', () => {
 
   test('stop kills the child and DISARMS restarts (the quit path never orphans or respawns)', () => {
     const { spawnFn, children } = fakeSpawner();
-    const s = createSupervisor({ command: 'x', env: {}, spawnFn });
+    // killFn injected so this stays platform-independent: the default kill would taskkill (spawning a
+    // real process) on a win runner instead of calling the fake child's kill().
+    const s = createSupervisor({ command: 'x', env: {}, spawnFn, killFn: (c) => c.kill() });
     s.start();
     s.stop();
     expect(children[0]!.killed).toBe(true);
@@ -77,7 +79,7 @@ describe('createSupervisor (v0.26.1)', () => {
 
   test('restart kills the old child and spawns a new one with the NEW env (v0.28.0)', () => {
     const { spawnFn, children, envs } = fakeSpawner();
-    const s = createSupervisor({ command: 'x', env: { ANTHROPIC_API_KEY: 'old' }, spawnFn });
+    const s = createSupervisor({ command: 'x', env: { ANTHROPIC_API_KEY: 'old' }, spawnFn, killFn: (c) => c.kill() });
     s.start();
     s.restart({ ANTHROPIC_API_KEY: 'new' });
     expect(children[0]!.killed).toBe(true);

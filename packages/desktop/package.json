@@ -1,6 +1,7 @@
 {
   "name": "@luna/desktop",
   "license": "MIT",
+  "author": "Alan-Yu-2077",
   "repository": { "type": "git", "url": "https://github.com/Alan-Yu-2077/Luna-ts.git", "directory": "packages/desktop" },
   "version": "0.1.0",
   "private": true,
@@ -13,9 +14,9 @@
     "start": "bun run build && electron .",
     "smoke": "bun run build && electron dist/smoke.cjs",
     "pack": "bun run build && electron-builder --dir",
-    "pack:mac": "bun run build && electron-builder --mac dmg",
+    "pack:mac": "bun run build && electron-builder --mac dmg --publish never",
     "fetch:7zr": "bun scripts/fetch-7zr.ts",
-    "pack:win": "bun run fetch:7zr && bun run build && electron-builder --win",
+    "pack:win": "bun run fetch:7zr && bun run build && electron-builder --win --publish never",
     "smoke:packaged": "LUNA_SMOKE=1 release/mac-arm64/Luna.app/Contents/MacOS/Luna"
   },
   "devDependencies": {

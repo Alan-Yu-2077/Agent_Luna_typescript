@@ -5,6 +5,9 @@ import { existsSync } from 'node:fs';
 // those tests would ENOENT instantly and read as failures. Skip them there (CI installs zsh, so
 // the invariants stay enforced where it matters); the argv-path tests run everywhere.
 const hasZsh = existsSync('/bin/zsh');
+// The argv-path proof uses /bin/echo (prints argv verbatim); it doesn't exist on Windows. The shell
+// tool is unmounted on win32 anyway (registry.ts), so skipping there loses no coverage that applies.
+const hasPosixEcho = existsSync('/bin/echo');
 import {
   capOutput,
   clampTimeout,
@@ -63,7 +66,7 @@ describe('realSpawner argv path (no shell interpretation — v0.20.0)', () => {
     ...over,
   });
 
-  test('argv passes $() / backticks as a LITERAL arg, never executes them', async () => {
+  test.skipIf(!hasPosixEcho)('argv passes $() / backticks as a LITERAL arg, never executes them', async () => {
     // /bin/echo prints its argv verbatim. If a shell had interpreted the arg, the
     // command substitution would have run and stdout would differ from the literal.
     const r = await realSpawner(req({ argv: ['/bin/echo', '$(echo INJECTED)', '`echo INJECTED`'] }));
