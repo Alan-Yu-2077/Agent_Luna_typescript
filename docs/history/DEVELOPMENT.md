@@ -742,6 +742,7 @@ Fact:
 - `scripts/app.ts`: `--win` mode cross-builds the Windows package from the mac (web build → `compile:server:win` → `pack:win`), prints the installer path, no ditto/launch.
 - Built locally on the mac: `release/Luna Setup 0.1.0.exe` (124 MB, "Nullsoft Installer self-extracting archive for MS Windows"); `release/win-unpacked/Luna.exe` is a `PE32+ executable (GUI) x86-64`. mac `bun run pack` + `smoke:packaged` re-run green (ok:true) — no regression. Suite 1421.
 - Not signed: SmartScreen will warn "unknown publisher" on first run — an EXPECTED, documented limitation (a code-signing cert is a future, paid decision), not a blocker.
+- `pack:win` is `electron-builder --win` (config-driven), NOT `--win nsis dir`: the target-shorthand form resets the arch to the build host's (arm64 on this mac), silently producing an arm64 installer; the bare `--win` honors the config's `arch: ["x64"]`. Verified the delivered `Luna Setup 0.1.0.exe` (108 MB) + `win-unpacked/Luna.exe` are x86-64.
 
 Inference:
 

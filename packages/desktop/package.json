@@ -14,7 +14,7 @@
     "smoke": "bun run build && electron dist/smoke.cjs",
     "pack": "bun run build && electron-builder --dir",
     "fetch:7zr": "bun scripts/fetch-7zr.ts",
-    "pack:win": "bun run fetch:7zr && bun run build && electron-builder --win nsis dir",
+    "pack:win": "bun run fetch:7zr && bun run build && electron-builder --win",
     "smoke:packaged": "LUNA_SMOKE=1 release/mac-arm64/Luna.app/Contents/MacOS/Luna"
   },
   "devDependencies": {
