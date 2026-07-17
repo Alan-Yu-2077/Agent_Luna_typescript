@@ -14,6 +14,11 @@ import { join, resolve } from 'node:path';
 
 const ROOT = resolve(import.meta.dir, '..');
 
+// v0.38.2: `bun run app --win` cross-builds the Windows package FROM the mac (electron-builder runs
+// NSIS on macOS, no wine needed for the app itself). Delivery to the test PC is manual (the built
+// installer path is printed) — no ditto, no launch.
+const WIN = process.argv.includes('--win');
+
 // The delivered, double-clickable app lands on the user's Desktop (override the folder with
 // LUNA_APP_DEST). packages/desktop/release/… stays the build cache; this is the copy people launch.
 const DEST_DIR = process.env['LUNA_APP_DEST'] ?? join(homedir(), 'Desktop');
@@ -83,6 +88,19 @@ async function warnIfVoiceDown(): Promise<void> {
 if (!existsSync(join(ROOT, 'node_modules'))) {
   console.log('[app] installing dependencies…');
   run(['bun', 'install']);
+}
+
+if (WIN) {
+  console.log('[app] cross-building the Windows package (web + luna-server.exe + NSIS installer)…');
+  run(['bun', 'run', '--cwd', 'packages/web', 'build']);
+  run(['bun', 'run', '--cwd', 'packages/desktop', 'compile:server:win']);
+  run(['bun', 'run', '--cwd', 'packages/desktop', 'pack:win']);
+  const rel = join(ROOT, 'packages/desktop/release');
+  const installer = existsSync(rel) ? readdirSync(rel).find((f) => /^Luna Setup .*\.exe$/.test(f)) : undefined;
+  if (installer) console.log(`[app] Windows installer built → ${join(rel, installer)}`);
+  else console.log(`[app] win-unpacked built at ${join(rel, 'win-unpacked')} (no NSIS installer found — check output above)`);
+  console.log('[app] deliver it to the x64 PC (GitHub Release / USB) and run it there.');
+  process.exit(0);
 }
 
 const cached = findApp();

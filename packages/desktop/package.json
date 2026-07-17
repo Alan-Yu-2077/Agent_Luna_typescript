@@ -13,6 +13,7 @@
     "start": "bun run build && electron .",
     "smoke": "bun run build && electron dist/smoke.cjs",
     "pack": "bun run build && electron-builder --dir",
+    "pack:win": "bun run build && electron-builder --win nsis dir",
     "smoke:packaged": "LUNA_SMOKE=1 release/mac-arm64/Luna.app/Contents/MacOS/Luna"
   },
   "devDependencies": {
@@ -27,7 +28,6 @@
     },
     "files": ["dist/main.cjs", "dist/preload.cjs", "package.json"],
     "extraResources": [
-      { "from": "bin/luna-server", "to": "luna-server" },
       { "from": "../server/src/migrations", "to": "migrations" },
       { "from": "../server/persona", "to": "persona" },
       { "from": "../web/dist", "to": "web" }
@@ -36,10 +36,24 @@
       "target": [{ "target": "dir", "arch": ["arm64"] }],
       "icon": "build/icon.icns",
       "identity": null,
+      "extraResources": [{ "from": "bin/luna-server", "to": "luna-server" }],
       "extendInfo": {
         "NSLocationUsageDescription": "Luna uses your location to show local weather.",
         "NSLocationWhenInUseUsageDescription": "Luna uses your location to show local weather."
       }
+    },
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "dir", "arch": ["x64"] }
+      ],
+      "icon": "build/icon.png",
+      "extraResources": [{ "from": "bin/luna-server.exe", "to": "luna-server.exe" }]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true
     }
   }
 }

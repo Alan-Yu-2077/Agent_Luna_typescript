@@ -37,6 +37,10 @@ export function startWebHost(
   // v0.37.0: the managed-voice supervisor's state — lets /api/tts/health answer "starting" (wait,
   // Luna owns the child and it's coming) instead of a bare 502 while api_v2 loads. null = not managed.
   voiceState: () => VoiceProcState | null = () => null,
+  // v0.38.2: listen failures (EADDRINUSE from a double-launch — common on the Windows taskbar) emit
+  // a 'error' event that, unhandled, crashes the process. Surface it to the caller (which shows a
+  // dialog) instead. Electron-free by contract, so the handler is a callback, not a dialog here.
+  onListenError: (err: Error) => void = (err) => console.error('[serve] listen error:', err.message),
 ): Server {
   const root = resolve(distDir);
   const currentTtsEnv = typeof ttsEnv === 'function' ? ttsEnv : (): TtsEnv => ttsEnv;
@@ -66,6 +70,7 @@ export function startWebHost(
   // a cold start. Node's default requestTimeout (5min) is borderline — bump it so the warm-up isn't
   // killed mid-flight (dev-server.ts raises Bun's idleTimeout for the same reason).
   server.requestTimeout = 600_000;
+  server.on('error', onListenError); // never let EADDRINUSE become an uncaught exception
   server.listen(port, '127.0.0.1');
   return server;
 }

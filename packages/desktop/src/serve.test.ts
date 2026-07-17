@@ -49,6 +49,19 @@ function startFakeApiV2(): Server {
 
 const envFor = (port: number): TtsEnv => ({ url: `http://127.0.0.1:${port}`, refAudio: '/voice/ref.wav' });
 
+describe('startWebHost listen errors (v0.38.2)', () => {
+  it('a double-bind (EADDRINUSE — a second launch) fires onListenError instead of crashing', async () => {
+    const first = startWebHost(mkDist(), 0, {});
+    const port = await portOf(first);
+    const err = await new Promise<Error>((resolve) => {
+      const second = startWebHost(mkDist(), port, {}, undefined, undefined, resolve);
+      servers.push(second);
+    });
+    expect(err).toBeInstanceOf(Error);
+    expect((err as NodeJS.ErrnoException).code).toBe('EADDRINUSE');
+  });
+});
+
 describe('startWebHost /api/tts → api_v2 forwarding', () => {
   it('health probes the api_v2 upstream and reports ready when reachable', async () => {
     const ttsPort = await portOf(startFakeApiV2());

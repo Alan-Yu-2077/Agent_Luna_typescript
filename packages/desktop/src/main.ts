@@ -833,7 +833,21 @@ async function smokeProbe(win: BrowserWindow): Promise<void> {
   app.exit(ok ? 0 : 1);
 }
 
+// v0.38.2: a second launch (a double-click on the Windows taskbar is the common case) must not try
+// to bind the pinned web port — hand focus to the running window and quit. The lock must be
+// requested before whenReady. Skipped under SMOKE (each smoke is its own isolated, short-lived run).
+const gotSingleInstanceLock = SMOKE || app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) app.quit();
+app.on('second-instance', () => {
+  const win = BrowserWindow.getAllWindows()[0];
+  if (win) {
+    if (win.isMinimized()) win.restore();
+    win.focus();
+  }
+});
+
 void app.whenReady().then(async () => {
+  if (!gotSingleInstanceLock) return; // lost the lock → this instance is quitting; do not boot
   const p = resolvePaths();
   paths = p;
   const userEnv = ensureUserConfig(p);
@@ -905,6 +919,19 @@ void app.whenReady().then(async () => {
     () => readTtsEnv({ ...process.env, ...parseEnvFile(readFileSync(p.envFile, 'utf8')) }),
     p.userModelsDir,
     () => (ttsSupervisor ? ttsProcState : null),
+    (err) => {
+      // The single-instance lock should already have prevented a double-bind; this is the belt to
+      // that suspenders. Surface it instead of crashing, then exit — the running instance owns 5177.
+      console.error('[luna-desktop] web host could not bind:', err.message);
+      if (!SMOKE)
+        dialog.showMessageBoxSync({
+          type: 'error',
+          message: 'Luna is already running',
+          detail: `The local web host port (${DESKTOP_WEB_PORT}) is in use — another Luna window likely has it. Close it and try again.`,
+          buttons: ['Close'],
+        });
+      app.quit();
+    },
   );
   supervisor = createSupervisor({
     command: p.serverBin,
