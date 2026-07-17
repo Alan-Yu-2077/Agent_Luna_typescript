@@ -83,6 +83,25 @@ describe('resolveInWorkspace — SECRET blocklist (read + write + execute)', () 
     }
   });
 
+  // v0.38.5: the Windows browser/cred dirs under %USERPROFILE% (home()) — segment-based, so they
+  // resolve under the fake HOME on any test host.
+  test('rejects the Windows browser/cred dirs (AppData Chrome/Firefox/gcloud)', () => {
+    const fakeHome = join(tmp, 'winhome');
+    Bun.env['HOME'] = fakeHome;
+    for (const sub of [
+      join('AppData', 'Local', 'Google', 'Chrome', 'User Data'),
+      join('AppData', 'Roaming', 'Mozilla', 'Firefox'),
+      join('AppData', 'Roaming', 'gcloud'),
+    ]) {
+      const dir = join(fakeHome, sub);
+      mkdirSync(dir, { recursive: true });
+      const file = join(dir, 'thing');
+      writeFileSync(file, 'x');
+      expect(resolveInWorkspace(file, 'read').ok).toBe(false);
+      expect(resolveInWorkspace(file, 'write').ok).toBe(false);
+    }
+  });
+
   test('rejects ~/.npmrc, ~/.netrc, ~/.docker/config.json secret files', () => {
     const fakeHome = join(tmp, 'home2');
     mkdirSync(join(fakeHome, '.docker'), { recursive: true });

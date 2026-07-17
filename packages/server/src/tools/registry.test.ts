@@ -8,6 +8,7 @@ import {
   codeWriteEnabled,
   repoMapEnabled,
   shellEnabled,
+  shellSupported,
   withCodeWrite,
   withRepoMap,
   withShell,
@@ -96,6 +97,26 @@ describe('LUNA_SHELL flag gates the shell + verify tools', () => {
     // read-only tools unaffected
     expect(reg.read_file).toBeDefined();
     expect(reg.grep).toBeDefined();
+  });
+
+  // v0.38.5: on win32 the shell spawner (/bin/zsh) is absent — `shell` unmounts, verify tools stay.
+  test('win32 → shell UNMOUNTED but the argv verify tools remain', () => {
+    delete Bun.env['LUNA_SHELL'];
+    expect(shellSupported('win32')).toBe(false);
+    expect(shellSupported('darwin')).toBe(true);
+    expect(shellSupported('linux')).toBe(true);
+    const reg = withShell(builtinRegistry, 'win32');
+    expect(reg.shell).toBeUndefined();
+    expect(reg.typecheck).toBeDefined();
+    expect(reg.run_tests).toBeDefined();
+    expect(reg.lint).toBeDefined();
+  });
+
+  test('LUNA_SHELL=0 on win32 → even the verify tools are absent (the whole surface is off)', () => {
+    Bun.env['LUNA_SHELL'] = '0';
+    const reg = withShell(builtinRegistry, 'win32');
+    expect(reg.shell).toBeUndefined();
+    expect(reg.typecheck).toBeUndefined();
   });
 
   test('with LUNA_SHELL off, a dispatched shell resolves to tool_not_found', async () => {

@@ -38,4 +38,28 @@ describe('resolveSqliteLib', () => {
     });
     expect(got).toBe('/b');
   });
+
+  // v0.38.5: win32 has no default extension-capable sqlite3.dll path — the override is the mechanism.
+  test('win32 without an override → null, and NO dead unix candidates are probed', () => {
+    const probed: string[] = [];
+    const got = resolveSqliteLib({
+      override: undefined,
+      platform: 'win32',
+      exists: (p) => {
+        probed.push(p);
+        return true; // even if everything "exists", win32 has no default candidates
+      },
+    });
+    expect(got).toBeNull();
+    expect(probed).toEqual([]); // never tried the .dylib/.so paths
+  });
+
+  test('win32 with LUNA_SQLITE_LIB override → the override (a bundled sqlite-vec dll)', () => {
+    const got = resolveSqliteLib({
+      override: 'C:\\luna\\sqlite3.dll',
+      platform: 'win32',
+      exists: (p) => p === 'C:\\luna\\sqlite3.dll',
+    });
+    expect(got).toBe('C:\\luna\\sqlite3.dll');
+  });
 });

@@ -1,4 +1,5 @@
 import { join } from 'node:path';
+import { shouldHonorShutdown } from './shutdownRoute';
 import { broadcast, handleClose, handleMessage, handleOpen, setRuntime, type WSData } from './ws';
 import { fireProactiveForActiveSessions, startScheduler } from './proactive/scheduler';
 import { providerFor } from './provider/factory';
@@ -81,6 +82,10 @@ const viewerEnabled = Bun.env['LUNA_VIEWER'] !== '0';
 process.on('unhandledRejection', (reason) => {
   console.error('[luna-server] unhandled rejection:', reason);
 });
+
+// v0.38.5: the graceful-shutdown trigger, set by whichever branch below owns the exit path, so the
+// POST /shutdown route (loopback-only) can reach it. Defaults to a hard exit until wired.
+let triggerShutdown: (reason: string) => void = () => process.exit(0);
 
 if (Bun.env['ANTHROPIC_API_KEY']) {
   const provider = providerFor();
@@ -196,6 +201,7 @@ if (Bun.env['ANTHROPIC_API_KEY']) {
   };
   process.on('SIGTERM', () => void shutdown('SIGTERM'));
   process.on('SIGINT', () => void shutdown('SIGINT'));
+  triggerShutdown = (reason) => void shutdown(reason); // POST /shutdown → the same graceful path
 } else {
   console.warn('[luna-server] ANTHROPIC_API_KEY not set — chat.send disabled');
   const bye = (): void => {
@@ -204,6 +210,7 @@ if (Bun.env['ANTHROPIC_API_KEY']) {
   };
   process.on('SIGTERM', bye);
   process.on('SIGINT', bye);
+  triggerShutdown = bye;
 }
 
 const server = Bun.serve<WSData>({
@@ -213,6 +220,14 @@ const server = Bun.serve<WSData>({
   // LUNA_BIND_HOST=0.0.0.0. Closes S1, S2's exposure, and S3 in one line.
   hostname: Bun.env['LUNA_BIND_HOST'] ?? '127.0.0.1',
   async fetch(req, srv) {
+    // v0.38.5: loopback-only graceful shutdown (the desktop shell calls this before killing the
+    // sidecar on win32, where SIGTERM never arrives). Reply immediately; the dream runs async.
+    const pathname = new URL(req.url).pathname;
+    if (shouldHonorShutdown(req.method, pathname, Bun.env['LUNA_BIND_HOST'] ?? '127.0.0.1')) {
+      console.log('[luna-server] POST /shutdown — graceful shutdown requested');
+      queueMicrotask(() => triggerShutdown('http'));
+      return new Response('shutting down', { status: 200 });
+    }
     if (viewerEnabled) {
       const viewerResponse = traceViewerHandler(req, traceStore);
       if (viewerResponse) return viewerResponse;

@@ -9,6 +9,33 @@ import { rename, rm } from 'node:fs/promises';
 
 let tmpCounter = 0;
 
+// v0.38.5: Windows can fail a rename-over-target with EPERM/EBUSY/EACCES when another process holds
+// the target open (a lock POSIX doesn't impose) — briefly retry there before giving up. On POSIX the
+// first error rethrows immediately (no behavior change). Pure of the fs so the retry path is tested
+// off-platform: rename/platform/sleep are injectable.
+export type RenameDeps = {
+  rename?: (from: string, to: string) => Promise<void>;
+  platform?: NodeJS.Platform;
+  sleep?: (ms: number) => Promise<void>;
+};
+const WIN_RENAME_RETRYABLE = new Set(['EPERM', 'EBUSY', 'EACCES']);
+
+export async function renameAtomic(from: string, to: string, deps: RenameDeps = {}): Promise<void> {
+  const doRename = deps.rename ?? rename;
+  const platform = deps.platform ?? process.platform;
+  const sleep = deps.sleep ?? ((ms) => Bun.sleep(ms));
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await doRename(from, to);
+      return;
+    } catch (e) {
+      const code = (e as NodeJS.ErrnoException).code ?? '';
+      if (platform !== 'win32' || !WIN_RENAME_RETRYABLE.has(code) || attempt >= 2) throw e;
+      await sleep(25 * (attempt + 1));
+    }
+  }
+}
+
 // Crash-atomic write (v0.20.7): stream to a sibling temp file in the SAME
 // directory, then rename over the target — rename is atomic within one filesystem,
 // so a kill / host crash / ENOSPC mid-write leaves the ORIGINAL intact instead of a
@@ -17,7 +44,7 @@ export async function atomicWrite(path: string, data: string): Promise<void> {
   const tmp = `${path}.luna-tmp-${process.pid}-${tmpCounter++}`;
   try {
     await Bun.write(tmp, data);
-    await rename(tmp, path);
+    await renameAtomic(tmp, path);
   } catch (e) {
     await rm(tmp, { force: true }).catch(() => {});
     throw e;

@@ -70,6 +70,10 @@ const SECRET_DIR_SEGMENTS: string[][] = [
   ['Library', 'Application Support', 'Firefox'],
   ['.config', 'google-chrome'],
   ['.mozilla', 'firefox'],
+  // v0.38.5 — Windows equivalents, under %USERPROFILE% (home()). Matching is case-folded on win32.
+  ['AppData', 'Local', 'Google', 'Chrome', 'User Data'],
+  ['AppData', 'Roaming', 'Mozilla', 'Firefox'],
+  ['AppData', 'Roaming', 'gcloud'],
 ];
 const SECRET_FILE_SEGMENTS: string[][] = [['.docker', 'config.json'], ['.npmrc'], ['.netrc']];
 

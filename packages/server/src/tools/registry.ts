@@ -78,11 +78,17 @@ export function withCodeWrite(base: ToolRegistry): ToolRegistry {
 // interactive block (shellDeny.ts), the sensitive-path block on cwd + command
 // text (resolveInWorkspace execute), proactiveRisk:'surface', timeout +
 // process-tree kill + output cap, and session-serial concurrency.
-export const shellTools: ToolRegistry = {
-  shell: shellTool,
+// The verify loop — typecheck/run_tests/lint EXECUTE, but through direct `bun`/`bun x`
+// argv (typecheck.ts/lint.ts/run_tests.ts), never the shell spawner — so they are
+// cross-platform and mount even where `shell` cannot (v0.38.5).
+export const verifyTools: ToolRegistry = {
   typecheck: typecheckTool,
   run_tests: runTestsTool,
   lint: lintTool,
+};
+export const shellTools: ToolRegistry = {
+  shell: shellTool,
+  ...verifyTools,
 };
 
 // Default ON (owner: enable-all-after-E2E); LUNA_SHELL=0 turns the execute
@@ -91,9 +97,22 @@ export function shellEnabled(): boolean {
   return Bun.env['LUNA_SHELL'] !== '0';
 }
 
+// v0.38.5: `shell`'s spawner is hardcoded `/bin/zsh -lc` (shellCore.ts), absent on
+// Windows — so the tool would mount and ALWAYS error. Rather than ship a PowerShell
+// spawner with unvetted deny semantics, `shell` is unmounted on win32 (logged); the
+// argv-form verify tools stay. A native win32 shell is a future, deny-reviewed opt-in.
+export function shellSupported(platform: NodeJS.Platform = process.platform): boolean {
+  return platform !== 'win32';
+}
+
 // Compose a base registry with the shell + verify tools iff the flag is on.
-export function withShell(base: ToolRegistry): ToolRegistry {
-  return shellEnabled() ? { ...base, ...shellTools } : { ...base };
+export function withShell(base: ToolRegistry, platform: NodeJS.Platform = process.platform): ToolRegistry {
+  if (!shellEnabled()) return { ...base };
+  if (!shellSupported(platform)) {
+    console.warn('[luna-server] shell tool unmounted on win32 (spawner is /bin/zsh); verify tools stay');
+    return { ...base, ...verifyTools };
+  }
+  return { ...base, ...shellTools };
 }
 
 // Repo map + hybrid symbol locator (Initiative 8, v0.15.3). Read-only + jailed

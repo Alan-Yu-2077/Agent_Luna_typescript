@@ -10,7 +10,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { atomicWrite, findEditMatch } from './editCore';
+import { atomicWrite, findEditMatch, renameAtomic } from './editCore';
 
 describe('findEditMatch — fuzzy uniqueness (v0.20.7)', () => {
   test('two distinct-indentation fuzzy windows → occurrences>1 (guard fires); count=verbatim', () => {
@@ -75,5 +75,83 @@ describe('atomicWrite (v0.20.7)', () => {
     expect(existsSync(join(target, 'keep.txt'))).toBe(true); // original untouched
     expect(readdirSync(dir).filter((n) => n.includes('luna-tmp')).length).toBe(0); // temp removed
     rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+describe('renameAtomic — win32 EPERM retry (v0.38.5)', () => {
+  const err = (code: string): NodeJS.ErrnoException => Object.assign(new Error(code), { code });
+
+  test('win32: an EPERM (locked target) retries and then succeeds', async () => {
+    let calls = 0;
+    const sleeps: number[] = [];
+    await renameAtomic('a', 'b', {
+      platform: 'win32',
+      sleep: async (ms) => void sleeps.push(ms),
+      rename: async () => {
+        calls++;
+        if (calls === 1) throw err('EPERM');
+      },
+    });
+    expect(calls).toBe(2);
+    expect(sleeps).toEqual([25]); // one backoff before the successful retry
+  });
+
+  test('win32: EPERM on every attempt → throws after the bounded retries (3 tries)', async () => {
+    let calls = 0;
+    let threw = false;
+    try {
+      await renameAtomic('a', 'b', {
+        platform: 'win32',
+        sleep: async () => {},
+        rename: async () => {
+          calls++;
+          throw err('EBUSY');
+        },
+      });
+    } catch (e) {
+      threw = true;
+      expect((e as NodeJS.ErrnoException).code).toBe('EBUSY');
+    }
+    expect(threw).toBe(true);
+    expect(calls).toBe(3); // initial + 2 retries
+  });
+
+  test('POSIX: the first error rethrows immediately — no retries (behavior unchanged)', async () => {
+    let calls = 0;
+    let threw = false;
+    try {
+      await renameAtomic('a', 'b', {
+        platform: 'darwin',
+        rename: async () => {
+          calls++;
+          throw err('EPERM');
+        },
+      });
+    } catch {
+      threw = true;
+    }
+    expect(threw).toBe(true);
+    expect(calls).toBe(1);
+  });
+
+  test('win32: a NON-lock error (ENOENT) rethrows immediately, not retried', async () => {
+    let calls = 0;
+    await renameAtomic('a', 'b', { platform: 'win32', rename: async () => void calls++ }); // sanity: success path
+    expect(calls).toBe(1);
+    calls = 0;
+    let threw = false;
+    try {
+      await renameAtomic('a', 'b', {
+        platform: 'win32',
+        rename: async () => {
+          calls++;
+          throw err('ENOENT');
+        },
+      });
+    } catch {
+      threw = true;
+    }
+    expect(threw).toBe(true);
+    expect(calls).toBe(1);
   });
 });

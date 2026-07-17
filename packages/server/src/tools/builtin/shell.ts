@@ -58,7 +58,10 @@ export type ShellOutput = z.infer<typeof Output>;
 // any explicit path argument through the same blocklist resolveInWorkspace uses,
 // so `cat ~/.aws/credentials` is refused exactly like reading it via read_file.
 function blockedPathInCommand(command: string): string | null {
-  const tokens = command.match(/(?:~\/|\/)[^\s'"|;&<>]+/g) ?? [];
+  // POSIX (`/…`, `~/…`) + v0.38.5 Windows shapes: a drive path (`C:\…`) and a
+  // %VAR%-prefixed path (`%USERPROFILE%\.aws\…`). Defense-in-depth — `shell` is
+  // unmounted on win32 today (registry.ts), so this guards a future win32 spawner.
+  const tokens = command.match(/(?:~[/\\]|[/\\]|[A-Za-z]:[/\\]|%[A-Za-z_]+%[/\\])[^\s'"|;&<>]+/g) ?? [];
   for (const tok of tokens) {
     // Tail check first: catches `$HOME/.aws/...` / `${HOME}/.ssh/...` env-var
     // indirection, where the captured token is `/.aws/...` and resolves OUTSIDE
