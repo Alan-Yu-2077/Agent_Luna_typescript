@@ -19,6 +19,10 @@ code-agent capability — embodied as a Live2D avatar with lip-synced custom voi
 
 <img src="docs/assets/moment-fries.png" width="820" alt="Luna, a Live2D companion, sharing a joke" />
 
+[![Download for Windows](https://img.shields.io/badge/Download-Windows_installer-0078D6?logo=windows&logoColor=white&style=for-the-badge)](https://github.com/Alan-Yu-2077/Luna-ts/releases/latest) &nbsp; [![Download for macOS](https://img.shields.io/badge/Download-macOS-000000?logo=apple&logoColor=white&style=for-the-badge)](https://github.com/Alan-Yu-2077/Luna-ts/releases/latest)
+
+<sub>Pre-release · unsigned — Windows SmartScreen / macOS Gatekeeper warns on first run (click **Run anyway** / right-click → **Open**). <a href="https://github.com/Alan-Yu-2077/Luna-ts/releases/latest">All downloads →</a></sub>
+
 </div>
 
 ---

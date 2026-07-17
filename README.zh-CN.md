@@ -19,6 +19,10 @@
 
 <img src="docs/assets/moment-fries.png" width="820" alt="Luna,一个 Live2D 桌面伙伴,在玩梗" />
 
+[![下载 Windows 安装包](https://img.shields.io/badge/%E4%B8%8B%E8%BD%BD-Windows_%E5%AE%89%E8%A3%85%E5%8C%85-0078D6?logo=windows&logoColor=white&style=for-the-badge)](https://github.com/Alan-Yu-2077/Luna-ts/releases/latest) &nbsp; [![下载 macOS](https://img.shields.io/badge/%E4%B8%8B%E8%BD%BD-macOS-000000?logo=apple&logoColor=white&style=for-the-badge)](https://github.com/Alan-Yu-2077/Luna-ts/releases/latest)
+
+<sub>预发布 · 未签名——Windows SmartScreen / macOS Gatekeeper 首次运行会警告(点“仍要运行” / 右键→“打开”)。<a href="https://github.com/Alan-Yu-2077/Luna-ts/releases/latest">全部下载 →</a></sub>
+
 </div>
 
 ---
