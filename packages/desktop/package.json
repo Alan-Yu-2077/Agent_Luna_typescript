@@ -59,7 +59,11 @@
     "nsis": {
       "oneClick": false,
       "perMachine": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "Luna-Setup-Windows-x64.${ext}"
+    },
+    "dmg": {
+      "artifactName": "Luna-macOS-arm64.${ext}"
     }
   }
 }

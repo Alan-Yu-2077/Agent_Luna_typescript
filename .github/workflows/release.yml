@@ -36,19 +36,22 @@ jobs:
       - name: Attach the installer to the Release
         uses: softprops/action-gh-release@v2
         with:
-          prerelease: true
+          # A normal (non-prerelease) release so GitHub's /releases/latest resolves to it — the
+          # README's direct /latest/download button 404s against a prerelease. The "unverified"
+          # caveat lives in the body below instead of the prerelease flag.
+          prerelease: false
           fail_on_unmatched_files: true
           files: packages/desktop/release/*.exe
           body: |
-            Desktop installers for Luna (Initiative 28 — Windows desktop, code-complete).
+            Desktop installers for Luna (Initiative 28 — Windows desktop).
 
-            **Windows** — `Luna Setup <version>.exe` (x64, unsigned). SmartScreen will warn
+            **Windows** — `Luna-Setup-Windows-x64.exe` (x64, unsigned). SmartScreen will warn
             "unknown publisher": click **More info → Run anyway**.
-            **macOS** — `Luna-<version>-arm64.dmg` (Apple Silicon, unsigned). Right-click the app
+            **macOS** — `Luna-macOS-arm64.dmg` (Apple Silicon, unsigned). Right-click the app
             → **Open** the first time (or `xattr -d com.apple.quarantine /Applications/Luna.app`).
 
             The installers contain no API keys — you enter those in the setup wizard on first run.
-            Marked pre-release: Windows real-machine acceptance is still pending.
+            Early build: Windows real-machine acceptance is still in progress.
 
   macos:
     runs-on: macos-latest
@@ -68,6 +71,6 @@ jobs:
       - name: Attach the dmg to the Release
         uses: softprops/action-gh-release@v2
         with:
-          prerelease: true
+          prerelease: false
           fail_on_unmatched_files: true
           files: packages/desktop/release/*.dmg
