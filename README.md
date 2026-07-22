@@ -23,6 +23,8 @@ code-agent capability — embodied as a Live2D avatar with lip-synced custom voi
 
 <sub>Pre-release · unsigned — Windows SmartScreen / macOS Gatekeeper warns on first run (click **Run anyway** / right-click → **Open**). <a href="https://github.com/Alan-Yu-2077/Luna-ts/releases/latest">All downloads →</a></sub>
 
+[![Luna TV — live capability showcase](https://img.shields.io/badge/%E2%96%B6_Luna_TV-live_capability_showcase-bfe0fb?style=for-the-badge)](https://alan-yu-2077.github.io/Luna-ts/)
+
 </div>
 
 ---

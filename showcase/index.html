@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Luna TV · 能力展示</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌙</text></svg>"
+    />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <div class="lace-top" aria-hidden="true"></div>
+    <div class="lace-bottom" aria-hidden="true"></div>
+
+    <div class="motif-layer" aria-hidden="true">
+      <span class="motif" style="top: 12%; left: 6%; font-size: 26px">☁︎</span>
+      <span class="motif" style="top: 30%; left: 90%; font-size: 22px; opacity: 0.6">☁︎</span>
+      <span class="motif" style="top: 72%; left: 8%; font-size: 22px; opacity: 0.55">☁︎</span>
+      <span class="motif" style="top: 58%; left: 94%; font-size: 24px; opacity: 0.6">☁︎</span>
+      <span class="motif" style="top: 22%; left: 14%; font-size: 14px">◇</span>
+      <span class="motif" style="top: 80%; left: 90%; font-size: 12px; opacity: 0.6">◇</span>
+      <span class="motif" style="top: 14%; left: 84%; font-size: 15px; opacity: 0.7">✿</span>
+      <span class="motif" style="top: 66%; left: 4%; font-size: 14px; opacity: 0.6">❀</span>
+      <span class="motif" style="top: 88%; left: 16%; font-size: 13px; opacity: 0.6">✿</span>
+    </div>
+
+    <main class="hall">
+      <header class="masthead">
+        <span class="on-air"><span class="dot"></span>ON AIR</span>
+        <h1 class="logo">
+          <span class="logo-moon">🌙</span>Luna<span class="logo-tv">TV</span>
+        </h1>
+        <p class="tagline">陪伴型 AI 智能体 · 能力展示频道</p>
+      </header>
+
+      <div class="narration-row">
+        <span class="narrator" aria-hidden="true">🌙</span>
+        <p class="narration" id="narration">欢迎来到 Luna TV,选一个频道看看我会做什么吧 ~</p>
+      </div>
+
+      <section class="tv" aria-label="Luna 能力展示电视机">
+        <div class="antenna left" aria-hidden="true"><i></i></div>
+        <div class="antenna right" aria-hidden="true"><i></i></div>
+
+        <div class="tv-body">
+          <span class="puff l1" aria-hidden="true"></span>
+          <span class="puff l2" aria-hidden="true"></span>
+          <span class="puff r1" aria-hidden="true"></span>
+          <span class="puff r2" aria-hidden="true"></span>
+
+          <aside class="tv-side">
+            <div class="side-label">Channels · 栏目</div>
+            <nav class="channel-list" id="channelList" aria-label="频道列表"></nav>
+
+            <div class="knob-row">
+              <div class="knob-unit">
+                <button class="knob" id="knobVol" title="静音 / 取消静音" aria-label="静音开关"></button>
+                <span class="knob-label">VOL</span>
+              </div>
+              <div class="knob-unit">
+                <button class="knob" id="knobTune" title="下一个频道" aria-label="切换到下一个频道"></button>
+                <span class="knob-label">TUNE</span>
+              </div>
+            </div>
+
+            <div class="speaker" aria-hidden="true">
+              <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+            </div>
+          </aside>
+
+          <div class="tv-screen-bezel">
+            <div class="tv-screen" id="screen">
+              <div class="crt" id="crt">
+                <video id="player" playsinline controls preload="metadata" loop></video>
+                <div class="no-signal" id="noSignal">
+                  <div class="bars" aria-hidden="true">
+                    <i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+                  </div>
+                  <div class="no-signal-card">
+                    <span class="ns-moon" aria-hidden="true">🌙</span>
+                    <span class="ns-title">节目准备中</span>
+                    <span class="ns-sub" id="noSignalHint">把演示视频放进 showcase/videos/ 就会开播</span>
+                  </div>
+                </div>
+                <div class="static-fx" aria-hidden="true"></div>
+                <div class="scanlines" aria-hidden="true"></div>
+                <div class="glare" aria-hidden="true"></div>
+              </div>
+            </div>
+            <div class="screen-status">
+              <span class="ch-chip" id="chChip">CH·01</span>
+              <span class="ch-name" id="chName">RAG</span>
+              <span class="live-pill"><i></i>LIVE</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="tv-feet" aria-hidden="true"><span></span><span></span></div>
+      </section>
+
+      <footer class="footer">
+        <a
+          class="pill-link"
+          href="https://github.com/Alan-Yu-2077/Luna-ts"
+          target="_blank"
+          rel="noreferrer"
+          >GitHub ↗</a
+        >
+        <span class="foot-note">按 1–4 或 ↑↓ 换台 · 视频文件命名见 showcase/videos/README.md</span>
+      </footer>
+    </main>
+
+    <script src="./main.js"></script>
+  </body>
+</html>

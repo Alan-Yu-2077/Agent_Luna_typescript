@@ -1,0 +1,879 @@
+/* Luna TV — standalone showcase page.
+   The visual language mirrors packages/web/src/ui/theme.css (the app's style source of truth):
+   same fonts, same palette tokens, same chunky pressed-button + lace-trim aesthetic. */
+
+@font-face {
+  font-family: "Fredoka";
+  src: url("./fonts/Fredoka.woff2") format("woff2");
+  font-weight: 300 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: "ZCOOL KuaiLe";
+  src: url("./fonts/ZCOOLKuaiLe.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+
+:root {
+  --stripe-a: #e4eef9;
+  --stripe-b: #f5f9fd;
+  --lace: #b9d4ef;
+  --sky: #bfe0fb;
+  --sky-deep: #a9d3f5;
+  --sky-text: #27496b;
+  --panel: #c8ccd6;
+  --panel-edge: #b6bbc7;
+  --inner: #ffffff;
+  --inner-border: #dbe6f2;
+  --user-bubble: #f0f3f7;
+  --user-text: #4a566a;
+  --lavender: #cdbef0;
+  --lavender-deep: #b6a6e0;
+  --lavender-text: #473075;
+  --tool-bg: #efe7fb;
+  --dream-bg: #d9d2f5;
+  --proactive-bg: #e2f3ea;
+  --proactive-text: #3f7a57;
+  --error-bg: #fbe6ea;
+  --error-text: #a8475e;
+  --ink: #4a5a6e;
+  --ink-soft: #5a7295;
+  --muted: #a7b6c8;
+  --ok: #5fb87f;
+  --tube: #22344c;
+  --radius: 16px;
+  --font: "Fredoka", "ZCOOL KuaiLe", "PingFang SC", "Hiragino Sans GB", ui-rounded, "Segoe UI",
+    system-ui, sans-serif;
+  --m-fast: 0.15s;
+  --m-soft: 0.28s;
+  --m-slow: 0.5s;
+  --ease-pop: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-glide: cubic-bezier(0.22, 0.8, 0.4, 1);
+}
+
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+body {
+  font-family: var(--font);
+  font-weight: 500;
+  color: var(--ink);
+  background: repeating-linear-gradient(
+    90deg,
+    var(--stripe-a) 0,
+    var(--stripe-a) 16px,
+    var(--stripe-b) 16px,
+    var(--stripe-b) 32px
+  );
+  overflow-x: hidden;
+}
+
+/* ---- room dressing: lace trim + drifting motifs (same SVG trim as the app) ---- */
+.lace-top,
+.lace-bottom {
+  position: fixed;
+  left: 0;
+  right: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+.lace-top {
+  top: 0;
+  height: 14px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='14'%3E%3Cpath d='M0,0L20,0L10,14Z' fill='%23b9d4ef'/%3E%3C/svg%3E")
+    repeat-x;
+}
+.lace-bottom {
+  bottom: 0;
+  height: 16px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='16'%3E%3Cpath d='M0,16L0,8Q12,-2,24,8L24,16Z' fill='%23b9d4ef'/%3E%3C/svg%3E")
+    repeat-x;
+}
+.motif-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  color: var(--lace);
+}
+.motif {
+  position: absolute;
+  opacity: 0.7;
+  line-height: 1;
+  animation: motif-drift 6s ease-in-out infinite;
+}
+.motif:nth-child(2n) {
+  animation-duration: 7.5s;
+  animation-delay: -2s;
+}
+.motif:nth-child(3n) {
+  animation-duration: 9s;
+  animation-delay: -4s;
+}
+@keyframes motif-drift {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+/* ---- page frame ---- */
+.hall {
+  position: relative;
+  z-index: 1;
+  max-width: 1060px;
+  margin: 0 auto;
+  padding: 34px 22px 46px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  min-height: 100vh;
+}
+
+.masthead {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+  animation: rise-in var(--m-slow) var(--ease-pop);
+}
+.on-air {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #fff;
+  color: #5b7fa6;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  padding: 4px 12px;
+  border-radius: 999px;
+  box-shadow: 0 1px 4px rgba(90, 120, 160, 0.18);
+}
+.on-air .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ok);
+  animation: live-pulse 1.6s ease-in-out infinite;
+}
+.logo {
+  margin: 4px 0 0;
+  font-size: clamp(34px, 6vw, 46px);
+  font-weight: 700;
+  color: var(--sky-text);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  line-height: 1;
+}
+.logo-moon {
+  font-size: 0.82em;
+  animation: moon-bob 4.5s ease-in-out infinite;
+}
+.logo-tv {
+  font-size: 0.5em;
+  background: var(--sky);
+  color: var(--sky-text);
+  border-radius: 12px;
+  padding: 5px 10px;
+  box-shadow: 0 3px 0 var(--sky-deep);
+  transform: rotate(4deg);
+}
+.tagline {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+@keyframes moon-bob {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-6deg);
+  }
+  50% {
+    transform: translateY(-6px) rotate(6deg);
+  }
+}
+
+/* ---- Luna's narration bubble (the app's speech-bubble language) ---- */
+.narration-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 9px;
+  max-width: 640px;
+}
+.narrator {
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: #ddeafb;
+  border: 2px solid #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 19px;
+  box-shadow: 0 2px 8px rgba(90, 120, 160, 0.25);
+}
+.narration {
+  margin: 0;
+  background: rgba(255, 255, 255, 0.82);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  color: var(--sky-text);
+  border: 1px solid var(--lace);
+  font-size: 13.5px;
+  line-height: 1.55;
+  border-radius: 14px 14px 14px 4px;
+  padding: 9px 14px;
+  box-shadow: 0 6px 20px rgba(39, 73, 107, 0.18);
+}
+.narration.pop {
+  animation: speech-rise var(--m-soft) var(--ease-pop);
+}
+@keyframes speech-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ---- the TV set ---- */
+.tv {
+  position: relative;
+  width: 100%;
+  margin-top: 48px; /* air for the antennae so they never pierce the narration bubble */
+  animation: rise-in 0.6s var(--ease-pop);
+}
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* antennae peek from behind the body */
+.antenna {
+  position: absolute;
+  top: -58px;
+  width: 5px;
+  height: 74px;
+  border-radius: 999px;
+  background: linear-gradient(var(--panel-edge), var(--panel));
+  z-index: 0;
+  transform-origin: bottom center;
+}
+.antenna.left {
+  left: 34%;
+  transform: rotate(-24deg);
+  animation: sway 5.5s ease-in-out infinite;
+}
+.antenna.right {
+  left: 44%;
+  transform: rotate(18deg);
+  animation: sway 6.5s ease-in-out infinite reverse;
+}
+.antenna i {
+  position: absolute;
+  top: -13px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+}
+.antenna.left i {
+  background: var(--lavender);
+  box-shadow: 0 2px 0 var(--lavender-deep);
+}
+.antenna.right i {
+  background: var(--sky);
+  box-shadow: 0 2px 0 var(--sky-deep);
+}
+@keyframes sway {
+  0%,
+  100% {
+    transform: rotate(-24deg);
+  }
+  50% {
+    transform: rotate(-19deg);
+  }
+}
+.antenna.right {
+  animation-name: sway-r;
+}
+@keyframes sway-r {
+  0%,
+  100% {
+    transform: rotate(18deg);
+  }
+  50% {
+    transform: rotate(13deg);
+  }
+}
+
+.tv-body {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 248px minmax(0, 1fr);
+  gap: 16px;
+  background: var(--panel);
+  border-radius: 30px;
+  padding: 20px;
+  box-shadow:
+    0 6px 0 var(--panel-edge),
+    0 26px 60px rgba(90, 120, 160, 0.28);
+}
+/* the app's puff-cloud trim, scaled up for the TV roof */
+.puff {
+  position: absolute;
+  background: var(--panel);
+  border-radius: 50%;
+}
+.puff.l1 {
+  top: -11px;
+  left: 26px;
+  width: 38px;
+  height: 26px;
+}
+.puff.l2 {
+  top: -16px;
+  left: 50px;
+  width: 28px;
+  height: 22px;
+}
+.puff.r1 {
+  top: -11px;
+  right: 26px;
+  width: 38px;
+  height: 26px;
+}
+.puff.r2 {
+  top: -16px;
+  right: 50px;
+  width: 28px;
+  height: 22px;
+}
+
+.tv-feet {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 60px;
+}
+.tv-feet span {
+  width: 74px;
+  height: 16px;
+  background: var(--panel-edge);
+  border-radius: 0 0 12px 12px;
+}
+
+/* ---- left: the channel column ---- */
+.tv-side {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--inner);
+  border: 1.5px dashed var(--inner-border);
+  border-radius: 20px;
+  padding: 14px;
+  min-width: 0;
+}
+.side-label {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-align: center;
+}
+.channel-list {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.channel-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  border: none;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  background: var(--user-bubble);
+  color: var(--user-text);
+  border-radius: 14px;
+  padding: 9px 11px;
+  box-shadow: 0 3px 0 rgba(90, 120, 160, 0.18);
+  transition:
+    transform var(--m-fast) var(--ease-pop),
+    background var(--m-fast) ease,
+    box-shadow var(--m-fast) ease;
+}
+.channel-btn:hover {
+  transform: translateY(-1px) scale(1.02);
+}
+.channel-btn:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 rgba(90, 120, 160, 0.18);
+}
+.channel-btn:focus-visible {
+  outline: 2px solid var(--sky-deep);
+  outline-offset: 2px;
+}
+.channel-btn.active {
+  background: var(--sky);
+  color: var(--sky-text);
+  box-shadow: 0 3px 0 var(--sky-deep);
+}
+.ch-icon {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 17px;
+  box-shadow: inset 0 0 0 1.5px var(--inner-border);
+}
+.channel-btn.active .ch-icon {
+  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.85);
+}
+.ch-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.ch-title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.1;
+}
+.ch-sub {
+  font-size: 10.5px;
+  color: var(--muted);
+}
+.channel-btn.active .ch-sub {
+  color: rgba(39, 73, 107, 0.65);
+}
+.ch-no {
+  margin-left: auto;
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.channel-btn.active .ch-no {
+  color: rgba(39, 73, 107, 0.65);
+}
+
+/* knobs + speaker grille */
+.knob-row {
+  display: flex;
+  justify-content: center;
+  gap: 26px;
+  margin-top: 2px;
+}
+.knob-unit {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.knob {
+  position: relative;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  background: var(--lavender);
+  box-shadow: 0 3px 0 var(--lavender-deep);
+  transition:
+    transform var(--m-soft) var(--ease-pop),
+    background var(--m-fast) ease;
+}
+.knob::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  width: 4px;
+  height: 12px;
+  margin-left: -2px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+}
+.knob:active {
+  box-shadow: 0 1px 0 var(--lavender-deep);
+}
+.knob.muted {
+  background: var(--muted);
+  box-shadow: 0 3px 0 #93a3b6;
+}
+.knob-label {
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+}
+.speaker {
+  margin-top: auto;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  padding: 10px 18px 2px;
+}
+.speaker i {
+  height: 5px;
+  border-radius: 999px;
+  background: var(--inner-border);
+}
+
+/* ---- right: the screen ---- */
+.tv-screen-bezel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--inner);
+  border: 1.5px dashed var(--inner-border);
+  border-radius: 20px;
+  padding: 14px;
+  min-width: 0;
+}
+.tv-screen {
+  position: relative;
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--tube);
+  aspect-ratio: 16 / 9;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+.crt {
+  position: absolute;
+  inset: 0;
+}
+.tv-screen.power-on .crt {
+  animation: crt-on 0.55s var(--ease-glide);
+}
+@keyframes crt-on {
+  0% {
+    transform: scaleY(0.006);
+    filter: brightness(3);
+  }
+  55% {
+    transform: scaleY(1.04);
+    filter: brightness(1.6);
+  }
+  100% {
+    transform: scaleY(1);
+    filter: brightness(1);
+  }
+}
+.tv-screen video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: transparent;
+}
+.tv-screen video.hidden {
+  visibility: hidden;
+}
+
+/* the pastel test card when a channel has no video yet */
+.no-signal {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.no-signal.hidden {
+  display: none;
+}
+.no-signal .bars {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  opacity: 0.9;
+}
+.no-signal .bars i {
+  flex: 1;
+}
+.no-signal .bars i:nth-child(1) {
+  background: #9fc7ec;
+}
+.no-signal .bars i:nth-child(2) {
+  background: #b3aee4;
+}
+.no-signal .bars i:nth-child(3) {
+  background: #a3d4b8;
+}
+.no-signal .bars i:nth-child(4) {
+  background: #f0e3a8;
+}
+.no-signal .bars i:nth-child(5) {
+  background: #eebfca;
+}
+.no-signal .bars i:nth-child(6) {
+  background: #c5cede;
+}
+.no-signal .bars i:nth-child(7) {
+  background: #8fb0d4;
+}
+.no-signal .bars::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 24%;
+  background: var(--tube);
+  opacity: 0.85;
+}
+.no-signal-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  background: rgba(255, 255, 255, 0.86);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  border-radius: 16px;
+  padding: 16px 26px;
+  box-shadow: 0 10px 30px rgba(30, 50, 80, 0.3);
+  text-align: center;
+  animation: card-float 4.5s ease-in-out infinite;
+}
+.ns-moon {
+  font-size: 30px;
+}
+.ns-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--sky-text);
+}
+.ns-sub {
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.ns-sub code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  background: var(--user-bubble);
+  border-radius: 6px;
+  padding: 1px 5px;
+}
+@keyframes card-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+/* analog snow while switching channels */
+.static-fx {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.9'/%3E%3C/svg%3E");
+  background-size: 140px 140px;
+}
+.tv-screen.switching .static-fx {
+  opacity: 0.55;
+  animation: static-jitter 0.12s steps(2) infinite;
+}
+.tv-screen.switching .crt > video,
+.tv-screen.switching .no-signal {
+  filter: brightness(1.4) saturate(0.6);
+}
+@keyframes static-jitter {
+  0% {
+    background-position: 0 0;
+  }
+  50% {
+    background-position: -46px 34px;
+  }
+  100% {
+    background-position: 38px -52px;
+  }
+}
+
+/* CRT dressing: scanlines + glass glare + vignette */
+.scanlines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(255, 255, 255, 0.04) 0 1px,
+    transparent 1px 3px
+  );
+  mix-blend-mode: overlay;
+}
+.glare {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(120% 90% at 18% 6%, rgba(255, 255, 255, 0.14), transparent 46%),
+    radial-gradient(140% 120% at 50% 50%, transparent 62%, rgba(10, 20, 36, 0.32) 100%);
+}
+
+.screen-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ch-chip {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  background: var(--sky);
+  color: var(--sky-text);
+  border-radius: 8px;
+  padding: 2px 8px;
+  font-weight: 600;
+}
+.ch-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.live-pill {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: var(--error-text);
+  background: var(--error-bg);
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+.live-pill i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--error-text);
+  animation: live-pulse 1.4s ease-in-out infinite;
+}
+@keyframes live-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(0.8);
+  }
+}
+
+/* ---- footer ---- */
+.footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.pill-link {
+  font-size: 11px;
+  font-weight: 600;
+  color: #4a7cb8;
+  text-decoration: none;
+  background: #fff;
+  border: 1px solid rgba(90, 120, 160, 0.28);
+  border-radius: 999px;
+  padding: 4px 12px;
+  transition:
+    border-color var(--m-fast) ease,
+    transform var(--m-fast) var(--ease-pop);
+}
+.pill-link:hover {
+  border-color: #7fa8d8;
+  transform: scale(1.05);
+}
+.foot-note {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* ---- responsive: the TV folds vertically, channels become a grid under the screen ---- */
+@media (max-width: 860px) {
+  .tv-body {
+    grid-template-columns: 1fr;
+  }
+  .tv-side {
+    order: 2;
+  }
+  .tv-screen-bezel {
+    order: 1;
+  }
+  .channel-list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .speaker {
+    display: none;
+  }
+  .antenna.left {
+    left: 20%;
+  }
+  .antenna.right {
+    left: 34%;
+  }
+  .tv-feet {
+    padding: 0 34px;
+  }
+}
+@media (max-width: 480px) {
+  .channel-list {
+    grid-template-columns: 1fr;
+  }
+  .hall {
+    padding: 26px 12px 36px;
+  }
+  .tv-body {
+    padding: 14px;
+    border-radius: 24px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

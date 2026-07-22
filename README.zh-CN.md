@@ -23,6 +23,8 @@
 
 <sub>预发布 · 未签名——Windows SmartScreen / macOS Gatekeeper 首次运行会警告(点“仍要运行” / 右键→“打开”)。<a href="https://github.com/Alan-Yu-2077/Luna-ts/releases/latest">全部下载 →</a></sub>
 
+[![Luna TV · 在线能力展示](https://img.shields.io/badge/%E2%96%B6_Luna_TV-%E5%9C%A8%E7%BA%BF%E8%83%BD%E5%8A%9B%E5%B1%95%E7%A4%BA-bfe0fb?style=for-the-badge)](https://alan-yu-2077.github.io/Luna-ts/)
+
 </div>
 
 ---
