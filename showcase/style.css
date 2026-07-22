@@ -126,6 +126,34 @@ body {
   }
 }
 
+/* ---- language toggle (mirrors the app's setup-wizard lang pill) ---- */
+.lang-btn {
+  position: fixed;
+  top: 12px;
+  right: 16px;
+  z-index: 9;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: #4a7cb8;
+  background: #fff;
+  border: 1px solid rgba(90, 120, 160, 0.35);
+  border-radius: 999px;
+  padding: 5px 13px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(90, 120, 160, 0.15);
+  transition:
+    transform var(--m-fast) var(--ease-pop),
+    border-color var(--m-fast) ease;
+}
+.lang-btn:hover {
+  border-color: #7fa8d8;
+  transform: scale(1.06);
+}
+.lang-btn:active {
+  transform: scale(0.94);
+}
+
 /* ---- page frame ---- */
 .hall {
   position: relative;

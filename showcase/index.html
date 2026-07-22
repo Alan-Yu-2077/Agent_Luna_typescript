@@ -11,6 +11,7 @@
     <link rel="stylesheet" href="./style.css" />
   </head>
   <body>
+    <button class="lang-btn" id="langBtn" type="button" aria-label="Switch language">EN</button>
     <div class="lace-top" aria-hidden="true"></div>
     <div class="lace-bottom" aria-hidden="true"></div>
 
@@ -32,7 +33,7 @@
         <h1 class="logo">
           <span class="logo-moon">🌙</span>Luna<span class="logo-tv">TV</span>
         </h1>
-        <p class="tagline">陪伴型 AI 智能体 · 能力展示频道</p>
+        <p class="tagline" id="tagline">陪伴型 AI 智能体 · 能力展示频道</p>
       </header>
 
       <div class="narration-row">
@@ -51,7 +52,7 @@
           <span class="puff r2" aria-hidden="true"></span>
 
           <aside class="tv-side">
-            <div class="side-label">Channels · 栏目</div>
+            <div class="side-label" id="sideLabel">Channels · 栏目</div>
             <nav class="channel-list" id="channelList" aria-label="频道列表"></nav>
 
             <div class="knob-row">
@@ -80,7 +81,7 @@
                   </div>
                   <div class="no-signal-card">
                     <span class="ns-moon" aria-hidden="true">🌙</span>
-                    <span class="ns-title">节目准备中</span>
+                    <span class="ns-title" id="nsTitle">节目准备中</span>
                     <span class="ns-sub" id="noSignalHint">把演示视频放进 showcase/videos/ 就会开播</span>
                   </div>
                 </div>
@@ -108,7 +109,7 @@
           rel="noreferrer"
           >GitHub ↗</a
         >
-        <span class="foot-note">按 1–4 或 ↑↓ 换台 · 视频文件命名见 showcase/videos/README.md</span>
+        <span class="foot-note" id="footNote">按 1–4 或 ↑↓ 换台 · 视频文件命名见 showcase/videos/README.md</span>
       </footer>
     </main>
 
