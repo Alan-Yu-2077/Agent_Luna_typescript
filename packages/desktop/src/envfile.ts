@@ -46,6 +46,10 @@ LUNA_LAT_LON=
 LUNA_WEB_SEARCH_PROVIDER=
 LUNA_WEB_SEARCH_API_KEY=
 
+# v0.39.2: which front end to build — 'full' (Live2D avatar + voice) or 'agent' (chat box only, no
+# model stage, no voice). Written by the setup wizard's first step; unset behaves as 'full'.
+LUNA_UI_MODE=
+
 # Avatar & voice (bring-your-own — see docs/SETUP.md). The "Choose model folder…" picker sets
 # LUNA_MODEL_URL for you. Voice defaults to the browser; set LUNA_TTS_BACKEND=http + a GPT-SoVITS
 # api_v2 server (services/tts) for a custom voice.

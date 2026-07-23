@@ -68,6 +68,7 @@ export const WIZARD_KEYS = [
   'LUNA_WEATHER_API_KEY',
   'LUNA_WEATHER_API_HOST',
   'LUNA_LAT_LON',
+  'LUNA_UI_MODE', // v0.39.2: 'full' (Live2D + voice) | 'agent' (chat only) — the wizard's first step
   'LUNA_MODEL_URL',
   'LUNA_TTS_BACKEND',
   'LUNA_TTS_URL',

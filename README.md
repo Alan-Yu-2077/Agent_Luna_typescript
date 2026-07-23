@@ -49,9 +49,11 @@ code-agent capability — embodied as a Live2D avatar with lip-synced custom voi
   terminal anywhere: the wizard downloads & deploys the runtime in one click, you drag a voice pack
   in, and Luna starts + supervises the voice server herself. Drop a new pack onto the running app
   to swap voices.
-- 🧙 **Guided onboarding** — a six-step bilingual (中文/English) wizard with *live* key validation
-  against the real vendors, drag-and-drop avatar/voice installs, and escape hatches everywhere
-  (status-bar button, native `⌘,` menu, failure dialogs) so a bad config can never strand you.
+- 🧙 **Guided onboarding** — a bilingual (中文/English) wizard that opens by asking which Luna you
+  want: **the complete companion** (Live2D + voice, seven steps) or **just the agent core** (chat box
+  only, five steps, nothing to download). Either way you get *live* key validation against the real
+  vendors, drag-and-drop avatar/voice installs, and escape hatches everywhere (status-bar button,
+  native `⌘,` menu, failure dialogs) so a bad config can never strand you.
 - 🔒 **Local-first** — memory is a local SQLite file, keys live in a local config only, the server
   binds loopback by default. Nothing about *her* leaves your machine.
 

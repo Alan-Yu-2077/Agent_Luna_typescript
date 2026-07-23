@@ -10,6 +10,7 @@
 
 import { detectSetupLang, makeT, persistSetupLang, type SetupLang } from './setupCopy';
 import { createDropZone } from './dropZone';
+import type { UiMode } from '../uiMode';
 
 export type WizardFieldSpec = {
   key: string; // the luna.env key this input feeds (whitelist enforced shell-side too)
@@ -20,14 +21,27 @@ export type WizardFieldSpec = {
 };
 
 export type WizardStepSpec = {
-  id: 'chat' | 'embedding' | 'search' | 'weather' | 'avatar' | 'voice';
+  id: 'mode' | 'chat' | 'embedding' | 'search' | 'weather' | 'avatar' | 'voice';
   titleKey: string;
   optional: boolean;
   fields: WizardFieldSpec[];
 };
 
-export function wizardSteps(): WizardStepSpec[] {
+// v0.39.2: the step table is a function OF the mode. Agent-only drops the two resource steps
+// entirely rather than showing them greyed out — a step you cannot use is still a step you have to
+// read. The mode step itself is always first and never optional (it decides what "the rest" is).
+export function wizardSteps(mode: UiMode = 'full'): WizardStepSpec[] {
+  const resourceSteps: WizardStepSpec[] = [
+    { id: 'avatar', titleKey: 'step.avatar.title', optional: true, fields: [] },
+    {
+      id: 'voice',
+      titleKey: 'step.voice.title',
+      optional: true,
+      fields: [{ key: 'LUNA_TTS_URL', labelKey: 'step.voice.url', type: 'text', placeholder: 'http://127.0.0.1:9880' }],
+    },
+  ];
   return [
+    { id: 'mode', titleKey: 'step.mode.title', optional: false, fields: [] },
     {
       id: 'chat',
       titleKey: 'step.chat.title',
@@ -95,14 +109,17 @@ export function wizardSteps(): WizardStepSpec[] {
         { key: 'LUNA_LAT_LON', labelKey: 'step.weather.latlon', type: 'text', placeholder: '31.23,121.47' },
       ],
     },
-    { id: 'avatar', titleKey: 'step.avatar.title', optional: true, fields: [] },
-    {
-      id: 'voice',
-      titleKey: 'step.voice.title',
-      optional: true,
-      fields: [{ key: 'LUNA_TTS_URL', labelKey: 'step.voice.url', type: 'text', placeholder: 'http://127.0.0.1:9880' }],
-    },
+    ...(mode === 'agent' ? [] : resourceSteps),
   ];
+}
+
+// v0.39.2: what the mode itself writes to luna.env. LUNA_TTS_BACKEND is written EXPLICITLY in both
+// directions: agent pins it to 'none', and coming BACK to full must overwrite that 'none' — an empty
+// field is dropped at submit and mergeEnvFile would then preserve it, leaving the full Luna mute.
+export function modeValues(mode: UiMode, voiceBackend: string): Record<string, string> {
+  return mode === 'agent'
+    ? { LUNA_UI_MODE: 'agent', LUNA_TTS_BACKEND: 'none' }
+    : { LUNA_UI_MODE: 'full', LUNA_TTS_BACKEND: voiceBackend };
 }
 
 // Values the user has actually typed (or a step pre-filled), keyed by env key. Empty/whitespace
@@ -261,6 +278,7 @@ const PROBE_STEP: Partial<Record<WizardStepSpec['id'], ProbeKind>> = {
 // (system browser only, https only).
 export type StepGuide = { textKey: string; links: Array<{ href: string; labelKey: string }> };
 export const STEP_GUIDES: Record<WizardStepSpec['id'], StepGuide> = {
+  mode: { textKey: 'guide.mode', links: [] },
   chat: {
     textKey: 'guide.chat',
     links: [{ href: 'https://console.anthropic.com', labelKey: 'guide.chat.link' }],
@@ -397,8 +415,11 @@ export function mountSetupWizard(root: HTMLElement, opts: { preview?: boolean } 
   while (root.firstChild) root.removeChild(root.firstChild);
 
   let lang: SetupLang = detectSetupLang();
-  const steps = wizardSteps();
-  const nav = createWizardNav(steps.length);
+  // v0.39.2: the mode decides WHICH steps exist, so the step table and the nav are rebuilt whenever
+  // it changes (selectMode / prefill) rather than being fixed at mount.
+  let uiMode: UiMode = 'full';
+  let steps = wizardSteps(uiMode);
+  let nav = createWizardNav(steps.length);
   let values = new Map<string, string>();
   let configuredSecrets = new Set<string>();
   const probeStates = new Map<string, ProbeState>(); // per-step; reset to 'none' when its fields change
@@ -503,7 +524,29 @@ export function mountSetupWizard(root: HTMLElement, opts: { preview?: boolean } 
     guideBox.appendChild(linkRow);
     body.appendChild(guideBox);
 
-    if (step.id === 'voice') {
+    if (step.id === 'mode') {
+      const cards = doc.createElement('div');
+      cards.className = 'wizard-mode-cards';
+      const options = [
+        ['full', 'wizard-mode-full', 'step.mode.full.title', 'step.mode.full.blurb'],
+        ['agent', 'wizard-mode-agent', 'step.mode.agent.title', 'step.mode.agent.blurb'],
+      ] as const;
+      for (const [value, cls, titleKey, blurbKey] of options) {
+        const btn = doc.createElement('button');
+        btn.type = 'button';
+        btn.className = `wizard-mode-card ${cls}${uiMode === value ? ' on' : ''}`;
+        const name = doc.createElement('div');
+        name.className = 'wizard-mode-name';
+        name.textContent = t(titleKey);
+        const blurb = doc.createElement('div');
+        blurb.className = 'wizard-mode-blurb';
+        blurb.textContent = t(blurbKey);
+        btn.append(name, blurb);
+        btn.addEventListener('click', () => selectMode(value));
+        cards.appendChild(btn);
+      }
+      body.appendChild(cards);
+    } else if (step.id === 'voice') {
       const radio = doc.createElement('div');
       radio.className = 'wizard-radio-row';
       for (const [value, key] of [
@@ -1049,7 +1092,9 @@ export function mountSetupWizard(root: HTMLElement, opts: { preview?: boolean } 
         finalStatus.textContent = makeT(lang)('wizard.finishing');
         finalStatus.dataset['kind'] = 'info';
       }
-      void setup.wizardSubmit(collectValues(values)).then((v) => {
+      // v0.39.2: the mode's own keys are merged LAST so they win over anything a step left behind
+      // (a stale LUNA_TTS_BACKEND from the voice radio in particular).
+      void setup.wizardSubmit({ ...collectValues(values), ...modeValues(uiMode, voiceBackend) }).then((v) => {
         // On success the shell swaps this window for the app; still here = failure.
         if (!v.ok) {
           busy = false;
@@ -1062,6 +1107,16 @@ export function mountSetupWizard(root: HTMLElement, opts: { preview?: boolean } 
         }
       });
     });
+  };
+
+  // v0.39.2: picking a mode rebuilds the step table (agent-only has no avatar/voice steps) and the
+  // nav, then advances — on this step the card IS the Next button.
+  const selectMode = (mode: UiMode): void => {
+    uiMode = mode;
+    steps = wizardSteps(mode);
+    nav = createWizardNav(steps.length);
+    nav.next();
+    render();
   };
 
   const chatFields = (): SetupFields | null => {
@@ -1077,13 +1132,23 @@ export function mountSetupWizard(root: HTMLElement, opts: { preview?: boolean } 
   const prefill = setup?.wizardPrefill;
   if (live && prefill) {
     void prefill().then((r) => {
-      const specs = steps.flatMap((st) => st.fields);
+      // v0.39.2: hydrate against the FULL step table, not the current mode's — an agent-mode re-run
+      // must not drop the stored voice URL just because its step isn't on screen.
+      const specs = wizardSteps('full').flatMap((st) => st.fields);
       const saved = r.values ?? {};
       const h = hydrateWizardValues(saved, r.configured ?? [], specs);
       values = h.values;
       configuredSecrets = h.configured;
       const backend = (saved['LUNA_TTS_BACKEND'] ?? '').trim();
-      if (backend !== '') voiceBackend = backend; // a saved http voice must survive a re-run
+      // Only a backend the voice step can actually represent. A stored 'none' is what an agent run
+      // pinned; adopting it would re-write 'none' on a switch back to full and leave her mute.
+      if (backend === 'browser' || backend === 'http') voiceBackend = backend;
+      const savedMode = (saved['LUNA_UI_MODE'] ?? '').trim();
+      if (savedMode === 'agent' || savedMode === 'full') {
+        uiMode = savedMode;
+        steps = wizardSteps(uiMode);
+        nav = createWizardNav(steps.length);
+      }
       render();
     });
   }

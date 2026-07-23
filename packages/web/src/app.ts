@@ -25,6 +25,7 @@ import { createBootGate, warmUpTts } from './ui/bootGate';
 import { mountPhysicsScene } from './physics/scene';
 import { createRiseBubbles } from './ui/riseBubble';
 import { mountPackDrop } from './ui/packDrop';
+import { resolveUiMode } from './uiMode';
 
 // Browser entry — builds the cute UI shell + the live Live2D avatar + voice, and
 // wires the v0.12.0 consumption controller plus the v0.13.4 polish chrome (dream
@@ -58,7 +59,12 @@ async function boot(): Promise<void> {
   // the stale persisted key so a previously-on instance doesn't carry a dead flag forever.
   localStorage.removeItem('luna:reduce-motion');
 
+  // v0.39.2: agent-only — the same brain with nothing but the conversation. No avatar is resolved or
+  // rendered, no voice is set up, and the model stage takes no width (theme.css `.agent-only`).
+  const uiMode = resolveUiMode();
+  const agentOnly = uiMode === 'agent';
   const refs = buildLayout(root);
+  if (agentOnly) root.classList.add('agent-only');
   const windowView = new CuteBubbleView(refs.chatLog, refs.scrollPill);
 
   // Voice backend: 'browser' (zero-setup Web Speech — the default a fresh install speaks with) |
@@ -111,7 +117,7 @@ async function boot(): Promise<void> {
   // No model ships by default (bring-your-own). Resolve an installed one; when there's none, WebGL is
   // off, or a configured model fails to load, keep the empty-state placeholder — labelled by which.
   let modelState: 'ok' | 'none' | 'webgl-off' | 'load-failed' = 'none';
-  if (localStorage.getItem('luna:live2d') !== '0') {
+  if (!agentOnly && localStorage.getItem('luna:live2d') !== '0') {
     const modelUrl = resolveModelUrl();
     if (!modelUrl) modelState = 'none';
     else if (!webglAvailable()) modelState = 'webgl-off';
@@ -125,7 +131,9 @@ async function boot(): Promise<void> {
     }
   }
   refs.modelStage.dataset['modelState'] = modelState;
-  if (modelState !== 'ok') applyEmptyState(refs.modelStage, modelState);
+  // Agent-only has no avatar by choice, so the "no avatar installed / install one" empty state would
+  // be nagging about something the user opted out of. The stage is hidden and stays hidden.
+  if (!agentOnly && modelState !== 'ok') applyEmptyState(refs.modelStage, modelState);
 
   // v0.25.0 (Initiative 18): the beside-model speech stack + a router that mirrors Luna's replies to
   // it in collapsed companion mode. v0.25.1: `collapsed` now reads the real collapse state (persisted
@@ -463,11 +471,21 @@ async function boot(): Promise<void> {
   // exists inside the desktop app; a plain browser (no bridge) never shows it.
   const setPetMode = bridge?.setPetMode;
   const petRow = refs.petToggle.closest('label');
-  if (setPetMode) {
+  if (setPetMode && !agentOnly) {
     refs.petToggle.checked = isPet;
     refs.petToggle.addEventListener('change', () => setPetMode(refs.petToggle.checked));
   } else if (petRow instanceof HTMLElement) {
     petRow.style.display = 'none';
+  }
+
+  // v0.39.2: agent-only drops the panes that only exist to serve an avatar (the Live2D/gaze/idle tab
+  // and its rail icon; the pet window is a Luna-shaped window with no Luna in it). The mood pip and
+  // the Dream button live INSIDE the model stage, so they move to the chat header or they'd vanish
+  // with it — dreaming is a core capability, not an avatar feature.
+  if (agentOnly) {
+    refs.avatarTab.style.display = 'none';
+    refs.avatarRailBtn.style.display = 'none';
+    refs.chatHeader.append(refs.moodPip, refs.dreamBtn);
   }
 
   // v0.35.0: re-enter the setup wizard from Settings (desktop shell only — the shell owns the
@@ -504,7 +522,7 @@ async function boot(): Promise<void> {
       };
     }
   ).lunaSetup;
-  if (voiceBridge?.scanVoicePack && voiceBridge.installVoicePack) {
+  if (!agentOnly && voiceBridge?.scanVoicePack && voiceBridge.installVoicePack) {
     const scan = voiceBridge.scanVoicePack.bind(voiceBridge);
     const install = voiceBridge.installVoicePack.bind(voiceBridge);
     mountPackDrop(document, { scanVoicePack: scan, installVoicePack: install });

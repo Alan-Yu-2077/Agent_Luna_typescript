@@ -694,6 +694,25 @@ body {
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* v0.39.2: agent-only — the same brain with nothing but the conversation. The model stage takes no
+   space at all while the chat is open, so the chat column gets the whole room. `:not(.collapsed)` is
+   load-bearing: collapsed mode hides the chat body and mirrors her replies into the SpeechStackView,
+   which is mounted inside .model-stage — hiding it unconditionally would leave nothing on screen. */
+.luna-app.agent-only:not(.collapsed) .model-stage { display: none; }
+.luna-app.agent-only:not(.collapsed) .chat-panel {
+  flex: 1 1 auto; width: 100%; max-width: 900px; margin: 18px auto;
+}
+.luna-app.agent-only .model-placeholder { display: none; }
+/* The mood pip and the Dream button are re-parented into the chat header (app.ts) — they were
+   absolutely positioned against the stage that no longer exists. */
+.luna-app.agent-only .chat-header { justify-content: flex-start; }
+.luna-app.agent-only .chat-header .mood-pip {
+  position: static; margin-left: auto; box-shadow: none; padding: 2px 8px;
+}
+.luna-app.agent-only .chat-header .dream-btn {
+  position: static; font-size: 12px; padding: 5px 13px; box-shadow: 0 2px 0 var(--lavender-deep);
+}
+
 /* v0.26.2 (Initiative 19): pet mode — the desktop shell's transparent window. Only Luna, her
    bubbles, and the pill bar exist; the room (stripes/motifs/status) disappears so the desktop shows
    through. (v0.36.0 无边模式 already removed the lace strips everywhere.) */
@@ -771,6 +790,21 @@ body.pet { background: none; }
   flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain;
   padding-right: 6px; margin-right: -6px; /* scrollbar gutter that doesn't shift the content */
 }
+/* v0.39.2: the first step's two choices — full companion vs agent core. Cards, not radios: this is
+   the one decision that changes what the rest of the wizard even is, so it gets the room to say why. */
+.wizard-mode-cards { display: flex; flex-direction: column; gap: 10px; }
+.wizard-mode-card {
+  display: flex; flex-direction: column; gap: 4px; text-align: left; cursor: pointer;
+  font: inherit; color: var(--ink); background: #fff; padding: 13px 15px; border-radius: 13px;
+  border: 1.5px solid var(--inner-border);
+  transition: border-color var(--m-fast) ease, background var(--m-fast) ease, transform var(--m-fast) var(--ease-pop);
+}
+.wizard-mode-card:hover { border-color: #7fa8d8; background: #f7fbff; }
+.wizard-mode-card:active { transform: scale(0.99); }
+.wizard-mode-card.on { border-color: #7fa8d8; background: #f0f6fc; }
+.wizard-mode-name { font-size: 14px; font-weight: 700; color: var(--ink); }
+.wizard-mode-blurb { font-size: 12px; line-height: 1.5; color: var(--ink-soft); }
+
 .wizard-radio-row { display: flex; gap: 16px; font-size: 13px; color: var(--ink-soft); }
 .wizard-radio-row label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
 .wizard-actions .wizard-back { margin-right: auto; }

@@ -135,11 +135,16 @@ function ensureUserConfig(p: Paths): Record<string, string> {
 
 // The renderer's boot config, injected by the preload as window.lunaConfig. Read fresh from luna.env
 // (over process.env) so a just-installed model / changed voice is picked up on the next window load.
-function currentLunaConfig(): { modelUrl?: string; ttsBackend?: string; ttsUrl?: string } {
+function currentLunaConfig(): { modelUrl?: string; ttsBackend?: string; ttsUrl?: string; uiMode?: string } {
   const env: Record<string, string | undefined> = paths
     ? { ...process.env, ...parseEnvFile(readFileSync(paths.envFile, 'utf8')) }
     : process.env;
-  return { modelUrl: env['LUNA_MODEL_URL'], ttsBackend: env['LUNA_TTS_BACKEND'], ttsUrl: env['LUNA_TTS_URL'] };
+  return {
+    modelUrl: env['LUNA_MODEL_URL'],
+    ttsBackend: env['LUNA_TTS_BACKEND'],
+    ttsUrl: env['LUNA_TTS_URL'],
+    uiMode: env['LUNA_UI_MODE'],
+  };
 }
 
 // v0.35.4 (Initiative 25 close): the wizard is the DEFAULT setup experience; LUNA_SETUP_WIZARD=0 is
@@ -1063,16 +1068,18 @@ void app.whenReady().then(async () => {
   });
 });
 
-// The wizard go/no-go: the packaged setup window mounts the six-step wizard (default-on flag), the
-// first step is the chat card, and the language toggle is live. Asserted from the real bundle.
+// The wizard go/no-go: the packaged setup window mounts the wizard (default-on flag), the first step
+// is the mode card, and the language toggle is live. Asserted from the real bundle.
 // LUNA_SMOKE_SETUP=voice additionally walks to the voice step (http mode) before probing, and
 // LUNA_SMOKE_OUT captures a PNG — the docs/README screenshots come from the real packaged wizard.
+// v0.39.2: the walk starts by choosing the FULL mode — agent-only has no voice step to reach.
 async function smokeSetupProbe(win: BrowserWindow): Promise<void> {
   await new Promise((r) => setTimeout(r, 4000));
   if (process.env['LUNA_SMOKE_SETUP'] === 'voice') {
     await win.webContents.executeJavaScript(
       `(() => {
         const click = (txt) => { const b = [...document.querySelectorAll('button')].find(x => x.textContent === txt); if (b) b.click(); return !!b; };
+        document.querySelector('.wizard-mode-full')?.click();
         const key = [...document.querySelectorAll('input')].find(i => i.type === 'password');
         if (key) { key.value = 'sk-preview'; key.dispatchEvent(new Event('input')); }
         click('Next') || click('下一步');
@@ -1098,7 +1105,7 @@ async function smokeSetupProbe(win: BrowserWindow): Promise<void> {
     writeFileSync(shotPath, shot.toPNG());
   }
   const p = JSON.parse(probe) as { wizard: boolean; dots: number; step: string | null; guide: boolean; langBtn: boolean };
-  const ok = p.wizard && p.dots === 6 && !!p.step && p.guide && p.langBtn;
+  const ok = p.wizard && p.dots === 7 && !!p.step && p.guide && p.langBtn;
   console.log(JSON.stringify({ ok, ...p }));
   supervisor?.stop();
   app.exit(ok ? 0 : 1);

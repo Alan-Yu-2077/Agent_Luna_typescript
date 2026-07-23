@@ -38,12 +38,18 @@ contextBridge.exposeInMainWorld('lunaPet', {
   },
 });
 
-// Inject the desktop-resolved config (LUNA_MODEL_URL / LUNA_TTS_BACKEND / LUNA_TTS_URL) so the renderer
-// can resolve its avatar + voice without env access. sendSync is fine for a one-time boot read and is
-// sandbox-agnostic (a sandboxed preload has no process.env). A plain browser has no window.lunaConfig.
+// Inject the desktop-resolved config (LUNA_MODEL_URL / LUNA_TTS_BACKEND / LUNA_TTS_URL / LUNA_UI_MODE)
+// so the renderer can resolve its avatar + voice + front-end mode without env access. sendSync is fine
+// for a one-time boot read and is sandbox-agnostic (a sandboxed preload has no process.env). A plain
+// browser has no window.lunaConfig.
 contextBridge.exposeInMainWorld(
   'lunaConfig',
-  ipcRenderer.sendSync('luna:get-config') as { modelUrl?: string; ttsBackend?: string; ttsUrl?: string },
+  ipcRenderer.sendSync('luna:get-config') as {
+    modelUrl?: string;
+    ttsBackend?: string;
+    ttsUrl?: string;
+    uiMode?: string;
+  },
 );
 
 // v0.28.0: the first-run setup bridge. The renderer collects base URL + key + model; the SHELL

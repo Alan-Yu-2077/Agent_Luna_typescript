@@ -56,6 +56,19 @@ export const SETUP_COPY: CopyTable = {
   // v0.39.0: the walkthrough card collapses once the step has content of its own — this is its handle.
   'wizard.guide.summary': { zh: '这一步怎么弄?', en: 'How does this step work?' },
 
+  // v0.39.2: the first step — the full companion, or just the agent core.
+  'step.mode.title': { zh: '你想要哪个 Luna?', en: 'Which Luna do you want?' },
+  'step.mode.full.title': { zh: '完整的 Luna', en: 'The complete Luna' },
+  'step.mode.full.blurb': {
+    zh: 'Live2D 立绘 + 语音的陪伴体验。立绘和音色包需要你自己下载(向导里有链接,可一键部署)。',
+    en: 'The companion experience: a Live2D avatar with voice. The avatar and voice pack are yours to download — the wizard links them and can deploy the voice runtime for you.',
+  },
+  'step.mode.agent.title': { zh: '只要 agent 内核', en: 'Just the agent core' },
+  'step.mode.agent.blurb': {
+    zh: '同一个大脑,只有对话框。不配置立绘和语音,界面不为模型留空,配置也少两步。',
+    en: 'The same brain, nothing but the chat box. No avatar, no voice, no space reserved for a model — and two fewer steps to configure.',
+  },
+
   'step.chat.title': { zh: '聊天模型', en: 'Chat model' },
   'step.chat.baseUrl': { zh: 'API base URL', en: 'API base URL' },
   'step.chat.apiKey': { zh: 'API key', en: 'API key' },
@@ -141,6 +154,10 @@ export function makeT(lang: SetupLang): (key: string) => string {
 // v0.35.4: the walkthrough-card copy — registration guidance per the reference instance's vendors.
 // Keys are referenced from setupWizard's STEP_GUIDES; the parity test above covers them too.
 Object.assign(SETUP_COPY, {
+  'guide.mode': {
+    zh: '记忆、工具、联网、做梦这些内核能力两种模式完全一样——区别只在她有没有身体。不确定就先选「只要 agent 内核」,配置最快;以后想加立绘和语音,在「设置 → 配置向导 → 重新运行」里换成完整版即可,聊天记录和记忆都不会丢。',
+    en: 'Memory, tools, web access, dreaming — the core is identical in both. The only difference is whether she has a body. Unsure? Take the agent core: it is the fastest to set up, and you can switch to the complete Luna later from Settings → Setup wizard → Re-run… without losing your history or her memory.',
+  },
   'guide.chat': {
     zh: '注册 Anthropic 后在控制台创建 API key,粘贴到下面;官方 base URL 保持不变。用中转/网关的话,换成网关的 base URL 和 key 即可。key 只保存在你本机的配置文件里,不会上传。',
     en: 'Create an API key in the Anthropic Console and paste it below; keep the official base URL. Using a gateway? Swap in its base URL and key. Your key is stored only in a local config file — it never leaves this machine.',

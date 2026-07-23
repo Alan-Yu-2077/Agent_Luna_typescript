@@ -8,6 +8,7 @@ import { DEFAULT_IDLE_PROFILE, IDLE_PROFILES } from '../live2d/faceData';
 export type LayoutRefs = {
   statusBadge: HTMLElement;
   chatLog: HTMLElement;
+  chatHeader: HTMLElement;
   input: HTMLInputElement;
   inputRow: HTMLElement;
   sendBtn: HTMLButtonElement;
@@ -28,6 +29,10 @@ export type LayoutRefs = {
   idleSelect: HTMLSelectElement;
   petToggle: HTMLInputElement;
   serverSettings: HTMLElement;
+  // v0.39.2: agent-only mode hides the avatar pane outright — a tab of dead controls is worse than
+  // no tab. Exposed as refs so app.ts decides, and layout stays a pure builder.
+  avatarTab: HTMLElement;
+  avatarRailBtn: HTMLButtonElement;
 };
 
 type Motif = { ch: string; top: string; left: string; size: string; op?: string };
@@ -161,7 +166,7 @@ export function buildLayout(root: HTMLElement): LayoutRefs {
   const avatarTab = tabPane(settingsBody, 'avatar', false);
   const serverTab = tabPane(settingsBody, 'server', false);
   railBtn(settingsRail, '🎚', 'General', 'general', true);
-  railBtn(settingsRail, '✨', 'Avatar', 'avatar', false);
+  const avatarRailBtn = railBtn(settingsRail, '✨', 'Avatar', 'avatar', false);
   railBtn(settingsRail, '☁️', 'Server', 'server', false);
   wireTabs(settingsRail, [generalTab, avatarTab, serverTab]);
 
@@ -268,9 +273,9 @@ export function buildLayout(root: HTMLElement): LayoutRefs {
   dreamOverlay.appendChild(dreamWakeBtn);
 
   return {
-    statusBadge, chatLog, input, inputRow, sendBtn, collapseBtn, dreamBtn, modelStage,
+    statusBadge, chatLog, chatHeader: header, input, inputRow, sendBtn, collapseBtn, dreamBtn, modelStage,
     moodPip, scrollPill, dreamOverlay, dreamWakeBtn, dreamCaption,
     settingsBtn, settingsPanel, settingsBackdrop, ttsToggle, live2dToggle, gazeToggle, idleSelect,
-    petToggle, serverSettings,
+    petToggle, serverSettings, avatarTab, avatarRailBtn,
   };
 }

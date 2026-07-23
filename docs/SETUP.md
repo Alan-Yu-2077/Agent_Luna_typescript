@@ -7,13 +7,27 @@ higher-quality voice.
 ## The guided way (desktop app) — recommended
 
 Since v0.35, the **desktop app's first launch opens a setup wizard** (中文/English) that covers this
-entire guide interactively: chat API key (with a live connection test), memory embeddings, Tavily web
+entire guide interactively.
+
+Since v0.39.2 its **first step asks which Luna you want**:
+
+| Choice | What you get | Steps |
+|---|---|---|
+| **The complete Luna** | The companion experience — Live2D avatar + voice. You supply the avatar and voice packs (the wizard links them, and can deploy the voice runtime for you). | 7 |
+| **Just the agent core** | The same brain with nothing but the chat box. No avatar, no voice, and the front end reserves no space for a model. | 5 |
+
+The core is identical either way — memory, tools, web access, dreaming. The choice is written to
+`LUNA_UI_MODE` in `luna.env`; switching means re-running the wizard, and nothing (history, memory) is
+lost when you do.
+
+The rest of the wizard: chat API key (with a live connection test), memory embeddings, Tavily web
 search, QWeather weather (each with a real "test this key" probe and links to the exact registration
-consoles), then **drag-and-drop installs** for a Live2D model folder and a GPT-SoVITS voice pack —
-the voice step can **download + deploy GPT-SoVITS itself and start the voice server for you**
-(managed: crash-restart + clean shutdown included), and a live badge flips green when the voice is
-up. Re-run it anytime from **Settings → Setup wizard → Re-run…**. `LUNA_SETUP_WIZARD=0` in
-`luna.env` restores the minimal three-field screen.
+consoles), then — in the complete mode — **drag-and-drop installs** for a Live2D model folder and a
+GPT-SoVITS voice pack. The voice step can **download + deploy GPT-SoVITS itself and start the voice
+server for you** (managed: crash-restart + clean shutdown included), with a progress bar over the
+download and a live badge that flips green when the voice is up. Re-run it anytime from
+**Settings → Setup wizard → Re-run…**. `LUNA_SETUP_WIZARD=0` in `luna.env` restores the minimal
+three-field screen.
 
 Everything below is the manual/advanced path — the web-only (browser) flow, headless setups, and
 what the wizard writes under the hood.

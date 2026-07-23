@@ -5,6 +5,7 @@ import {
   formatBytes,
   guideOpen,
   hydrateWizardValues,
+  modeValues,
   nextLabelKey,
   probeFieldsFor,
   probeGateAction,
@@ -15,12 +16,38 @@ import {
 } from './setupWizard';
 import { makeT, SETUP_COPY } from './setupCopy';
 
-describe('wizardSteps (v0.35.0)', () => {
-  test('six steps in onboarding order, chat first and required', () => {
+describe('wizardSteps (v0.35.0, mode-aware since v0.39.2)', () => {
+  test('the full run is mode → chat → the four optional steps, chat required', () => {
     const steps = wizardSteps();
-    expect(steps.map((s) => s.id)).toEqual(['chat', 'embedding', 'search', 'weather', 'avatar', 'voice']);
-    expect(steps[0]?.optional).toBe(false);
-    expect(steps.slice(1).every((s) => s.optional)).toBe(true);
+    expect(steps.map((s) => s.id)).toEqual([
+      'mode',
+      'chat',
+      'embedding',
+      'search',
+      'weather',
+      'avatar',
+      'voice',
+    ]);
+    expect(steps[0]?.optional).toBe(false); // the mode decides what the rest IS — not skippable
+    expect(steps[1]?.optional).toBe(false);
+    expect(steps.slice(2).every((s) => s.optional)).toBe(true);
+  });
+
+  test('agent-only drops the two resource steps entirely — not greyed out, gone', () => {
+    const steps = wizardSteps('agent');
+    expect(steps.map((s) => s.id)).toEqual(['mode', 'chat', 'embedding', 'search', 'weather']);
+    expect(steps.some((s) => s.id === 'avatar' || s.id === 'voice')).toBe(false);
+  });
+
+  test('every step in either mode has a title + guide that resolve in both languages', () => {
+    const zh = makeT('zh');
+    const en = makeT('en');
+    for (const mode of ['full', 'agent'] as const) {
+      for (const step of wizardSteps(mode)) {
+        expect(zh(step.titleKey), `${mode}/${step.id}`).not.toBe(step.titleKey);
+        expect(en(step.titleKey), `${mode}/${step.id}`).not.toBe(step.titleKey);
+      }
+    }
   });
 
   test('field keys are exactly the luna.env keys the shell whitelist manages', () => {
@@ -146,6 +173,23 @@ describe('probeFieldsFor', () => {
     expect(probeFieldsFor('search', new Map([['LUNA_WEB_SEARCH_API_KEY', ' tvly-1 ']]))).toEqual({
       apiKey: 'tvly-1',
     });
+  });
+});
+
+// v0.39.2: what the chosen mode itself writes to luna.env.
+describe('modeValues', () => {
+  test('agent-only pins the voice off along with the mode', () => {
+    expect(modeValues('agent', 'http')).toEqual({ LUNA_UI_MODE: 'agent', LUNA_TTS_BACKEND: 'none' });
+  });
+
+  test('coming back to full OVERWRITES the pinned none — otherwise the full Luna returns mute', () => {
+    expect(modeValues('full', 'browser')).toEqual({ LUNA_UI_MODE: 'full', LUNA_TTS_BACKEND: 'browser' });
+    expect(modeValues('full', 'http')['LUNA_TTS_BACKEND']).toBe('http');
+  });
+
+  test('merged last, it beats a stale backend the voice step left in the collected values', () => {
+    const collected = collectValues(new Map([['LUNA_TTS_BACKEND', 'http']]));
+    expect({ ...collected, ...modeValues('agent', 'http') }['LUNA_TTS_BACKEND']).toBe('none');
   });
 });
 
