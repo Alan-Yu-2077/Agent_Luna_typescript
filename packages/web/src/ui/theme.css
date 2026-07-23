@@ -706,8 +706,11 @@ body.pet { background: none; }
 }
 
 /* v0.28.0: first-run setup screen (desktop shell, ?setup=1) */
+/* v0.39.0: the vertical padding is the card's clearance — .luna-app is height:100vh + overflow:hidden,
+   so without it a tall card is silently CLIPPED (Back/Next included) instead of scrolling. */
 .luna-app.setup {
   display: flex; align-items: center; justify-content: center; min-height: 100vh;
+  padding: 20px 0;
   background: repeating-linear-gradient(90deg, #e4eef9 0, #e4eef9 16px, #f5f9fd 16px, #f5f9fd 32px);
 }
 .setup-card {
@@ -736,7 +739,18 @@ body.pet { background: none; }
 .setup-btn:disabled { opacity: 0.55; cursor: default; }
 
 /* v0.35.0 (Initiative 25): the multi-step wizard over the same setup-card visual language */
-.setup-card.wizard { position: relative; width: min(480px, 94vw); }
+.setup-card.wizard { position: relative; width: min(480px, 94vw); max-height: calc(100vh - 40px); }
+/* v0.39.0: a step that grew a second body of content (a scanned voice pack) gets more width before it
+   is forced to spend height. Set by the renderer, cleared the moment that content goes away. */
+.setup-card.wizard[data-dense='1'] { width: min(600px, 96vw); }
+/* v0.39.0: with the card clamped, the step body must be the ONLY thing that shrinks — the progress
+   dots, the step title, the status line and the Back/Next row stay pinned and always reachable. */
+.setup-card.wizard > .setup-title,
+.setup-card.wizard > .setup-sub,
+.setup-card.wizard > .wizard-dots,
+.setup-card.wizard > .wizard-step-title,
+.setup-card.wizard > .setup-status,
+.setup-card.wizard > .setup-actions { flex: none; }
 .setup-lang-btn {
   position: absolute; top: 14px; right: 16px; font: inherit; font-size: 11px; padding: 4px 10px;
   border-radius: 9px; border: 1px solid rgba(90, 120, 160, 0.3); background: #fff;
@@ -750,7 +764,13 @@ body.pet { background: none; }
 .wizard-dot.done { background: #a9c6e6; }
 .wizard-dot.on { background: #7fa8d8; }
 .wizard-step-title { font-size: 13px; font-weight: 700; color: var(--ink-soft); }
-.wizard-step-body { display: flex; flex-direction: column; gap: 10px; min-height: 120px; }
+/* v0.39.0: min-height doubles as the flex floor — an explicit value overrides a flex item's default
+   `min-height:auto`, which is what pins a tall step's content open and pushes the actions off-screen. */
+.wizard-step-body {
+  display: flex; flex-direction: column; gap: 10px; min-height: 120px;
+  flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain;
+  padding-right: 6px; margin-right: -6px; /* scrollbar gutter that doesn't shift the content */
+}
 .wizard-radio-row { display: flex; gap: 16px; font-size: 13px; color: var(--ink-soft); }
 .wizard-radio-row label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
 .wizard-actions .wizard-back { margin-right: auto; }
@@ -774,10 +794,22 @@ body.pet { background: none; }
   background: #f0f4f9; border-radius: 9px; padding: 10px 12px; margin: 0;
   white-space: pre-wrap; word-break: break-all; user-select: all;
 }
+/* v0.39.0: the walkthrough is a <details> now — open on arrival, collapsed once the step has real
+   content of its own, so a long paragraph never out-competes the thing you actually have to do. */
 .wizard-guide {
-  display: flex; flex-direction: column; gap: 7px; background: #f4f8fc; border-radius: 11px;
-  padding: 11px 13px;
+  background: #f4f8fc; border-radius: 11px; padding: 11px 13px; flex: none;
 }
+.wizard-guide[open] { display: flex; flex-direction: column; gap: 7px; }
+.wizard-guide-summary {
+  font-size: 12px; font-weight: 600; color: #4a7cb8; cursor: pointer; list-style: none;
+  display: flex; align-items: center; gap: 6px;
+}
+.wizard-guide-summary::-webkit-details-marker { display: none; }
+.wizard-guide-summary::before {
+  content: "›"; display: inline-block; font-size: 15px; line-height: 1;
+  transition: transform var(--m-fast) ease;
+}
+.wizard-guide[open] .wizard-guide-summary::before { transform: rotate(90deg); }
 .wizard-guide-text { font-size: 12px; line-height: 1.55; color: var(--ink-soft); }
 .wizard-guide-links { display: flex; gap: 8px; flex-wrap: wrap; }
 .wizard-guide-link {
@@ -789,6 +821,21 @@ body.pet { background: none; }
 .wizard-voice-badge { font-size: 12px; font-weight: 600; }
 .wizard-voice-badge.down { color: #c9556b; }
 .wizard-voice-badge.up { color: #4a9b6e; }
+
+/* v0.39.0: a scanned voice pack reads as ONE block instead of six loose form rows, and its rows go
+   label|value horizontal — those pick rows were the biggest height sink after a pack drop. */
+.wizard-pack {
+  display: flex; flex-direction: column; gap: 8px; flex: none;
+  background: #f8fbfe; border: 1px solid var(--inner-border); border-radius: 11px; padding: 11px 13px;
+}
+.wizard-pack-title { font-size: 12px; font-weight: 700; color: var(--ink-soft); }
+.wizard-pack .setup-field { flex-direction: row; align-items: center; gap: 10px; }
+.wizard-pack .setup-field > span { flex: 0 0 38%; }
+.wizard-pack .setup-field > select,
+.wizard-pack .setup-field > textarea,
+.wizard-pack .setup-field > .wizard-picked { flex: 1 1 auto; min-width: 0; }
+.wizard-pack .wizard-picked { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wizard-pack .wizard-command { max-height: 96px; overflow: auto; }
 
 /* v0.28.6: NO -webkit-app-region rules — on transparent frameless windows the drag region ate
    every mousedown before the DOM saw it (nothing inside the pet was clickable). Window-move is

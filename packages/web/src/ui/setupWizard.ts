@@ -250,6 +250,14 @@ export const STEP_GUIDES: Record<WizardStepSpec['id'], StepGuide> = {
   },
 };
 
+// v0.39.0: which steps may auto-collapse their walkthrough card. Only the two resource steps grow a
+// SECOND body of content (a scanned voice pack, an installed avatar) that then competes with the
+// guidance for the card's height; everywhere else the guidance IS the step, so it stays open.
+export function guideOpen(stepId: WizardStepSpec['id'], hasResults: boolean): boolean {
+  if (stepId !== 'voice' && stepId !== 'avatar') return true;
+  return !hasResults;
+}
+
 type InstallResult = { ok: boolean; modelUrl?: string; error?: string };
 type PetBridge = {
   chooseModel?: () => Promise<InstallResult>;
@@ -352,6 +360,7 @@ export function mountSetupWizard(root: HTMLElement, opts: { preview?: boolean } 
   let configuredSecrets = new Set<string>();
   const probeStates = new Map<string, ProbeState>(); // per-step; reset to 'none' when its fields change
   let voiceBackend = 'browser';
+  let avatarInstalled = false;
   let busy = false;
   const voice: VoiceState = { picks: {}, transcript: '', promptLang: 'en' };
   let healthTimer: ReturnType<typeof setInterval> | null = null;
@@ -419,11 +428,20 @@ export function mountSetupWizard(root: HTMLElement, opts: { preview?: boolean } 
     body.className = 'wizard-step-body';
     body.dataset['step'] = step.id;
     card.appendChild(body);
+    // v0.39.0: a step carrying scan results earns the wider card — spend width before height.
+    if (step.id === 'voice' && voice.scan) card.dataset['dense'] = '1';
+    else delete card.dataset['dense'];
 
     // v0.35.4: the walkthrough card — plain-language registration/download guidance + links.
+    // v0.39.0: a <details> that yields its space once the step has content of its own.
     const guide = STEP_GUIDES[step.id];
-    const guideBox = doc.createElement('div');
+    const guideBox = doc.createElement('details');
     guideBox.className = 'wizard-guide';
+    guideBox.open = guideOpen(step.id, step.id === 'voice' ? voice.scan !== undefined : avatarInstalled);
+    const summary = doc.createElement('summary');
+    summary.className = 'wizard-guide-summary';
+    summary.textContent = t('wizard.guide.summary');
+    guideBox.appendChild(summary);
     const guideText = doc.createElement('div');
     guideText.className = 'wizard-guide-text';
     guideText.textContent = t(guide.textKey);
@@ -555,6 +573,15 @@ export function mountSetupWizard(root: HTMLElement, opts: { preview?: boolean } 
           body.appendChild(zone);
 
           if (voice.scan && voice.root) {
+            // v0.39.0: everything the scan produced lives in ONE block with horizontal rows, so a
+            // dropped pack adds a bounded card instead of eight full-width form rows.
+            const pack = doc.createElement('div');
+            pack.className = 'wizard-pack';
+            const packTitle = doc.createElement('div');
+            packTitle.className = 'wizard-pack-title';
+            packTitle.textContent = t('step.voice.pack.title');
+            pack.appendChild(packTitle);
+            body.appendChild(pack);
             const pickRow = (
               labelKey: string,
               options: string[],
@@ -585,7 +612,7 @@ export function mountSetupWizard(root: HTMLElement, opts: { preview?: boolean } 
                 if (!picked && options[0]) onPick(options[0]);
                 row.appendChild(select);
               }
-              body.appendChild(row);
+              pack.appendChild(row);
             };
             pickRow('step.voice.gpt', voice.scan.gpt, voice.picks.gptCkpt, (p) => {
               voice.picks.gptCkpt = p;
@@ -609,7 +636,7 @@ export function mountSetupWizard(root: HTMLElement, opts: { preview?: boolean } 
               voice.transcript = tArea.value;
             });
             tRow.append(tSpan, tArea);
-            body.appendChild(tRow);
+            pack.appendChild(tRow);
 
             const langRow = doc.createElement('label');
             langRow.className = 'setup-field';
@@ -628,7 +655,7 @@ export function mountSetupWizard(root: HTMLElement, opts: { preview?: boolean } 
               voice.promptLang = lSel.value;
             });
             langRow.append(lSpan, lSel);
-            body.appendChild(langRow);
+            pack.appendChild(langRow);
 
             const runtimeRow = doc.createElement('div');
             runtimeRow.className = 'wizard-runtime-row';
@@ -654,7 +681,7 @@ export function mountSetupWizard(root: HTMLElement, opts: { preview?: boolean } 
               });
             });
             runtimeRow.append(rBtn, rInfo);
-            body.appendChild(runtimeRow);
+            pack.appendChild(runtimeRow);
 
             const installBtn = doc.createElement('button');
             installBtn.type = 'button';
@@ -691,7 +718,7 @@ export function mountSetupWizard(root: HTMLElement, opts: { preview?: boolean } 
                 }
               });
             });
-            body.appendChild(installBtn);
+            pack.appendChild(installBtn);
 
             if (voice.installedOk && voice.command) {
               const cmdTitle = doc.createElement('div');
@@ -709,7 +736,7 @@ export function mountSetupWizard(root: HTMLElement, opts: { preview?: boolean } 
                   copyBtn.textContent = t('step.voice.copied');
                 });
               });
-              body.append(cmdTitle, pre, copyBtn);
+              pack.append(cmdTitle, pre, copyBtn);
             }
           }
         }
@@ -779,7 +806,14 @@ export function mountSetupWizard(root: HTMLElement, opts: { preview?: boolean } 
       const onResult = (r: InstallResult): void => {
         // 'cancelled' is the picker dialog being dismissed — not an error worth alarming over.
         if (!r.ok && r.error === 'cancelled') return;
-        setStatus(r.ok ? t('step.avatar.installed') : (r.error ?? ''), r.ok ? 'ok' : 'error');
+        if (!r.ok) return setStatus(r.error ?? '', 'error');
+        avatarInstalled = true;
+        render(); // collapses the walkthrough now that the step is done; status is re-set after
+        const st = card.querySelector('.setup-status');
+        if (st instanceof HTMLElement) {
+          st.textContent = t('step.avatar.installed');
+          st.dataset['kind'] = 'ok';
+        }
       };
       if (installFile) {
         // v0.35.2: drag the downloaded model folder straight in.

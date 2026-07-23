@@ -53,6 +53,8 @@ export const SETUP_COPY: CopyTable = {
   'wizard.optional': { zh: '(可跳过)', en: '(optional)' },
   'wizard.continueAnyway': { zh: '仍然继续', en: 'Continue anyway' },
   'wizard.nothingToTest': { zh: '还没填写要测试的 key。', en: 'Nothing to test yet — fill in a key first.' },
+  // v0.39.0: the walkthrough card collapses once the step has content of its own — this is its handle.
+  'wizard.guide.summary': { zh: '这一步怎么弄?', en: 'How does this step work?' },
 
   'step.chat.title': { zh: '聊天模型', en: 'Chat model' },
   'step.chat.baseUrl': { zh: 'API base URL', en: 'API base URL' },
@@ -93,6 +95,7 @@ export const SETUP_COPY: CopyTable = {
   'step.voice.url': { zh: 'api_v2 地址', en: 'api_v2 URL' },
   'step.voice.drop': { zh: '把下载好的音色包文件夹拖到这里', en: 'Drag the downloaded voice pack folder here' },
   'step.voice.scanning': { zh: '扫描音色包…', en: 'Scanning the pack…' },
+  'step.voice.pack.title': { zh: '音色包内容', en: 'What the pack contains' },
   'step.voice.gpt': { zh: 'GPT 权重(.ckpt)', en: 'GPT weight (.ckpt)' },
   'step.voice.sovits': { zh: 'SoVITS 权重(.pth)', en: 'SoVITS weight (.pth)' },
   'step.voice.ref': { zh: '参考音频(.wav)', en: 'Reference audio (.wav)' },

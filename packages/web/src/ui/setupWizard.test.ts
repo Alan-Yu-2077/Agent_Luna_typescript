@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   collectValues,
   createWizardNav,
+  guideOpen,
   hydrateWizardValues,
   nextLabelKey,
   probeFieldsFor,
@@ -82,6 +83,22 @@ describe('walkthrough guides (v0.35.4)', () => {
     ];
     for (const url of expected) expect(hrefs.filter((h) => h === url).length, url).toBe(1);
     expect(hrefs.length).toBe(expected.length);
+  });
+});
+
+// v0.39.0: the walkthrough must yield its space once the step has content of its own — a dropped
+// voice pack adds eight rows, and the long guidance paragraph used to keep competing for the height.
+describe('guideOpen (v0.39.0)', () => {
+  test('a resource step collapses its walkthrough once it has results', () => {
+    expect(guideOpen('voice', true)).toBe(false);
+    expect(guideOpen('avatar', true)).toBe(false);
+  });
+  test('every step arrives with the walkthrough open', () => {
+    for (const step of wizardSteps()) expect(guideOpen(step.id, false), step.id).toBe(true);
+  });
+  test('a key step stays open even if something reports results — the guidance IS the step', () => {
+    expect(guideOpen('chat', true)).toBe(true);
+    expect(guideOpen('weather', true)).toBe(true);
   });
 });
 
