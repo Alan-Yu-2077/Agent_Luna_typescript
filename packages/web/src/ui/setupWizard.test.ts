@@ -2,12 +2,14 @@ import { describe, expect, test } from 'bun:test';
 import {
   collectValues,
   createWizardNav,
+  formatBytes,
   guideOpen,
   hydrateWizardValues,
   nextLabelKey,
   probeFieldsFor,
   probeGateAction,
   provisionCopyKey,
+  provisionProgress,
   STEP_GUIDES,
   wizardSteps,
 } from './setupWizard';
@@ -181,6 +183,83 @@ describe('provisionCopyKey', () => {
     for (const st of ['preflight', 'downloading', 'extracting', 'materializing', 'venv', 'validating']) {
       expect(provisionCopyKey(st, true)).toBe(`step.voice.provision.${st}`);
     }
+  });
+});
+
+// v0.39.1: the installer's progress bar — a 2–5.7 GB download plus minutes inside pip has to look
+// alive, and the stages WITHOUT byte totals must not fake a percentage.
+describe('formatBytes (v0.39.1)', () => {
+  test('scales through the units and never prints a negative or NaN size', () => {
+    expect(formatBytes(0)).toBe('0 B');
+    expect(formatBytes(-1)).toBe('0 B');
+    expect(formatBytes(Number.NaN)).toBe('0 B');
+    expect(formatBytes(512)).toBe('512 B');
+    expect(formatBytes(1024)).toBe('1.0 KB');
+    expect(formatBytes(5 * 1024 * 1024)).toBe('5.0 MB');
+    expect(formatBytes(1.5 * 1024 ** 3)).toBe('1.5 GB');
+    expect(formatBytes(5.7 * 1024 ** 3)).toBe('5.7 GB');
+  });
+  test('drops the decimal once the number is wide enough to read on its own', () => {
+    expect(formatBytes(12 * 1024 ** 3)).toBe('12 GB');
+  });
+});
+
+describe('provisionProgress (v0.39.1)', () => {
+  const snap = (o: Partial<Parameters<typeof provisionProgress>[0]>): Parameters<typeof provisionProgress>[0] => ({
+    stage: 'downloading',
+    pct: 0,
+    bytesDone: 0,
+    bytesTotal: 0,
+    inFlight: true,
+    ...o,
+  });
+
+  test('nothing started yet → no empty rail', () => {
+    expect(provisionProgress(snap({ stage: 'idle', inFlight: false })).mode).toBe('hidden');
+  });
+
+  test('downloading with a known total is bytes-weighted and labelled', () => {
+    const v = provisionProgress(snap({ pct: 21, bytesDone: 1.2 * 1024 ** 3, bytesTotal: 5.7 * 1024 ** 3 }));
+    expect(v).toMatchObject({ mode: 'determinate', pct: 21, tone: 'active' });
+    expect(v.detail).toBe('1.2 GB / 5.7 GB · 21%');
+  });
+
+  test('a stage with no byte total sweeps instead of faking a percentage', () => {
+    for (const stage of ['preflight', 'extracting', 'materializing', 'venv', 'validating']) {
+      const v = provisionProgress(snap({ stage, pct: 99 }));
+      expect(v.mode, stage).toBe('indeterminate');
+      expect(v.detail, stage).toBe('');
+    }
+    expect(provisionProgress(snap({ bytesTotal: 0 })).mode).toBe('indeterminate'); // unknown total
+  });
+
+  test('a parked install shows where it stopped — sweeping would claim it is still working', () => {
+    const v = provisionProgress(snap({ stage: 'venv', pct: 60, inFlight: false }));
+    expect(v).toMatchObject({ mode: 'determinate', pct: 60 });
+  });
+
+  test('a parked download keeps its byte label; a parked LATER stage does not resurrect it', () => {
+    const mid = snap({ pct: 40, bytesDone: 2 * 1024 ** 3, bytesTotal: 5 * 1024 ** 3, inFlight: false });
+    expect(provisionProgress(mid).detail).toBe('2.0 GB / 5.0 GB · 40%');
+    expect(provisionProgress({ ...mid, stage: 'venv' }).detail).toBe('');
+  });
+
+  test('terminal states pin the bar and colour it', () => {
+    expect(provisionProgress(snap({ stage: 'ready', pct: 100 }))).toMatchObject({
+      mode: 'determinate',
+      pct: 100,
+      tone: 'ok',
+    });
+    expect(provisionProgress(snap({ stage: 'failed', pct: 37, inFlight: false }))).toMatchObject({
+      mode: 'determinate',
+      pct: 37,
+      tone: 'error',
+    });
+  });
+
+  test('a nonsense pct from the shell is clamped, never written into a width', () => {
+    expect(provisionProgress(snap({ pct: 140 })).pct).toBe(100);
+    expect(provisionProgress(snap({ pct: -5 })).pct).toBe(0);
   });
 });
 

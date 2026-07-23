@@ -176,6 +176,49 @@ export function provisionCopyKey(stage: string, inFlight: boolean): string {
   return `step.voice.provision.${stage}`;
 }
 
+// v0.39.1: the one-click installer moves 2–5.7 GB and then sits inside pip for minutes. A single
+// static line of copy is indistinguishable from a hang, so the shell's status snapshot is mapped onto
+// a bar: bytes-weighted where bytes exist, a sweep where only the stage is known. Pure so it tests.
+export type ProvisionSnapshot = {
+  stage: string;
+  pct: number;
+  bytesDone: number;
+  bytesTotal: number;
+  inFlight: boolean;
+};
+export type ProgressView = {
+  mode: 'hidden' | 'determinate' | 'indeterminate';
+  pct: number;
+  detail: string;
+  tone: 'active' | 'ok' | 'error';
+};
+
+const BYTE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB'] as const;
+export function formatBytes(n: number): string {
+  if (!Number.isFinite(n) || n <= 0) return '0 B';
+  let value = n;
+  let unit = 0;
+  while (value >= 1024 && unit < BYTE_UNITS.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  return `${unit === 0 || value >= 10 ? Math.round(value) : value.toFixed(1)} ${BYTE_UNITS[unit]}`;
+}
+
+export function provisionProgress(s: ProvisionSnapshot): ProgressView {
+  const pct = Math.max(0, Math.min(100, Math.round(s.pct)));
+  if (s.stage === 'idle') return { mode: 'hidden', pct: 0, detail: '', tone: 'active' };
+  if (s.stage === 'ready') return { mode: 'determinate', pct: 100, detail: '', tone: 'ok' };
+  if (s.stage === 'failed') return { mode: 'determinate', pct, detail: '', tone: 'error' };
+  // Bytes are only meaningful WHILE downloading — a parked venv stage still carries the finished
+  // download's totals, and a frozen "5.7 GB / 5.7 GB" there reads as progress that stopped moving.
+  const downloading = s.stage === 'downloading' && s.bytesTotal > 0;
+  const detail = downloading ? `${formatBytes(s.bytesDone)} / ${formatBytes(s.bytesTotal)} · ${pct}%` : '';
+  // A parked install (quit mid-run) shows where it stopped; sweeping would claim it is still working.
+  if (!s.inFlight || downloading) return { mode: 'determinate', pct, detail, tone: 'active' };
+  return { mode: 'indeterminate', pct, detail: '', tone: 'active' };
+}
+
 // v0.35.1: the probe gate for optional steps. Next with an untested filled key runs the probe
 // first; a failed probe arms "continue anyway" (the second click advances). Pure so it unit-tests.
 export type ProbeState = 'none' | 'ok' | 'fail';
@@ -504,17 +547,45 @@ export function mountSetupWizard(root: HTMLElement, opts: { preview?: boolean } 
           const line = doc.createElement('div');
           line.className = 'wizard-provision-status';
           line.textContent = t('step.voice.provision.hint');
+          // v0.39.1: the bar. Hidden until the install is actually a thing (stage 'idle' → no empty rail).
+          const bar = doc.createElement('div');
+          bar.className = 'wizard-progress';
+          bar.hidden = true;
+          bar.setAttribute('role', 'progressbar');
+          bar.setAttribute('aria-valuemin', '0');
+          bar.setAttribute('aria-valuemax', '100');
+          const fill = doc.createElement('div');
+          fill.className = 'wizard-progress-fill';
+          bar.appendChild(fill);
+          const detail = doc.createElement('div');
+          detail.className = 'wizard-progress-detail';
           row.appendChild(btn);
-          box.append(row, line);
+          box.append(row, line, bar, detail);
           body.appendChild(box);
 
           const paint = (snap: Record<string, unknown>): void => {
             const stage = typeof snap['stage'] === 'string' ? snap['stage'] : 'idle';
             const inFlight = snap['inFlight'] === true;
-            const pct = typeof snap['pct'] === 'number' ? snap['pct'] : 0;
+            const num = (k: string): number => {
+              const v = snap[k];
+              return typeof v === 'number' ? v : 0;
+            };
             const err = typeof snap['error'] === 'string' ? ` — ${snap['error']}` : '';
-            const pctTxt = stage === 'downloading' && pct > 0 ? ` ${pct}%` : '';
-            line.textContent = `${t(provisionCopyKey(stage, inFlight))}${pctTxt}${stage === 'failed' ? err : ''}`;
+            const p = provisionProgress({
+              stage,
+              pct: num('pct'),
+              bytesDone: num('bytesDone'),
+              bytesTotal: num('bytesTotal'),
+              inFlight,
+            });
+            line.textContent = `${t(provisionCopyKey(stage, inFlight))}${stage === 'failed' ? err : ''}`;
+            bar.hidden = p.mode === 'hidden';
+            bar.classList.toggle('indeterminate', p.mode === 'indeterminate');
+            bar.dataset['tone'] = p.tone;
+            fill.style.width = p.mode === 'indeterminate' ? '' : `${p.pct}%`;
+            if (p.mode === 'determinate') bar.setAttribute('aria-valuenow', String(p.pct));
+            else bar.removeAttribute('aria-valuenow');
+            detail.textContent = p.detail;
             btn.disabled = inFlight || stage === 'ready';
             if ((stage === 'ready' || stage === 'failed') && provisionTimer !== null) {
               clearInterval(provisionTimer);
