@@ -4,9 +4,16 @@ import {
   buildManifest,
   checkoutFfmpeg,
   INFERENCE_REQUIREMENTS,
+  JIEBA_SHIM_INIT,
+  JIEBA_SHIM_POSSEG,
+  markerIsCurrent,
   PYTHON_CANDIDATES,
+  recipePython,
   runProvision,
-  sevenZipCandidates,
+  venvPythonPath,
+  WIN_FFMPEG_DIR,
+  WIN_PY_DIR,
+  winSitePackages,
   type Artifact,
   type ProvisionDirs,
   type ProvisionSeams,
@@ -93,11 +100,18 @@ function fakeWorld(o: {
       files.set(join(pre, 'chinese-hubert-base', 'pytorch_model.bin'), 1);
       files.set(join(DIRS.runtimeDir, 'GPT_SoVITS', 'text', 'G2PWModel'), 1);
       files.set(join(DIRS.runtimeDir, 'nltk_data', 'corpora', 'cmudict'), 1);
+      // v0.40.0: the two Windows-only payloads land by extraction too.
+      if ((o.platform ?? 'darwin') === 'win32') {
+        files.set(join(DIRS.runtimeDir, WIN_PY_DIR, 'python.exe'), 1);
+        files.set(join(DIRS.runtimeDir, WIN_FFMPEG_DIR, 'bin', 'ffmpeg.exe'), 1);
+      }
       return Promise.resolve();
     },
+    // v0.40.0: the venv interpreter lands where the REAL platform puts it. Hardcoding the POSIX path
+    // here would make every Windows assertion below pass against a layout Windows never produces.
     exec: (command, args) => {
       calls.execs.push(`${command} ${args.join(' ')}`);
-      if (args.includes('venv')) files.set(join(DIRS.runtimeDir, '.venv', 'bin', 'python'), 1);
+      if (args.includes('venv')) files.set(venvPythonPath(DIRS.runtimeDir, o.platform ?? 'darwin'), 1);
       return Promise.resolve();
     },
   };
@@ -203,15 +217,54 @@ describe('runProvision — stage machine', () => {
     expect(world.calls.downloads.length).toBe(before);
   });
 
-  test('win32: single 整合包 artifact, no venv stage', async () => {
+  // v0.40.0: Windows runs the SAME recipe as everyone else. It used to be a single 8.19 GB 整合包
+  // with no venv stage at all.
+  test('win32: the scripted recipe plus its own interpreter and ffmpeg, and it DOES build a venv', async () => {
     const manifest = buildManifest({ platform: 'win32' });
-    const world = fakeWorld({ platform: 'win32', manifest });
-    expect(manifest.length).toBe(1);
-    expect(manifest[0]!.archive).toBe('7z');
+    const world = fakeWorld({ platform: 'win32', manifest, python: null });
+    expect(manifest.some((a) => a.url.includes('.7z'))).toBe(false);
+    expect(manifest.some((a) => a.dest === WIN_PY_DIR)).toBe(true);
+    expect(manifest.some((a) => a.dest === WIN_FFMPEG_DIR)).toBe(true);
+    // the shared scripted body is present too — the models, not just the extras
+    expect(manifest.some((a) => a.name.startsWith('roberta/'))).toBe(true);
     const { final, stages } = await run(world, manifest);
     expect(final.stage).toBe('ready');
-    expect(stages).not.toContain('venv');
-    expect(world.calls.execs.length).toBe(0);
+    expect(stages).toContain('venv');
+  });
+
+  test('win32 builds the venv from the PROVISIONED interpreter, never a system one', async () => {
+    const manifest = buildManifest({ platform: 'win32' });
+    const world = fakeWorld({ platform: 'win32', manifest, python: null });
+    await run(world, manifest);
+    const winPy = join(DIRS.runtimeDir, WIN_PY_DIR, 'python.exe');
+    expect(world.calls.execs[0]).toBe(`${winPy} -m venv .venv`);
+    // …and every later pip call goes through the venv's Windows-layout interpreter
+    const venvPy = venvPythonPath(DIRS.runtimeDir, 'win32');
+    expect(venvPy.endsWith(join('.venv', 'Scripts', 'python.exe'))).toBe(true);
+    expect(world.calls.execs.slice(1).every((c) => c.startsWith(venvPy))).toBe(true);
+  });
+
+  test('win32 installs the jieba shim as a PACKAGE (a bare module cannot satisfy jieba_fast.posseg)', async () => {
+    const manifest = buildManifest({ platform: 'win32' });
+    const world = fakeWorld({ platform: 'win32', manifest, python: null });
+    const { final } = await run(world, manifest);
+    expect(final.stage).toBe('ready');
+    const pkg = join(winSitePackages(DIRS.runtimeDir), 'jieba_fast');
+    expect(world.texts.get(join(pkg, '__init__.py'))).toBe(JIEBA_SHIM_INIT);
+    expect(world.texts.get(join(pkg, 'posseg.py'))).toBe(JIEBA_SHIM_POSSEG);
+  });
+
+  test('win32 never runs the pyopenjtalk warm-up — it is not installed there', async () => {
+    const manifest = buildManifest({ platform: 'win32' });
+    const world = fakeWorld({ platform: 'win32', manifest, python: null });
+    await run(world, manifest);
+    expect(world.calls.execs.some((c) => c.includes('pyopenjtalk'))).toBe(false);
+  });
+
+  test('mac still runs it — the Windows exemption must not leak', async () => {
+    const world = fakeWorld({});
+    await run(world);
+    expect(world.calls.execs.some((c) => c.includes('pyopenjtalk'))).toBe(true);
   });
 });
 
@@ -279,11 +332,14 @@ describe('runProvision — the python gate', () => {
     expect(world.calls.execs.every((c) => !c.startsWith('python3 '))).toBe(true);
   });
 
-  test('win32 needs no system python — the 整合包 ships its own', async () => {
-    const world = fakeWorld({ platform: 'win32', python: null });
-    const { final } = await run(world);
+  // v0.40.0: still true, for a new reason — the interpreter is a manifest artifact, not a bundled
+  // 整合包. The point of the test is the same: a Windows box with no Python must not be blocked.
+  test('win32 needs no system python — the recipe downloads its own', async () => {
+    const manifest = buildManifest({ platform: 'win32' });
+    const world = fakeWorld({ platform: 'win32', manifest, python: null });
+    const { final } = await run(world, manifest);
     expect(final.stage).toBe('ready'); // not blocked by the python gate
-    expect(world.calls.execs.length).toBe(0);
+    expect(recipePython(DIRS.runtimeDir, 'win32', null)).toBe(join(DIRS.runtimeDir, WIN_PY_DIR, 'python.exe'));
   });
 });
 
@@ -331,9 +387,17 @@ describe('runProvision — the ffmpeg gate', () => {
     expect(final.error).toContain('FFmpeg');
     expect(world.calls.downloads.length).toBe(0);
   });
-  test('win32 needs no system ffmpeg — the 整合包 bundles one', async () => {
-    const world = fakeWorld({ platform: 'win32', ffmpeg: false });
-    expect((await run(world)).final.stage).toBe('ready');
+  // v0.40.0: still exempt, for a new reason — the recipe downloads a SHARED ffmpeg build. It has to
+  // be shared: torchcodec dlopens the libav* DLLs and uses ffmpeg.exe only to locate their directory,
+  // so a static exe would validate green and then fail on the user's first sentence.
+  test('win32 needs no system ffmpeg — the recipe downloads a shared build', async () => {
+    const manifest = buildManifest({ platform: 'win32' });
+    const world = fakeWorld({ platform: 'win32', manifest, python: null, ffmpeg: false });
+    expect((await run(world, manifest)).final.stage).toBe('ready');
+    const ff = manifest.find((a) => a.dest === WIN_FFMPEG_DIR)!;
+    expect(ff.url).toContain('shared'); // NOT a static build
+    expect(ff.url).toContain('lgpl'); // NOT the GPL build — we point users at it, but still
+    expect(ff.url).toContain('n7.1'); // torchcodec probes FFmpeg 4-8; `master` is 9-dev
   });
   test('torchcodec is installed WITH the torch trio (ceilinged), not left unpinned in the list', () => {
     expect(INFERENCE_REQUIREMENTS).not.toContain('torchcodec'); // moved to the torch install command
@@ -413,11 +477,19 @@ describe('language data (v0.37.13 — the fake-HOME findings)', () => {
     expect(nltk.every((a) => a.sha256 && a.archive === 'zip')).toBe(true);
     expect(nltk.find((a) => a.name === 'nltk/cmudict')!.dest).toBe('nltk_data/corpora');
   });
-  test('every artifact carries a sha256 EXCEPT the GitHub tarball (GitHub does not guarantee byte-stability)', () => {
+  // Exactly TWO artifacts may go unhashed, and only because a pinned digest would ROT and hard-fail
+  // every install: GitHub recompresses source tarballs (it broke Homebrew and Go's module cache in
+  // 2023), and BtbN rebuilds its `latest` ffmpeg tag daily. Both are archives, so integrity is
+  // structural — a captive-portal HTML body is not a valid gzip/zip and dies loudly at extract.
+  // Anything else without a hash is a cache-poisoning hole; keep this list closed.
+  test('every artifact carries a sha256 except the two whose digests provably rot', () => {
+    const UNHASHABLE = ['github.com/RVC-Boss', 'github.com/BtbN/FFmpeg-Builds'];
     for (const plat of ['darwin', 'linux', 'win32'] as const) {
       for (const a of buildManifest({ platform: plat })) {
-        if (a.url.includes('github.com/RVC-Boss')) expect(a.sha256).toBeUndefined(); // structural check instead
-        else expect(a.sha256).toBeTruthy();
+        if (UNHASHABLE.some((h) => a.url.includes(h))) {
+          expect(a.sha256, a.name).toBeUndefined();
+          expect(a.archive, a.name).toBeTruthy(); // the structural gate only exists for archives
+        } else expect(a.sha256, a.name).toBeTruthy();
       }
     }
   });
@@ -475,9 +547,23 @@ describe('compiler preflight + GitHub-tarball resilience', () => {
     expect(world.calls.downloads.length).toBe(0);
   });
 
-  test('win32 needs no compiler — the 整合包 ships prebuilt', async () => {
-    const world = fakeWorld({ platform: 'win32', compiler: false });
-    expect((await run(world)).final.stage).toBe('ready');
+  // v0.40.0: still exempt, for a THIRD reason — Windows now compiles nothing. jieba_fast is shimmed,
+  // pyopenjtalk is excluded by marker, and every other binary dep ships a win_amd64 wheel. Do not
+  // "fix" this by un-exempting: hasCompiler() probes `cc`, which no Windows box has, MSVC or not.
+  test('win32 needs no compiler — it compiles nothing', async () => {
+    const manifest = buildManifest({ platform: 'win32' });
+    const world = fakeWorld({ platform: 'win32', manifest, python: null, compiler: false });
+    expect((await run(world, manifest)).final.stage).toBe('ready');
+  });
+
+  test('the two sdist-only deps are excluded on win32 by marker, and present everywhere else', () => {
+    for (const dep of ['jieba_fast', 'pyopenjtalk>=0.4']) {
+      const line = INFERENCE_REQUIREMENTS.split('\n').find((l) => l.trim().startsWith(dep));
+      expect(line, dep).toBeDefined();
+      expect(line, dep).toContain("sys_platform != 'win32'");
+    }
+    // plain jieba stays unconditional — it is what the Windows shim re-exports
+    expect(INFERENCE_REQUIREMENTS.split('\n')).toContain('jieba');
   });
 
   test('the GitHub source tarball is NOT sha256-pinned (GitHub recompression would flip it)', () => {
@@ -498,34 +584,84 @@ describe('compiler preflight + GitHub-tarball resilience', () => {
   });
 });
 
-describe('sevenZipCandidates (v0.38.4 — the 整合包 .7z extractor ladder)', () => {
-  test('win32: bundled 7zr.exe leads, then ProgramFiles installs, then PATH', () => {
-    const cands = sevenZipCandidates(
-      { LUNA_7ZR_DIR: 'C:\\res', 'ProgramFiles': 'C:\\Program Files', 'ProgramFiles(x86)': 'C:\\Program Files (x86)' },
-      'win32',
-    );
-    expect(cands).toEqual([
-      join('C:\\res', '7zr.exe'),
-      join('C:\\Program Files', '7-Zip', '7z.exe'),
-      join('C:\\Program Files (x86)', '7-Zip', '7z.exe'),
-      '7z',
-      '7za',
-      '7zr',
-    ]);
+// v0.40.0: the recipe changed shape, so a `ready` marker from the old one is a LIE — on Windows it
+// describes an 8.19 GB 整合包 tree with no venv and no nltk data. Without this gate those machines
+// would keep launching the old layout forever and never see the new recipe.
+// The shim's two load-bearing properties, pinned so a future edit cannot quietly break either.
+// Both were verified against real jieba 0.42.1 with GPT-SoVITS' actual call sites (chinese2.py's
+// `import jieba_fast` + setLogLevel + `jieba_fast.posseg as psg`, psg.lcut, tone_sandhi's
+// cut_for_search) before this landed.
+describe('the Windows jieba shim', () => {
+  test('posseg is a SEPARATE module — `import jieba_fast.posseg` needs a package, not a module', () => {
+    expect(JIEBA_SHIM_POSSEG).toContain('jieba.posseg');
+    expect(JIEBA_SHIM_INIT).not.toContain('posseg'); // putting it in __init__ does NOT satisfy the import
   });
-  test('win32 without the bundled dir → ProgramFiles + PATH only (no undefined path)', () => {
-    const cands = sevenZipCandidates({ 'ProgramFiles': 'C:\\PF' }, 'win32');
-    expect(cands).toEqual([join('C:\\PF', '7-Zip', '7z.exe'), '7z', '7za', '7zr']);
-  });
-  test('non-win32: no ProgramFiles probing; bundled dir uses the bare name', () => {
-    expect(sevenZipCandidates({ LUNA_7ZR_DIR: '/res' }, 'darwin')).toEqual([join('/res', '7zr'), '7z', '7za', '7zr']);
-    expect(sevenZipCandidates({}, 'linux')).toEqual(['7z', '7za', '7zr']);
+  test('attribute access falls through to real jieba, so an unread call site still resolves', () => {
+    for (const src of [JIEBA_SHIM_INIT, JIEBA_SHIM_POSSEG]) expect(src).toContain('def __getattr__');
   });
 });
 
-describe('checkoutFfmpeg (v0.38.4 — the 整合包 ships its own ffmpeg)', () => {
+describe('recipe migration (markerIsCurrent)', () => {
+  test('the current recipe is ready on every platform', () => {
+    expect(markerIsCurrent({ state: 'ready', recipe: 2 }, 'win32')).toBe(true);
+    expect(markerIsCurrent({ state: 'ready', recipe: 2 }, 'darwin')).toBe(true);
+  });
+  test('a pre-v0.40 marker (recipe absent) is stale ONLY on Windows — the POSIX tree did not change', () => {
+    expect(markerIsCurrent({ state: 'ready' }, 'win32')).toBe(false); // 整合包 tree — unusable now
+    expect(markerIsCurrent({ state: 'ready' }, 'darwin')).toBe(true); // byte-identical to recipe 2
+    expect(markerIsCurrent({ state: 'ready' }, 'linux')).toBe(true);
+  });
+  test('a newer recipe than we know is not adopted on any platform (a downgrade must not trust it)', () => {
+    expect(markerIsCurrent({ state: 'ready', recipe: 99 }, 'win32')).toBe(false);
+    expect(markerIsCurrent({ state: 'ready', recipe: 99 }, 'darwin')).toBe(false);
+  });
+  test('anything not ready stays not ready, whatever its recipe or platform', () => {
+    expect(markerIsCurrent({ state: 'failed', recipe: 2 }, 'darwin')).toBe(false);
+    expect(markerIsCurrent({}, 'win32')).toBe(false);
+  });
+
+  test('win32: a stale (整合包) ready marker re-provisions from scratch instead of resuming a foreign tree', async () => {
+    const manifest = buildManifest({ platform: 'win32' });
+    const world = fakeWorld({ platform: 'win32', manifest, python: null });
+    world.texts.set(
+      join(DIRS.ttsDir, 'provision.json'),
+      JSON.stringify({ state: 'ready', extracted: ['code'], venvDone: true }), // no recipe = v0.39 整合包
+    );
+    const { final } = await run(world, manifest);
+    expect(final.stage).toBe('ready');
+    expect(world.calls.downloads.length).toBeGreaterThan(0); // it really re-ran
+    expect(world.calls.execs.some((c) => c.includes('venv'))).toBe(true); // venvDone was NOT trusted
+    expect(JSON.parse(world.texts.get(join(DIRS.ttsDir, 'provision.json'))!).recipe).toBe(2);
+  });
+
+  test('mac: a pre-v0.40 ready marker is honoured as-is — no needless multi-GB re-provision', async () => {
+    const world = fakeWorld({}); // darwin
+    world.texts.set(
+      join(DIRS.ttsDir, 'provision.json'),
+      JSON.stringify({ state: 'ready', extracted: ['code'], venvDone: true }), // no recipe
+    );
+    const { final } = await run(world);
+    expect(final.stage).toBe('ready');
+    expect(world.calls.downloads.length).toBe(0); // the identical POSIX tree is trusted, not rebuilt
+  });
+
+  test('a current ready marker still short-circuits — no re-download on every launch', async () => {
+    const world = fakeWorld({});
+    await run(world);
+    const before = world.calls.downloads.length;
+    await run(world);
+    expect(world.calls.downloads.length).toBe(before);
+  });
+});
+
+describe('checkoutFfmpeg — the provisioned shared build, then the legacy 整合包 layouts', () => {
   const CO = join('C:', 'tts', 'runtime-checkout');
-  test('win32: prefers runtime\\ffmpeg.exe when present', () => {
+  // v0.40.0: the DIRECTORY is what matters — torchcodec dlopens the libav* DLLs beside this exe.
+  test('win32: prefers the v0.40.0 provisioned ffmpeg\\bin\\ffmpeg.exe', () => {
+    const want = join(CO, WIN_FFMPEG_DIR, 'bin', 'ffmpeg.exe');
+    expect(checkoutFfmpeg(CO, 'win32', (p) => p === want)).toBe(want);
+  });
+  test('win32: an already-provisioned 整合包 machine still resolves until it re-provisions', () => {
     const want = join(CO, 'runtime', 'ffmpeg.exe');
     expect(checkoutFfmpeg(CO, 'win32', (p) => p === want)).toBe(want);
   });

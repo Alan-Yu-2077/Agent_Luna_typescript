@@ -8,6 +8,8 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { markerIsCurrent } from './ttsProvision';
+
 export type ManagedRuntime = {
   kind: 'provisioned' | 'byo';
   checkout: string; // the GPT-SoVITS dir — the child's cwd
@@ -72,12 +74,16 @@ function launchableCheckout(dir: string, fs: RuntimeFs): boolean {
   return fs.exists(join(pre, 'chinese-roberta-wwm-ext-large')) && fs.exists(join(pre, 'chinese-hubert-base'));
 }
 
-function provisionReady(runtimeDir: string, fs: RuntimeFs): boolean {
+// v0.40.0: `ready` is not enough — the marker must also come from the CURRENT recipe. A Windows
+// machine provisioned before v0.40.0 holds a ready marker over an 8.19 GB 整合包 tree (embedded
+// python, no venv, no nltk data); launching that as if it were the new layout is exactly the mystery
+// crash-loop this check exists to prevent. markerIsCurrent is shared with the provisioner that
+// writes it, so the two can never drift.
+function provisionReady(runtimeDir: string, fs: RuntimeFs, platform: NodeJS.Platform): boolean {
   const marker = join(runtimeDir, '..', 'provision.json');
   if (!fs.exists(marker)) return false;
   try {
-    const state = (JSON.parse(fs.readText(marker)) as { state?: unknown }).state;
-    return state === 'ready';
+    return markerIsCurrent(JSON.parse(fs.readText(marker)) as { state?: unknown; recipe?: unknown }, platform);
   } catch {
     return false;
   }
@@ -87,13 +93,14 @@ function provisionReady(runtimeDir: string, fs: RuntimeFs): boolean {
 // against, before any pack exists to make the full runtime resolvable.
 export function resolveManagedCheckout(
   env: Record<string, string | undefined>,
-  opts: { userData: string; fs?: RuntimeFs },
+  opts: { userData: string; platform?: NodeJS.Platform; fs?: RuntimeFs },
 ): { kind: ManagedRuntime['kind']; checkout: string } | null {
   if (env['LUNA_TTS_MANAGED'] !== '1') return null;
   const fs = opts.fs ?? realFs;
+  const platform = opts.platform ?? process.platform;
   const ttsDir = join(opts.userData, 'tts');
   const provisionedDir = join(ttsDir, 'runtime');
-  if (provisionReady(provisionedDir, fs) && launchableCheckout(provisionedDir, fs))
+  if (provisionReady(provisionedDir, fs, platform) && launchableCheckout(provisionedDir, fs))
     return { kind: 'provisioned', checkout: provisionedDir };
   const byo = (env['LUNA_TTS_RUNTIME_DIR'] ?? '').trim();
   if (byo !== '' && launchableCheckout(byo, fs)) return { kind: 'byo', checkout: byo };
@@ -109,7 +116,7 @@ export function resolveManagedRuntime(
   const target = parseLoopbackUrl(env['LUNA_TTS_URL']);
   if (!target) return null;
 
-  const co = resolveManagedCheckout(env, { userData: opts.userData, fs });
+  const co = resolveManagedCheckout(env, { userData: opts.userData, platform, fs });
   if (co === null) return null;
   const { kind, checkout } = co;
   const ttsDir = join(opts.userData, 'tts');

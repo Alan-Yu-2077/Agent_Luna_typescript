@@ -90,10 +90,12 @@ Set the backend in `.env` (or per-browser via `localStorage['luna:tts-backend']`
 
 The highest-quality option, and since v0.37 the desktop wizard can do ALL of it — no terminal:
 
-1. **Voice step → "Download & deploy GPT-SoVITS"** — Luna downloads the runtime (≈2 GB on
-   macOS/Linux; the official ~5.7 GB 整合包 on Windows), resumable across quits, and validates it.
-   On CN networks set `LUNA_TTS_HF_MIRROR=https://hf-mirror.com` in `luna.env` first — it covers
-   every model download. (`LUNA_TTS_PROVISION=0` hides the button if you'd rather install by hand.)
+1. **Voice step → "Download & deploy GPT-SoVITS"** — Luna downloads the runtime (~1.7 GB on every
+   platform since v0.40.0), builds a local Python environment, and validates it, resumable across
+   quits. A progress bar tracks the download; Windows additionally fetches its own bundled Python and
+   FFmpeg (no 7-Zip, no system Python needed). On CN networks set
+   `LUNA_TTS_HF_MIRROR=https://hf-mirror.com` in `luna.env` first — it covers every model download.
+   (`LUNA_TTS_PROVISION=0` hides the button if you'd rather install by hand.)
 2. **Drag your voice pack in** (the weights + reference-clip folder, e.g. from a creator's netdisk
    link) — Luna installs it, writes the api_v2 config, and **starts + supervises the voice server
    herself** (`LUNA_TTS_MANAGED=1`): crash-restart, clean shutdown, no orphaned process. The badge

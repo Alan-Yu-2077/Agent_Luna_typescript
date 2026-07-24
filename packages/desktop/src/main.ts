@@ -49,6 +49,7 @@ import {
   buildManifest,
   checkoutFfmpeg,
   killProvisioners,
+  markerIsCurrent,
   realSeams,
   runProvision,
   type ProvisionStatus,
@@ -203,12 +204,18 @@ function hydrateProvisionStatus(p: Paths): void {
   const marker = join(p.userData, 'tts', 'provision.json');
   if (!existsSync(marker)) return;
   try {
-    const m = JSON.parse(readFileSync(marker, 'utf8')) as { state?: string; error?: string };
-    if (m.state === 'ready') provisionStatus = { stage: 'ready', pct: 100, bytesDone: 0, bytesTotal: 0 };
+    const m = JSON.parse(readFileSync(marker, 'utf8')) as { state?: string; error?: string; recipe?: number };
+    // v0.40.0: gate on markerIsCurrent, not raw `state === 'ready'` — the other readers of this file
+    // (ttsRuntime.provisionReady, runProvision's short-circuit) already do. Without this the two
+    // disagree for a pre-v0.40 marker: the launcher refuses the stale tree (voice drops to browser)
+    // while the wizard prints "Runtime ready ✓" and greys out the only button that would heal it.
+    // A stale-recipe ready marker falls through to the parked branch → button ENABLED → a click
+    // re-provisions (runProvision resets the stale marker's extracted/venvDone state itself).
+    if (markerIsCurrent(m)) provisionStatus = { stage: 'ready', pct: 100, bytesDone: 0, bytesTotal: 0 };
     else if (m.state === 'failed')
       provisionStatus = { stage: 'failed', pct: 0, bytesDone: 0, bytesTotal: 0, ...(m.error ? { error: m.error } : {}) };
     else if (typeof m.state === 'string' && m.state !== 'idle')
-      provisionStatus = { stage: 'downloading', pct: 0, bytesDone: 0, bytesTotal: 0 }; // parked mid-install
+      provisionStatus = { stage: 'downloading', pct: 0, bytesDone: 0, bytesTotal: 0 }; // parked mid-install (or a stale-recipe ready)
   } catch {
     /* unreadable marker — stay idle */
   }
@@ -759,9 +766,6 @@ ipcMain.handle('luna:provision-start', () => {
   const dirs = { ttsDir, runtimeDir: join(ttsDir, 'runtime'), downloadsDir: join(ttsDir, 'downloads') };
   const mirror = (env['LUNA_TTS_HF_MIRROR'] ?? '').trim();
   const manifest = buildManifest({ platform: process.platform, ...(mirror !== '' ? { hfBase: mirror } : {}) });
-  // v0.38.4: where the bundled 7zr.exe lives (resourcesPath packaged / bin dev, same split as
-  // serverBin) so the .7z extractor is found without a system 7-Zip. Only the win32 manifest uses 7z.
-  process.env['LUNA_7ZR_DIR'] = app.isPackaged ? process.resourcesPath : join(__dirname, '..', 'bin');
   void runProvision(dirs, manifest, realSeams(), (s) => {
     provisionStatus = s;
   })

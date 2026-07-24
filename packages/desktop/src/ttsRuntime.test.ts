@@ -8,17 +8,23 @@ const RUNTIME = join(TTS, 'runtime');
 const BYO = '/byo/GPT-SoVITS';
 const PACK_YAML = { path: join(TTS, 'neuro-pack', 'tts_infer.runtime.yaml'), mtimeMs: 1000 };
 
+// v0.40.0: `recipe` defaults to the CURRENT one so existing tests keep describing a usable runtime;
+// pass provisionRecipe explicitly to model a machine provisioned by an older Luna.
+const CURRENT_RECIPE = 2;
 function fakeFs(o: {
   files?: string[];
   provisionState?: string;
+  provisionRecipe?: number | null; // null = the pre-v0.40.0 marker, which carried no recipe at all
   packYamls?: Array<{ path: string; mtimeMs: number }>;
 }): RuntimeFs {
   const files = new Set(o.files ?? []);
   return {
     exists: (p) => files.has(p),
     readText: (p) => {
-      if (p === join(TTS, 'provision.json') && o.provisionState !== undefined)
-        return JSON.stringify({ state: o.provisionState });
+      if (p === join(TTS, 'provision.json') && o.provisionState !== undefined) {
+        const recipe = o.provisionRecipe === undefined ? CURRENT_RECIPE : o.provisionRecipe;
+        return JSON.stringify(recipe === null ? { state: o.provisionState } : { state: o.provisionState, recipe });
+      }
       throw new Error(`unexpected read: ${p}`);
     },
     listPackYamls: () => o.packYamls ?? [],
@@ -164,6 +170,40 @@ describe('resolveManagedRuntime', () => {
     );
     expect(rt?.kind).toBe('provisioned');
     expect(rt?.checkout).toBe(RUNTIME);
+  });
+
+  // v0.40.0: on Windows a pre-v0.40 ready marker describes an 8.19 GB 整合包 tree this version cannot
+  // launch (embedded python, no venv), so it is refused and the flow falls through to BYO — the same
+  // way a half-finished install does. Treating it as ready is how a machine sticks on the old layout.
+  test('win32: a ready marker from the OLD recipe is refused, not launched', () => {
+    const fs = fakeFs({
+      files: [...provisionedFiles, ...byoCheckoutFiles],
+      provisionState: 'ready',
+      provisionRecipe: null, // the pre-v0.40.0 marker shape
+      packYamls: [PACK_YAML],
+    });
+    const rt = resolveManagedRuntime(
+      { LUNA_TTS_MANAGED: '1', LUNA_TTS_RUNTIME_DIR: BYO },
+      { userData: UD, platform: 'win32', fs },
+    );
+    expect(rt?.kind).toBe('byo');
+  });
+
+  // …but on macOS/Linux the SAME old marker points at a byte-identical tree, so it must still launch —
+  // invalidating it would drop a working install to the browser voice for no reason (the regression
+  // the platform-aware markerIsCurrent exists to prevent).
+  test('mac: a pre-v0.40 ready marker still launches — the POSIX tree did not change', () => {
+    const fs = fakeFs({
+      files: [...provisionedFiles, ...byoCheckoutFiles],
+      provisionState: 'ready',
+      provisionRecipe: null,
+      packYamls: [PACK_YAML],
+    });
+    const rt = resolveManagedRuntime(
+      { LUNA_TTS_MANAGED: '1', LUNA_TTS_RUNTIME_DIR: BYO },
+      { userData: UD, platform: 'darwin', fs },
+    );
+    expect(rt?.kind).toBe('provisioned');
   });
 
   test('a mid-install provisioned runtime (state!=ready) falls back to BYO', () => {

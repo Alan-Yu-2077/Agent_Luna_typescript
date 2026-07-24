@@ -1,7 +1,8 @@
 // v0.37.2 (Initiative 27): the one-click GPT-SoVITS provisioner — download, deploy, validate, mark
 // ready. Reproduces the owner's verified reference recipe (roberta + hubert + G2PW + lid.176 +
-// the 20240821v2 checkout + a venv) on macOS/Linux, and the official 整合包 on Windows. Staged,
-// resumable (`.part` + Range), disk-preflighted, and persisted to provision.json after every
+// the pinned checkout + a venv) on EVERY platform since v0.40.0 — Windows additionally fetches its
+// own CPython and a shared FFmpeg as ordinary manifest artifacts, having replaced the 8.19 GB 整合包.
+// Staged, resumable (`.part` + Range), disk-preflighted, and persisted to provision.json after every
 // transition so a mid-install quit resumes. The engine is pure over injected seams (tests run it
 // headlessly); `realSeams()` provides the node implementations. Every executed command is built from
 // vetted constants + resolved paths — never anything derived from user content (the voicePack
@@ -10,10 +11,14 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
+  closeSync,
+  copyFileSync,
   createWriteStream,
   existsSync,
   mkdirSync,
+  openSync,
   readFileSync,
+  readSync,
   renameSync,
   rmSync,
   statSync,
@@ -22,7 +27,7 @@ import {
 } from 'node:fs';
 import { dirname, join } from 'node:path';
 
-export type ArchiveKind = 'zip' | '7z' | 'tar.gz';
+export type ArchiveKind = 'zip' | 'tar.gz';
 
 export type Artifact = {
   name: string;
@@ -75,29 +80,60 @@ const HUBERT_FILES: Array<[string, number, string]> = [
   ['pytorch_model.bin', 188_811_417, '24164f129c66499d1346e2aa55f183250c223161ec2770c0da3d3b08cf432d3c'],
 ];
 
+// v0.40.0: where the two Windows-only payloads land inside the checkout. Both are consumed by path,
+// never by PATH lookup, so provisioning never depends on — or disturbs — what the machine has.
+export const WIN_PY_DIR = 'pyruntime';
+export const WIN_FFMPEG_DIR = 'ffmpeg';
+
+// v0.40.0: what Windows needs ON TOP of the scripted recipe. macOS/Linux get a Python and an ffmpeg
+// from a package manager; Windows has none, and the old answer was the 8.19 GB 整合包 that bundled
+// both. These are ordinary manifest artifacts, so they inherit the resumable download, the checksum
+// gate, the mirror hook and the progress bar instead of needing a second mechanism. Both are fetched
+// from their upstream host to the USER's machine — the same model every model file already uses —
+// so Luna redistributes neither.
+function windowsExtras(): Artifact[] {
+  return [
+    {
+      // python-build-standalone's install_only build: a self-contained CPython 3.11 carrying its own
+      // vcruntime140 DLLs, so no VC++ redistributable install. It is used ONLY to build the venv and
+      // is never registered with the OS (no PEP 514 registry key, no PATH entry, no bin shim), so a
+      // provision can't disturb whatever Python the user already has.
+      name: 'CPython 3.11 (windows x86_64)',
+      url: 'https://github.com/astral-sh/python-build-standalone/releases/download/20260718/cpython-3.11.15%2B20260718-x86_64-pc-windows-msvc-install_only.tar.gz',
+      dest: WIN_PY_DIR,
+      sizeBytes: 48_400_412,
+      sha256: 'c3d782be3733f779d585633da374ff1bd92400d4d74c0c3922aee1526446096b', // the release's own SHA256SUMS
+      archive: 'tar.gz',
+      stripPrefix: 'python',
+    },
+    {
+      // torchcodec does NOT shell out to ffmpeg, whatever this file used to claim: it dlopens the
+      // libav* DLLs and uses `ffmpeg.exe` purely to LOCATE the directory they sit in
+      // (torchcodec/_core/ops.py — shutil.which('ffmpeg') → os.add_dll_directory(its dir)). A static
+      // ffmpeg.exe therefore does nothing here; it must be a SHARED build with the DLLs beside the
+      // exe. n7.1 is deliberate: torchcodec probes FFmpeg majors 4-8 and BtbN's `master` build is
+      // 9-dev, which loads nothing and fails on the user's first sentence.
+      name: 'FFmpeg 7.1 shared (windows x64, LGPL)',
+      url: 'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-win64-lgpl-shared-7.1.zip',
+      dest: WIN_FFMPEG_DIR,
+      sizeBytes: 62_413_211,
+      // No sha256, for the same structural reason the GitHub source tarball has none: BtbN rebuilds
+      // the `latest` tag DAILY, so a pinned digest rots within a day and would hard-fail every
+      // install forever. Integrity is enforced by the extractor instead — a captive-portal HTML page
+      // is not a valid zip, and a failed extract deletes the cached file so retry re-fetches.
+      archive: 'zip',
+      stripPrefix: 'ffmpeg-n7.1-latest-win64-lgpl-shared-7.1',
+    },
+  ];
+}
+
 export function buildManifest(o: { platform: NodeJS.Platform; hfBase?: string }): Artifact[] {
   const hf = (o.hfBase ?? HF_DEFAULT).replace(/\/+$/, '');
-  if (o.platform === 'win32') {
-    return [
-      {
-        // Same code generation as the scripted platforms (see CODE_TAG) so a bug fixed on one is fixed
-        // on both. Self-contained: it ships its own python + torch, so no system interpreter is needed.
-        name: 'GPT-SoVITS 整合包 (v2pro-20250604)',
-        url: `${hf}/lj1995/GPT-SoVITS-windows-package/resolve/main/GPT-SoVITS-v2pro-20250604.7z`,
-        dest: '.',
-        sizeBytes: 8_185_086_602,
-        // From HuggingFace's LFS etag, which IS the sha256 — cross-checked against a file I hashed
-        // myself (roberta's 651 MB bin: HF's etag matched byte-for-byte), so this is trustworthy
-        // even though 8.19 GB was never downloaded here. The rest of the Windows path (7z layout,
-        // 7-Zip's presence) remains genuinely unverified — see the changelog.
-        sha256: 'bd60d0796553ff05d8568136e199c13e0dc22ebe2ed24273134e34ed6f215cd6',
-        archive: '7z',
-        stripPrefix: 'GPT-SoVITS-v2pro-20250604',
-      },
-    ];
-  }
   const models = 'GPT_SoVITS/pretrained_models';
   return [
+    // v0.40.0: Windows runs the SAME recipe as everyone else now (it used to early-return a single
+    // 8.19 GB 整合包), plus its own interpreter and ffmpeg.
+    ...(o.platform === 'win32' ? windowsExtras() : []),
     {
       name: `GPT-SoVITS code (${CODE_TAG})`,
       url: `https://github.com/RVC-Boss/GPT-SoVITS/archive/refs/tags/${CODE_TAG}.tar.gz`,
@@ -246,7 +282,8 @@ export type ProvisionSeams = {
   // version) — pip MUST compile them. A clean machine with no Xcode CLT / build-essential passes
   // every other check, downloads ~1.6 GB, then dies at the venv stage. The reference machine had CLT
   // (cc/clang), so the e2e never saw it. Probe non-invasively (xcode-select on mac — it does NOT
-  // trigger the install popup that `cc` would). Windows' 整合包 ships prebuilt, so it needs none.
+  // trigger the install popup that `cc` would). Windows compiles nothing (jieba_fast is shimmed,
+  // pyopenjtalk excluded, every other binary dep has a win_amd64 wheel), so it needs no compiler.
   hasCompiler(): boolean;
   sha256(path: string): string; // '' when unreadable
   platform: NodeJS.Platform;
@@ -258,11 +295,12 @@ export type ProvisionDirs = {
   downloadsDir: string; // <ttsDir>/downloads — artifacts + .part files (resume survives quits)
 };
 
-// The floor has to cover downloads + the extracted tree + the venv, per platform — 10 GB did not:
-// Windows alone is an 8.19 GB archive that extracts to roughly its own size again. Measured on the
-// scripted path: 1.57 GB downloads + ~1.6 GB extracted + 1.8 GB venv ≈ 5 GB, so 12 GB leaves room.
-const MIN_FREE_BYTES_SCRIPTED = 12_000_000_000;
-const MIN_FREE_BYTES_WIN = 25_000_000_000;
+// The floor covers downloads + the extracted tree + the venv. Measured on the scripted path:
+// 1.57 GB downloads + ~1.6 GB extracted + 1.8 GB venv ≈ 5 GB, so 12 GB leaves room.
+// v0.40.0: ONE floor again. Windows used to need 25 GB because it downloaded an 8.19 GB archive that
+// extracted to roughly its own size; running the same recipe as everyone else, it adds only its own
+// interpreter (~78 MB extracted) and ffmpeg (~140 MB) on top of the shared ~5 GB.
+const MIN_FREE_BYTES = 12_000_000_000;
 
 // GPT-SoVITS (20240821v2) pins deps whose wheels exist for 3.9-3.11 only; the reference instance runs
 // Homebrew python@3.11. Ordered best-first — 3.11 is the version the working install is proven on.
@@ -298,29 +336,11 @@ export const FFMPEG_CANDIDATES = [
   'ffmpeg',
 ] as const;
 
-// v0.38.4: ordered 7-Zip binaries to try for the Windows 整合包 (.7z). The bundled 7zr.exe (shipped
-// as an extraResource, its dir passed via LUNA_7ZR_DIR) leads so a stock machine never needs a
-// system 7-Zip; then the default install locations (7-Zip's installer does NOT add itself to PATH);
-// then PATH. Pure so the ordering is testable off-platform.
-export function sevenZipCandidates(
-  env: Record<string, string | undefined>,
-  platform: NodeJS.Platform,
-): string[] {
-  const out: string[] = [];
-  const bundledDir = env['LUNA_7ZR_DIR'];
-  if (bundledDir) out.push(join(bundledDir, platform === 'win32' ? '7zr.exe' : '7zr'));
-  if (platform === 'win32') {
-    for (const pf of [env['ProgramFiles'], env['ProgramFiles(x86)']])
-      if (pf) out.push(join(pf, '7-Zip', '7z.exe'));
-  }
-  out.push('7z', '7za', '7zr'); // PATH
-  return out;
-}
-
-// v0.38.4: the api_v2 CHILD needs ffmpeg on its PATH (torchcodec shells out to it). The provisioned
-// win32 整合包 ships its own ffmpeg inside the checkout — prefer it over a system one. The exact
-// subpath inside the 整合包 is confirmed on the real machine (v0.38.4 full); these are the likely
-// locations and are simply skipped when absent, so a system-ffmpeg machine is unaffected.
+// v0.40.0: the api_v2 CHILD needs the ffmpeg DIRECTORY, because torchcodec dlopens the libav* shared
+// libraries from it (it locates them via `shutil.which('ffmpeg')` → `os.add_dll_directory`). The
+// provisioned Windows checkout carries its own shared build; the legacy 整合包 layouts are still
+// probed so an already-provisioned v0.39 machine keeps working until it re-provisions. Absent → null,
+// and system discovery covers the BYO/mac/linux cases.
 export function checkoutFfmpeg(
   checkout: string,
   platform: NodeJS.Platform,
@@ -328,10 +348,29 @@ export function checkoutFfmpeg(
 ): string | null {
   const names =
     platform === 'win32'
-      ? [join(checkout, 'runtime', 'ffmpeg.exe'), join(checkout, 'ffmpeg.exe')]
-      : []; // BYO mac/linux checkouts don't ship ffmpeg; system discovery covers them
+      ? [
+          join(checkout, WIN_FFMPEG_DIR, 'bin', 'ffmpeg.exe'), // v0.40.0 provisioned
+          join(checkout, 'runtime', 'ffmpeg.exe'), // legacy 整合包
+          join(checkout, 'ffmpeg.exe'),
+        ]
+      : [];
   for (const n of names) if (exists(n)) return n;
   return null;
+}
+
+// v0.40.0: the interpreter the venv is built FROM. On Windows that is the provisioned CPython — the
+// machine is not required to have one, and we deliberately never look for one. Pure so it tests.
+export function recipePython(runtimeDir: string, platform: NodeJS.Platform, discovered: string | null): string | null {
+  return platform === 'win32' ? join(runtimeDir, WIN_PY_DIR, 'python.exe') : discovered;
+}
+
+// v0.40.0: a venv's interpreter, whose location is one of the few genuine POSIX/Windows layout
+// differences. Same shape as ttsRuntime.venvPython — kept in sync deliberately, since the provisioner
+// WRITES what that module then launches.
+export function venvPythonPath(runtimeDir: string, platform: NodeJS.Platform): string {
+  return platform === 'win32'
+    ? join(runtimeDir, '.venv', 'Scripts', 'python.exe')
+    : join(runtimeDir, '.venv', 'bin', 'python');
 }
 // v0.37.12: Luna installs its OWN inference dependency set, NOT the upstream requirements.txt.
 // Why: that file pins `numba==0.56.4`, whose installer refuses Python 3.11 outright ("Cannot install
@@ -376,13 +415,21 @@ psutil
 chardet
 ffmpeg-python
 jieba
-jieba_fast
+# v0.40.0: jieba_fast is sdist-only on PyPI and there is no MSVC on a stock Windows box, so Windows
+# gets the pure-Python jieba behind a shim package instead (writeJiebaShim). Measured cost: GPT-SoVITS'
+# hot path is posseg.lcut, and jieba_fast's C acceleration is wired into Tokenizer.__cut_DAG only —
+# NOT into POSTokenizer — so on TTS-length sentences the delta is ~0.001 ms.
+jieba_fast; sys_platform != 'win32'
 cn2an
 pypinyin
 g2p_en
 nltk
 wordsegment
-pyopenjtalk>=0.4
+# v0.40.0: also sdist-only, and it needs CMake + a C++ toolchain on top. Windows omits it, which is
+# safe because GPT-SoVITS resolves language modules lazily (cleaner.py __import__s per language), so
+# text.japanese — the only importer — never loads for zh/en. Japanese input on Windows fails the
+# utterance, and the v0.37.4 ladder speaks it with the browser voice rather than dropping it.
+pyopenjtalk>=0.4; sys_platform != 'win32'
 fast-langdetect
 # text/LangSegmenter/langsegmenter.py imports it; nothing else pulls it in
 split-lang
@@ -394,16 +441,82 @@ ToJyutping
 python-mecab-ko; sys_platform != 'win32'
 `;
 
+// v0.40.0: Windows never sees this — it compiles nothing (jieba_fast is shimmed, pyopenjtalk is
+// excluded by marker, and every other binary dep ships a win_amd64 wheel), so the gate stays exempt
+// there rather than being made MSVC-aware.
 export const COMPILER_HINT =
-  'GPT-SoVITS has two dependencies (jieba_fast, pyopenjtalk) that pip must compile from source, and no C compiler was found. Install one — macOS: `xcode-select --install`; Debian/Ubuntu: `sudo apt install build-essential`; Fedora: `sudo dnf groupinstall "Development Tools"` — then click retry.';
+  'GPT-SoVITS has two dependencies (jieba_fast, pyopenjtalk) that pip must compile from source on this platform, and no C compiler was found. Install one — macOS: `xcode-select --install`; Debian/Ubuntu: `sudo apt install build-essential`; Fedora: `sudo dnf groupinstall "Development Tools"` — then click retry.';
 export const FFMPEG_HINT =
   'GPT-SoVITS decodes your reference clip with FFmpeg, which is not installed. Get it — macOS: `brew install ffmpeg`; Linux: `apt install ffmpeg` (or your package manager) — then click retry.';
 const NLTK_BASE = 'https://raw.githubusercontent.com/nltk/nltk_data/gh-pages/packages';
 
+// v0.40.0: the Windows stand-in for jieba_fast (sdist-only, and a stock Windows box has no MSVC).
+// jieba_fast is an accelerated FORK of jieba with the same surface, and plain jieba is already an
+// install dependency, so the shim is a re-export — but it MUST be a package, not a module:
+// chinese2.py does `import jieba_fast.posseg as psg`, which a single jieba_fast.py cannot satisfy
+// (ModuleNotFoundError: 'jieba_fast' is not a package). Attribute access falls through via PEP 562
+// __getattr__ rather than an enumerated re-export list, so a call site we haven't read still works.
+// If this is wrong the failure is loud and immediate: TextPreprocessor imports text.chinese at
+// startup, so api_v2 dies on boot rather than mis-synthesizing.
+export const JIEBA_SHIM_INIT = `# Generated by Luna. jieba_fast has no Windows wheel and needs MSVC to build; jieba is the same API.
+import jieba as _jieba
+from jieba import *  # noqa: F401,F403
+
+
+def __getattr__(name):  # PEP 562 — anything not re-exported above still resolves
+    return getattr(_jieba, name)
+`;
+
+export const JIEBA_SHIM_POSSEG = `# Generated by Luna. See jieba_fast/__init__.py.
+import jieba.posseg as _posseg
+from jieba.posseg import *  # noqa: F401,F403
+
+
+def __getattr__(name):
+    return getattr(_posseg, name)
+`;
+
+// Windows venvs put site-packages at a fixed <venv>/Lib/site-packages (no python-version segment),
+// which is why the shim can be placed without probing for the interpreter's version.
+export function winSitePackages(runtimeDir: string): string {
+  return join(runtimeDir, '.venv', 'Lib', 'site-packages');
+}
+
 export const PYTHON_HINT =
   'GPT-SoVITS needs Python 3.10 or 3.11 (3.11 recommended; 3.9 no longer works — modern torch dropped it). Install it — macOS: `brew install python@3.11`; Windows: python.org 3.11; Linux: your package manager — then click retry.';
 
-type Marker = { state: string; stage?: ProvisionStage; error?: string; extracted?: string[]; venvDone?: boolean };
+// v0.40.0: `recipe` is what lets the recipe CHANGE. Windows machines provisioned before this version
+// hold a `ready` marker over an 8.19 GB 整合包 tree with no venv and no nltk data; without a version
+// here they would keep launching it forever and never see the new layout. Absent = 1.
+const RECIPE = 2;
+// …but the on-disk tree only CHANGED on Windows (整合包 → scripted). On macOS/Linux the recipe-1 and
+// recipe-2 trees are byte-identical: the manifest is unchanged and the only requirements edits are
+// `; sys_platform != 'win32'` markers that no-op off Windows. So an older POSIX marker still points
+// at a launchable runtime, and invalidating it would force a pointless multi-GB re-provision plus a
+// silent drop to the browser voice. This floor says "the POSIX tree has not changed since recipe 1";
+// a FUTURE recipe that alters the POSIX layout must raise it to its own number.
+const POSIX_TREE_UNCHANGED_SINCE = 1;
+type Marker = {
+  state: string;
+  recipe?: number;
+  stage?: ProvisionStage;
+  error?: string;
+  extracted?: string[];
+  venvDone?: boolean;
+};
+
+// Whether a `ready` marker describes a runtime THIS version can launch. Platform-aware: Windows
+// demands the exact current recipe (its tree changed shape); elsewhere any recipe back to
+// POSIX_TREE_UNCHANGED_SINCE is fine (the tree did not). Pure so it unit-tests; the default platform
+// keeps the callers that don't thread one honest against the host they actually run on.
+export function markerIsCurrent(
+  m: { state?: unknown; recipe?: unknown },
+  platform: NodeJS.Platform = process.platform,
+): boolean {
+  if (m.state !== 'ready') return false;
+  const recipe = typeof m.recipe === 'number' ? m.recipe : 1;
+  return platform === 'win32' ? recipe === RECIPE : recipe >= POSIX_TREE_UNCHANGED_SINCE && recipe <= RECIPE;
+}
 
 function readMarker(dirs: ProvisionDirs, fs: ProvisionFs): Marker {
   const p = join(dirs.ttsDir, 'provision.json');
@@ -428,13 +541,16 @@ export async function runProvision(
 ): Promise<ProvisionStatus> {
   const { fs } = seams;
   const marker = readMarker(dirs, fs);
-  if (marker.state === 'ready') {
+  if (markerIsCurrent(marker, seams.platform)) {
     const done: ProvisionStatus = { stage: 'ready', pct: 100, bytesDone: 0, bytesTotal: 0 };
     onStatus(done);
     return done;
   }
-  const extracted = new Set(marker.extracted ?? []);
-  let venvDone = marker.venvDone === true;
+  // A marker from an older recipe describes a tree this version cannot use, so its resume state is
+  // meaningless — start the new recipe from scratch rather than "resuming" into a foreign layout.
+  const stale = marker.state === 'ready';
+  const extracted = new Set(stale ? [] : (marker.extracted ?? []));
+  let venvDone = !stale && marker.venvDone === true;
 
   const totalKnown = manifest.reduce((n, a) => n + a.sizeBytes, 0);
   const st: ProvisionStatus = { stage: 'preflight', pct: 0, bytesDone: 0, bytesTotal: totalKnown };
@@ -443,7 +559,7 @@ export async function runProvision(
     onStatus({ ...st });
   };
   const persist = (state: string, extra: Partial<Marker> = {}): void =>
-    writeMarker(dirs, fs, { state, extracted: [...extracted], venvDone, ...extra });
+    writeMarker(dirs, fs, { state, recipe: RECIPE, extracted: [...extracted], venvDone, ...extra });
   const fail = (stage: ProvisionStage, error: string): ProvisionStatus => {
     persist('failed', { stage, error });
     push({ stage: 'failed', failedStage: stage, error });
@@ -454,15 +570,20 @@ export async function runProvision(
     push({ stage: 'preflight' });
     fs.mkdirp(dirs.downloadsDir);
     fs.mkdirp(dirs.runtimeDir);
-    const floor = seams.platform === 'win32' ? MIN_FREE_BYTES_WIN : MIN_FREE_BYTES_SCRIPTED;
-    if (seams.freeDiskBytes(dirs.ttsDir) < floor)
-      return fail('preflight', `Need ~${Math.round(floor / 1e9)} GB free disk for the voice runtime.`);
-    // v0.37.12: the venv needs a 3.9-3.11 python. Discover it HERE — failing after a 1.6 GB download
+    if (seams.freeDiskBytes(dirs.ttsDir) < MIN_FREE_BYTES)
+      return fail('preflight', `Need ~${Math.round(MIN_FREE_BYTES / 1e9)} GB free disk for the voice runtime.`);
+    // v0.37.12: the venv needs a 3.10/3.11 python. Discover it HERE — failing after a 1.6 GB download
     // (which is what a hardcoded `python3` did on any machine whose python3 is 3.12+) is unforgivable.
-    // Windows' 整合包 ships its own embedded interpreter, so it needs no system python.
-    const python = seams.platform === 'win32' ? 'win32-embedded' : seams.findPython();
+    // v0.40.0: Windows brings its own (the manifest's CPython), so it is neither discovered nor
+    // required — recipePython resolves to the in-tree interpreter the download stage is about to
+    // place. Note it does not exist YET at preflight; nothing dereferences it until the venv stage.
+    const python = recipePython(dirs.runtimeDir, seams.platform, seams.findPython());
     if (python === null) return fail('preflight', PYTHON_HINT);
-    // The 整合包 bundles its own ffmpeg; the scripted platforms need the system one.
+    // ffmpeg: Windows gets a shared build from the manifest, so only the scripted platforms — which
+    // rely on a system one — are gated here. The compiler gate is Windows-exempt for a different
+    // reason since v0.40.0: it COMPILES NOTHING (jieba_fast shimmed, pyopenjtalk excluded by marker,
+    // every other binary dep has a win_amd64 wheel). Do not "fix" this by un-exempting it —
+    // hasCompiler() probes `cc`, which no Windows machine has, MSVC or not.
     if (seams.platform !== 'win32' && seams.findFfmpeg() === null) return fail('preflight', FFMPEG_HINT);
     if (seams.platform !== 'win32' && !seams.hasCompiler()) return fail('preflight', COMPILER_HINT);
 
@@ -546,12 +667,13 @@ export async function runProvision(
       if (!fs.exists(dest) || (a.sizeBytes > 0 && fs.size(dest) !== a.sizeBytes)) fs.copy(finalPath, dest);
     }
 
-    // ── venv (scripted platforms only — the 整合包 ships its own runtime python) ──
-    if (seams.platform !== 'win32' && !venvDone) {
+    // ── venv (every platform since v0.40.0 — Windows used to be exempt because the 整合包 shipped
+    // its own embedded python; it now builds the same venv from the manifest's CPython) ──
+    if (!venvDone) {
       persist('venv');
       push({ stage: 'venv', artifact: 'python venv + requirements' });
-      await seams.exec(python, ['-m', 'venv', '.venv'], dirs.runtimeDir); // the DISCOVERED 3.9-3.11
-      const pip = join(dirs.runtimeDir, '.venv', 'bin', 'python');
+      await seams.exec(python, ['-m', 'venv', '.venv'], dirs.runtimeDir);
+      const pip = venvPythonPath(dirs.runtimeDir, seams.platform);
       await seams.exec(pip, ['-m', 'pip', 'install', '--upgrade', 'pip'], dirs.runtimeDir);
       // torch on its own: PyPI's linux torch is a ~2.5 GB CUDA build, and Luna runs api_v2 on CPU.
       // v0.37.15 (audit): CEILINGS. These were unpinned, so the next torch major (which can drop an API
@@ -568,12 +690,26 @@ export async function runProvision(
       const reqPath = join(dirs.runtimeDir, 'luna-requirements.txt');
       fs.writeText(reqPath, INFERENCE_REQUIREMENTS);
       await seams.exec(pip, ['-m', 'pip', 'install', '-r', reqPath], dirs.runtimeDir);
+      // v0.40.0: Windows compiles nothing, so jieba_fast — which pip just skipped via its marker —
+      // is supplied as a re-export package over plain jieba. Written AFTER the requirements install
+      // so pip cannot clobber it, and into site-packages so it resolves the same way a real
+      // dependency would. chinese2.py imports it at api_v2 startup, so a mistake here is loud.
+      if (seams.platform === 'win32') {
+        const shim = join(winSitePackages(dirs.runtimeDir), 'jieba_fast');
+        fs.mkdirp(shim);
+        fs.writeText(join(shim, '__init__.py'), JIEBA_SHIM_INIT);
+        fs.writeText(join(shim, 'posseg.py'), JIEBA_SHIM_POSSEG);
+      }
       // v0.37.12: pyopenjtalk fetches its 22.6 MB dictionary on FIRST USE — i.e. mid-conversation, over
       // the network, or not at all. Force it here, inside the install. (The nltk corpora, whose absence
       // is even worse — English G2P raises LookupError rather than downloading — are manifest artifacts
       // instead: checksummed, resumable, mirrorable, and visible in the progress bar.)
-      push({ stage: 'venv', artifact: 'language data' });
-      await seams.exec(pip, ['-c', 'import pyopenjtalk; pyopenjtalk.g2p("テスト")'], dirs.runtimeDir);
+      // v0.40.0: skipped on Windows, where pyopenjtalk is not installed at all — running it there
+      // would raise ImportError and fail the whole provision at the last step.
+      if (seams.platform !== 'win32') {
+        push({ stage: 'venv', artifact: 'language data' });
+        await seams.exec(pip, ['-c', 'import pyopenjtalk; pyopenjtalk.g2p("テスト")'], dirs.runtimeDir);
+      }
       venvDone = true;
       persist('venv');
     }
@@ -584,16 +720,24 @@ export async function runProvision(
     // v0.37.12: check EVERY load-bearing piece, not just the two model dirs — a marker that says
     // `ready` while the venv or G2PW is missing sends ttsRuntime off to spawn an interpreter that
     // isn't there, and the failure surfaces as a mystery voice crash-loop instead of an install error.
+    // v0.40.0: no platform exemptions. Windows used to skip the venv and cmudict checks, so a partial
+    // install still wrote `ready`; ttsRuntime then spawned a bare `python` off PATH, restarted three
+    // times and landed in `gave-up` with nothing anywhere saying why.
     const required: Array<[string, string]> = [
       ['api_v2.py', join(dirs.runtimeDir, 'api_v2.py')],
       ['roberta', join(pre, 'chinese-roberta-wwm-ext-large', 'pytorch_model.bin')],
       ['hubert', join(pre, 'chinese-hubert-base', 'pytorch_model.bin')],
       ['G2PWModel', join(dirs.runtimeDir, 'GPT_SoVITS', 'text', 'G2PWModel')],
-    ];
-    if (seams.platform !== 'win32') {
-      required.push(['python venv', join(dirs.runtimeDir, '.venv', 'bin', 'python')]);
+      ['python venv', venvPythonPath(dirs.runtimeDir, seams.platform)],
       // Without cmudict, English synthesis raises LookupError on the FIRST utterance.
-      required.push(['English pronunciation data', join(dirs.runtimeDir, 'nltk_data', 'corpora', 'cmudict')]);
+      ['English pronunciation data', join(dirs.runtimeDir, 'nltk_data', 'corpora', 'cmudict')],
+    ];
+    if (seams.platform === 'win32') {
+      // The two payloads that only Windows provisions, plus the shim without which api_v2 cannot
+      // even import text.chinese. Each one's absence is a first-sentence failure, not a boot failure,
+      // so nothing downstream would catch it.
+      required.push(['ffmpeg libraries', join(dirs.runtimeDir, WIN_FFMPEG_DIR, 'bin', 'ffmpeg.exe')]);
+      required.push(['jieba shim', join(winSitePackages(dirs.runtimeDir), 'jieba_fast', 'posseg.py')]);
     }
     const missing = required.filter(([, path]) => !fs.exists(path)).map(([name]) => name);
     if (missing.length > 0)
@@ -673,16 +817,36 @@ export function realSeams(): ProvisionSeams {
       size: (p) => statSync(p).size,
       mkdirp: (p) => mkdirSync(p, { recursive: true }),
       rename: (from, to) => renameSync(from, to),
+      // v0.40.0: copyFileSync, not writeFileSync(readFileSync(…)). The old shape materialized the
+      // whole file in the main process — 651 MB for roberta alone, and above Node's 2 GiB buffer
+      // ceiling it throws outright.
       copy: (from, to) => {
         rmSync(to, { force: true });
-        writeFileSync(to, readFileSync(from));
+        copyFileSync(from, to);
       },
       writeText: (p, s) => writeFileSync(p, s),
       readText: (p) => readFileSync(p, 'utf8'),
     },
+    // v0.40.0: STREAMING. `readFileSync` throws ERR_FS_FILE_TOO_LARGE above 2 GiB, and the catch
+    // below turned that into '' — which never equals the expected digest, so the caller reported a
+    // checksum mismatch and DELETED the .part. The 8.19 GB Windows 整合包 hit this every single time:
+    // download 8 GB, throw it away, blame the server. Nothing in the current manifest exceeds 651 MB,
+    // but a hash function that silently fails on big files is a trap for the next artifact.
     sha256: (p) => {
       try {
-        return createHash('sha256').update(readFileSync(p)).digest('hex');
+        const h = createHash('sha256');
+        const fd = openSync(p, 'r');
+        try {
+          const buf = Buffer.allocUnsafe(1 << 20);
+          for (;;) {
+            const n = readSync(fd, buf, 0, buf.length, null);
+            if (n === 0) break;
+            h.update(buf.subarray(0, n));
+          }
+        } finally {
+          closeSync(fd);
+        }
+        return h.digest('hex');
       } catch {
         return '';
       }
@@ -757,42 +921,18 @@ export function realSeams(): ProvisionSeams {
         await new Promise<void>((res) => ws.end(() => res()));
       }
     },
+    // v0.40.0: the `7z` arm is gone with the 整合包 that was its only consumer, and with it the
+    // bundled 7zr.exe, its fetch script, and the "install 7-Zip and retry" dead end.
     async extract(archive, kind, destDir, stripPrefix) {
       // System extractors via vetted argv (never a shell): tar handles tar.gz everywhere and zip on
-      // Windows (bsdtar); ditto covers zip on macOS; 7z needs a system 7-Zip on Windows — absent →
-      // a clear error steering to manual placement (recorded limitation).
+      // Windows (bsdtar); ditto covers zip on macOS; unzip on Linux.
       const strip = stripPrefix ? ['--strip-components', '1'] : [];
       if (kind === 'tar.gz') return runProc('tar', ['-xzf', archive, '-C', destDir, ...strip]);
-      if (kind === 'zip') {
-        if (process.platform === 'darwin' && !stripPrefix) return runProc('ditto', ['-x', '-k', archive, destDir]);
-        // GNU tar — which IS `tar` on Linux — cannot read zip at all (bsdtar can, which is why this
-        // looked fine on macOS/Windows). Linux gets unzip.
-        if (process.platform === 'linux') return runProc('unzip', ['-q', '-o', archive, '-d', destDir]);
-        return runProc('tar', ['-xf', archive, '-C', destDir, ...strip]); // bsdtar on mac + win
-      }
-      // 7z (the Windows 整合包). 7z has no --strip-components — hoist the top folder afterwards.
-      // v0.38.4: the bundled 7zr.exe leads (see sevenZipCandidates) so a stock machine needs no
-      // system 7-Zip; PATH is the last resort.
-      for (const bin of sevenZipCandidates(process.env, process.platform)) {
-        try {
-          await runProc(bin, ['x', archive, `-o${destDir}`, '-y']);
-          if (stripPrefix) {
-            const top = join(destDir, stripPrefix);
-            if (existsSync(top)) {
-              const { readdirSync, rmdirSync } = await import('node:fs');
-              for (const entry of readdirSync(top)) renameSync(join(top, entry), join(destDir, entry));
-              rmdirSync(top);
-            }
-          }
-          return;
-        } catch (e) {
-          if (!(e instanceof Error) || !e.message.includes('ENOENT')) throw e;
-        }
-      }
-      throw new Error(
-        'The Windows package needs 7-Zip to unpack. Install it from 7-zip.org and click retry — ' +
-          'the download is already saved, so it resumes instantly.',
-      );
+      if (process.platform === 'darwin' && !stripPrefix) return runProc('ditto', ['-x', '-k', archive, destDir]);
+      // GNU tar — which IS `tar` on Linux — cannot read zip at all (bsdtar can, which is why this
+      // looked fine on macOS/Windows). Linux gets unzip.
+      if (process.platform === 'linux') return runProc('unzip', ['-q', '-o', archive, '-d', destDir]);
+      return runProc('tar', ['-xf', archive, '-C', destDir, ...strip]); // bsdtar on mac + win
     },
     exec: (command, args, cwd) => runProc(command, args, cwd),
   };
