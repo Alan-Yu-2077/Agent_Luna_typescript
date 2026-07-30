@@ -107,8 +107,14 @@ This repo ships Claude Code skills under [`.claude/skills/`](.claude/skills/):
 
 They encode the discipline above. If you're working with an agent, point it at `luna-orient` first.
 
-## Reporting things
+## What this repo is (and isn't)
 
-Bugs and questions are welcome as issues. For anything touching the wire protocol, memory schema, or the
-tool surface, please open an issue to discuss before a large PR — those three are where a well-meaning
-change can quietly break the invariants.
+Luna is a personal project, published so the engineering can be read and reused. It is **not a
+supported product**: there are no installers, no platform-support promise, and no commitment to
+answer issues or review PRs. If you fork it and something breaks, the per-version log in
+[`docs/history/DEVELOPMENT.md`](docs/history/DEVELOPMENT.md) is the honest record of why things are
+the way they are — including the parts that were never verified.
+
+The conventions above are here because they're load-bearing for *this* codebase, not as gatekeeping.
+If you're changing the wire protocol, memory schema, or tool surface in your own fork, they're the
+three places where a well-meaning change quietly breaks an invariant — read those sections twice.

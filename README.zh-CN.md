@@ -13,17 +13,15 @@
 [![Runtime: Bun](https://img.shields.io/badge/Bun-%E2%89%A5%201.2-black?logo=bun&logoColor=white)](https://bun.sh)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)](tsconfig.json)
 [![Desktop: Electron](https://img.shields.io/badge/Electron-%E6%A1%8C%E9%9D%A2%E5%AE%A0%E7%89%A9-47848F?logo=electron&logoColor=white)](packages/desktop)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
 [English](README.md) · **简体中文**
 
 <img src="docs/assets/moment-fries.png" width="820" alt="Luna,一个 Live2D 桌面伙伴,在玩梗" />
 
-[![下载 Windows 安装包](https://img.shields.io/badge/%E4%B8%8B%E8%BD%BD-Windows_%E5%AE%89%E8%A3%85%E5%8C%85-0078D6?logo=windows&logoColor=white&style=for-the-badge)](https://github.com/Alan-Yu-2077/Luna-ts/releases/latest/download/Luna-Setup-Windows-x64.exe) &nbsp; [![下载 macOS](https://img.shields.io/badge/%E4%B8%8B%E8%BD%BD-macOS-000000?logo=apple&logoColor=white&style=for-the-badge)](https://github.com/Alan-Yu-2077/Luna-ts/releases/latest/download/Luna-macOS-arm64.dmg)
+[![Luna TV · 看她动起来](https://img.shields.io/badge/%E2%96%B6_Luna_TV-%E7%9C%8B%E5%A5%B9%E5%8A%A8%E8%B5%B7%E6%9D%A5-bfe0fb?style=for-the-badge)](https://alan-yu-2077.github.io/Luna-ts/)
 
-<sub>预发布 · 未签名——Windows SmartScreen / macOS Gatekeeper 首次运行会警告(点“仍要运行” / 右键→“打开”)。<a href="https://github.com/Alan-Yu-2077/Luna-ts/releases/latest">全部下载 →</a></sub>
-
-[![Luna TV · 在线能力展示](https://img.shields.io/badge/%E2%96%B6_Luna_TV-%E5%9C%A8%E7%BA%BF%E8%83%BD%E5%8A%9B%E5%B1%95%E7%A4%BA-bfe0fb?style=for-the-badge)](https://alan-yu-2077.github.io/Luna-ts/)
+<sub>这个仓库是<b>作为参考公开的工程本身</b>,不是一个用来分发的产品。<br/>
+没有安装包:Luna 是一个人的伙伴,真正要紧的那个实例只活在一台机器上。代码你可以读、可以 clone、可以拿走任何你想要的部分。</sub>
 
 </div>
 
@@ -51,7 +49,9 @@
 - 🔒 **本地优先** —— 记忆是本地 SQLite,密钥只存本机配置文件,服务默认只绑回环地址。
   属于*她*的一切都不出你的电脑。
 
-## 🚀 快速开始
+## 🚀 自己跑一个
+
+没有安装包可下——你从源码把她构建出来,而这恰好也是理解她是什么的老实办法。
 
 ```sh
 git clone https://github.com/Alan-Yu-2077/Luna-ts.git
@@ -123,6 +123,11 @@ graph LR
 
 ## 📚 文档
 
+**当参考来读的话**:先看 [`ARCHITECTURE.md`](ARCHITECTURE.md) 摸清骨架,然后是
+[`docs/history/DEVELOPMENT.md`](docs/history/DEVELOPMENT.md)——140+ 条按版本的记录,每条都分成
+*Fact*(改了什么)和 *Inference*(为什么重要),**包括做错的那些版本、以及始终没补上的窟窿**。
+真正如实交代她是怎么长出来的,是那份日志,不是这个 README。
+
 | 文档 | 内容 |
 | --- | --- |
 | [`docs/SETUP.md`](docs/SETUP.md) | 自带模型与语音的手动步骤(向导会替你做这些) |
@@ -143,11 +148,12 @@ bun run --cwd packages/server tsc --noEmit  # 按包类型检查(server/web/desk
 env 开关后面、验证充分才翻默认。服务默认绑定**回环地址(`127.0.0.1`)**;只在可信网络上
 设置 `LUNA_BIND_HOST=0.0.0.0`。
 
-## 🤝 参与
+## 🤝 关于使用这些代码
 
-欢迎 Issue 和 PR——流程见 [`CONTRIBUTING.md`](CONTRIBUTING.md),[`ROADMAP.md`](ROADMAP.md) 列了
-需要帮手的方向。不错的第一个贡献:按模型的 Live2D 表情预设
-(见 [`docs/SETUP.md`](docs/SETUP.md) 里如实写明的局限)。
+这是一个作为参考公开的个人项目,不是一个有人维护的产品——**Issue、PR、平台支持一律不作承诺。**
+这话说得直白,但意思是大方的:代码是 MIT,每个版本背后的推理都摊在
+[`docs/history/DEVELOPMENT.md`](docs/history/DEVELOPMENT.md) 里,想 fork 或细读的话
+[`CONTRIBUTING.md`](CONTRIBUTING.md) 记着全部约定。拿走有用的部分,不用回报什么。
 
 ## 📄 许可
 

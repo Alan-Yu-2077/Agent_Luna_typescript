@@ -13,17 +13,16 @@ code-agent capability — embodied as a Live2D avatar with lip-synced custom voi
 [![Runtime: Bun](https://img.shields.io/badge/Bun-%E2%89%A5%201.2-black?logo=bun&logoColor=white)](https://bun.sh)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)](tsconfig.json)
 [![Desktop: Electron](https://img.shields.io/badge/Electron-desktop%20pet-47848F?logo=electron&logoColor=white)](packages/desktop)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
 **English** · [简体中文](README.zh-CN.md)
 
 <img src="docs/assets/moment-fries.png" width="820" alt="Luna, a Live2D companion, sharing a joke" />
 
-[![Download for Windows](https://img.shields.io/badge/Download-Windows_installer-0078D6?logo=windows&logoColor=white&style=for-the-badge)](https://github.com/Alan-Yu-2077/Luna-ts/releases/latest/download/Luna-Setup-Windows-x64.exe) &nbsp; [![Download for macOS](https://img.shields.io/badge/Download-macOS-000000?logo=apple&logoColor=white&style=for-the-badge)](https://github.com/Alan-Yu-2077/Luna-ts/releases/latest/download/Luna-macOS-arm64.dmg)
+[![Luna TV — live capability showcase](https://img.shields.io/badge/%E2%96%B6_Luna_TV-see_her_in_motion-bfe0fb?style=for-the-badge)](https://alan-yu-2077.github.io/Luna-ts/)
 
-<sub>Pre-release · unsigned — Windows SmartScreen / macOS Gatekeeper warns on first run (click **Run anyway** / right-click → **Open**). <a href="https://github.com/Alan-Yu-2077/Luna-ts/releases/latest">All downloads →</a></sub>
-
-[![Luna TV — live capability showcase](https://img.shields.io/badge/%E2%96%B6_Luna_TV-live_capability_showcase-bfe0fb?style=for-the-badge)](https://alan-yu-2077.github.io/Luna-ts/)
+<sub>This repository is the <b>engineering, published as a reference</b> — not a distributed product.<br/>
+There are no installers: Luna is one person's companion, and the instance that matters lives on one
+machine. Read the code, clone it, take the parts you want.</sub>
 
 </div>
 
@@ -57,7 +56,10 @@ code-agent capability — embodied as a Live2D avatar with lip-synced custom voi
 - 🔒 **Local-first** — memory is a local SQLite file, keys live in a local config only, the server
   binds loopback by default. Nothing about *her* leaves your machine.
 
-## 🚀 Quick start
+## 🚀 Run your own
+
+There is no installer to download — you build her from source, which is also the honest way to read
+what she is.
 
 ```sh
 git clone https://github.com/Alan-Yu-2077/Luna-ts.git
@@ -131,6 +133,12 @@ Real conversations — she jokes, she looks things up, she reads her own codebas
 
 ## 📚 Documentation
 
+**Reading this as a reference?** Start with [`ARCHITECTURE.md`](ARCHITECTURE.md) for the shape, then
+[`docs/history/DEVELOPMENT.md`](docs/history/DEVELOPMENT.md) — 140+ per-version entries, each split
+into *Fact* (what changed) and *Inference* (why it mattered), including the versions that were wrong
+and the gaps that were never closed. That log, not this README, is the honest account of how she got
+built.
+
 | Doc | What it covers |
 | --- | --- |
 | [`docs/SETUP.md`](docs/SETUP.md) | Bring-your-own model & voice, step by step (the wizard does this for you) |
@@ -151,12 +159,13 @@ Tests live next to the code (`*.test.ts`), the wire contract is `as`-free, and e
 lands behind a default-off env flag before its default flips. The server binds
 **loopback (`127.0.0.1`) by default**; set `LUNA_BIND_HOST=0.0.0.0` only on a trusted network.
 
-## 🤝 Contributing
+## 🤝 Using this code
 
-Issues and PRs are welcome — [`CONTRIBUTING.md`](CONTRIBUTING.md) has the workflow, and
-[`ROADMAP.md`](ROADMAP.md) lists directions where help is wanted. Good first contribution:
-per-model Live2D expression presets (see the honest limitation note in
-[`docs/SETUP.md`](docs/SETUP.md)).
+This is a personal project published as a reference, not a supported product — **no promises about
+issues, PRs, or platform support.** That's the deal, and it's meant generously: the code is MIT, the
+per-version reasoning is all in [`docs/history/DEVELOPMENT.md`](docs/history/DEVELOPMENT.md), and
+[`CONTRIBUTING.md`](CONTRIBUTING.md) documents the conventions if you're forking or reading closely.
+Take what's useful; you don't owe anything back.
 
 ## 📄 License
 

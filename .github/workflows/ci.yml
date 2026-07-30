@@ -62,9 +62,5 @@ jobs:
       - name: Build web (portable)
         run: bun run --cwd packages/web build
 
-      # v0.38.1: keep the Windows cross-compile target valid — it emits luna-server.exe from either OS.
-      - name: Cross-compile the Windows sidecar
-        run: bun run --cwd packages/desktop compile:server:win
-
       - name: Test
         run: bun test
