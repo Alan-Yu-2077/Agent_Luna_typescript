@@ -16,6 +16,7 @@ import {
   flagOn,
 } from './perfFlags';
 import { debugBridgeEnabled } from '../workbenchMode';
+import { costumeWrites, loadCostume } from './costume';
 
 // The real Live2DSink: loads the configured Live2D model via pixi-live2d-display, drives it through a
 // FaceVm on the pixi ticker, and makes it draggable with a persisted offset. Returns null when no model
@@ -168,6 +169,10 @@ export async function createPixiLive2DSink(
     shortClipsEnabled: () => flagOn(SHORT_CLIPS_KEY),
     idleActionsEnabled: () => flagOn(IDLE_ACTIONS_KEY),
   });
+  // v0.43.10: whatever the owner last put on her. Reuses v0.43.8's per-frame `setManualParam`
+  // verbatim, so persistence cost the engine nothing.
+  for (const [pid, value] of costumeWrites(loadCostume())) faceVm.setManualParam(pid, value);
+
   // Drive FaceVm from the model's OWN update cycle, on 'beforeModelUpdate' — the
   // point inside InternalModel.update() right after the built-in controllers
   // (auto idle-motion, eyeBlink, focus/gaze, breath, physics, pose) have run and

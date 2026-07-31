@@ -105,6 +105,23 @@ export const OVERLAYS: Record<string, Record<string, number>> = {
 // overlay is actively zeroed rather than left latched on.
 export const ALL_OVERLAY_PARAMS = Object.values(OVERLAYS).flatMap((o) => Object.keys(o));
 
+// v0.43.10 — costume: the model's prop assets as a THIRD semantic, distinct from both tables above.
+// An overlay is chosen by the emotion system and lasts as long as its clip; a costume is chosen by
+// the owner and lasts until he changes it. That is why the two id sets are disjoint and a test says
+// so: an id in both would mean a clip could silently take his eyepatch off.
+//
+// `ParamarmupL/R` is deliberately absent — a raised arm is gesture material, not something to wear —
+// and so is `Paramdown1`, which `adorable` already drives as an overlay.
+export const COSTUME: Record<string, { pid: string; label: string; group?: string }> = {
+  eyepatch: { pid: 'Paramyanzhao', label: 'Eyepatch' },
+  mic: { pid: 'Paramhuatong', label: 'Microphone' },
+  puppy: { pid: 'Paramxiaogou', label: 'Floating puppy' },
+  // The two hairstyles are mutually exclusive at the UI layer; both off = the drawn default.
+  longHair: { pid: 'Paramlonghair', label: 'Short hair 1', group: 'hair' },
+  shortHair2: { pid: 'Paramlonghair2', label: 'Short hair 2', group: 'hair' },
+};
+export const COSTUME_IDS: readonly string[] = Object.keys(COSTUME);
+
 export const EMOTIONS = {
   focused: {
     timeline: { introMs: 820, performMs: 5600, outroMs: 1100 },

@@ -28,6 +28,7 @@ import { mountPackDrop } from './ui/packDrop';
 import { resolveUiMode } from './uiMode';
 import { mountWorkbench, type ComposeTarget, type DebugBridge } from './ui/workbench';
 import type { EmotionDef } from './live2d/faceData';
+import { costumeWrites, loadCostume, saveCostume, toggleCostume } from './live2d/costume';
 import { isWorkbenchMode, workbenchModelUrl } from './workbenchMode';
 
 // Browser entry — builds the cute UI shell + the live Live2D avatar + voice, and
@@ -521,6 +522,22 @@ async function boot(): Promise<void> {
     localStorage.setItem('luna:idle-profile', refs.idleSelect.value);
     live2d.setIdleProfile?.(refs.idleSelect.value);
   });
+  // v0.43.10: costume. The sink already applied the saved state at boot; these rows keep it in sync,
+  // writing the whole set on every change so a removed item is actively released rather than latched.
+  let costume = loadCostume();
+  const paintCostume = (): void => {
+    for (const [id, box] of Object.entries(refs.costumeToggles)) box.checked = costume[id] === true;
+  };
+  paintCostume();
+  for (const [id, box] of Object.entries(refs.costumeToggles)) {
+    box.addEventListener('change', () => {
+      costume = toggleCostume(costume, id, box.checked);
+      saveCostume(costume);
+      for (const [pid, value] of costumeWrites(costume)) live2d.setManualParam?.(pid, value);
+      paintCostume(); // a hairstyle turning on takes the other one off — show that
+    });
+  }
+
   // v0.43.7: leaving for the workbench is a full navigation (it is a different page mode), so the
   // current URL is stashed first — the bench's "← Back" restores the exact instance.
   refs.workbenchBtn.addEventListener('click', () => {

@@ -2,6 +2,7 @@ import { ExpressionKey } from '@luna/protocol';
 import type { Live2DSink, Live2DState } from '../sinks';
 import {
   ACTIONS,
+  COSTUME,
   EMOTIONS,
   FACE_CHANNEL_GROUPS,
   IDLE_PROFILES,
@@ -18,6 +19,7 @@ import {
 } from '../live2d/paramMap';
 import { HIGH_INTENSITY } from '../live2d/expressionMap';
 import { GAZE_KEY, PERF_FLAGS, flagOn, setFlag } from '../live2d/perfFlags';
+import { costumeWrites, loadCostume, saveCostume, toggleCostume } from '../live2d/costume';
 
 // v0.43.7 — the Live2D workbench. Six versions of expressive machinery accumulated behind one
 // observable surface (her final face) and one console bridge, and the owner said it plainly: the
@@ -75,6 +77,12 @@ export const MODEL_ASSETS: readonly ModelAsset[] = [
 ];
 
 export const COSTUME_NOTE = 'The emotion system never touches these on its own — this is your hand.';
+
+// v0.43.10: which of the try-on assets are PERSISTENT costume (the settings card owns them) versus
+// session-only experiments. Returns undefined for the latter.
+export function costumeIdForParam(pid: string): string | undefined {
+  return Object.entries(COSTUME).find(([, def]) => def.pid === pid)?.[0];
+}
 
 export const WORKBENCH_STATES: readonly Live2DState[] = ['neutral', 'thinking', 'speaking', 'sleeping'];
 
@@ -422,8 +430,24 @@ export function mountWorkbench(root: HTMLElement, deps: WorkbenchDeps): { stage:
       row.dataset['pid'] = asset.pid;
       const box = doc.createElement('input');
       box.type = 'checkbox';
+      // v0.43.10: a costume asset is the SAME switch as the one on the settings card, so the bench
+      // writes through the same persisted state rather than keeping a second, session-only truth.
+      const costumeId = costumeIdForParam(asset.pid);
+      if (costumeId !== undefined) box.checked = loadCostume()[costumeId] === true;
       box.addEventListener('change', () => {
-        deps.target()?.setManualParam?.(asset.pid, box.checked ? 1 : null);
+        const target = deps.target();
+        if (costumeId === undefined) {
+          target?.setManualParam?.(asset.pid, box.checked ? 1 : null);
+          return;
+        }
+        const next = toggleCostume(loadCostume(), costumeId, box.checked);
+        saveCostume(next);
+        for (const [pid, value] of costumeWrites(next)) target?.setManualParam?.(pid, value);
+        // A hairstyle turning on takes the other one off — the bench has to show that too.
+        for (const [pid, other] of assetToggles) {
+          const otherId = costumeIdForParam(pid);
+          if (otherId !== undefined) other.checked = next[otherId] === true;
+        }
       });
       const text = doc.createElement('span');
       text.textContent = asset.label;

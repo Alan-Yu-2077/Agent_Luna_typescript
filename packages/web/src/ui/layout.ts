@@ -3,7 +3,7 @@
 // chrome (dream overlay, mood pip, scroll pill, settings popover), and returns
 // the live mount points the app wires events to. Pure DOM construction.
 
-import { DEFAULT_IDLE_PROFILE, IDLE_PROFILES } from '../live2d/faceData';
+import { COSTUME, DEFAULT_IDLE_PROFILE, IDLE_PROFILES } from '../live2d/faceData';
 
 export type LayoutRefs = {
   statusBadge: HTMLElement;
@@ -32,6 +32,7 @@ export type LayoutRefs = {
   idleActionsToggle: HTMLInputElement;
   idleSelect: HTMLSelectElement;
   workbenchBtn: HTMLButtonElement;
+  costumeToggles: Record<string, HTMLInputElement>;
   petToggle: HTMLInputElement;
   serverSettings: HTMLElement;
   // v0.39.2: agent-only mode hides the avatar pane outright — a tab of dead controls is worse than
@@ -197,6 +198,19 @@ export function buildLayout(root: HTMLElement): LayoutRefs {
     IDLE_PROFILES,
     localStorage.getItem('luna:idle-profile') ?? DEFAULT_IDLE_PROFILE,
   );
+  // v0.43.10: costume. Its own card because it is a different KIND of switch from everything above —
+  // those tune how the expression system behaves, these are things the owner puts on her and that
+  // stay on until he takes them off. Checked state is filled in by app.ts from `luna:costume`.
+  const costumeCard = add(avatarTab, 'div', 'settings-card costume-card');
+  add(costumeCard, 'div', 'card-title', 'Costume');
+  const costumeToggles: Record<string, HTMLInputElement> = {};
+  for (const [id, item] of Object.entries(COSTUME)) {
+    const box = toggleRow(costumeCard, item.label, false);
+    box.dataset['costume'] = id;
+    costumeToggles[id] = box;
+  }
+  add(costumeCard, 'div', 'hint', 'Yours to set — her expressions never put these on or take them off');
+
   // v0.43.7: the way into the Live2D workbench. A row rather than a rail tab — the bench replaces
   // the whole page (no WS, no chat), so it is a departure, not another settings pane.
   const workbenchBtn = doc.createElement('button');
@@ -293,6 +307,6 @@ export function buildLayout(root: HTMLElement): LayoutRefs {
     moodPip, scrollPill, dreamOverlay, dreamWakeBtn, dreamCaption,
     settingsBtn, settingsPanel, settingsBackdrop, ttsToggle, live2dToggle, gazeToggle, idleSelect,
     petToggle, serverSettings, avatarTab, avatarRailBtn, affectToggle, livePeakToggle, shortClipsToggle, idleActionsToggle,
-    workbenchBtn,
+    workbenchBtn, costumeToggles,
   };
 }

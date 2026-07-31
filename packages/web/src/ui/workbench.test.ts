@@ -10,6 +10,7 @@ import {
   composeEmotionDef,
   composeFromClip,
   COSTUME_NOTE,
+  costumeIdForParam,
   ENTRY_FRACTION,
   exportEmotionDef,
   inferOwns,
@@ -21,7 +22,7 @@ import {
   type ControlTarget,
   type WorkbenchControl,
 } from './workbench';
-import { ACTIONS, ALL_OVERLAY_PARAMS, EMOTIONS, IDLE_PROFILES, type EmotionDef } from '../live2d/faceData';
+import { ACTIONS, ALL_OVERLAY_PARAMS, COSTUME, EMOTIONS, IDLE_PROFILES, type EmotionDef } from '../live2d/faceData';
 import { FACE_STATE_KEYS } from '../live2d/paramMap';
 import { affectToEmotion, HIGH_INTENSITY } from '../live2d/expressionMap';
 import { PERF_FLAGS } from '../live2d/perfFlags';
@@ -293,5 +294,28 @@ describe('the compose export', () => {
 
   test('an unknown clip id loads an empty pose rather than throwing', () => {
     expect(composeFromClip('does-not-exist')).toEqual({});
+  });
+});
+
+// v0.43.10 — the bench's costume rows are the SAME switch as the settings card, not a second one.
+describe('costumeIdForParam — persistent costume vs session-only try-on', () => {
+  test('the five costume assets map back to their catalog id', () => {
+    expect(costumeIdForParam('Paramyanzhao')).toBe('eyepatch');
+    expect(costumeIdForParam('Paramhuatong')).toBe('mic');
+    expect(costumeIdForParam('Paramlonghair2')).toBe('shortHair2');
+  });
+
+  test('an emotional asset and a non-costume prop stay session-only', () => {
+    expect(costumeIdForParam('Paramheart')).toBeUndefined();
+    expect(costumeIdForParam('ParamarmupL')).toBeUndefined();
+    expect(costumeIdForParam('Paramdown1')).toBeUndefined();
+  });
+
+  // The wall, stated once as a table: three actors, three permissions.
+  test('every costume param is in the bench catalog and none is emotion-reachable', () => {
+    const catalog = new Map(MODEL_ASSETS.map((a) => [a.pid, a.group]));
+    for (const item of Object.values(COSTUME)) {
+      expect(catalog.get(item.pid)).toBe('costume');
+    }
   });
 });
