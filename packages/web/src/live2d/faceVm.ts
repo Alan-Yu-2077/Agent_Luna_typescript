@@ -226,6 +226,8 @@ export class FaceVm {
   private readonly shortClipsEnabled: () => boolean;
   private readonly idleActionsEnabled: () => boolean;
   private readonly smoothingEnabled: () => boolean;
+  private readonly manualParams = new Map<string, number>();
+  private readonly manualRelease = new Set<string>();
   private lastTickAt = -1;
   private nextIdleActionAt = -1;
   private readonly recentIdleActions: string[] = [];
@@ -323,6 +325,54 @@ export class FaceVm {
   listEmotions(): string[] {
     return Object.keys(EMOTIONS);
   }
+
+  // v0.43.8: fire one authored gesture by name. Until now the nine ACTIONS could only be reached as
+  // a clip's `actionRefs` or by v0.43.4's spontaneous scheduler — there was no way to just watch one.
+  // Keyed `manual:` so it coexists with a same-named scheduled instance rather than replacing it;
+  // `applyActions` already samples several at once, so this adds no execution path.
+  playAction(name: string, intensity = 0.95): void {
+    const action = ACTIONS[name];
+    if (!action) return;
+    this.actions.set(`manual:${name}:${Math.round(this.lastTickAt)}`, {
+      action,
+      startAt: this.lastTickAt,
+      intensity: clamp01(intensity),
+    });
+  }
+  listActions(): string[] {
+    return Object.keys(ACTIONS);
+  }
+
+  // v0.43.8: wear a raw model parameter — the mechanism behind trying the model's 17 `.exp3.json`
+  // assets on, costume and props included.
+  //
+  // It must be written EVERY frame, not once. The prop params are not in `ALL_OVERLAY_PARAMS` so
+  // nothing zeroes them, but pixi-live2d-display's motion update has a parameter save/restore cycle
+  // that discards a one-shot write. Written last, after the overlay loop, so wearing `Paramheart`
+  // beats that loop's zero for the same id.
+  setManualParam(pid: string, value: number | null): void {
+    if (value === null) {
+      // Take it OFF, don't just stop writing: these are Add-blend params, so a dropped entry would
+      // freeze at its last value and she would wear the eyepatch forever.
+      if (this.manualParams.delete(pid)) this.manualRelease.add(pid);
+      return;
+    }
+    this.manualRelease.delete(pid);
+    this.manualParams.set(pid, value);
+  }
+  manualParamIds(): string[] {
+    return [...this.manualParams.keys()];
+  }
+  // v0.43.8: what the clip layer is currently driving through the overlay table, read-only. The bench
+  // lights its emotional asset toggles from this, which is the first time the "which clip carries
+  // which drawn asset" mapping is visible while it happens instead of inferable from source.
+  activeOverlayParams(now = -1): Record<string, number> {
+    const out: Record<string, number> = {};
+    for (const [pid, v] of Object.entries(this.overlayParams(now < 0 ? this.lastTickAt : now))) {
+      if (v > 1e-3) out[pid] = v;
+    }
+    return out;
+  }
   clear(): void {
     this.pending = { id: null, intensity: 0 };
     this.state = 'neutral';
@@ -415,6 +465,14 @@ export class FaceVm {
       for (const k of MOUTH_KEYS) {
         this.writer.setParam(FACE_VM_PARAM_MAP[k], clampStateValue(k, this.cur[k] * (FACE_PARAM_GAIN[k] ?? 1)));
       }
+    }
+
+    // v0.43.8: worn params go LAST, so a manually worn asset outranks every layer above — including
+    // the overlay loop's per-frame zeroing of the same id. A just-removed one gets exactly one 0.
+    for (const [pid, value] of this.manualParams) this.writer.setParam(pid, value);
+    if (this.manualRelease.size > 0) {
+      for (const pid of this.manualRelease) this.writer.setParam(pid, 0);
+      this.manualRelease.clear();
     }
   }
 

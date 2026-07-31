@@ -942,3 +942,8 @@ body.pet { background: none; }
 .wb-btn.on { background: var(--sky); border-color: var(--sky-deep); color: var(--sky-text); font-weight: 700; }
 .wb-flag { display: flex; align-items: center; gap: 7px; font-size: 11px; }
 .wb-readout p { margin: 0; font-size: 11px; font-family: ui-monospace, monospace; color: var(--ink-soft); word-break: break-word; }
+
+/* v0.43.8: worn assets. `.driven` = the clip layer is currently driving that
+   overlay — the first time the clip→asset table is visible while it happens. */
+.wb-asset { display: flex; align-items: center; gap: 7px; font-size: 11px; border-radius: 6px; padding: 1px 3px; }
+.wb-asset.driven { background: var(--tool-bg); color: var(--tool-text); font-weight: 700; }

@@ -1,6 +1,6 @@
 import { ExpressionKey } from '@luna/protocol';
 import type { Live2DSink, Live2DState } from '../sinks';
-import { EMOTIONS, IDLE_PROFILES } from '../live2d/faceData';
+import { ACTIONS, EMOTIONS, IDLE_PROFILES } from '../live2d/faceData';
 import { HIGH_INTENSITY } from '../live2d/expressionMap';
 import { GAZE_KEY, PERF_FLAGS, flagOn, setFlag } from '../live2d/perfFlags';
 
@@ -17,14 +17,49 @@ export type WorkbenchControl =
   | { kind: 'affect'; id: ExpressionKey; label: string }
   | { kind: 'clip'; id: string; label: string }
   | { kind: 'state'; id: Live2DState; label: string }
-  | { kind: 'idle'; id: string; label: string };
+  | { kind: 'idle'; id: string; label: string }
+  | { kind: 'action'; id: string; label: string };
 
 export type WorkbenchSection = {
-  id: 'affect' | 'clip' | 'state' | 'idle';
+  id: 'affect' | 'clip' | 'state' | 'idle' | 'action';
   title: string;
   hint: string;
   controls: WorkbenchControl[];
 };
+
+// v0.43.8 — the model's 17 `.exp3.json` assets, addressable by hand.
+//
+// Hardcoded on purpose. The model tree is gitignored (F31) and the bundler cannot enumerate a
+// directory at build time, so the honest options are a hardcoded list checked against the real
+// `yumi.cdi3.json` by a test, or a runtime directory listing that does not exist. Same choice
+// v0.43.1 made for `OVERLAYS`, same guard.
+//
+// The split is the whole point. `emotion` assets are ones the clip layer may drive on its own;
+// `costume` assets are ones it must NEVER touch (v0.43.1's hard test) — she does not produce a
+// microphone mid-apology. Here they are all reachable because this is the owner's hand, not hers.
+export type ModelAsset = { pid: string; label: string; group: 'emotion' | 'costume' };
+
+export const MODEL_ASSETS: readonly ModelAsset[] = [
+  { pid: 'Paramheart', label: '爱心眼 heart eyes', group: 'emotion' },
+  { pid: 'Paramxingxing', label: '星星眼 star eyes', group: 'emotion' },
+  { pid: 'Paramleiwangwang', label: '泪汪汪 welling', group: 'emotion' },
+  { pid: 'Paramtear', label: '眼泪 tears', group: 'emotion' },
+  { pid: 'Paramheilian', label: '黑脸 black face', group: 'emotion' },
+  { pid: 'Paramwenxiang', label: '蚊香眼 swirl eyes', group: 'emotion' },
+  { pid: 'ParamMouthShrug', label: '猫猫嘴 cat mouth', group: 'emotion' },
+  { pid: 'ParamMouthX', label: '歪嘴 crooked mouth', group: 'emotion' },
+  { pid: 'Paramshita', label: '舌头伸出 tongue', group: 'emotion' },
+  { pid: 'Paramyanzhao', label: '眼罩 eyepatch', group: 'costume' },
+  { pid: 'Paramhuatong', label: '拿话筒 microphone', group: 'costume' },
+  { pid: 'Paramxiaogou', label: '漂浮小狗 floating dog', group: 'costume' },
+  { pid: 'Paramlonghair', label: '短发1 short hair 1', group: 'costume' },
+  { pid: 'Paramlonghair2', label: '短发2 short hair 2', group: 'costume' },
+  { pid: 'ParamarmupL', label: '抬手左 arm up L', group: 'costume' },
+  { pid: 'ParamarmupR', label: '抬手右 arm up R', group: 'costume' },
+  { pid: 'Paramdown1', label: '俯身按键 bow press', group: 'costume' },
+];
+
+export const COSTUME_NOTE = 'The emotion system never touches these on its own — this is your hand.';
 
 export const WORKBENCH_STATES: readonly Live2DState[] = ['neutral', 'thinking', 'speaking', 'sleeping'];
 
@@ -61,13 +96,24 @@ export function workbenchSections(): WorkbenchSection[] {
       hint: 'the resting animation underneath everything',
       controls: IDLE_PROFILES.map((p) => ({ kind: 'idle', id: p.id, label: p.label })),
     },
+    {
+      id: 'action',
+      title: 'Action',
+      hint: 'the nine authored gestures, fired one at a time',
+      controls: Object.keys(ACTIONS).map((id) => ({ kind: 'action', id, label: titleCase(id) })),
+    },
   ];
 }
 
 // Exactly the optional half of Live2DSink the bench drives. Typing it structurally (rather than
 // against the concrete pixi sink) is what lets the dispatch below be tested against a recorder.
 export type ControlTarget = Pick<Live2DSink, 'setExpression' | 'setState'> &
-  Partial<Pick<Live2DSink, 'triggerEmotion' | 'setIdleProfile' | 'setGazeFollow'>>;
+  Partial<
+    Pick<
+      Live2DSink,
+      'triggerEmotion' | 'setIdleProfile' | 'setGazeFollow' | 'playAction' | 'setManualParam'
+    >
+  >;
 
 export function applyControl(target: ControlTarget, c: WorkbenchControl, intensity: number): void {
   switch (c.kind) {
@@ -85,6 +131,9 @@ export function applyControl(target: ControlTarget, c: WorkbenchControl, intensi
     case 'idle':
       target.setIdleProfile?.(c.id);
       return;
+    case 'action':
+      target.playAction?.(c.id, intensity);
+      return;
   }
 }
 
@@ -101,7 +150,7 @@ export type WorkbenchReadout = { mood: string; playback: string; actions: string
 export type DebugBridge = {
   mood?: () => string;
   playback?: () => { id: string; intensity: number; phase: string } | null;
-  faceVm?: { activeActionIds(): string[] };
+  faceVm?: { activeActionIds(): string[]; activeOverlayParams?(): Record<string, number> };
 };
 
 export function readout(bridge: DebugBridge | undefined): WorkbenchReadout {
@@ -228,6 +277,38 @@ export function mountWorkbench(root: HTMLElement, deps: WorkbenchDeps): { stage:
     drawer.appendChild(el);
   }
 
+  // v0.43.8: the 17 drawn assets, worn by hand. Emotional ones also LIGHT UP when the clip layer is
+  // driving them, so the overlay table stops being something he has to read source to know.
+  const assetToggles = new Map<string, HTMLInputElement>();
+  for (const group of ['emotion', 'costume'] as const) {
+    const sec = doc.createElement('section');
+    sec.className = 'wb-section';
+    sec.dataset['section'] = `asset-${group}`;
+    const h = doc.createElement('h3');
+    h.textContent = group === 'emotion' ? 'Assets · emotional' : 'Assets · costume & props';
+    const hint = doc.createElement('p');
+    hint.className = 'wb-hint';
+    hint.textContent =
+      group === 'emotion' ? 'lit = the playing clip is driving it right now' : COSTUME_NOTE;
+    sec.append(h, hint);
+    for (const asset of MODEL_ASSETS.filter((a) => a.group === group)) {
+      const row = doc.createElement('label');
+      row.className = 'wb-asset';
+      row.dataset['pid'] = asset.pid;
+      const box = doc.createElement('input');
+      box.type = 'checkbox';
+      box.addEventListener('change', () => {
+        deps.target()?.setManualParam?.(asset.pid, box.checked ? 1 : null);
+      });
+      const text = doc.createElement('span');
+      text.textContent = asset.label;
+      row.append(box, text);
+      sec.appendChild(row);
+      assetToggles.set(asset.pid, box);
+    }
+    drawer.appendChild(sec);
+  }
+
   const flags = doc.createElement('section');
   flags.className = 'wb-section';
   flags.dataset['section'] = 'flags';
@@ -268,10 +349,15 @@ export function mountWorkbench(root: HTMLElement, deps: WorkbenchDeps): { stage:
   drawer.appendChild(readoutEl);
 
   const paint = (): void => {
-    const r = readout(deps.bridge?.());
+    const bridge = deps.bridge?.();
+    const r = readout(bridge);
     moodEl.textContent = `mood — ${r.mood}`;
     clipEl.textContent = `clip — ${r.playback}`;
     actEl.textContent = `actions — ${r.actions}`;
+    const driven = bridge?.faceVm?.activeOverlayParams?.() ?? {};
+    for (const [pid, box] of assetToggles) {
+      box.parentElement?.classList.toggle('driven', driven[pid] !== undefined);
+    }
   };
   paint();
   const timer = setInterval(paint, READOUT_MS);

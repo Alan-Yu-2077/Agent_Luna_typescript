@@ -31,6 +31,13 @@ export interface Live2DSink {
   setIdleProfile?(id: string): void;
   // the available idle profiles, ordered, with display labels
   listIdleProfiles?(): ReadonlyArray<{ id: string; label: string }>;
+  // v0.43.8 (workbench): fire one authored gesture by name — the manual counterpart to the clip
+  // `actionRefs` and the spontaneous scheduler, which were the only two ways in before.
+  playAction?(name: string, intensity?: number): void;
+  // v0.43.8 (workbench, and v0.43.10's costume runtime): wear a raw model parameter, written every
+  // frame until released with `null`. Deliberately raw ids: these address drawn assets the parameter
+  // vocabulary in `faceData` does not model.
+  setManualParam?(pid: string, value: number | null): void;
   // v0.25.2: run a layout change and GLIDE the model between its before/after positions (FLIP on
   // the pixi ticker). Callers without a real sink just run `mutate()`.
   glideLayout?(mutate: () => void): void;

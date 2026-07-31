@@ -361,5 +361,7 @@ export async function createPixiLive2DSink(
     listEmotions: () => faceVm.listEmotions(),
     setIdleProfile: (id) => faceVm.setIdleProfile(id),
     listIdleProfiles: () => faceVm.listIdleProfiles(),
+    playAction: (name, intensity) => faceVm.playAction(name, intensity),
+    setManualParam: (pid, value) => faceVm.setManualParam(pid, value),
   };
 }

@@ -1,16 +1,20 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, test } from 'bun:test';
 import { ExpressionKey } from '@luna/protocol';
 import type { Live2DState } from '../sinks';
 import {
   applyControl,
+  COSTUME_NOTE,
   INTENSITY_MARK,
+  MODEL_ASSETS,
   parseIntensity,
   readout,
   workbenchSections,
   type ControlTarget,
   type WorkbenchControl,
 } from './workbench';
-import { EMOTIONS, IDLE_PROFILES } from '../live2d/faceData';
+import { ACTIONS, ALL_OVERLAY_PARAMS, EMOTIONS, IDLE_PROFILES } from '../live2d/faceData';
 import { affectToEmotion, HIGH_INTENSITY } from '../live2d/expressionMap';
 import { PERF_FLAGS } from '../live2d/perfFlags';
 
@@ -25,6 +29,8 @@ function recorder(): { target: ControlTarget; calls: Call[] } {
       setState: (state) => calls.push(['setState', state]),
       triggerEmotion: (id, intensity) => calls.push(['triggerEmotion', id, intensity]),
       setIdleProfile: (id) => calls.push(['setIdleProfile', id]),
+      playAction: (name, intensity) => calls.push(['playAction', name, intensity]),
+      setManualParam: (pid, v) => calls.push(['setManualParam', pid, v]),
     },
   };
 }
@@ -75,13 +81,14 @@ describe('workbenchSections — derived from the engine tables, never hand-liste
 });
 
 describe('applyControl — each kind reaches the sink method that performs it', () => {
-  test('affect → setExpression, clip → triggerEmotion, state → setState, idle → setIdleProfile', () => {
+  test('affect, clip, state, idle and gesture each dispatch to their own method', () => {
     const { target, calls } = recorder();
     const controls: WorkbenchControl[] = [
       { kind: 'affect', id: 'bright_delight', label: '' },
       { kind: 'clip', id: 'poutyAnnoyed', label: '' },
       { kind: 'state', id: 'thinking' as Live2DState, label: '' },
       { kind: 'idle', id: 'cuteSwayV1', label: '' },
+      { kind: 'action', id: 'sighRelease', label: '' },
     ];
     for (const c of controls) applyControl(target, c, 0.5);
     expect(calls).toEqual([
@@ -89,6 +96,7 @@ describe('applyControl — each kind reaches the sink method that performs it', 
       ['triggerEmotion', 'poutyAnnoyed', 0.5],
       ['setState', 'thinking'],
       ['setIdleProfile', 'cuteSwayV1'],
+      ['playAction', 'sighRelease', 0.5],
     ]);
   });
 
@@ -148,5 +156,64 @@ describe('readout — the live panel degrades instead of lying', () => {
     const r = readout({ mood: () => 'x', playback: () => null, faceVm: { activeActionIds: () => [] } });
     expect(r.playback).toBe('idle');
     expect(r.actions).toBe('—');
+  });
+});
+
+// v0.43.8 — the 17 drawn assets. The list is hardcoded (the model tree is gitignored and the bundler
+// cannot enumerate it), so the guard is the same one v0.43.1 used: check it against the file the
+// artist shipped. A typo'd id is otherwise a checkbox that silently does nothing.
+describe('MODEL_ASSETS — the hardcoded catalog matches the real model', () => {
+  const modelParamIds = (): Set<string> => {
+    const cdi: { Parameters: { Id: string }[] } = JSON.parse(
+      readFileSync(join(import.meta.dir, '../../public/models/yumi/yumi.cdi3.json'), 'utf8'),
+    );
+    return new Set(cdi.Parameters.map((p) => p.Id));
+  };
+
+  test('every asset param exists on the model', () => {
+    const ids = modelParamIds();
+    expect(MODEL_ASSETS.filter((a) => !ids.has(a.pid)).map((a) => a.pid)).toEqual([]);
+  });
+
+  test('the catalog covers all 17 shipped exp3 assets, with no duplicates', () => {
+    expect(MODEL_ASSETS.length).toBe(17);
+    expect(new Set(MODEL_ASSETS.map((a) => a.pid)).size).toBe(17);
+  });
+
+  test('the costume group is exactly what the emotion system is walled off from', () => {
+    const costume = MODEL_ASSETS.filter((a) => a.group === 'costume').map((a) => a.pid).sort();
+    expect(costume).toEqual(
+      [
+        'Paramyanzhao',
+        'Paramhuatong',
+        'Paramxiaogou',
+        'Paramlonghair',
+        'Paramlonghair2',
+        'ParamarmupL',
+        'ParamarmupR',
+        'Paramdown1',
+      ].sort(),
+    );
+  });
+
+  // The wall v0.43.1 built stands: nothing here re-opens automatic selection over the props. This
+  // catalog is reachable only from the bench, i.e. only by the owner's hand.
+  test('no prop leaked into an emotion overlay', () => {
+    const props = new Set(MODEL_ASSETS.filter((a) => a.group === 'costume').map((a) => a.pid));
+    // `Paramdown1` IS in OVERLAYS (adorable's bow) — the wall is about the OTHER seven.
+    const leaked = ALL_OVERLAY_PARAMS.filter((p) => props.has(p) && p !== 'Paramdown1');
+    expect(leaked).toEqual([]);
+  });
+
+  test('the costume group carries the note saying the emotion system will not touch them', () => {
+    expect(COSTUME_NOTE).toContain('never touches these');
+  });
+});
+
+describe('workbenchSections — the gesture section (v0.43.8)', () => {
+  test('one button per authored gesture, derived from ACTIONS', () => {
+    const section = workbenchSections().find((s) => s.id === 'action');
+    expect(section?.controls.map((c) => c.id)).toEqual(Object.keys(ACTIONS));
+    expect(section?.controls.length).toBe(9);
   });
 });

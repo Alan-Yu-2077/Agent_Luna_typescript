@@ -894,3 +894,117 @@ describe('FaceVm — native peak overlays', () => {
     expect(last.get('ParamBrowYL') ?? 0).toBeGreaterThan(0.05);
   });
 });
+
+// v0.43.8 — the workbench's two engine hooks. Both are manual-only entry points, so the tests are
+// about the mechanism (does it fire, does it stop, does it win the write order), not about looks.
+// Every write per param id, not just the last — "written every frame" and "written once" are
+// indistinguishable to the last-value recorder above.
+function countingWriter(): { writer: ParamWriter; writes: Map<string, number[]> } {
+  const writes = new Map<string, number[]>();
+  return {
+    writer: {
+      setParam: (id, v) => {
+        const a = writes.get(id);
+        if (a) a.push(v);
+        else writes.set(id, [v]);
+      },
+    },
+    writes,
+  };
+}
+
+describe('FaceVm — manual gesture single-shot (v0.43.8)', () => {
+  test('playAction queues under a manual: key and expires on its own', () => {
+    const { writer } = recorder();
+    const vm = new FaceVm(writer, { rng: () => 0.5 });
+    run(vm, 0, 100);
+    vm.playAction('sighRelease'); // durationMs 1460
+    run(vm, 116, 400);
+    expect(vm.activeActionIds().some((id) => id.startsWith('manual:sighRelease:'))).toBe(true);
+    run(vm, 416, 2200);
+    expect(vm.activeActionIds()).toEqual([]);
+  });
+
+  test('an unknown gesture name is a no-op, not a crash', () => {
+    const { writer } = recorder();
+    const vm = new FaceVm(writer, { rng: () => 0.5 });
+    run(vm, 0, 100);
+    expect(() => vm.playAction('nope')).not.toThrow();
+    expect(vm.activeActionIds()).toEqual([]);
+  });
+
+  test('a manually fired gesture actually moves the model', () => {
+    const { writer, last } = recorder();
+    // Idle gestures off so the only thing that can move the head is the manual one.
+    const vm = new FaceVm(writer, { rng: () => 0.5, idleActionsEnabled: () => false });
+    run(vm, 0, 200);
+    const before = last.get(FACE_VM_PARAM_MAP.headPitch) ?? 0;
+    vm.playAction('headLowerShy', 1); // headPitch peaks at 11 (deg) mid-track
+    let peak = before;
+    for (let t = 216; t <= 1100; t += 16) {
+      vm.tick(t);
+      vm.flushPose();
+      peak = Math.max(peak, last.get(FACE_VM_PARAM_MAP.headPitch) ?? 0);
+    }
+    expect(peak).toBeGreaterThan(2);
+  });
+
+  test('listActions names all nine authored gestures', () => {
+    const { writer } = recorder();
+    expect(new FaceVm(writer).listActions().length).toBe(9);
+  });
+});
+
+describe('FaceVm — worn model params (v0.43.8)', () => {
+  // The prop params are not in ALL_OVERLAY_PARAMS, so nothing zeroes them — but pixi's motion update
+  // has a save/restore cycle that drops a one-shot write. Wearing must therefore be per-frame.
+  test('a worn param is written EVERY frame, not once', () => {
+    const { writer, writes } = countingWriter();
+    const vm = new FaceVm(writer, { rng: () => 0.5 });
+    vm.setManualParam('Paramyanzhao', 1);
+    for (let i = 0; i < 100; i++) vm.tick(i * 16);
+    expect(writes.get('Paramyanzhao')?.length).toBe(100);
+    expect(new Set(writes.get('Paramyanzhao'))).toEqual(new Set([1]));
+  });
+
+  test('taking it off writes exactly one 0, then stops — no frozen eyepatch', () => {
+    const { writer, writes } = countingWriter();
+    const vm = new FaceVm(writer, { rng: () => 0.5 });
+    vm.setManualParam('Paramyanzhao', 1);
+    for (let i = 0; i < 10; i++) vm.tick(i * 16);
+    vm.setManualParam('Paramyanzhao', null);
+    for (let i = 10; i < 40; i++) vm.tick(i * 16);
+    const w = writes.get('Paramyanzhao') ?? [];
+    expect(w.length).toBe(11);
+    expect(w[10]).toBe(0);
+    expect(vm.manualParamIds()).toEqual([]);
+  });
+
+  // Write ORDER is the load-bearing part: the overlay loop writes 0 to every overlay param each
+  // frame, so a worn overlay id has to be written after it or wearing heart eyes would do nothing.
+  test('a worn overlay id beats the overlay loop that zeroes it', () => {
+    const { writer, last } = recorder();
+    const vm = new FaceVm(writer, { rng: () => 0.5 });
+    vm.setManualParam('Paramheart', 1);
+    run(vm, 0, 500);
+    expect(last.get('Paramheart')).toBe(1);
+  });
+
+  test('activeOverlayParams reports what the CLIP drives, not what is worn', () => {
+    const { writer } = recorder();
+    const vm = new FaceVm(writer, { rng: () => 0.5 });
+    vm.setManualParam('Paramyanzhao', 1);
+    vm.setExpression('shy_softness', 1); // shy carries the 脸红 overlay
+    run(vm, 0, 3000);
+    const driven = vm.activeOverlayParams();
+    expect(driven['Paramsmileshy']).toBeGreaterThan(0.5);
+    expect('Paramyanzhao' in driven).toBe(false);
+  });
+
+  test('nothing playing means nothing driven', () => {
+    const { writer } = recorder();
+    const vm = new FaceVm(writer, { rng: () => 0.5 });
+    run(vm, 0, 500);
+    expect(vm.activeOverlayParams()).toEqual({});
+  });
+});
