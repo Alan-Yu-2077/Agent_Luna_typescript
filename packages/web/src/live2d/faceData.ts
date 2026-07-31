@@ -23,6 +23,9 @@ export type ActionDef = { durationMs: number; tracks: Partial<Record<FaceStateKe
 
 export const FACE_CHANNEL_GROUPS: Record<FaceChannel, FaceStateKey[]> = {
   pose: ['headPitch', 'headYaw', 'headRoll', 'bodyYaw', 'bodyLift', 'bodyRoll', 'bow', 'bowPress'],
+  // `pupil*` is deliberately NOT in `gaze`: the eyeball is owned by the focus controller (and by any
+  // clip that authored a gaze), while the pupil offset inside it belongs to the microsaccade layer and
+  // must survive both. Keeping it out of every group is what makes it unownable.
   gaze: ['gazeX', 'gazeY'],
   eyes: ['eyeOpenL', 'eyeOpenR', 'eyeSquintL', 'eyeSquintR', 'eyeSize', 'eyeSmileL', 'eyeSmileR'],
   mouth: ['mouthOpen', 'mouthForm', 'mouthShift', 'mouthPucker', 'mouthShrug', 'jawOpen', 'tongueOut'],

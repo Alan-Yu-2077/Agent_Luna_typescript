@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { FaceVm, type ParamWriter } from './faceVm';
 import { AffectState } from './affect';
+import { EMOTIONS, FACE_PARAM_GAIN } from './faceData';
+import { FACE_VM_PARAM_MAP, clampStateValue, type FaceStateKey } from './paramMap';
 
 function recorder(): { writer: ParamWriter; last: Map<string, number> } {
   const last = new Map<string, number>();
@@ -384,6 +386,157 @@ describe('FaceVm — the eyelid invariant', () => {
     const w = eyeWrites({ state: 'sleeping', affectOn: false, toMs: 3200 });
     expect(w.l).toBeGreaterThan(100);
     expect(w.values).toContain('0.000');
+  });
+});
+
+// --- v0.43.3: the thaw + microsaccades -----------------------------------------------------------
+
+describe('FaceVm — the peak is no longer a still photograph', () => {
+  // Samples a channel across a clip's PERFORM window and reports the mean absolute per-frame change.
+  // Before this version these were exactly 0.00e+0 for every face channel an active clip owned, while
+  // `ParamAngleZ` (not owned, driven by the idle) moved 0.116 per frame — body swaying, face frozen.
+  function perform(
+    pid: string,
+    livePeak: boolean,
+    clip: 'bright_delight' | 'shy_softness' = 'bright_delight',
+  ): { frozenFrames: number; frames: number; range: number } {
+    // One sample per FRAME, not per setParam call: the mouth channels are written twice a frame (the
+    // main loop, then the lip-sync ownership block), and counting both would read the duplicate as a
+    // frozen frame.
+    const vals: number[] = [];
+    let now = 0;
+    let frameValue: number | undefined;
+    const writer: ParamWriter = { setParam: (p, v) => { if (p === pid) frameValue = v; } };
+    const vm = new FaceVm(writer, { rng: () => 0.5, livePeakEnabled: () => livePeak });
+    vm.setExpression(clip, 1);
+    for (now = 0; now <= 6000; now += 16) {
+      frameValue = undefined;
+      vm.tick(now);
+      if (now >= 2000 && frameValue !== undefined) vals.push(frameValue);
+    }
+    if (vals.length < 2) return { frozenFrames: 0, frames: vals.length, range: 0 };
+    let frozen = 0;
+    for (let i = 1; i < vals.length; i++) if (vals[i] === vals[i - 1]) frozen++;
+    return { frozenFrames: frozen, frames: vals.length, range: Math.max(...vals) - Math.min(...vals) };
+  }
+
+  // `adorable`'s brows are pinned at ±1 with a 1.35 gain, so they saturate the clamp at BOTH ends and
+  // provably cannot breathe (see the dedicated test below). Brows are probed on `shy` instead, where
+  // browLY sits at 0.26 and has room.
+  const THAWED: Array<[string, 'bright_delight' | 'shy_softness']> = [
+    ['ParamMouthpucker', 'bright_delight'],
+    ['ParamMouthShrug', 'bright_delight'],
+    ['ParamBrowYL', 'shy_softness'],
+    ['ParamCheekpuff', 'shy_softness'],
+  ];
+
+  test('owned face channels change on EVERY frame — zero frozen frames', () => {
+    // The precise inverse of the measured bug. Asserting a per-frame magnitude instead would punish
+    // motion for being gentle: a channel breathing 0.018 over a 5 s cycle moves 7e-5 per frame and is
+    // perfectly visible. What was broken was not the size of the step but that there was no step.
+    for (const [pid, clip] of THAWED) {
+      const { frozenFrames, frames } = perform(pid, true, clip);
+      expect(`${pid}:${frozenFrames}/${frames > 200}`).toBe(`${pid}:0/true`);
+    }
+  });
+
+  test('…and the swing is large enough for a person to see, not merely for a test to measure', () => {
+    // The v0.42.4 lesson: direction/ordering assertions pass happily on motion nobody can perceive.
+    for (const [pid, clip] of THAWED) {
+      expect(`${pid}:${perform(pid, true, clip).range > 0.01}`).toBe(`${pid}:true`);
+    }
+  });
+
+  test('…and were provably a still photograph with the flag off', () => {
+    for (const [pid, clip] of THAWED) {
+      const { frozenFrames, frames, range } = perform(pid, false, clip);
+      expect(`${pid}:${frozenFrames === frames - 1}:${range}`).toBe(`${pid}:true:0`);
+    }
+  });
+
+  test('KNOWN LIMIT: a channel authored at its clamp cannot breathe, and we do not pretend it can', () => {
+    // `adorable` sets browLY = -1 with FACE_PARAM_GAIN 1.35. Both -1 and -1+jitter map past the clamp
+    // after the gain, so the written value is identical every frame. Fixing it means lowering the
+    // authored peak — a taste decision for the owner, not something to smuggle in here.
+    expect(FACE_PARAM_GAIN.browLY! * Math.abs(EMOTIONS.adorable.sustainedState.browLY!)).toBeGreaterThan(1);
+    expect(perform('ParamBrowYL', true, 'bright_delight').range).toBe(0);
+  });
+
+  test('the peak is not diluted — the authored pose still lands within 8%', () => {
+    const settled = (livePeak: boolean): number => {
+      const { writer, last } = recorder();
+      const vm = new FaceVm(writer, { rng: () => 0.5, livePeakEnabled: () => livePeak });
+      vm.setExpression('bright_delight', 1);
+      run(vm, 0, 4000);
+      return last.get('ParamMouthpucker') ?? 0;
+    };
+    const on = settled(true);
+    const off = settled(false);
+    expect(Math.abs(on - off)).toBeLessThan(Math.abs(off) * 0.08);
+  });
+
+  test('head and body are untouched — they already move under the built-in breath', () => {
+    const trace = (livePeak: boolean): number[] => {
+      const out: number[] = [];
+      let now = 0;
+      const writer: ParamWriter = { setParam: (p, v) => { if (p === 'ParamAngleZ') out.push(v); } };
+      const vm = new FaceVm(writer, { rng: () => 0.5, livePeakEnabled: () => livePeak });
+      vm.setExpression('bright_delight', 1);
+      for (now = 0; now <= 5000; now += 16) { vm.tick(now); vm.flushPose(); }
+      return out;
+    };
+    expect(trace(true)).toEqual(trace(false));
+  });
+
+  test('no channel is pushed past its clamp by the residue', () => {
+    const offenders: string[] = [];
+    const writer: ParamWriter = {
+      setParam: (id, v) => {
+        for (const [key, pid] of Object.entries(FACE_VM_PARAM_MAP)) {
+          if (pid !== id) continue;
+          const gain = FACE_PARAM_GAIN[key as FaceStateKey] ?? 1;
+          const lim = clampStateValue(key as FaceStateKey, v / gain) * gain;
+          if (Math.abs(v - lim) > 1e-6) offenders.push(`${id}=${v}`);
+        }
+      },
+    };
+    for (const id of Object.keys(EMOTIONS)) {
+      const vm = new FaceVm(writer, { rng: () => 0.5, livePeakEnabled: () => true });
+      vm.triggerEmotion(id, 1);
+      for (let t = 0; t <= 9000; t += 16) { vm.tick(t); vm.flushPose(); }
+    }
+    expect(offenders).toEqual([]);
+  });
+});
+
+describe('FaceVm — pupil microsaccades', () => {
+  function pupilTrace(seed: () => number, ms = 10_000): number[] {
+    const out: number[] = [];
+    const writer: ParamWriter = { setParam: (p, v) => { if (p === 'ParamhitomiX') out.push(v); } };
+    const vm = new FaceVm(writer, { rng: seed });
+    for (let t = 0; t <= ms; t += 16) vm.tick(t);
+    return out;
+  }
+
+  test('the pupil visits several distinct targets over ten seconds', () => {
+    let n = 0;
+    const rng = (): number => ((n = (n * 9301 + 49297) % 233280), n / 233280);
+    const distinct = new Set(pupilTrace(rng).map((v) => v.toFixed(3)));
+    expect(distinct.size).toBeGreaterThanOrEqual(4);
+  });
+
+  test('it stays a microsaccade — never beyond ±0.15', () => {
+    let n = 7;
+    const rng = (): number => ((n = (n * 9301 + 49297) % 233280), n / 233280);
+    for (const v of pupilTrace(rng)) expect(Math.abs(v)).toBeLessThanOrEqual(0.15 + 1e-9);
+  });
+
+  test('it does not disturb the eyelids — the v0.43.0 invariant still holds', () => {
+    let l = 0;
+    const writer: ParamWriter = { setParam: (p) => { if (p === 'ParamEyeOpenL') l++; } };
+    const vm = new FaceVm(writer, { rng: () => 0.5 });
+    for (let t = 0; t <= 9600; t += 16) vm.tick(t);
+    expect(l).toBe(0);
   });
 });
 

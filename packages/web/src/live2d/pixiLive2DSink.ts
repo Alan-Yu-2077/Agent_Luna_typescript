@@ -17,6 +17,7 @@ const ZOOM_KEY = 'luna:live2d:zoom';
 const GAZE_KEY = 'luna:gaze-follow';
 const IDLE_KEY = 'luna:idle-profile';
 const AFFECT_KEY = 'luna:affect';
+const LIVE_PEAK_KEY = 'luna:live-peak';
 const ZOOM_MIN = 0.4;
 const ZOOM_MAX = 2.5;
 type Offset = { dx: number; dy: number };
@@ -49,6 +50,14 @@ function gazeFollowEnabled(): boolean {
 function affectEnabled(): boolean {
   try {
     return localStorage.getItem(AFFECT_KEY) !== '0';
+  } catch {
+    return true;
+  }
+}
+// v0.43.3: the thaw. Same shape as the mood flag — on by default, `'0'` opts out, read per tick.
+function livePeakEnabled(): boolean {
+  try {
+    return localStorage.getItem(LIVE_PEAK_KEY) !== '0';
   } catch {
     return true;
   }
@@ -168,6 +177,7 @@ export async function createPixiLive2DSink(
     gazeActive: gazeFollowEnabled(),
     affect,
     affectEnabled,
+    livePeakEnabled,
   });
   // Drive FaceVm from the model's OWN update cycle, on 'beforeModelUpdate' — the
   // point inside InternalModel.update() right after the built-in controllers

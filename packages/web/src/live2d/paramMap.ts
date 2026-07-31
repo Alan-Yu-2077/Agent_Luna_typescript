@@ -13,6 +13,11 @@ export const FACE_VM_PARAM_MAP = {
   bowPress: 'Paramdown1',
   gazeX: 'ParamEyeBallX',
   gazeY: 'ParamEyeBallY',
+  // v0.43.3: the pupil's own offset INSIDE the eyeball, separate from where the eyeball points.
+  // Present on the model since it was drawn and never driven by anything. This is where microsaccades
+  // belong — the eyeball is owned by the gaze/focus controller, the pupil is free.
+  pupilX: 'ParamhitomiX',
+  pupilY: 'ParamhitomiY',
   eyeOpenL: 'ParamEyeOpenL',
   eyeOpenR: 'ParamEyeOpenR',
   eyeSmileL: 'ParamEyeSmileL',
@@ -47,6 +52,7 @@ export const FACE_VM_DEFAULT_STATE: Record<FaceStateKey, number> = {
   bodyYaw: 0, bodyLift: 0, bodyRoll: 0,
   bow: 0, bowPress: 0,
   gazeX: 0, gazeY: 0,
+  pupilX: 0, pupilY: 0,
   eyeOpenL: 1, eyeOpenR: 1,
   eyeSmileL: 0, eyeSmileR: 0,
   eyeSquintL: 0, eyeSquintR: 0,
@@ -70,7 +76,8 @@ export function clampStateValue(key: FaceStateKey, value: number): number {
     key === 'mouthForm' || key === 'mouthShift' || key === 'mouthPucker' ||
     key === 'eyeSize' || key === 'eyeSquintL' || key === 'eyeSquintR' ||
     key.startsWith('browL') || key.startsWith('browR') ||
-    key === 'gazeX' || key === 'gazeY'
+    key === 'gazeX' || key === 'gazeY' ||
+    key === 'pupilX' || key === 'pupilY'
   ) return clamp(value, -1, 1);
   return value;
 }

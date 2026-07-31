@@ -86,6 +86,36 @@ const IDLE_EYE_SKIP = new Set<FaceStateKey>([
 ]);
 const MOUTH_CHANNEL = new Set<FaceStateKey>(FACE_CHANNEL_GROUPS.mouth);
 const GAZE_KEYS = new Set<FaceStateKey>(['gazeX', 'gazeY']);
+
+// v0.43.3: the channels a playing clip lets breathe. Face only — head/body already move under the
+// built-in breath and are written in the pre-physics phase; eyelids belong to the blink controller;
+// gaze belongs to the focus controller.
+const RESIDUE_KEYS = new Set<FaceStateKey>([
+  ...FACE_CHANNEL_GROUPS.brows,
+  ...FACE_CHANNEL_GROUPS.mouth,
+  ...FACE_CHANNEL_GROUPS.specials,
+  'eyeSmileL', 'eyeSmileR', 'eyeSquintL', 'eyeSquintR', 'eyeSize',
+]);
+// How much of the idle's deviation from rest survives underneath a clip. Small on purpose: enough to
+// see the face is alive, far too little to pull a peak pose off its authored value.
+const RESIDUE_SHARE = 0.22;
+
+// Bleeding the idle through is not enough on its own, and measurement is what showed it: the DEFAULT
+// idle profile drives only `mouthForm` and `mouthOpen` on the face — brows, pucker, shrug and cheek
+// have no idle motion to leak, so those channels would stay exactly as frozen as before. So the peak
+// also gets its own breath: a slow, per-channel, out-of-phase wobble scaled by how far the channel is
+// from rest, which means a channel sitting AT rest gets nothing and a face at rest is untouched.
+const JITTER_AMPLITUDE = 0.035;
+// rad/s — one cycle every 3.3–10.5 s, the pace of breathing rather than of a tic. Deliberately
+// incommensurable so the channels never pulse in unison: synchronised wobble reads as a glitch,
+// drifting wobble reads as alive. (First tried an octave lower; at a 20 s period the amplitude was
+// right but the motion was too slow to register as motion at all.)
+const JITTER_RATES = [0.6, 0.73, 0.91, 1.07, 1.24, 1.41, 1.63, 1.9];
+
+// Pupil microsaccade: a small offset, re-picked on a dwell, applied to a channel nothing else owns.
+const SACCADE_RANGE = 0.15;
+const SACCADE_DWELL_MIN_MS = 420;
+const SACCADE_DWELL_MAX_MS = 1900;
 const CAT_ACCENT_IDLE = new Set<IdleProfileId>(['defaultIdleV1', 'cuteSwayV1', 'sweetBounceV1']);
 
 type IdleLook = {
@@ -102,6 +132,9 @@ export type FaceVmOptions = {
   // version. `affectEnabled` is read per tick so the flag can flip at runtime.
   affect?: AffectState;
   affectEnabled?: () => boolean;
+  // v0.43.3: the thaw — a clip's owned face channels keep a fraction of the idle underneath them.
+  // Read per tick like `affectEnabled`, so the escape hatch works live.
+  livePeakEnabled?: () => boolean;
 };
 
 // Simple state-layer biases (kept from v0.13.1; rich speaking/thinking procedural
@@ -136,6 +169,8 @@ export class FaceVm {
   private idleLook: IdleLook | null = null;
   private readonly affect: AffectState | null;
   private readonly affectEnabled: () => boolean;
+  private readonly livePeakEnabled: () => boolean;
+  private saccade = { x: 0, y: 0, until: -1 };
 
   constructor(
     private readonly writer: ParamWriter,
@@ -146,6 +181,7 @@ export class FaceVm {
     this.gazeActive = opts.gazeActive ?? true;
     this.affect = opts.affect ?? null;
     this.affectEnabled = opts.affectEnabled ?? (() => false);
+    this.livePeakEnabled = opts.livePeakEnabled ?? (() => true);
   }
 
   setState(state: Live2DState): void {
@@ -228,13 +264,20 @@ export class FaceVm {
 
     const target: Record<FaceStateKey, number> = { ...rest };
     const owned = this.ownedKeys(now);
-    this.applyIdle(target, now, owned); // lowest layer — state/emotion/actions override
+    const idle = this.applyIdle(target, now, owned); // lowest layer — state/emotion/actions override
     applyPose(target, STATE_BIAS[this.state], owned);
     // v0.42.1: the mood undertone. ADDED, not set — the idle below it is real motion that must
     // survive. Rides under the clip, so a performance still reads cleanly on top of the mood.
     if (mood) addPose(target, affectPose(mood), owned);
     this.applyEmotion(target, now);
+    // v0.43.3: AFTER the clip, not before — the residue is added on top of the authored pose, which
+    // is the whole point. Ordering it earlier would just have it overwritten.
+    if (this.livePeakEnabled()) this.applyIdleResidue(target, idle, rest, owned, this.lip !== null, now);
     this.applyActions(target, now);
+
+    this.updateSaccade(now);
+    target.pupilX = this.saccade.x;
+    target.pupilY = this.saccade.y;
 
     const smBase = this.state === 'sleeping' ? 0.34 : this.state === 'thinking' ? 0.24 : 0.18;
     // v0.42.2 (`deriveParameterSmoothing`, absorbed): an agitated face should move snappier and a
@@ -508,8 +551,10 @@ export class FaceVm {
     return Math.min(fadeIn, fadeOut, 1);
   }
 
-  private applyIdle(target: Record<FaceStateKey, number>, now: number, owned: Set<FaceStateKey>): void {
-    if (this.state === 'sleeping') return; // the awake idle yields to the sleeping state bias
+  // Returns the idle pose it computed so the residue pass (v0.43.3) can reuse it without a second
+  // evaluation of the profile's trig — and, more importantly, so both layers see the same frame.
+  private applyIdle(target: Record<FaceStateKey, number>, now: number, owned: Set<FaceStateKey>): Pose {
+    if (this.state === 'sleeping') return {}; // the awake idle yields to the sleeping state bias
     if (this.idleStartedAt < 0 || !this.idleLook) {
       this.idleStartedAt = now;
       this.idleLook = this.createIdleLook(now);
@@ -672,6 +717,65 @@ export class FaceVm {
       if (isSpeaking && MOUTH_CHANNEL.has(key)) continue; // lip-sync owns the mouth
       const v = idle[key];
       if (v !== undefined) target[key] = v;
+    }
+    return idle;
+  }
+
+  // v0.43.3 — THE THAW. `ownedKeys` gives a playing clip exclusive use of its channels, so for the
+  // whole perform window the face is literally a still photograph: measured across `adorable`'s 323
+  // perform frames, `ParamBrowAngleL`, `ParamMouthShrug`, `ParamMouthpucker` and `ParamBrowYL` each
+  // changed by an average of 0.00e+0 per frame, while `ParamAngleZ` moved 0.116. Body swaying, face
+  // frozen, for up to 6.8 s.
+  //
+  // The fix is the one idea worth taking from soullink-emotion-sdk's mixer: layers should ADD rather
+  // than one of them winning outright. Rather than surrender ownership (which would let the idle drag
+  // a peak pose off its authored value), a fraction of the idle's DEVIATION FROM REST is added back on
+  // top of whatever the clip set. The clip keeps its shape; it just breathes.
+  //
+  // Deliberately face-only. Head and body are excluded because they already move — the built-in
+  // CubismBreath adds ±15°/8°/10° on ParamAngleX/Y/Z every frame — and because they are physics
+  // inputs written in a different phase (`flushPose`).
+  private applyIdleResidue(
+    target: Record<FaceStateKey, number>,
+    idle: Pose,
+    rest: Record<FaceStateKey, number>,
+    owned: Set<FaceStateKey>,
+    isSpeaking: boolean,
+    now: number,
+  ): void {
+    const seconds = now / 1000;
+    let i = 0;
+    for (const key of RESIDUE_KEYS) {
+      const slot = i++;
+      if (!owned.has(key)) continue; // not owned → the idle already wrote it in full
+      if (isSpeaking && MOUTH_CHANNEL.has(key)) continue;
+
+      let delta = 0;
+      const idleValue = idle[key];
+      if (idleValue !== undefined) delta += (idleValue - rest[key]) * RESIDUE_SHARE;
+
+      // Scaled by displacement from rest: a channel the clip pushed hard breathes, a channel the clip
+      // left alone stays exactly where it was. This is what keeps the layer invisible on a calm face.
+      const reach = Math.min(1, Math.abs(target[key] - rest[key]));
+      if (reach > 0.02) {
+        const rate = JITTER_RATES[slot % JITTER_RATES.length]!;
+        delta += Math.sin(seconds * rate + slot * 1.7) * JITTER_AMPLITUDE * reach;
+      }
+
+      if (delta !== 0) target[key] = clampStateValue(key, target[key] + delta);
+    }
+  }
+
+  // A slow target-and-dwell wander for the pupil, independent of where the eyeball is pointing. Real
+  // eyes do this constantly and a face without it reads as glassy; it costs two channels nothing else
+  // touches, so no ownership question arises.
+  private updateSaccade(now: number): void {
+    if (now >= this.saccade.until) {
+      this.saccade = {
+        x: (this.rng() * 2 - 1) * SACCADE_RANGE,
+        y: (this.rng() * 2 - 1) * SACCADE_RANGE * 0.7,
+        until: now + SACCADE_DWELL_MIN_MS + this.rng() * (SACCADE_DWELL_MAX_MS - SACCADE_DWELL_MIN_MS),
+      };
     }
   }
 }

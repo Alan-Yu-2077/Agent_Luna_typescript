@@ -467,6 +467,11 @@ async function boot(): Promise<void> {
     // off drops the undertone on the next frame without disturbing anything else.
     localStorage.setItem('luna:affect', refs.affectToggle.checked ? '1' : '0');
   });
+  refs.livePeakToggle.addEventListener('change', () => {
+    // v0.43.3: same live-read contract as mood memory — switching it off makes a playing clip go back
+    // to being a still photograph on the very next frame.
+    localStorage.setItem('luna:live-peak', refs.livePeakToggle.checked ? '1' : '0');
+  });
   refs.idleSelect.addEventListener('change', () => {
     // idle animation switches live (no refresh) — FaceVm swaps the resting profile
     localStorage.setItem('luna:idle-profile', refs.idleSelect.value);
