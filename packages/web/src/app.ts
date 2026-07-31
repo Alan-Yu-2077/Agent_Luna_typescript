@@ -547,6 +547,9 @@ async function boot(): Promise<void> {
   refs.listeningToggle.addEventListener('change', () => {
     localStorage.setItem('luna:listening', refs.listeningToggle.checked ? '1' : '0');
   });
+  refs.speechPerfToggle.addEventListener('change', () => {
+    localStorage.setItem('luna:speech-performance', refs.speechPerfToggle.checked ? '1' : '0');
+  });
   refs.idleSelect.addEventListener('change', () => {
     // idle animation switches live (no refresh) — FaceVm swaps the resting profile
     localStorage.setItem('luna:idle-profile', refs.idleSelect.value);

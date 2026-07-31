@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { FaceVm, approach, type FaceVmOptions, type ParamWriter } from './faceVm';
+import { FaceVm, PULSE_MAX_HEAD_DEG, approach, type FaceVmOptions, type ParamWriter } from './faceVm';
 import { AffectState } from './affect';
 import { ACTIONS, EMOTIONS, FACE_PARAM_GAIN, timelineFor } from './faceData';
 import { FACE_VM_PARAM_MAP, clampStateValue, type FaceStateKey } from './paramMap';
@@ -1250,5 +1250,141 @@ describe('FaceVm — thinking choreography (v0.43.11)', () => {
       expect(kfs.length).toBeGreaterThan(0);
       expect(kfs[kfs.length - 1]?.value).toBeCloseTo(kfs[0]?.value ?? -1, 6);
     }
+  });
+});
+
+// v0.43.12 — the pulse layer and the stress nods it carries. Initiative 30's立项 named this as its
+// one untouched gap: six versions, and she still said everything with a still face.
+describe('FaceVm — stress pulses while speaking (v0.43.12)', () => {
+  // Drive a synthetic energy envelope through setMouth the way the audio sink does: one frame per
+  // tick, `null` at the sentence boundary.
+  function speak(
+    vm: FaceVm,
+    frames: Array<{ t: number; open: number }>,
+    onFrame?: (t: number) => void,
+  ): void {
+    for (const f of frames) {
+      vm.tick(f.t);
+      vm.setMouth({ open: f.open, form: 0, shrug: 0, pucker: 0 });
+      onFrame?.(f.t);
+    }
+    vm.setMouth(null);
+  }
+
+  const envelope = (peaks: number[], durationMs: number): Array<{ t: number; open: number }> => {
+    const out: Array<{ t: number; open: number }> = [];
+    for (let t = 0; t <= durationMs; t += 16) {
+      let open = 0.1;
+      for (const at of peaks) {
+        const d = Math.abs(t - at);
+        if (d < 40) open = Math.max(open, 0.8 * Math.cos((Math.PI * d) / 80));
+      }
+      out.push({ t, open });
+    }
+    return out;
+  };
+
+  // The idle drives `headPitch` too, so an absolute reading measures the sway, not the nod. Two VMs
+  // on the same clock and the same envelope, one with the flag off: the difference IS the pulse layer
+  // and nothing else — the same differential discipline the listening bias needed.
+  function speakPair(peaks: number[], durationMs: number): { deltas: number[]; after: number } {
+    const on = recorder();
+    const off = recorder();
+    const opts = { rng: () => 0.5, idleActionsEnabled: () => false } as const;
+    const vmOn = new FaceVm(on.writer, opts);
+    const vmOff = new FaceVm(off.writer, { ...opts, speechPerformanceEnabled: () => false });
+    const deltas: number[] = [];
+    for (const f of envelope(peaks, durationMs)) {
+      const frame = { open: f.open, form: 0, shrug: 0, pucker: 0 };
+      vmOn.tick(f.t);
+      vmOn.setMouth(frame);
+      vmOff.tick(f.t);
+      vmOff.setMouth(frame);
+      vmOn.flushPose();
+      vmOff.flushPose();
+      deltas.push((on.last.get('ParamAngleY') ?? 0) - (off.last.get('ParamAngleY') ?? 0));
+    }
+    vmOn.setMouth(null);
+    vmOff.setMouth(null);
+    for (let t = durationMs + 16; t <= durationMs + 2000; t += 16) {
+      vmOn.tick(t);
+      vmOff.tick(t);
+    }
+    vmOn.flushPose();
+    vmOff.flushPose();
+    return { deltas, after: (on.last.get('ParamAngleY') ?? 0) - (off.last.get('ParamAngleY') ?? 0) };
+  }
+
+  test('a stressed syllable produces a nod, and the head returns after it', () => {
+    const { deltas, after } = speakPair([2000], 3000);
+    expect(Math.max(...deltas.map(Math.abs))).toBeGreaterThan(0.5);
+    // The envelope is a half-sine, so a finished pulse contributes exactly nothing — no residue.
+    expect(Math.abs(after)).toBeLessThan(0.05);
+  });
+
+  // Her built-in breath already swings ParamAngleY by ±8°; a stress that competed with that would be
+  // a second animation rather than an accent.
+  test('no pulse can move the head further than the declared bound', () => {
+    const { deltas } = speakPair([1000, 2000, 3000, 4000, 5000, 6000], 7000);
+    expect(Math.max(...deltas.map(Math.abs))).toBeLessThanOrEqual(PULSE_MAX_HEAD_DEG);
+  });
+
+  test('the rhythm fuse holds across a very emphatic sentence', () => {
+    const { writer } = recorder();
+    const vm = new FaceVm(writer, { rng: () => 0.5, idleActionsEnabled: () => false });
+    let fired = 0;
+    let wasActive = false;
+    const peaks = Array.from({ length: 30 }, (_, i) => 800 + i * 900);
+    speak(vm, envelope(peaks, 28_000), (t) => {
+      const active = vm.activePulseCount(t) > 0;
+      if (active && !wasActive) fired++;
+      wasActive = active;
+    });
+    expect(fired).toBe(6);
+  });
+
+  test('the pulse layer touches neither the eyelids nor the mouth', () => {
+    const { writer, writes } = countingWriter();
+    const vm = new FaceVm(writer, { rng: () => 0.5, idleActionsEnabled: () => false, gazeActive: false });
+    const before = {
+      eyeL: (writes.get('ParamEyeOpenL') ?? []).length,
+      mouthForm: new Set(writes.get('ParamMouthForm') ?? []).size,
+    };
+    speak(vm, envelope([1000, 2500], 4000));
+    // The mouth IS written — by the lip-sync, from the frames we fed. What must not happen is the
+    // pulse layer adding a second writer to those channels, or touching the eyelids at all.
+    expect((writes.get('ParamEyeOpenL') ?? []).length).toBe(before.eyeL);
+    expect(before.mouthForm).toBe(0);
+  });
+
+  test('the flag off means no detection and no pulses at all', () => {
+    const { writer } = recorder();
+    const vm = new FaceVm(writer, {
+      rng: () => 0.5,
+      idleActionsEnabled: () => false,
+      speechPerformanceEnabled: () => false,
+    });
+    let seen = 0;
+    speak(vm, envelope([1000, 2500, 4000], 5000), (t) => {
+      seen = Math.max(seen, vm.activePulseCount(t));
+    });
+    expect(seen).toBe(0);
+  });
+
+  test('addPulse is generic — v0.43.13 rides this mechanism, not a new one', () => {
+    const { writer, last } = recorder();
+    const vm = new FaceVm(writer, { rng: () => 0.5, idleActionsEnabled: () => false });
+    run(vm, 0, 200);
+    vm.addPulse({ headRoll: 4 }, 500);
+    let peak = 0;
+    for (let t = 216; t <= 800; t += 16) {
+      vm.tick(t);
+      vm.flushPose();
+      peak = Math.max(peak, Math.abs(last.get('ParamAngleZ') ?? 0));
+    }
+    expect(peak).toBeGreaterThan(1);
+    run(vm, 816, 2000);
+    vm.flushPose();
+    expect(vm.activePulseCount()).toBe(0);
   });
 });

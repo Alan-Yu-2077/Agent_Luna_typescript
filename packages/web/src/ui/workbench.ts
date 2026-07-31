@@ -266,12 +266,16 @@ export function exportEmotionDef(pose: Pose, timeline = COMPOSE_TIMELINE): strin
   );
 }
 
-export type WorkbenchReadout = { mood: string; playback: string; actions: string };
+export type WorkbenchReadout = { mood: string; playback: string; actions: string; accent: boolean };
 
 export type DebugBridge = {
   mood?: () => string;
   playback?: () => { id: string; intensity: number; phase: string } | null;
-  faceVm?: { activeActionIds(): string[]; activeOverlayParams?(): Record<string, number> };
+  faceVm?: {
+    activeActionIds(): string[];
+    activeOverlayParams?(): Record<string, number>;
+    activePulseCount?(): number;
+  };
 };
 
 export function readout(bridge: DebugBridge | undefined): WorkbenchReadout {
@@ -281,6 +285,10 @@ export function readout(bridge: DebugBridge | undefined): WorkbenchReadout {
     mood: bridge?.mood?.() ?? '—',
     playback: pb ? `${pb.id} · ${pb.phase} · ${pb.intensity.toFixed(2)}` : 'idle',
     actions: actions.length > 0 ? actions.join(', ') : '—',
+    // v0.43.12: the stress indicator. The detector's constants are a feel judgement, and this lamp
+    // is the calibration loop — it lights while a stress pulse is live, so the owner can check it
+    // against what his own ears hear in his own voice model.
+    accent: (bridge?.faceVm?.activePulseCount?.() ?? 0) > 0,
   };
 }
 
@@ -634,7 +642,9 @@ export function mountWorkbench(root: HTMLElement, deps: WorkbenchDeps): { stage:
   const moodEl = doc.createElement('p');
   const clipEl = doc.createElement('p');
   const actEl = doc.createElement('p');
-  readoutEl.append(rh, moodEl, clipEl, actEl);
+  const accentEl = doc.createElement('p');
+  accentEl.className = 'wb-accent';
+  readoutEl.append(rh, moodEl, clipEl, actEl, accentEl);
   drawer.appendChild(readoutEl);
 
   const paint = (): void => {
@@ -643,6 +653,8 @@ export function mountWorkbench(root: HTMLElement, deps: WorkbenchDeps): { stage:
     moodEl.textContent = `mood — ${r.mood}`;
     clipEl.textContent = `clip — ${r.playback}`;
     actEl.textContent = `actions — ${r.actions}`;
+    accentEl.textContent = `accent — ${r.accent ? '● stress' : '○'}`;
+    accentEl.classList.toggle('on', r.accent);
     const driven = bridge?.faceVm?.activeOverlayParams?.() ?? {};
     for (const [pid, box] of assetToggles) {
       box.parentElement?.classList.toggle('driven', driven[pid] !== undefined);

@@ -966,3 +966,7 @@ body.pet { background: none; }
   width: 100%; min-height: 120px; font-family: ui-monospace, monospace; font-size: 10px;
   border: 1px solid var(--inner-border); border-radius: 8px; padding: 6px; resize: vertical;
 }
+
+/* v0.43.12: the stress indicator — the calibration loop for a detector whose
+   constants are a feel judgement, not a derivation. */
+.wb-accent.on { color: #c9556b; font-weight: 800; }

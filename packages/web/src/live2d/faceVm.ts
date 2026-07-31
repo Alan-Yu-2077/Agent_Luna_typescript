@@ -30,6 +30,7 @@ import {
 import { affectToEmotion } from './expressionMap';
 import type { AffectState, Vad } from './affect';
 import { affectPose, restingState } from './affectPose';
+import { AccentDetector } from './accent';
 
 // The high-fidelity FaceVM (v0.13.2) — a faithful port of Python's layered
 // engine. Per tick: idle profile (procedural resting motion) → state bias →
@@ -155,6 +156,24 @@ const THINKING_ACTION_MAX_MS = 8_000;
 // has to read as attention, not as a pose. Head and body only — the eyes are the focus controller's
 // (gaze-follow) or the idle's, and the brows get the faintest "oh?" lift.
 const LISTENING_BIAS: Pose = { headYaw: -3, bodyYaw: -1.5, browLY: 0.05, browRY: 0.05 };
+
+// v0.43.12 — the pulse layer: v0.43.11's constant bias generalised to a time envelope. A pulse is a
+// pose plus a duration, sampled under a half-sine so it rises and falls with no discontinuity at
+// either end, and ADDED to the target like the bias. Generic on purpose — v0.43.13's punctuation
+// gestures are the same mechanism with a different trigger.
+type Pulse = { startAt: number; durationMs: number; pose: Pose };
+
+// A stressed syllable: a small downward nod, plus the faintest brow lift. Head pitch is written in
+// the pre-physics pass (F26), which is the entire reason the hair follows for free.
+const ACCENT_PULSE_MS = 380;
+const ACCENT_NOD_BASE_DEG = 1.2;
+const ACCENT_NOD_RANGE_DEG = 1.6; // so the strongest stress nods 2.8°, comfortably under the 3° bound
+const ACCENT_BROW_LIFT = 0.05;
+// The most a single pulse may move the head, asserted by a test. Her built-in breath already swings
+// ParamAngleY by ±8°, so this stays an accent rather than a second animation.
+export const PULSE_MAX_HEAD_DEG = 3;
+// A pulse older than this is dropped from the list; nothing samples past its own duration anyway.
+const PULSE_SWEEP_SLACK_MS = 50;
 // Softer than a clip's 0.95: these are things she does while nobody asked, not a performance.
 const IDLE_ACTION_INTENSITY = 0.72;
 // How many recent picks are barred from repeating, so a run never stutters on the same gesture.
@@ -218,6 +237,9 @@ export type FaceVmOptions = {
   // v0.43.11 — gates BOTH halves of listening: the typing bias and the thinking gesture pool. One
   // flag, because they are one behaviour (she attends to the pauses) seen from two sides.
   listeningEnabled?: () => boolean;
+  // v0.43.12 — gates everything she does with her face WHILE SPEAKING (stress nods now, punctuation
+  // gestures in v0.43.13). Shared, because they are one behaviour: performing what she is saying.
+  speechPerformanceEnabled?: () => boolean;
 };
 
 // Simple state-layer biases (kept from v0.13.1; rich speaking/thinking procedural
@@ -257,9 +279,12 @@ export class FaceVm {
   private readonly idleActionsEnabled: () => boolean;
   private readonly smoothingEnabled: () => boolean;
   private readonly listeningEnabled: () => boolean;
+  private readonly speechPerformanceEnabled: () => boolean;
   private composePose: Pose | null = null;
   private previewDef: EmotionDef | null = null;
   private listening = false;
+  private readonly accent = new AccentDetector();
+  private pulses: Pulse[] = [];
   private readonly manualParams = new Map<string, number>();
   private readonly manualRelease = new Set<string>();
   private lastTickAt = -1;
@@ -281,6 +306,7 @@ export class FaceVm {
     this.idleActionsEnabled = opts.idleActionsEnabled ?? (() => true);
     this.smoothingEnabled = opts.smoothingEnabled ?? (() => true);
     this.listeningEnabled = opts.listeningEnabled ?? (() => true);
+    this.speechPerformanceEnabled = opts.speechPerformanceEnabled ?? (() => true);
   }
 
   setState(state: Live2DState): void {
@@ -335,8 +361,38 @@ export class FaceVm {
   // Lip-sync owns the mouth while speaking: a frame overrides the 4 mouth params
   // (raw, post-emotion, no extra smoothing — it's already smoothed); null releases
   // the mouth back to the emotion/idle layer.
+  //
+  // v0.43.12: the same frame is now also read for STRESS. `open` has always been a per-frame energy
+  // envelope and nothing but the mouth ever looked at it; a peak in it becomes a small nod. The
+  // detector's state is per-utterance, and `null` is exactly the sentence boundary the audio sink
+  // already publishes.
   setMouth(frame: LipSyncFrame | null): void {
     this.lip = frame;
+    if (frame === null) {
+      this.accent.reset();
+      return;
+    }
+    if (!this.speechPerformanceEnabled()) return;
+    const strength = this.accent.feed(frame.open, this.lastTickAt);
+    if (strength === null) return;
+    this.addPulse(
+      {
+        headPitch: ACCENT_NOD_BASE_DEG + ACCENT_NOD_RANGE_DEG * strength,
+        browLY: ACCENT_BROW_LIFT * strength,
+        browRY: ACCENT_BROW_LIFT * strength,
+      },
+      ACCENT_PULSE_MS,
+    );
+  }
+
+  // v0.43.12: the pulse layer's only entry point. Public so v0.43.13's punctuation gestures ride the
+  // same mechanism rather than growing a second one.
+  addPulse(pose: Pose, durationMs: number): void {
+    this.pulses.push({ startAt: this.lastTickAt, durationMs, pose });
+  }
+  activePulseCount(now = -1): number {
+    const t = now < 0 ? this.lastTickAt : now;
+    return this.pulses.filter((p) => t >= p.startAt && t - p.startAt <= p.durationMs).length;
   }
 
   // Writes the head/body pose at 'afterMotionUpdate' (pre-physics) so it actually
@@ -492,6 +548,9 @@ export class FaceVm {
       if (this.livePeakEnabled()) this.applyIdleResidue(target, idle, rest, owned, this.lip !== null, now);
       this.updateIdleActions(now, mood);
       this.applyActions(target, now);
+      // v0.43.12: last of the additive layers, so a stress reads on top of whatever pose is playing.
+      // `headPitch` is a soft-blend channel, so this needs no arbitration against a clip.
+      this.applyPulses(target, now);
 
       this.updateSaccade(now);
       target.pupilX = this.saccade.x;
@@ -669,6 +728,21 @@ export class FaceVm {
       out[k] = lerp(base, raw, pb.intensity); // affect intensity scales expression strength
     }
     return out;
+  }
+
+  // Half-sine envelope: 0 at both ends, peak in the middle. A pulse that started or ended on a
+  // non-zero value would be a step, and a step in a physics-input channel is a snap of her hair.
+  private applyPulses(target: Record<FaceStateKey, number>, now: number): void {
+    if (this.pulses.length === 0) return;
+    for (const pulse of this.pulses) {
+      const p = (now - pulse.startAt) / Math.max(1, pulse.durationMs);
+      if (p < 0 || p > 1) continue;
+      const env = Math.sin(Math.PI * p);
+      for (const [key, value] of Object.entries(pulse.pose) as [FaceStateKey, number][]) {
+        target[key] = (target[key] ?? 0) + value * env;
+      }
+    }
+    this.pulses = this.pulses.filter((pulse) => now - pulse.startAt <= pulse.durationMs + PULSE_SWEEP_SLACK_MS);
   }
 
   private applyActions(target: Record<FaceStateKey, number>, now: number): void {

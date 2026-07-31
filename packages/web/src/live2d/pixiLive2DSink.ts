@@ -14,6 +14,7 @@ import {
   LISTENING_KEY,
   LIVE_PEAK_KEY,
   SHORT_CLIPS_KEY,
+  SPEECH_PERF_KEY,
   flagOn,
 } from './perfFlags';
 import { debugBridgeEnabled } from '../workbenchMode';
@@ -170,6 +171,7 @@ export async function createPixiLive2DSink(
     shortClipsEnabled: () => flagOn(SHORT_CLIPS_KEY),
     idleActionsEnabled: () => flagOn(IDLE_ACTIONS_KEY),
     listeningEnabled: () => flagOn(LISTENING_KEY),
+    speechPerformanceEnabled: () => flagOn(SPEECH_PERF_KEY),
   });
   // v0.43.10: whatever the owner last put on her. Reuses v0.43.8's per-frame `setManualParam`
   // verbatim, so persistence cost the engine nothing.
@@ -244,6 +246,7 @@ export async function createPixiLive2DSink(
       affect,
       mood: () => describeAffect(affect.current),
       playback: () => faceVm.currentPlayback(),
+      pulses: () => faceVm.activePulseCount(),
       param: (id: string) =>
         (
           model.internalModel.coreModel as unknown as { getParameterValueById(id: string): number }

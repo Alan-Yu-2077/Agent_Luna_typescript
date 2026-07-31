@@ -86,6 +86,7 @@ describe('workbenchSections — derived from the engine tables, never hand-liste
       'luna:short-clips',
       'luna:idle-actions',
       'luna:listening',
+      'luna:speech-performance',
     ]);
   });
 });
@@ -145,7 +146,7 @@ describe('the intensity slider drives the escalation branch end to end', () => {
 
 describe('readout — the live panel degrades instead of lying', () => {
   test('no bridge yet reads as blank, not as a state that is not happening', () => {
-    expect(readout(undefined)).toEqual({ mood: '—', playback: 'idle', actions: '—' });
+    expect(readout(undefined)).toEqual({ mood: '—', playback: 'idle', actions: '—', accent: false });
   });
 
   test('a live bridge names the clip, its phase and the running gestures', () => {
@@ -159,7 +160,18 @@ describe('readout — the live panel degrades instead of lying', () => {
       mood: 'warm · calm · yielding (v+0.55 a-0.10 d-0.20)',
       playback: 'adorable · perform · 0.90',
       actions: 'sighRelease, headLowerShy',
+      accent: false,
     });
+  });
+
+  // v0.43.12: the stress lamp is the calibration loop, so it must report the live pulse count and
+  // not, say, "she is speaking".
+  test('the accent lamp follows the live pulse count', () => {
+    const base = { mood: () => 'x', playback: () => null };
+    expect(readout({ ...base, faceVm: { activeActionIds: () => [], activePulseCount: () => 1 } }).accent).toBe(true);
+    expect(readout({ ...base, faceVm: { activeActionIds: () => [], activePulseCount: () => 0 } }).accent).toBe(false);
+    // A bridge from a build without the pulse layer must read dark, not throw.
+    expect(readout({ ...base, faceVm: { activeActionIds: () => [] } }).accent).toBe(false);
   });
 
   test('an idle model reports idle rather than the last clip it played', () => {
