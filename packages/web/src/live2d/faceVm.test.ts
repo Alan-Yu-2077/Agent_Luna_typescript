@@ -390,10 +390,14 @@ describe('FaceVm — the eyelid invariant', () => {
 // --- v0.43.1: the model's own peak assets reach the screen ---------------------------------------
 
 describe('FaceVm — native peak overlays', () => {
-  function peak(id: 'bright_delight' | 'playful_brightness' | 'awkward_lightness' | 'shy_softness', pid: string): number {
+  function peak(
+    id: 'bright_delight' | 'playful_brightness' | 'awkward_lightness' | 'shy_softness' | 'gentle_concern',
+    pid: string,
+    intensity = 1,
+  ): number {
     const { writer, last } = recorder();
     const vm = new FaceVm(writer, { rng: () => 0.5 });
-    vm.setExpression(id, 1);
+    vm.setExpression(id, intensity);
     run(vm, 0, 3000); // past the intro, inside perform
     return last.get(pid) ?? 0;
   }
@@ -406,14 +410,70 @@ describe('FaceVm — native peak overlays', () => {
     expect(peak('playful_brightness', 'Paramxingxing')).toBeGreaterThan(0.5);
   });
 
-  test('awkwardness lights up the swirl eyes', () => {
-    expect(peak('awkward_lightness', 'Paramwenxiang')).toBeGreaterThan(0.5);
+  test('mild awkwardness lights up the swirl eyes — it rides the `awkwardV2` branch', () => {
+    // v0.43.2 put `awkward_lightness` on a branch: pushed hard it performs `embarrassed` instead,
+    // which is a blush rather than a system-crash face. The swirl belongs to the lighter one.
+    expect(peak('awkward_lightness', 'Paramwenxiang', 0.4)).toBeGreaterThan(0.3);
+  });
+
+  test('strong concern reaches the tears — a clip that was unreachable before v0.43.2', () => {
+    expect(peak('gentle_concern', 'Paramtear', 0.9)).toBeGreaterThan(0.5);
   });
 
   test('an unrelated emotion lights up none of them — the whitelist is not leaky', () => {
     for (const pid of ['Paramheart', 'Paramxingxing', 'Paramwenxiang', 'Paramtear']) {
       expect(`${pid}:${peak('shy_softness', pid)}`).toBe(`${pid}:0`);
     }
+  });
+
+  // --- v0.43.2: the overlay no longer flares as the clip lets go ---
+  //
+  // `stage.weight` is direction-relative: during the outro it counts progress BACK toward baseline.
+  // Read as an absolute strength it made every overlay fade IN as the clip wound down, reach full
+  // value, and hard-cut to zero on the frame the stage went inactive. Measured on `shy`'s blush:
+  // 0.000 at 6600ms → 0.449 at 7200 → 0.990 at 7800 → 0 at 7900.
+  function overlayTrace(id: 'shy_softness' | 'bright_delight', pid: string, fromMs: number, toMs: number): number[] {
+    const trace: number[] = [];
+    let now = 0;
+    const writer: ParamWriter = { setParam: (p, v) => { if (p === pid && now >= fromMs) trace.push(v); } };
+    const vm = new FaceVm(writer, { rng: () => 0.5 });
+    vm.setExpression(id, 1);
+    for (now = 0; now <= toMs; now += 16) vm.tick(now);
+    return trace;
+  }
+
+  test('the blush fades OUT through the outro — monotonically, to nothing', () => {
+    // shy: intro 980 + perform 5600 = 6580, outro 1300 → sample the whole tail.
+    const trace = overlayTrace('shy_softness', 'Paramsmileshy', 6600, 9000);
+    expect(trace.length).toBeGreaterThan(100);
+    const rises = trace.filter((v, i) => i > 0 && v > trace[i - 1]! + 1e-9).length;
+    expect(rises).toBe(0);
+    expect(trace.at(-1)).toBe(0);
+  });
+
+  test('…while the intro still fades IN — only the outro was reversed', () => {
+    const trace = overlayTrace('shy_softness', 'Paramsmileshy', 0, 980);
+    const falls = trace.filter((v, i) => i > 0 && v < trace[i - 1]! - 1e-9).length;
+    expect(falls).toBe(0);
+    expect(trace.at(-1)!).toBeGreaterThan(0.9);
+  });
+
+  test('a peak asset fades out the same way — no hard cut on the last frame', () => {
+    const trace = overlayTrace('bright_delight', 'Paramheart', 6980, 9500);
+    const rises = trace.filter((v, i) => i > 0 && v > trace[i - 1]! + 1e-9).length;
+    expect(rises).toBe(0);
+  });
+
+  test('overlay strength follows the affect intensity, like the pose already did', () => {
+    const at = (intensity: number): number => {
+      const { writer, last } = recorder();
+      const vm = new FaceVm(writer, { rng: () => 0.5 });
+      vm.setExpression('bright_delight', intensity);
+      run(vm, 0, 3000);
+      return last.get('Paramheart') ?? 0;
+    };
+    expect(at(0.3)).toBeLessThan(at(1));
+    expect(at(0.3)).toBeGreaterThan(0);
   });
 
   test('the asset is released when the clip ends — it does not latch on', () => {

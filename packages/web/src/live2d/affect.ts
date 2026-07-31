@@ -56,9 +56,10 @@ const AMBIENT_MAGNITUDE: Vad = { valence: 0.05, arousal: 0.07, dominance: 0.03 }
 const AMBIENT_MIN_MS = 1700;
 const AMBIENT_SPAN_MS = 4200;
 
-// All 15 affects as VAD coordinates — no fan-in. The existing AFFECT_TO_EMOTION collapses these to 11
-// clips (three of them land on `tender` alone); that lookup still governs the CLIP layer, but the
-// continuous layer reads this table instead, so distinctions the wire already carries survive.
+// All 15 affects as VAD coordinates — no fan-in, one coordinate per affect. `AFFECT_TO_EMOTION` still
+// governs the CLIP layer and is necessarily lossy (14 authored poses for 15 affects, and no surprise
+// pose exists at all); the continuous layer reads this table instead, so every distinction the wire
+// carries survives in her mood even when two affects have to share a performance.
 export const AFFECT_VAD: Record<ExpressionKey, Vad> = {
   steady_presence: { valence: 0.05, arousal: -0.1, dominance: 0.05 },
   soft_warmth: { valence: 0.55, arousal: -0.15, dominance: 0.0 },

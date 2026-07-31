@@ -186,12 +186,17 @@ export class FaceVm {
       }
     }
   }
-  // One wire event now feeds two systems: the clip (unchanged, still through the 15→11 lookup) and
-  // the continuous field (all 15 affects, no fan-in). The clip is the performance; the field is what
-  // is still there after it ends.
-  setExpression(key: ExpressionKey, emotion = 0.95): void {
-    this.pending = { id: affectToEmotion(key), intensity: clamp01(emotion) };
-    this.affect?.nudge(key, clamp01(emotion));
+  // One wire event now feeds two systems: the clip (v0.43.2: the lookup reaches all 14 clips, and
+  // takes the intensity so an affect can escalate into a different pose) and the continuous field
+  // (all 15 affects, no fan-in). The clip is the performance; the field is what is still there after
+  // it ends.
+  setExpression(key: ExpressionKey, emotion?: number): void {
+    // `emotion` is optional on the wire. The 0.95 fallback is how strongly to RENDER the pose; the
+    // raw (possibly undefined) value is what decides whether the affect escalates into its other
+    // clip — an unstated intensity must never mean "maximum".
+    const intensity = clamp01(emotion ?? 0.95);
+    this.pending = { id: affectToEmotion(key, emotion), intensity };
+    this.affect?.nudge(key, intensity);
   }
   // Dev / manual trigger: play a named emotion directly (bypassing affect→emotion
   // mapping) so every preset performance is visibly triggerable. Guards bad ids.
@@ -423,11 +428,24 @@ export class FaceVm {
     const def: EmotionDef = EMOTIONS[pb.id];
     if (!def.overlayRefs.length) return out;
     const stage = this.stage(now);
-    const w = stage.phase === 'perform' ? 1 : stage.phase === 'intro' || stage.phase === 'outro' ? stage.weight : 0;
+    // v0.43.2: `stage.weight` is direction-relative, not absolute — during the outro it is the
+    // progress made BACK toward baseline (0 → 1), the mirror of the intro's 0 → 1 toward the pose.
+    // Reading it as an absolute strength meant every overlay FADED IN as its clip wound down, hit
+    // full value, then hard-cut to nothing on the frame the stage flipped to 'inactive'. Measured on
+    // `shy`'s blush: 0.000 at t=6600 → 0.449 at 7200 → 0.990 at 7800 → 0 at 7900. Six of the ten
+    // reachable clips carry an overlay, so this fired at the end of most messages.
+    const w =
+      stage.phase === 'perform' ? 1
+      : stage.phase === 'intro' ? stage.weight
+      : stage.phase === 'outro' ? 1 - stage.weight
+      : 0;
     for (const ref of def.overlayRefs) {
       const ov = OVERLAYS[ref];
       if (!ov) continue;
-      for (const [pid, base] of Object.entries(ov)) out[pid] = base * w;
+      // v0.43.2: scale by intensity as well, matching how the pose is already `lerp(base, raw,
+      // intensity)`. Without it a barely-felt concern arrived with tears at full strength — and with
+      // v0.43.1 wiring the drawn peak assets in, that mismatch became a lot more visible.
+      for (const [pid, base] of Object.entries(ov)) out[pid] = base * w * pb.intensity;
     }
     return out;
   }
