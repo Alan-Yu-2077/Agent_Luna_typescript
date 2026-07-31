@@ -133,6 +133,32 @@ const IDLE_ACTION_INTENSITY = 0.72;
 // How many recent picks are barred from repeating, so a run never stutters on the same gesture.
 const IDLE_ACTION_MEMORY = 3;
 
+// v0.43.5 — frame-rate independence. The engine used a fixed per-frame lerp coefficient, which is
+// only correct at one frame rate; `approach` converts that coefficient into the equivalent
+// exponential approach over the real elapsed time. At 60 fps it returns `sm` itself, to within
+// floating-point noise, which is what lets this land as a substitution rather than a re-tune.
+const FRAME_60_S = 1 / 60;
+// A backgrounded tab hands back a huge dt on refocus; without this the face would teleport.
+const MAX_TICK_S = 0.25;
+export function approach(sm: number, dt: number): number {
+  if (dt <= 0) return 0;
+  if (sm >= 1) return 1;
+  const rate = -Math.log(1 - sm) / FRAME_60_S;
+  return 1 - Math.exp(-rate * dt);
+}
+
+// Per-organ smoothing multipliers, absorbed from soullink-emotion-sdk's `parameterSmoothing` as
+// NUMBERS, not code (its eye 26 / mouth 24 / gaze 11 / head 8 / body 6, normalised against Luna's own
+// base rate). Eyes and mouth settle almost immediately; posture takes its time. Deliberately four
+// values rather than a per-channel table — the point is organ-level pacing, not another 33 knobs.
+const SMOOTHING_SCALE: Partial<Record<FaceStateKey, number>> = Object.fromEntries([
+  ...FACE_CHANNEL_GROUPS.eyes.map((k) => [k, 1.5]),
+  ...FACE_CHANNEL_GROUPS.mouth.map((k) => [k, 1.4]),
+  ...FACE_CHANNEL_GROUPS.brows.map((k) => [k, 1.2]),
+  ...FACE_CHANNEL_GROUPS.gaze.map((k) => [k, 0.9]),
+  ...FACE_CHANNEL_GROUPS.pose.map((k) => [k, 0.6]),
+]) as Partial<Record<FaceStateKey, number>>;
+
 // Pupil microsaccade: a small offset, re-picked on a dwell, applied to a channel nothing else owns.
 const SACCADE_RANGE = 0.15;
 const SACCADE_DWELL_MIN_MS = 420;
@@ -160,6 +186,8 @@ export type FaceVmOptions = {
   shortClipsEnabled?: () => boolean;
   // v0.43.4: let the nine authored actions fire on their own while she is idle.
   idleActionsEnabled?: () => boolean;
+  // v0.43.5: per-organ smoothing speeds on top of the frame-rate-independent approach.
+  smoothingEnabled?: () => boolean;
 };
 
 // Simple state-layer biases (kept from v0.13.1; rich speaking/thinking procedural
@@ -197,6 +225,8 @@ export class FaceVm {
   private readonly livePeakEnabled: () => boolean;
   private readonly shortClipsEnabled: () => boolean;
   private readonly idleActionsEnabled: () => boolean;
+  private readonly smoothingEnabled: () => boolean;
+  private lastTickAt = -1;
   private nextIdleActionAt = -1;
   private readonly recentIdleActions: string[] = [];
   private saccade = { x: 0, y: 0, until: -1 };
@@ -213,6 +243,7 @@ export class FaceVm {
     this.livePeakEnabled = opts.livePeakEnabled ?? (() => true);
     this.shortClipsEnabled = opts.shortClipsEnabled ?? (() => true);
     this.idleActionsEnabled = opts.idleActionsEnabled ?? (() => true);
+    this.smoothingEnabled = opts.smoothingEnabled ?? (() => true);
   }
 
   setState(state: Live2DState): void {
@@ -325,9 +356,22 @@ export class FaceVm {
     const sm = mood
       ? Math.max(smBase * 0.6, Math.min(smBase * 1.6, smBase * (1 + 0.55 * mood.arousal)))
       : smBase;
+    // v0.43.5: the per-frame lerp coefficient becomes an exponential approach over the ACTUAL elapsed
+    // time. The old form silently assumed 60 fps: on a 30 fps frame it converged half as far in twice
+    // the wall-clock, so the same expression read differently depending on load. `sm` is preserved
+    // exactly as the 60 fps-equivalent coefficient (`rate = −ln(1 − sm) / (1/60)`), which is what
+    // makes this substitution a no-op at 60 fps rather than a re-tune.
+    const dt = this.lastTickAt < 0 ? FRAME_60_S : Math.min(MAX_TICK_S, Math.max(0, (now - this.lastTickAt) / 1000));
+    this.lastTickAt = now;
+    const perKeySmoothing = this.smoothingEnabled();
+    const uniform = approach(sm, dt);
     for (const key of FACE_STATE_KEYS) {
       const def = rest[key];
-      let next = this.cur[key] + (target[key] - this.cur[key]) * sm;
+      // Per-organ speeds (absorbed from the SDK's `parameterSmoothing`, values only): eyes and mouth
+      // settle fast, head and body slowly. Applied as a MULTIPLIER on the state/mood-derived rate so
+      // both v0.42.2 behaviours survive underneath it.
+      const k = perKeySmoothing ? approach(sm * (SMOOTHING_SCALE[key] ?? 1), dt) : uniform;
+      let next = this.cur[key] + (target[key] - this.cur[key]) * k;
       if (Math.abs(target[key] - next) < 0.001) next = target[key];
       this.cur[key] = next;
       if (POSE_SET.has(key)) continue; // smoothed here, but written pre-physics in flushPose()

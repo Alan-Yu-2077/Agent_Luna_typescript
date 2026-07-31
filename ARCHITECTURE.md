@@ -124,18 +124,39 @@ A framework-free TypeScript app.
 
   The face is a **layered per-frame engine**, not a preset switcher. `FaceVm` composes, in order:
   procedural **idle** (five selectable profiles) → coarse **state bias** (neutral/thinking/speaking/
-  sleeping) → the **mood undertone** → the **emotion clip** (intro→perform→outro) → **staggered
-  actions** → smoothing → per-channel gain and clamp, writing 33 named channels to raw Cubism
+  sleeping) → the **mood undertone** → the **emotion clip** (intro→perform→outro) → the **thaw** →
+  **actions** → smoothing → per-channel gain and clamp, writing 35 named channels to raw Cubism
   parameter ids. Each layer skips the channels an upper layer *owns*, which is how lip-sync keeps the
   mouth and gaze-follow keeps the eyes without any layer knowing about the others.
 
   The mood undertone is the continuous half (Initiative 29). An affect arriving on the wire is an
   **impulse** into a 3-axis VAD field (`affect.ts`), not a selection: a fast `current` chases a
   slowly-decaying `target`, so a mood *outlives the clip that announced it* instead of snapping back
-  to neutral. `affectPose.ts` projects that field onto the 33 channels as a small additive offset and
+  to neutral. `affectPose.ts` projects that field onto the channels as a small additive offset and
   — the part that makes it a mood rather than a tint — also moves the **resting pose itself**, so "at
   rest" means "at rest in this mood". Arousal modulates the smoothing rate, and a bounded ambient
   wander keeps a settled state from reading as frozen. `luna:affect = '0'` opts out.
+
+  Ownership is exclusive, which used to mean a playing clip froze the face solid for its whole perform
+  window. The **thaw** (Initiative 30) breaks that without surrendering ownership: a fraction of the
+  idle's deviation from rest, plus a small per-channel out-of-phase wobble scaled by how far the clip
+  pushed that channel, is added *on top of* the authored pose. Peaks keep their shape and breathe.
+  Three rules keep the layers from fighting over the same parameters, and they are worth stating
+  because none of them is guessable from the code alone:
+
+  - **Eyelids belong to the built-in blink.** `FaceVm` writes after Cubism's `CubismEyeBlink`, so any
+    *persistent* layer that touches `eyeOpen` silently deletes blinking. Persistent layers must never;
+    a time-bounded clip or gesture may, and must release. A clip can also decline its eyelids by
+    declaring them in `physicsPassthrough`.
+  - **Head and body are physics inputs**, written in a separate pre-physics pass (`flushPose`), and
+    the built-in breath already moves them — so the thaw deliberately leaves them alone.
+  - **Smoothing is an exponential approach over real elapsed time**, with per-organ speeds (eyes and
+    mouth settle fast, posture slowly) and a dt clamp so a backgrounded tab cannot teleport the face.
+
+  The affect→clip lookup is intensity-branched: the wire's optional 0–1 `emotion` selects between a
+  mild and an escalated performance, which is what makes all fourteen authored clips reachable from
+  fifteen affects. Left alone, she plays one of nine authored gestures every 8–20 s, drawn with
+  mood-weighted probability and only while nothing else is performing.
 - **`audio/`** + **`sinks.ts`** — TTS playback with a serial speech queue (one utterance finishes before
   the next starts) and pluggable audio sinks; a text-only degrade path keeps working when no voice
   backend is configured.

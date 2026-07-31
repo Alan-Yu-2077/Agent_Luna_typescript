@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { FaceVm, type ParamWriter } from './faceVm';
+import { FaceVm, approach, type ParamWriter } from './faceVm';
 import { AffectState } from './affect';
 import { EMOTIONS, FACE_PARAM_GAIN, timelineFor } from './faceData';
 import { FACE_VM_PARAM_MAP, clampStateValue, type FaceStateKey } from './paramMap';
@@ -633,6 +633,99 @@ describe('FaceVm — spontaneous idle actions', () => {
     // which is exactly what v0.43.0's invariant permits. What must not happen is a permanent hold.
     expect(writes).toBeGreaterThan(0);
     expect(Math.abs(lastValue - 1)).toBeLessThan(0.05);
+  });
+});
+
+// --- v0.43.5: frame-rate-independent smoothing ---------------------------------------------------
+
+describe('smoothing — the substitution is a no-op at 60 fps', () => {
+  function streamAt(dtMs: number, frames: number, perOrgan: boolean): Map<string, number> {
+    const { writer, last } = recorder();
+    const vm = new FaceVm(writer, {
+      rng: () => 0.5,
+      idleActionsEnabled: () => false,
+      smoothingEnabled: () => perOrgan,
+    });
+    vm.setExpression('shy_softness', 1);
+    for (let i = 0; i <= frames; i++) { vm.tick(i * dtMs); vm.flushPose(); }
+    return last;
+  }
+
+  test('THE GATE: at 60 fps the new coefficient IS the old constant', () => {
+    // This is the gate the whole version hangs on, stated directly rather than sampled. The old loop
+    // used a fixed per-frame coefficient `sm`; the new one uses `approach(sm, dt)`. If those are equal
+    // at the frame rate everything was tuned at, the substitution cannot have changed the feel — and
+    // if they are not, this version is a re-tune wearing a refactor's clothes.
+    for (const smBase of [0.18, 0.24, 0.34]) {
+      for (const mult of [0.6, 1, 1.6]) {
+        const sm = smBase * mult;
+        expect(Math.abs(approach(sm, 1 / 60) - sm)).toBeLessThan(1e-12);
+      }
+    }
+  });
+
+  test('the expression still lands where it always did', () => {
+    const now = streamAt(1000 / 60, 180, false); // 3.0 s — inside shy's shortened perform window
+    expect(now.get('ParamMouthpucker')!).toBeLessThan(-0.15);
+    expect(now.get('Paramsmileshy')!).toBeGreaterThan(0.5);
+  });
+
+  test('half the frame rate, half the frames — same settled face', () => {
+    // The actual payoff: the old fixed coefficient converged the same FRACTION per frame regardless of
+    // elapsed time, so at 30 fps the same expression settled half as far in the same wall-clock.
+    // Tolerance is relative — head angles are degrees (±30), the rest are normalised.
+    const a = streamAt(1000 / 60, 360, false);
+    const b = streamAt(1000 / 30, 180, false);
+    for (const id of ['ParamMouthpucker', 'ParamBrowYL', 'ParamMouthShrug', 'ParamAngleY']) {
+      const av = a.get(id) ?? 0;
+      const bv = b.get(id) ?? 0;
+      const tol = Math.max(0.02, Math.abs(av) * 0.05);
+      expect(`${id}:${Math.abs(av - bv) <= tol}`).toBe(`${id}:true`);
+    }
+  });
+
+  test('a backgrounded tab cannot teleport the face on refocus', () => {
+    const { writer, last } = recorder();
+    const vm = new FaceVm(writer, { rng: () => 0.5, idleActionsEnabled: () => false });
+    vm.setExpression('shy_softness', 1);
+    vm.tick(0);
+    const before = last.get('ParamMouthpucker') ?? 0;
+    vm.tick(30_000); // 30 s of "away"
+    const after = last.get('ParamMouthpucker') ?? 0;
+    // dt is clamped to 0.25 s, so one frame can advance at most a quarter-second's worth.
+    expect(Math.abs(after - before)).toBeLessThan(0.6);
+  });
+});
+
+describe('smoothing — per-organ pacing', () => {
+  // Time for a channel to travel 90% of the way from where it started to where it ends up. Derived
+  // from the trace rather than from a hardcoded target, so it works regardless of sign or gain.
+  function timeTo90(pid: string, perOrgan: boolean): number {
+    const trace: Array<[number, number]> = [];
+    let now = 0;
+    const writer: ParamWriter = { setParam: (p, v) => { if (p === pid) trace.push([now, v]); } };
+    const vm = new FaceVm(writer, {
+      rng: () => 0.5,
+      idleActionsEnabled: () => false,
+      smoothingEnabled: () => perOrgan,
+    });
+    vm.setState('sleeping'); // a step input on an eye channel AND a pose channel at once
+    for (now = 0; now <= 4000; now += 16) { vm.tick(now); vm.flushPose(); }
+    if (trace.length < 2) return Infinity;
+    const first = trace[0]![1];
+    const final = trace.at(-1)![1];
+    const span = final - first;
+    if (Math.abs(span) < 1e-6) return Infinity;
+    for (const [t, v] of trace) if (Math.abs(v - first) >= Math.abs(span) * 0.9) return t;
+    return Infinity;
+  }
+
+  test('the eyes settle faster than the posture does', () => {
+    expect(timeTo90('ParamEyeOpenL', true)).toBeLessThan(timeTo90('ParamAngleY', true));
+  });
+
+  test('with the flag off every channel shares one rate again', () => {
+    expect(timeTo90('ParamEyeOpenL', false)).toBe(timeTo90('ParamAngleY', false));
   });
 });
 
