@@ -5,6 +5,7 @@ import { FaceVm } from './faceVm';
 import { createGlide } from './glide';
 import { petFraming } from './petFraming';
 import { DEFAULT_IDLE_PROFILE, IDLE_PROFILE_IDS, type IdleProfileId } from './faceData';
+import { AffectState } from './affect';
 
 // The real Live2DSink: loads the configured Live2D model via pixi-live2d-display, drives it through a
 // FaceVm on the pixi ticker, and makes it draggable with a persisted offset. Returns null when no model
@@ -15,6 +16,7 @@ const POS_KEY = 'luna:live2d:pos';
 const ZOOM_KEY = 'luna:live2d:zoom';
 const GAZE_KEY = 'luna:gaze-follow';
 const IDLE_KEY = 'luna:idle-profile';
+const AFFECT_KEY = 'luna:affect';
 const ZOOM_MIN = 0.4;
 const ZOOM_MAX = 2.5;
 type Offset = { dx: number; dy: number };
@@ -40,6 +42,15 @@ function saveZoom(z: number): void {
 }
 function gazeFollowEnabled(): boolean {
   return localStorage.getItem(GAZE_KEY) !== '0';
+}
+// v0.42.1: the continuous mood undertone. Opt-IN this version (the repo's pattern for anything that
+// can change how she looks), read per tick so it can be flipped from the console without a reload.
+function affectEnabled(): boolean {
+  try {
+    return localStorage.getItem(AFFECT_KEY) === '1';
+  } catch {
+    return false;
+  }
 }
 function loadIdleProfile(): IdleProfileId {
   try {
@@ -150,9 +161,12 @@ export async function createPixiLive2DSink(
     /* older build — ignore */
   }
 
+  const affect = new AffectState();
   const faceVm = new FaceVm(driver, {
     idleProfile: loadIdleProfile(),
     gazeActive: gazeFollowEnabled(),
+    affect,
+    affectEnabled,
   });
   // Drive FaceVm from the model's OWN update cycle, on 'beforeModelUpdate' — the
   // point inside InternalModel.update() right after the built-in controllers

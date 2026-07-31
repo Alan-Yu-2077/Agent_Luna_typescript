@@ -27,9 +27,11 @@ export type AffectOptions = {
   baseline?: Vad; // her resting temperament; decay pulls here, not to zero
 };
 
-// Her resting temperament: very slightly warm, slightly under-aroused. Not zero — a person at rest
-// is not a blank.
-export const DEFAULT_BASELINE: Vad = { valence: 0.08, arousal: -0.05, dominance: 0 };
+// Dead neutral, deliberately. A non-zero resting temperament is the whole subject of v0.42.2 (the
+// living baseline); shipping it here would mean enabling the layer visibly changes a face that is
+// doing nothing, which would cost the "turning this on is provably safe" guarantee that lets the
+// undertone be verified in isolation. `setBaseline` already exists for when that version arrives.
+export const DEFAULT_BASELINE: Vad = { valence: 0, arousal: 0, dominance: 0 };
 
 const DEFAULTS = {
   approachRate: 1.35,

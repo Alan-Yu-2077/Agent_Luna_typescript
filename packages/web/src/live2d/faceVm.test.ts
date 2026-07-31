@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { FaceVm, type ParamWriter } from './faceVm';
+import { AffectState } from './affect';
 
 function recorder(): { writer: ParamWriter; last: Map<string, number> } {
   const last = new Map<string, number>();
@@ -162,5 +163,93 @@ describe('FaceVm — idle profiles', () => {
     vm.setState('sleeping');
     run(vm, 0, 1500);
     expect(last.has('ParamEyeBallX')).toBe(false); // idle is gated off while sleeping
+  });
+});
+
+// --- v0.42.1: the continuous mood undertone -------------------------------------------------
+
+// Record the FULL parameter stream (every write, in order) so "unchanged" can be asserted exactly
+// rather than by sampling a few ids.
+function streamRecorder(): { writer: ParamWriter; stream: string[] } {
+  const stream: string[] = [];
+  return { writer: { setParam: (id, v) => stream.push(`${id}=${v.toFixed(9)}`) }, stream };
+}
+
+function runWithAffect(on: boolean, drive?: (vm: FaceVm) => void): string[] {
+  const { writer, stream } = streamRecorder();
+  const affect = new AffectState();
+  const vm = new FaceVm(writer, { rng: () => 0.5, affect, affectEnabled: () => on });
+  drive?.(vm);
+  run(vm, 0, 4000);
+  return stream;
+}
+
+describe('FaceVm — affect undertone (v0.42.1)', () => {
+  test('flag OFF: the parameter stream is byte-identical to having no affect state at all', () => {
+    const { writer, stream } = streamRecorder();
+    const plain = new FaceVm(writer, { rng: () => 0.5 }); // no affect wired — the pre-v0.42.1 shape
+    plain.setExpression('bright_delight', 1);
+    run(plain, 0, 4000);
+
+    const gated = runWithAffect(false, (vm) => vm.setExpression('bright_delight', 1));
+    expect(gated).toEqual(stream);
+  });
+
+  test('flag ON but the mood at rest: still byte-identical (enabling it cannot disturb a resting face)', () => {
+    const { writer, stream } = streamRecorder();
+    const plain = new FaceVm(writer, { rng: () => 0.5 });
+    run(plain, 0, 4000);
+
+    const resting = runWithAffect(true); // ticked, never nudged
+    expect(resting).toEqual(stream);
+  });
+
+  test('flag ON after a message: the rendered stream genuinely changes', () => {
+    const off = runWithAffect(false, (vm) => vm.setExpression('bright_delight', 1));
+    const on = runWithAffect(true, (vm) => vm.setExpression('bright_delight', 1));
+    expect(on).not.toEqual(off);
+    // More channels clear the write threshold once a mood rides under the clip.
+    expect(on.length).toBeGreaterThan(off.length);
+    // DIRECTION is asserted post-clip in the next test, not here: while a clip performs it OWNS the
+    // expressive channels, so the undertone is (correctly) suppressed on exactly those params.
+  });
+
+  test('THE POINT: the mood is still there long after the clip has ended', () => {
+    // bright_delight → `adorable`; run far past intro+perform+outro so the clip is provably inactive.
+    const { writer, last } = recorder();
+    const affect = new AffectState();
+    const vm = new FaceVm(writer, { rng: () => 0.5, affect, affectEnabled: () => true });
+    vm.setExpression('bright_delight', 1);
+    run(vm, 0, 30_000);
+    const withMood = last.get('ParamMouthForm') ?? 0;
+
+    const { writer: w2, last: l2 } = recorder();
+    const plain = new FaceVm(w2, { rng: () => 0.5 });
+    plain.setExpression('bright_delight', 1);
+    run(plain, 0, 30_000);
+    const withoutMood = l2.get('ParamMouthForm') ?? 0;
+
+    expect(withMood).toBeGreaterThan(withoutMood); // she is still warm; the old engine went flat
+  });
+
+  test('lip-sync still owns the mouth regardless of mood', () => {
+    const { writer, last } = recorder();
+    const affect = new AffectState();
+    const vm = new FaceVm(writer, { rng: () => 0.5, affect, affectEnabled: () => true });
+    vm.setExpression('annoyed_resistance', 1);
+    run(vm, 0, 2000);
+    vm.setMouth({ open: 0.7, form: 0.3, shrug: 0.1, pucker: -0.2 });
+    run(vm, 2000, 2200);
+    expect(last.get('ParamMouthOpenY')).toBeCloseTo(0.7, 6);
+    expect(last.get('ParamMouthForm')).toBeCloseTo(0.3, 6);
+  });
+
+  test('a clip that owns a channel is not muddied by the mood while it performs', () => {
+    // `shy` owns the mouth; during perform the mouth must match the no-affect run exactly.
+    const pluck = (s: string[], id: string): number[] =>
+      s.filter((e) => e.startsWith(`${id}=`)).map((e) => Number(e.split('=')[1]));
+    const off = runWithAffect(false, (vm) => vm.setExpression('shy_softness', 1));
+    const on = runWithAffect(true, (vm) => vm.setExpression('shy_softness', 1));
+    expect(pluck(on, 'ParamMouthpucker')).toEqual(pluck(off, 'ParamMouthpucker'));
   });
 });

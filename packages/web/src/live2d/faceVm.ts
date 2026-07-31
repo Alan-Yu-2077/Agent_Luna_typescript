@@ -27,6 +27,8 @@ import {
   type Pose,
 } from './faceData';
 import { affectToEmotion } from './expressionMap';
+import type { AffectState } from './affect';
+import { affectPose } from './affectPose';
 
 // The high-fidelity FaceVM (v0.13.2) — a faithful port of Python's layered
 // engine. Per tick: idle profile (procedural resting motion) → state bias →
@@ -96,6 +98,10 @@ export type FaceVmOptions = {
   rng?: () => number;
   idleProfile?: IdleProfileId;
   gazeActive?: boolean;
+  // v0.42.1: the continuous mood field. When absent the face behaves exactly as it did before this
+  // version. `affectEnabled` is read per tick so the flag can flip at runtime.
+  affect?: AffectState;
+  affectEnabled?: () => boolean;
 };
 
 // Simple state-layer biases (kept from v0.13.1; rich speaking/thinking procedural
@@ -120,6 +126,8 @@ export class FaceVm {
   private gazeActive: boolean;
   private idleStartedAt = -1; // <0 = (re)initialize on the next tick
   private idleLook: IdleLook | null = null;
+  private readonly affect: AffectState | null;
+  private readonly affectEnabled: () => boolean;
 
   constructor(
     private readonly writer: ParamWriter,
@@ -128,6 +136,8 @@ export class FaceVm {
     this.rng = opts.rng ?? (() => Math.random());
     this.idleProfile = opts.idleProfile ?? DEFAULT_IDLE_PROFILE;
     this.gazeActive = opts.gazeActive ?? true;
+    this.affect = opts.affect ?? null;
+    this.affectEnabled = opts.affectEnabled ?? (() => false);
   }
 
   setState(state: Live2DState): void {
@@ -168,8 +178,12 @@ export class FaceVm {
       }
     }
   }
+  // One wire event now feeds two systems: the clip (unchanged, still through the 15→11 lookup) and
+  // the continuous field (all 15 affects, no fan-in). The clip is the performance; the field is what
+  // is still there after it ends.
   setExpression(key: ExpressionKey, emotion = 0.95): void {
     this.pending = { id: affectToEmotion(key), intensity: clamp01(emotion) };
+    this.affect?.nudge(key, clamp01(emotion));
   }
   // Dev / manual trigger: play a named emotion directly (bypassing affect→emotion
   // mapping) so every preset performance is visibly triggerable. Guards bad ids.
@@ -194,6 +208,13 @@ export class FaceVm {
     const owned = this.ownedKeys(now);
     this.applyIdle(target, now, owned); // lowest layer — state/emotion/actions override
     applyPose(target, STATE_BIAS[this.state], owned);
+    // v0.42.1: the mood undertone. ADDED, not set — the idle below it is real motion that must
+    // survive. Rides under the clip, so a performance still reads cleanly on top of the mood.
+    // The state is ticked even when the layer is off, so enabling it mid-session doesn't snap.
+    if (this.affect) {
+      this.affect.tick(now);
+      if (this.affectEnabled()) addPose(target, affectPose(this.affect.current), owned);
+    }
     this.applyEmotion(target, now);
     this.applyActions(target, now);
 
@@ -623,6 +644,17 @@ function applyPose(target: Record<FaceStateKey, number>, pose: Pose, owned: Set<
     if (owned.has(k)) continue;
     const v = pose[k];
     if (v !== undefined) target[k] = v;
+  }
+}
+
+// The undertone variant: offsets ACCUMULATE onto whatever the layers below produced, so the idle's
+// sway and the mood's lean coexist instead of one erasing the other. Ownership is honoured
+// identically, which is what keeps lip-sync's mouth and gaze-follow's eyes untouched for free.
+function addPose(target: Record<FaceStateKey, number>, pose: Pose, owned: Set<FaceStateKey>): void {
+  for (const k of Object.keys(pose) as FaceStateKey[]) {
+    if (owned.has(k)) continue;
+    const v = pose[k];
+    if (v !== undefined) target[k] += v;
   }
 }
 
