@@ -140,3 +140,26 @@ describe('restingState — the pose she relaxes TO', () => {
     expect(restingState(vad(0.8, 0, 0)).mouthForm).toBeGreaterThan(restingState(vad(-0.8, 0, 0)).mouthForm);
   });
 });
+
+describe('affectPose — perceptibility (v0.42.4)', () => {
+  // The regression that would have caught the original miss: a full-intensity mood must move the
+  // face by an amount a person can actually SEE, not merely an amount a test can measure.
+  test('a strong warm mood moves the mouth by a visible fraction of full range', () => {
+    const p = affectPose(vad(0.73, 0.47, 0.09)); // the real settled VAD after bright_delight @ 1.0
+    expect(Math.abs(p.mouthForm!)).toBeGreaterThan(0.2);
+    expect(Math.abs(p.eyeSmileL!)).toBeGreaterThan(0.1);
+  });
+
+  test('…and still stays under the ceiling, i.e. under a clip', () => {
+    for (const v of [-1, 1]) {
+      for (const a of [-1, 1]) {
+        for (const d of [-1, 1]) {
+          for (const [key, value] of Object.entries(affectPose(vad(v, a, d)))) {
+            const lim = ANGLE_KEYS.includes(key as FaceStateKey) ? ANGLE_CEIL : CEIL;
+            expect(Math.abs(value ?? 0)).toBeLessThanOrEqual(lim + 1e-9);
+          }
+        }
+      }
+    }
+  });
+});

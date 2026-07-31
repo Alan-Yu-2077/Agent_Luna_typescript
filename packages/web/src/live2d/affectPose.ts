@@ -21,6 +21,13 @@ import { FACE_STATE_KEYS, FACE_VM_DEFAULT_STATE, clampStateValue, type FaceState
 // Pure: same input → same output, input never mutated. Knows nothing about the default state, so
 // v0.42.2 can reuse it to move the resting pose itself.
 
+// v0.42.4 — PERCEPTIBILITY. The coefficients below are the SDK's, and they were tuned for a system
+// where the undertone is the ONLY emotion channel. Luna layers it under 14 full-amplitude clips and
+// on top of an idle that already swings `mouthForm` by ±0.22, so at the original magnitudes a
+// full-intensity mood moved the mouth by 0.13 of full range — measurable in a test, invisible on a
+// face. GAIN restores the intended READ without touching the shape of the projection: every relative
+// weight, every interaction term and the ordering are unchanged, and the ceiling still binds after it.
+const GAIN = 2.6;
 const CEIL = 0.46;
 const ANGLE_SCALE = 8;
 
@@ -33,7 +40,8 @@ function ceilFor(key: FaceStateKey): number {
 
 function put(pose: Pose, key: FaceStateKey, value: number): void {
   if (value === 0) return;
-  const scaled = ANGLE_KEYS.has(key) ? value * ANGLE_SCALE : value;
+  const gained = value * GAIN;
+  const scaled = ANGLE_KEYS.has(key) ? gained * ANGLE_SCALE : gained;
   const lim = ceilFor(key);
   const clamped = Math.max(-lim, Math.min(lim, scaled));
   // Sub-perceptual offsets are dropped so a resting state produces a provably EMPTY pose — that is
