@@ -947,3 +947,22 @@ body.pet { background: none; }
    overlay — the first time the clip→asset table is visible while it happens. */
 .wb-asset { display: flex; align-items: center; gap: 7px; font-size: 11px; border-radius: 6px; padding: 1px 3px; }
 .wb-asset.driven { background: var(--tool-bg); color: var(--tool-text); font-weight: 700; }
+
+/* v0.43.9: the pose composer. 35 sliders is a wall on purpose — this is a tool
+   for one person, and density beats hunting. Groups fold; brows + mouth open. */
+.wb-compose-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.wb-badge {
+  background: #c9556b; color: #fff; border-radius: 5px; padding: 2px 6px;
+  font-size: 10px; font-weight: 800; letter-spacing: 0.06em;
+}
+.wb-compose-toggle.on { background: var(--lavender); border-color: var(--lavender-deep); color: var(--lavender-text); }
+.wb-group { border: 1px solid var(--inner-border); border-radius: 8px; padding: 4px 7px; }
+.wb-group > summary { font-size: 11px; font-weight: 700; color: var(--ink-soft); cursor: pointer; }
+.wb-chan { display: grid; grid-template-columns: 92px 1fr 38px; align-items: center; gap: 6px; font-size: 10px; }
+.wb-chan-name { font-family: ui-monospace, monospace; overflow: hidden; text-overflow: ellipsis; }
+.wb-chan-val { text-align: right; font-variant-numeric: tabular-nums; color: var(--ink-soft); }
+.wb-chan input[type='range'] { width: 100%; }
+.wb-export {
+  width: 100%; min-height: 120px; font-family: ui-monospace, monospace; font-size: 10px;
+  border: 1px solid var(--inner-border); border-radius: 8px; padding: 6px; resize: vertical;
+}

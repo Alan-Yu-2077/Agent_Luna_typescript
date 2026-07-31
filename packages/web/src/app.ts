@@ -26,7 +26,8 @@ import { mountPhysicsScene } from './physics/scene';
 import { createRiseBubbles } from './ui/riseBubble';
 import { mountPackDrop } from './ui/packDrop';
 import { resolveUiMode } from './uiMode';
-import { mountWorkbench, type DebugBridge } from './ui/workbench';
+import { mountWorkbench, type ComposeTarget, type DebugBridge } from './ui/workbench';
+import type { EmotionDef } from './live2d/faceData';
 import { isWorkbenchMode, workbenchModelUrl } from './workbenchMode';
 
 // Browser entry — builds the cute UI shell + the live Live2D avatar + voice, and
@@ -64,8 +65,16 @@ async function boot(): Promise<void> {
   // UI, no boot gate. It mounts the REAL sink so what he tunes here is what he gets in the app.
   if (isWorkbenchMode(location.search)) {
     let benchSink: Live2DSink | null = null;
+    // v0.43.9: the composer reaches past the sink to the FaceVm, through the same `?workbench` debug
+    // bridge the readout uses. Freezing every living layer is a bench state, not an app capability,
+    // so it deliberately never becomes a Live2DSink method.
+    type BenchVm = ComposeTarget & { previewPose(def: EmotionDef, intensity?: number): void };
+    const benchVm = (): BenchVm | null =>
+      (globalThis as { __lunaDbg?: { faceVm?: BenchVm } }).__lunaDbg?.faceVm ?? null;
     const bench = mountWorkbench(root, {
       target: () => benchSink,
+      compose: benchVm,
+      onPreviewPose: (def) => benchVm()?.previewPose(def),
       bridge: () => (globalThis as { __lunaDbg?: DebugBridge }).__lunaDbg,
       onBack: () => {
         const prev = sessionStorage.getItem(WORKBENCH_RETURN_KEY);
@@ -78,6 +87,7 @@ async function boot(): Promise<void> {
     }
     if (benchSink) bench.stage.querySelector('.model-placeholder')?.remove();
     else applyEmptyState(bench.stage, !modelUrl ? 'none' : webglAvailable() ? 'load-failed' : 'webgl-off');
+    window.addEventListener('pagehide', () => bench.dispose());
     return;
   }
 

@@ -66,6 +66,12 @@ type Playback = {
 };
 type ActionInstance = { action: ActionDef; startAt: number; intensity: number };
 
+// v0.43.9: the id a composed, not-yet-authored pose plays under.
+// WHY the cast: `EmotionId` is `keyof typeof EMOTIONS` and this id deliberately is NOT one — which is
+// exactly the guarantee we want, since `triggerEmotion` gates on `id in EMOTIONS` and so can never
+// reach a preview by name. Every lookup goes through `defOf`, which handles this id first.
+const PREVIEW_EMOTION_ID = '__preview__' as EmotionId;
+
 const SOFT_BLEND_KEYS = new Set(Object.keys(EMOTION_SOFT_BLEND_WEIGHTS) as FaceStateKey[]);
 
 // The 4 mouth params the lip-sync owns while speaking (and that we always write
@@ -226,6 +232,8 @@ export class FaceVm {
   private readonly shortClipsEnabled: () => boolean;
   private readonly idleActionsEnabled: () => boolean;
   private readonly smoothingEnabled: () => boolean;
+  private composePose: Pose | null = null;
+  private previewDef: EmotionDef | null = null;
   private readonly manualParams = new Map<string, number>();
   private readonly manualRelease = new Set<string>();
   private lastTickAt = -1;
@@ -363,6 +371,40 @@ export class FaceVm {
   manualParamIds(): string[] {
     return [...this.manualParams.keys()];
   }
+
+  // v0.43.9: hold ONE pose still so it can be edited channel by channel. Every living layer — idle,
+  // state bias, mood, clip, gestures, residue, microsaccades — is skipped while a compose pose is
+  // set, because all of them write every frame and would fight the sliders.
+  //
+  // What is deliberately NOT skipped is the write path itself: smoothing → gain → clamp → setParam.
+  // The sliders edit PRE-GAIN state values, which is what `faceData.ts` stores, so a preview that
+  // bypassed the gain would look right and export numbers that mean something else.
+  //
+  // Eyelids are the documented exception to v0.43.0's invariant. That rule is "persistent layers
+  // never write eyeOpen, time-bounded ones may and must release" — compose is time-bounded by the
+  // owner leaving the bench, and half-lidded is a face he has to be able to author.
+  setComposeMode(pose: Pose | null): void {
+    this.composePose = pose === null ? null : { ...pose };
+  }
+  composeActive(): boolean {
+    return this.composePose !== null;
+  }
+
+  // v0.43.9: run an unauthored pose through a real intro→perform→outro. A pose that reads well as a
+  // still is not necessarily a pose that reads well arriving and leaving, and the whole point of the
+  // composer is to answer that before the numbers reach `faceData.ts`.
+  previewPose(def: EmotionDef, intensity = 0.95): void {
+    this.previewDef = def;
+    this.composePose = null; // a preview is motion; compose is a freeze — they cannot both be on
+    this.pending = { id: PREVIEW_EMOTION_ID, intensity: clamp01(intensity) };
+  }
+
+  // The one indirection the preview needs: every clip lookup goes through here, so a transient def
+  // plays through exactly the same playback machinery as an authored one.
+  private defOf(id: EmotionId): EmotionDef {
+    if (id === PREVIEW_EMOTION_ID) return this.previewDef ?? EMOTIONS.focused;
+    return EMOTIONS[id];
+  }
   // v0.43.8: what the clip layer is currently driving through the overlay table, read-only. The bench
   // lights its emotional asset toggles from this, which is the first time the "which clip carries
   // which drawn asset" mapping is visible while it happens instead of inferable from source.
@@ -390,25 +432,37 @@ export class FaceVm {
 
     // v0.42.2: the pose she relaxes TO is a function of mood. With no mood this is exactly
     // FACE_VM_DEFAULT_STATE, so both the target and the write-gate below stay bit-identical.
-    const rest = mood ? restingState(mood) : FACE_VM_DEFAULT_STATE;
+    // v0.43.9: compose pins it to the neutral face — the write gate below measures deviation from
+    // `rest`, so a mood-shifted baseline would make the exported numbers mean something else.
+    const rest = mood && this.composePose === null ? restingState(mood) : FACE_VM_DEFAULT_STATE;
 
     const target: Record<FaceStateKey, number> = { ...rest };
-    const owned = this.ownedKeys(now);
-    const idle = this.applyIdle(target, now, owned); // lowest layer — state/emotion/actions override
-    applyPose(target, STATE_BIAS[this.state], owned);
-    // v0.42.1: the mood undertone. ADDED, not set — the idle below it is real motion that must
-    // survive. Rides under the clip, so a performance still reads cleanly on top of the mood.
-    if (mood) addPose(target, affectPose(mood), owned);
-    this.applyEmotion(target, now);
-    // v0.43.3: AFTER the clip, not before — the residue is added on top of the authored pose, which
-    // is the whole point. Ordering it earlier would just have it overwritten.
-    if (this.livePeakEnabled()) this.applyIdleResidue(target, idle, rest, owned, this.lip !== null, now);
-    this.updateIdleActions(now, mood);
-    this.applyActions(target, now);
+    // v0.43.9: compose freezes the stack. Every layer below writes each frame, so leaving even one on
+    // would drag the edited channel back under the slider.
+    if (this.composePose === null) {
+      const owned = this.ownedKeys(now);
+      const idle = this.applyIdle(target, now, owned); // lowest layer — state/emotion/actions override
+      applyPose(target, STATE_BIAS[this.state], owned);
+      // v0.42.1: the mood undertone. ADDED, not set — the idle below it is real motion that must
+      // survive. Rides under the clip, so a performance still reads cleanly on top of the mood.
+      if (mood) addPose(target, affectPose(mood), owned);
+      this.applyEmotion(target, now);
+      // v0.43.3: AFTER the clip, not before — the residue is added on top of the authored pose, which
+      // is the whole point. Ordering it earlier would just have it overwritten.
+      if (this.livePeakEnabled()) this.applyIdleResidue(target, idle, rest, owned, this.lip !== null, now);
+      this.updateIdleActions(now, mood);
+      this.applyActions(target, now);
 
-    this.updateSaccade(now);
-    target.pupilX = this.saccade.x;
-    target.pupilY = this.saccade.y;
+      this.updateSaccade(now);
+      target.pupilX = this.saccade.x;
+      target.pupilY = this.saccade.y;
+    } else {
+      // The default state plus the edited channels, nothing else. `rest` is FACE_VM_DEFAULT_STATE in
+      // compose (see above), so `target` already holds the neutral face.
+      for (const [key, value] of Object.entries(this.composePose) as [FaceStateKey, number][]) {
+        target[key] = value;
+      }
+    }
 
     const smBase = this.state === 'sleeping' ? 0.34 : this.state === 'thinking' ? 0.24 : 0.18;
     // v0.42.2 (`deriveParameterSmoothing`, absorbed): an agitated face should move snappier and a
@@ -439,7 +493,9 @@ export class FaceVm {
       // When mouse gaze-follow owns the eyes, the focusController is authoritative —
       // emotion/action gaze must not overwrite it (mirrors the applyIdle gate, so
       // the eyeballs stay owned regardless of which layer set the gaze target).
-      if (this.gazeActive && GAZE_KEYS.has(key)) continue;
+      // v0.43.9: compose owns every channel, gaze included — otherwise the two gaze sliders would
+      // silently do nothing whenever mouse-follow happens to be on.
+      if (this.gazeActive && GAZE_KEYS.has(key) && this.composePose === null) continue;
       if (Math.abs(next - def) > 1e-3) {
         const gain = FACE_PARAM_GAIN[key] ?? 1;
         this.writer.setParam(FACE_VM_PARAM_MAP[key], clampStateValue(key, next * gain));
@@ -484,7 +540,7 @@ export class FaceVm {
       if (this.playback && this.playback.outroStartAt === null) this.playback.outroStartAt = now;
       return;
     }
-    const def: EmotionDef = EMOTIONS[id];
+    const def: EmotionDef = this.defOf(id);
     // v0.43.4: resolved once, at trigger time — a clip that started long must FINISH long, or flipping
     // the flag mid-performance would jump her out of a pose.
     const timeline = timelineFor(def, this.shortClipsEnabled());
@@ -550,7 +606,7 @@ export class FaceVm {
     if (!pb) return {};
     const stage = this.stage(now);
     if (stage.phase === 'inactive') return {};
-    const def: EmotionDef = EMOTIONS[pb.id];
+    const def: EmotionDef = this.defOf(pb.id);
     const keys = new Set<FaceStateKey>([
       ...(Object.keys(def.entryState) as FaceStateKey[]),
       ...(Object.keys(def.sustainedState) as FaceStateKey[]),
@@ -587,7 +643,7 @@ export class FaceVm {
   }
 
   private queueActions(pb: Playback): void {
-    EMOTIONS[pb.id].actionRefs.forEach((name, i) => {
+    this.defOf(pb.id).actionRefs.forEach((name, i) => {
       const action = ACTIONS[name];
       if (!action) return;
       this.actions.set(`${pb.id}:${name}:${i}`, {
@@ -662,7 +718,7 @@ export class FaceVm {
     const owned = new Set<FaceStateKey>();
     const pb = this.playback;
     if (!pb || this.stage(now).phase === 'inactive') return owned;
-    const def: EmotionDef = EMOTIONS[pb.id];
+    const def: EmotionDef = this.defOf(pb.id);
     const pass = FaceVm.passthrough(def);
     for (const ch of def.owns) for (const k of FACE_CHANNEL_GROUPS[ch]) if (!SOFT_BLEND_KEYS.has(k)) owned.add(k);
     for (const k of Object.keys(def.entryState) as FaceStateKey[]) if (!SOFT_BLEND_KEYS.has(k)) owned.add(k);
@@ -672,7 +728,7 @@ export class FaceVm {
   }
 
   private snapshot(id: EmotionId): Pose {
-    const def: EmotionDef = EMOTIONS[id];
+    const def: EmotionDef = this.defOf(id);
     const owned = new Set<FaceStateKey>();
     for (const ch of def.owns) for (const k of FACE_CHANNEL_GROUPS[ch]) owned.add(k);
     for (const k of Object.keys(def.entryState) as FaceStateKey[]) owned.add(k);
@@ -686,7 +742,7 @@ export class FaceVm {
     const out: Record<string, number> = {};
     const pb = this.playback;
     if (!pb) return out;
-    const def: EmotionDef = EMOTIONS[pb.id];
+    const def: EmotionDef = this.defOf(pb.id);
     if (!def.overlayRefs.length) return out;
     const stage = this.stage(now);
     // v0.43.2: `stage.weight` is direction-relative, not absolute — during the outro it is the

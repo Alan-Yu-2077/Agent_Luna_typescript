@@ -5,7 +5,14 @@ import { ExpressionKey } from '@luna/protocol';
 import type { Live2DState } from '../sinks';
 import {
   applyControl,
+  COMPOSE_GROUPS,
+  composeChannels,
+  composeEmotionDef,
+  composeFromClip,
   COSTUME_NOTE,
+  ENTRY_FRACTION,
+  exportEmotionDef,
+  inferOwns,
   INTENSITY_MARK,
   MODEL_ASSETS,
   parseIntensity,
@@ -14,7 +21,8 @@ import {
   type ControlTarget,
   type WorkbenchControl,
 } from './workbench';
-import { ACTIONS, ALL_OVERLAY_PARAMS, EMOTIONS, IDLE_PROFILES } from '../live2d/faceData';
+import { ACTIONS, ALL_OVERLAY_PARAMS, EMOTIONS, IDLE_PROFILES, type EmotionDef } from '../live2d/faceData';
+import { FACE_STATE_KEYS } from '../live2d/paramMap';
 import { affectToEmotion, HIGH_INTENSITY } from '../live2d/expressionMap';
 import { PERF_FLAGS } from '../live2d/perfFlags';
 
@@ -215,5 +223,75 @@ describe('workbenchSections — the gesture section (v0.43.8)', () => {
     const section = workbenchSections().find((s) => s.id === 'action');
     expect(section?.controls.map((c) => c.id)).toEqual(Object.keys(ACTIONS));
     expect(section?.controls.length).toBe(9);
+  });
+});
+
+// v0.43.9 — the composer's data layer. The export is the deliverable: numbers that paste into
+// `faceData.ts` and mean there what they meant on the bench.
+describe('composeChannels — sliders bounded by the engine, not by guesswork', () => {
+  const channels = composeChannels();
+  const byKey = (k: string) => channels.find((c) => c.key === k);
+
+  test('one slider per state channel, all 35', () => {
+    expect(channels.map((c) => c.key)).toEqual([...FACE_STATE_KEYS]);
+  });
+
+  test('bounds come from clampStateValue, so a slider cannot travel where the engine clamps', () => {
+    expect(byKey('eyeOpenL')).toMatchObject({ min: 0, max: 1 });
+    expect(byKey('browLY')).toMatchObject({ min: -1, max: 1 });
+    expect(byKey('mouthShrug')).toMatchObject({ min: -2, max: 2 });
+    expect(byKey('jawOpen')).toMatchObject({ min: 0, max: 2 });
+  });
+
+  test('the unclamped angle channels get the model working range instead of infinity', () => {
+    expect(byKey('headPitch')).toMatchObject({ min: -30, max: 30 });
+  });
+
+  test('pupil channels get a slider even though they belong to no engine group', () => {
+    expect(byKey('pupilX')?.group).toBe('pupil');
+    expect(COMPOSE_GROUPS['pupil']).toEqual(['pupilX', 'pupilY']);
+  });
+});
+
+describe('the compose export', () => {
+  test('load → export is lossless on the sustained pose', () => {
+    const loaded = composeFromClip('shy');
+    const def = composeEmotionDef(loaded);
+    expect(def.sustainedState).toEqual(EMOTIONS.shy.sustainedState);
+  });
+
+  test('owns is inferred from which groups the pose actually touches', () => {
+    expect(inferOwns({ browLY: -0.5 })).toEqual(['brows']);
+    expect(inferOwns({ cheekPuff: 1, mouthForm: -0.3 }).sort()).toEqual(['mouth', 'specials']);
+    // pupil is in no group on purpose (v0.43.3) — it must never become ownable.
+    expect(inferOwns({ pupilX: 0.4 })).toEqual([]);
+  });
+
+  test('channels left at their default are omitted, not exported as zeroes', () => {
+    const def = composeEmotionDef({ browLY: -0.5, headPitch: 0, eyeOpenL: 1 });
+    expect(Object.keys(def.sustainedState)).toEqual(['browLY']);
+  });
+
+  test('entryState is the documented approximation, and says so in the JSON', () => {
+    const def = composeEmotionDef({ cheekPuff: 1 });
+    expect(def.entryState['cheekPuff']).toBeCloseTo(ENTRY_FRACTION, 6);
+    const json = JSON.parse(exportEmotionDef({ cheekPuff: 1 })) as Record<string, unknown>;
+    expect(String(json['//'])).toContain('tune it by hand');
+  });
+
+  test('the export parses back into the EmotionDef shape faceData.ts expects', () => {
+    const json = JSON.parse(exportEmotionDef(composeFromClip('disappointed'))) as EmotionDef;
+    expect(typeof json.timeline.introMs).toBe('number');
+    expect(typeof json.timeline.performMs).toBe('number');
+    expect(typeof json.timeline.outroMs).toBe('number');
+    expect(Array.isArray(json.owns)).toBe(true);
+    expect(Array.isArray(json.actionRefs)).toBe(true);
+    expect(Array.isArray(json.overlayRefs)).toBe(true);
+    expect(Array.isArray(json.physicsPassthrough)).toBe(true);
+    expect(Object.keys(json.sustainedState).length).toBeGreaterThan(0);
+  });
+
+  test('an unknown clip id loads an empty pose rather than throwing', () => {
+    expect(composeFromClip('does-not-exist')).toEqual({});
   });
 });

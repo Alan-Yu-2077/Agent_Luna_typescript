@@ -1,6 +1,21 @@
 import { ExpressionKey } from '@luna/protocol';
 import type { Live2DSink, Live2DState } from '../sinks';
-import { ACTIONS, EMOTIONS, IDLE_PROFILES } from '../live2d/faceData';
+import {
+  ACTIONS,
+  EMOTIONS,
+  FACE_CHANNEL_GROUPS,
+  IDLE_PROFILES,
+  timelineFor,
+  type EmotionDef,
+  type FaceChannel,
+  type Pose,
+} from '../live2d/faceData';
+import {
+  FACE_STATE_KEYS,
+  FACE_VM_DEFAULT_STATE,
+  clampStateValue,
+  type FaceStateKey,
+} from '../live2d/paramMap';
 import { HIGH_INTENSITY } from '../live2d/expressionMap';
 import { GAZE_KEY, PERF_FLAGS, flagOn, setFlag } from '../live2d/perfFlags';
 
@@ -145,6 +160,104 @@ export function parseIntensity(raw: string): number {
   return Math.max(0, Math.min(1, v));
 }
 
+// ── v0.43.9: the pose composer ────────────────────────────────────────────────────────────────
+// The pipeline behind "let me look at it before it goes in the code": 35 channels on sliders, she
+// holds the pose live, and what comes out is an `EmotionDef` that pastes straight into `faceData.ts`.
+
+export type ComposeChannel = { key: FaceStateKey; group: string; min: number; max: number; step: number };
+
+// Slider bounds derived from `clampStateValue`, not re-typed — a slider that can travel somewhere the
+// engine clamps away is a slider that lies about what she can do.
+export function composeChannels(): ComposeChannel[] {
+  const groupOf = new Map<FaceStateKey, string>();
+  for (const [group, keys] of Object.entries(FACE_CHANNEL_GROUPS)) {
+    for (const k of keys) groupOf.set(k, group);
+  }
+  return FACE_STATE_KEYS.map((key) => {
+    const group = groupOf.get(key) ?? 'pupil';
+    const lo = clampStateValue(key, -1e6);
+    const hi = clampStateValue(key, 1e6);
+    // The angle channels are unclamped by `clampStateValue` (they are raw Cubism degrees), so they
+    // get the model's own ±30 working range rather than ±1e6.
+    const unbounded = lo <= -1e5;
+    return {
+      key,
+      group,
+      min: unbounded ? -30 : lo,
+      max: unbounded ? 30 : hi,
+      step: unbounded ? 0.1 : 0.01,
+    };
+  });
+}
+
+// Groups the owner works in most, open by default. The rest fold away — 35 sliders at once is a wall.
+export const COMPOSE_OPEN_GROUPS: readonly string[] = ['brows', 'mouth'];
+
+// `pupil*` is in no channel group by design (v0.43.3 — it must be unownable), but the composer still
+// has to offer it a slider, so the UI adds a group the engine does not have.
+export const COMPOSE_GROUPS: Record<string, readonly FaceStateKey[]> = {
+  ...FACE_CHANNEL_GROUPS,
+  pupil: ['pupilX', 'pupilY'],
+};
+
+export function composeFromClip(id: string): Pose {
+  const def = EMOTIONS[id as keyof typeof EMOTIONS] as EmotionDef | undefined;
+  return def ? { ...def.sustainedState } : {};
+}
+
+// Only channels that actually left the neutral face — an export listing all 35 with 28 zeroes would
+// be unreadable next to the hand-authored entries it has to sit beside.
+function nonDefault(pose: Pose): Pose {
+  const out: Pose = {};
+  for (const [k, v] of Object.entries(pose) as [FaceStateKey, number][]) {
+    if (Math.abs(v - FACE_VM_DEFAULT_STATE[k]) > 1e-6) out[k] = Math.round(v * 1000) / 1000;
+  }
+  return out;
+}
+
+// Which channel groups this pose touches — that IS what `owns` means, so it is inferred rather than
+// asked for. `pupil*` belongs to no group on purpose (v0.43.3) and so can never be owned.
+export function inferOwns(pose: Pose): FaceChannel[] {
+  const touched = new Set(Object.keys(nonDefault(pose)));
+  return (Object.entries(FACE_CHANNEL_GROUPS) as [FaceChannel, FaceStateKey[]][])
+    .filter(([, keys]) => keys.some((k) => touched.has(k)))
+    .map(([group]) => group);
+}
+
+export const ENTRY_FRACTION = 0.6;
+export const COMPOSE_TIMELINE = { introMs: 900, performMs: 5600, outroMs: 1200 };
+
+export function composeEmotionDef(pose: Pose, timeline = COMPOSE_TIMELINE): EmotionDef {
+  const sustainedState = nonDefault(pose);
+  const entryState: Pose = {};
+  for (const [k, v] of Object.entries(sustainedState) as [FaceStateKey, number][]) {
+    entryState[k] = Math.round(v * ENTRY_FRACTION * 1000) / 1000;
+  }
+  return {
+    timeline,
+    owns: inferOwns(pose),
+    entryState,
+    sustainedState,
+    actionRefs: [],
+    overlayRefs: [],
+    physicsPassthrough: [],
+  };
+}
+
+export function exportEmotionDef(pose: Pose, timeline = COMPOSE_TIMELINE): string {
+  return JSON.stringify(
+    {
+      // A flat scale of the sustained pose is an approximation, not an authored entry — every
+      // hand-written clip in `faceData.ts` leads INTO its pose differently, and that shape is
+      // half of what makes a clip read as arriving rather than snapping on.
+      '//': `entryState is sustained x ${ENTRY_FRACTION} — a starting point, tune it by hand`,
+      ...composeEmotionDef(pose, timeline),
+    },
+    null,
+    2,
+  );
+}
+
 export type WorkbenchReadout = { mood: string; playback: string; actions: string };
 
 export type DebugBridge = {
@@ -165,10 +278,22 @@ export function readout(bridge: DebugBridge | undefined): WorkbenchReadout {
 
 const READOUT_MS = 500;
 
+export type ComposeTarget = {
+  setComposeMode(pose: Pose | null): void;
+  composeActive(): boolean;
+};
+
 export type WorkbenchDeps = {
   // A thunk, not a value: the drawer is built before the model finishes loading (a model load is a
   // network fetch and a WebGL context), so the buttons must exist and then find their target.
   target: () => ControlTarget | null;
+  // The composer drives FaceVm directly rather than through the sink: `setComposeMode` freezes every
+  // living layer, which is a debugging state, not something the app should ever be able to enter.
+  compose?: () => ComposeTarget | null;
+  // A/B: hand the composed pose back as a real EmotionDef so the caller can run it as a clip. It
+  // carries the SHORT timeline (`timelineFor`), i.e. the pacing the app actually performs with —
+  // previewing at the authored 5.6 s would rehearse a beat that no longer exists.
+  onPreviewPose?: (def: EmotionDef) => void;
   bridge?: () => DebugBridge | undefined;
   storage?: Pick<Storage, 'getItem' | 'setItem'> | null;
   onBack?: () => void;
@@ -337,6 +462,146 @@ export function mountWorkbench(root: HTMLElement, deps: WorkbenchDeps): { stage:
   }
   drawer.appendChild(flags);
 
+  // v0.43.9: the composer. Off by default — it freezes every living layer, so entering it has to be
+  // a deliberate act with a badge saying so.
+  const composeSec = doc.createElement('section');
+  composeSec.className = 'wb-section wb-compose';
+  composeSec.dataset['section'] = 'compose';
+  const ch = doc.createElement('h3');
+  ch.textContent = 'Compose';
+  const chint = doc.createElement('p');
+  chint.className = 'wb-hint';
+  chint.textContent = 'freezes every living layer so one pose can be edited channel by channel';
+  composeSec.append(ch, chint);
+
+  const pose: Pose = {};
+  const sliders = new Map<FaceStateKey, HTMLInputElement>();
+  const values = new Map<FaceStateKey, HTMLElement>();
+  let composing = false;
+
+  const pushPose = (): void => {
+    if (composing) deps.compose?.()?.setComposeMode(pose);
+  };
+  const paintChannel = (key: FaceStateKey): void => {
+    const v = pose[key] ?? FACE_VM_DEFAULT_STATE[key];
+    const s = sliders.get(key);
+    if (s) s.value = String(v);
+    const label = values.get(key);
+    if (label) label.textContent = v.toFixed(2);
+  };
+
+  const composeRow = doc.createElement('div');
+  composeRow.className = 'wb-compose-row';
+  const composeToggle = doc.createElement('button');
+  composeToggle.type = 'button';
+  composeToggle.className = 'wb-btn wb-compose-toggle';
+  composeToggle.textContent = 'Enter compose';
+  const badge = doc.createElement('span');
+  badge.className = 'wb-badge';
+  badge.textContent = 'COMPOSING';
+  badge.hidden = true;
+  composeToggle.addEventListener('click', () => {
+    composing = !composing;
+    composeToggle.textContent = composing ? 'Exit compose' : 'Enter compose';
+    composeToggle.classList.toggle('on', composing);
+    badge.hidden = !composing;
+    deps.compose?.()?.setComposeMode(composing ? pose : null);
+  });
+  const loadSel = doc.createElement('select');
+  const blank = doc.createElement('option');
+  blank.value = '';
+  blank.textContent = 'Load a clip…';
+  loadSel.appendChild(blank);
+  for (const id of Object.keys(EMOTIONS)) {
+    const o = doc.createElement('option');
+    o.value = id;
+    o.textContent = titleCase(id);
+    loadSel.appendChild(o);
+  }
+  // Authoring a new face starts by editing a nearby one — "sad" comes out of `disappointed`, not out
+  // of 35 zeroes.
+  loadSel.addEventListener('change', () => {
+    if (loadSel.value === '') return;
+    for (const k of FACE_STATE_KEYS) delete pose[k];
+    Object.assign(pose, composeFromClip(loadSel.value));
+    for (const k of FACE_STATE_KEYS) paintChannel(k);
+    pushPose();
+  });
+  const exportBtn = doc.createElement('button');
+  exportBtn.type = 'button';
+  exportBtn.className = 'wb-btn';
+  exportBtn.textContent = 'Copy EmotionDef';
+  const exportOut = doc.createElement('textarea');
+  exportOut.className = 'wb-export';
+  exportOut.readOnly = true;
+  exportOut.hidden = true;
+  exportBtn.addEventListener('click', () => {
+    const json = exportEmotionDef(pose);
+    exportOut.value = json;
+    exportOut.hidden = false;
+    void navigator.clipboard?.writeText(json).catch(() => {
+      /* clipboard blocked — the textarea below is the fallback, and it is always filled */
+    });
+  });
+  const playBtn = doc.createElement('button');
+  playBtn.type = 'button';
+  playBtn.className = 'wb-btn';
+  playBtn.textContent = 'A/B play';
+  // Static beauty is not the same as a pose that reads in motion, so the composed face can be run
+  // through a real intro→perform→outro before it is trusted.
+  playBtn.addEventListener('click', () => {
+    const c = deps.compose?.();
+    if (!c) return;
+    c.setComposeMode(null);
+    composing = false;
+    composeToggle.textContent = 'Enter compose';
+    composeToggle.classList.remove('on');
+    badge.hidden = true;
+    deps.onPreviewPose?.(composeEmotionDef(pose, timelineFor(composeEmotionDef(pose), true)));
+  });
+  composeRow.append(composeToggle, badge, loadSel, playBtn, exportBtn);
+  composeSec.append(composeRow, exportOut);
+
+  for (const [group, keys] of Object.entries(COMPOSE_GROUPS)) {
+    const details = doc.createElement('details');
+    details.className = 'wb-group';
+    if (COMPOSE_OPEN_GROUPS.includes(group)) details.open = true;
+    const summary = doc.createElement('summary');
+    summary.textContent = group;
+    details.appendChild(summary);
+    for (const chan of composeChannels().filter((c) => keys.includes(c.key))) {
+      const row = doc.createElement('label');
+      row.className = 'wb-chan';
+      row.dataset['chan'] = chan.key;
+      const name = doc.createElement('span');
+      name.className = 'wb-chan-name';
+      // v0.43.0's invariant in the UI: these two are borrowed for as long as compose is on.
+      name.textContent =
+        chan.key === 'eyeOpenL' || chan.key === 'eyeOpenR' ? `${chan.key} ⟲` : chan.key;
+      if (chan.key.startsWith('eyeOpen')) name.title = 'released back to the blink when you exit compose';
+      const input = doc.createElement('input');
+      input.type = 'range';
+      input.min = String(chan.min);
+      input.max = String(chan.max);
+      input.step = String(chan.step);
+      input.value = String(FACE_VM_DEFAULT_STATE[chan.key]);
+      const val = doc.createElement('span');
+      val.className = 'wb-chan-val';
+      val.textContent = FACE_VM_DEFAULT_STATE[chan.key].toFixed(2);
+      input.addEventListener('input', () => {
+        pose[chan.key] = Number.parseFloat(input.value);
+        val.textContent = (pose[chan.key] ?? 0).toFixed(2);
+        pushPose();
+      });
+      sliders.set(chan.key, input);
+      values.set(chan.key, val);
+      row.append(name, input, val);
+      details.appendChild(row);
+    }
+    composeSec.appendChild(details);
+  }
+  drawer.appendChild(composeSec);
+
   const readoutEl = doc.createElement('section');
   readoutEl.className = 'wb-section wb-readout';
   readoutEl.dataset['section'] = 'readout';
@@ -362,5 +627,12 @@ export function mountWorkbench(root: HTMLElement, deps: WorkbenchDeps): { stage:
   paint();
   const timer = setInterval(paint, READOUT_MS);
 
-  return { stage, dispose: () => clearInterval(timer) };
+  return {
+    stage,
+    dispose: () => {
+      clearInterval(timer);
+      // Never leave her frozen in a composed pose: exiting the bench hands every layer back.
+      deps.compose?.()?.setComposeMode(null);
+    },
+  };
 }

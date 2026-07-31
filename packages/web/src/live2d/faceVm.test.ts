@@ -1008,3 +1008,102 @@ describe('FaceVm — worn model params (v0.43.8)', () => {
     expect(vm.activeOverlayParams()).toEqual({});
   });
 });
+
+// v0.43.9 — compose mode. The composer's whole value rests on two claims: the face holds exactly
+// what the sliders say (no living layer bleeding in), and the numbers it exports mean the same thing
+// they mean in `faceData.ts` (the preview goes through the real gain path).
+describe('FaceVm — compose mode (v0.43.9)', () => {
+  test('every living layer goes silent — only the composed channels are written', () => {
+    const { writer, writes } = countingWriter();
+    const affect = new AffectState({ ambient: 0 });
+    affect.nudge('bright_delight', 1); // a live mood that would normally tint everything
+    const vm = new FaceVm(writer, { rng: () => 0.5, affect, affectEnabled: () => true });
+    vm.setComposeMode({ browLY: -0.5 });
+    for (let i = 0; i < 600; i++) {
+      vm.tick(i * 16);
+      vm.flushPose();
+    }
+    // ParamBrowYL is the composed channel. Nothing from the idle, the mood, the microsaccade or the
+    // state bias may appear alongside it.
+    expect(writes.has('ParamBrowYL')).toBe(true);
+    for (const forbidden of ['ParamhitomiX', 'ParamhitomiY', 'ParamAngleZ', 'ParamBodyAngleZ', 'ParamEyeSmileL']) {
+      expect(writes.has(forbidden)).toBe(false);
+    }
+  });
+
+  test('composed values travel the real gain + clamp path', () => {
+    const { writer, last } = recorder();
+    const vm = new FaceVm(writer, { rng: () => 0.5 });
+    // browLY has gain 1.35 and clamps to [-1, 1] → -1 x 1.35 clamps back to -1.
+    // headPitch has gain 1 and no clamp → -10 stays -10.
+    vm.setComposeMode({ browLY: -1, headPitch: -10 });
+    run(vm, 0, 4000);
+    vm.flushPose();
+    expect(last.get('ParamBrowYL')).toBeCloseTo(clampStateValue('browLY', -1 * (FACE_PARAM_GAIN.browLY ?? 1)), 6);
+    expect(last.get('ParamAngleY') ?? 0).toBeCloseTo(-10, 1);
+  });
+
+  // v0.43.0's invariant is "persistent layers never write eyeOpen; time-bounded ones may and must
+  // release". Compose is time-bounded by the owner leaving the bench — half-lidded has to be
+  // authorable — so it writes, and then gives the eyelids back.
+  test('compose may hold the eyelids, and hands them back on exit', () => {
+    const { writer, writes } = countingWriter();
+    const vm = new FaceVm(writer, { rng: () => 0.5 });
+    vm.setComposeMode({ eyeOpenL: 0.4, eyeOpenR: 0.4 });
+    for (let i = 0; i < 200; i++) vm.tick(i * 16);
+    expect((writes.get('ParamEyeOpenL') ?? []).length).toBeGreaterThan(100);
+    const held = (writes.get('ParamEyeOpenL') ?? []).length;
+    vm.setComposeMode(null);
+    for (let i = 200; i < 600; i++) vm.tick(i * 16);
+    // Once released the value returns to 1 (the default) and the write gate stops writing it.
+    const after = (writes.get('ParamEyeOpenL') ?? []).length;
+    expect(after - held).toBeLessThan(120);
+    expect(vm.composeActive()).toBe(false);
+  });
+
+  test('leaving compose brings the living layers straight back', () => {
+    const { writer, writes } = countingWriter();
+    const vm = new FaceVm(writer, { rng: () => 0.5 });
+    vm.setComposeMode({ browLY: -0.5 });
+    for (let i = 0; i < 200; i++) {
+      vm.tick(i * 16);
+      vm.flushPose();
+    }
+    expect(writes.has('ParamAngleZ')).toBe(false); // idle sway frozen
+    vm.setComposeMode(null);
+    for (let i = 200; i < 400; i++) {
+      vm.tick(i * 16);
+      vm.flushPose();
+    }
+    expect(writes.has('ParamAngleZ')).toBe(true); // and alive again
+  });
+
+  test('previewPose runs an unauthored pose through a real intro→perform→outro', () => {
+    const { writer, last } = recorder();
+    const vm = new FaceVm(writer, { rng: () => 0.5 });
+    vm.setComposeMode({ cheekPuff: 1 });
+    run(vm, 0, 200);
+    vm.previewPose({
+      timeline: { introMs: 400, performMs: 1200, outroMs: 400 },
+      owns: ['specials'],
+      entryState: { cheekPuff: 0.6 },
+      sustainedState: { cheekPuff: 1 },
+      actionRefs: [],
+      overlayRefs: [],
+      physicsPassthrough: [],
+    });
+    expect(vm.composeActive()).toBe(false); // a preview is motion; compose is a freeze
+    run(vm, 216, 1200);
+    expect(last.get('ParamCheekpuff') ?? 0).toBeGreaterThan(0.7);
+    run(vm, 1216, 4000);
+    expect(last.get('ParamCheekpuff') ?? 1).toBeLessThan(0.1); // and it releases
+  });
+
+  test('the preview id is unreachable from triggerEmotion', () => {
+    const { writer } = recorder();
+    const vm = new FaceVm(writer, { rng: () => 0.5 });
+    vm.triggerEmotion('__preview__');
+    run(vm, 0, 500);
+    expect(vm.currentPlayback()).toBeNull();
+  });
+});
