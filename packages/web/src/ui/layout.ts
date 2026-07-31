@@ -31,6 +31,7 @@ export type LayoutRefs = {
   shortClipsToggle: HTMLInputElement;
   idleActionsToggle: HTMLInputElement;
   idleSelect: HTMLSelectElement;
+  workbenchBtn: HTMLButtonElement;
   petToggle: HTMLInputElement;
   serverSettings: HTMLElement;
   // v0.39.2: agent-only mode hides the avatar pane outright — a tab of dead controls is worse than
@@ -196,6 +197,13 @@ export function buildLayout(root: HTMLElement): LayoutRefs {
     IDLE_PROFILES,
     localStorage.getItem('luna:idle-profile') ?? DEFAULT_IDLE_PROFILE,
   );
+  // v0.43.7: the way into the Live2D workbench. A row rather than a rail tab — the bench replaces
+  // the whole page (no WS, no chat), so it is a departure, not another settings pane.
+  const workbenchBtn = doc.createElement('button');
+  workbenchBtn.className = 'workbench-btn';
+  workbenchBtn.type = 'button';
+  workbenchBtn.textContent = '🎛 Live2D workbench';
+  avatarCard.appendChild(workbenchBtn);
 
   // v0.27.1: the server-driven half — settingsView.ts fills this from settings.state.
   const serverSettings = add(serverTab, 'div', 'server-settings');
@@ -285,5 +293,6 @@ export function buildLayout(root: HTMLElement): LayoutRefs {
     moodPip, scrollPill, dreamOverlay, dreamWakeBtn, dreamCaption,
     settingsBtn, settingsPanel, settingsBackdrop, ttsToggle, live2dToggle, gazeToggle, idleSelect,
     petToggle, serverSettings, avatarTab, avatarRailBtn, affectToggle, livePeakToggle, shortClipsToggle, idleActionsToggle,
+    workbenchBtn,
   };
 }

@@ -26,6 +26,8 @@ import { mountPhysicsScene } from './physics/scene';
 import { createRiseBubbles } from './ui/riseBubble';
 import { mountPackDrop } from './ui/packDrop';
 import { resolveUiMode } from './uiMode';
+import { mountWorkbench, type DebugBridge } from './ui/workbench';
+import { isWorkbenchMode, workbenchModelUrl } from './workbenchMode';
 
 // Browser entry — builds the cute UI shell + the live Live2D avatar + voice, and
 // wires the v0.12.0 consumption controller plus the v0.13.4 polish chrome (dream
@@ -38,6 +40,9 @@ const STATUS_TEXT: Record<WsStatus, string> = { connecting: 'Connecting…', ope
 // where the local server lives.
 const WS_URL = resolveWsUrl(location.search);
 const DREAM_MIN_MS = 1500;
+// Where the workbench remembers the URL it was opened from, so "← Back" returns to the exact
+// instance (ws port, pet mode and all) rather than a bare '/'.
+const WORKBENCH_RETURN_KEY = 'luna:workbench-return';
 
 async function boot(): Promise<void> {
   const root = document.getElementById('app');
@@ -55,6 +60,27 @@ async function boot(): Promise<void> {
     else mountSetupView(root);
     return;
   }
+  // v0.43.7: `?workbench=1` — the Live2D bench. Same early-exit shape as `?setup`: no WS, no chat
+  // UI, no boot gate. It mounts the REAL sink so what he tunes here is what he gets in the app.
+  if (isWorkbenchMode(location.search)) {
+    let benchSink: Live2DSink | null = null;
+    const bench = mountWorkbench(root, {
+      target: () => benchSink,
+      bridge: () => (globalThis as { __lunaDbg?: DebugBridge }).__lunaDbg,
+      onBack: () => {
+        const prev = sessionStorage.getItem(WORKBENCH_RETURN_KEY);
+        location.href = prev !== null && prev !== '' ? prev : location.pathname;
+      },
+    });
+    const modelUrl = workbenchModelUrl(location.search, resolveModelUrl());
+    if (modelUrl && webglAvailable()) {
+      benchSink = await createPixiLive2DSink(bench.stage, { modelUrl });
+    }
+    if (benchSink) bench.stage.querySelector('.model-placeholder')?.remove();
+    else applyEmptyState(bench.stage, !modelUrl ? 'none' : webglAvailable() ? 'load-failed' : 'webgl-off');
+    return;
+  }
+
   // v0.36.0: Reduce-motion is gone (Initiative 26 constitution — the app is always alive). Clean up
   // the stale persisted key so a previously-on instance doesn't carry a dead flag forever.
   localStorage.removeItem('luna:reduce-motion');
@@ -484,6 +510,14 @@ async function boot(): Promise<void> {
     // idle animation switches live (no refresh) — FaceVm swaps the resting profile
     localStorage.setItem('luna:idle-profile', refs.idleSelect.value);
     live2d.setIdleProfile?.(refs.idleSelect.value);
+  });
+  // v0.43.7: leaving for the workbench is a full navigation (it is a different page mode), so the
+  // current URL is stashed first — the bench's "← Back" restores the exact instance.
+  refs.workbenchBtn.addEventListener('click', () => {
+    sessionStorage.setItem(WORKBENCH_RETURN_KEY, location.href);
+    const next = new URLSearchParams(location.search);
+    next.set('workbench', '1');
+    location.href = `${location.pathname}?${next.toString()}`;
   });
   // v0.27.0: pet mode is a SHELL choice (window recreation), not a page style — the row only
   // exists inside the desktop app; a plain browser (no bridge) never shows it.

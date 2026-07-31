@@ -257,6 +257,17 @@ export class FaceVm {
     return [...this.actions.keys()];
   }
 
+  // v0.43.7: the clip layer's observation point, the counterpart to `activeActionIds`. Read-only and
+  // deliberately snapshot-shaped — the workbench polls this at 2 Hz to name what is on screen, and a
+  // bench that reported a phase the renderer is not in would be worse than no readout at all.
+  currentPlayback(now = -1): { id: EmotionId; intensity: number; phase: Stage['phase'] } | null {
+    const pb = this.playback;
+    if (!pb) return null;
+    const phase = this.stage(now < 0 ? this.lastTickAt : now).phase;
+    if (phase === 'inactive') return null;
+    return { id: pb.id, intensity: pb.intensity, phase };
+  }
+
   // Switch the resting-state idle animation. Unknown ids are ignored (guarded).
   setIdleProfile(id: string): void {
     if (!IDLE_PROFILE_IDS.includes(id) || id === this.idleProfile) return;

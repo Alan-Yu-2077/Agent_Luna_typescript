@@ -900,3 +900,45 @@ body.pet { background: none; }
 /* v0.28.6: NO -webkit-app-region rules — on transparent frameless windows the drag region ate
    every mousedown before the DOM saw it (nothing inside the pet was clickable). Window-move is
    now manual: app.ts pointer-drags her body via the lunaPet.drag* bridge; clicks stay ordinary. */
+
+/* ── v0.43.7: the Live2D workbench ────────────────────────────────────────────
+   A page mode, not a panel: `?workbench=1` replaces the whole app shell. Model
+   left on the same renderer the real app uses, controls right. Deliberately
+   plain — this is a bench for one person, and every pixel spent on skin here is
+   a pixel not spent on her face. */
+.workbench {
+  display: grid; grid-template-columns: minmax(0, 1fr) 360px; height: 100%;
+  background: var(--stripe-b); color: var(--ink); overflow: hidden;
+}
+.workbench .wb-stage { position: relative; min-width: 0; height: 100%; }
+.workbench .wb-drawer {
+  overflow-y: auto; padding: 14px; border-left: 1px solid var(--inner-border);
+  background: var(--inner); display: flex; flex-direction: column; gap: 14px;
+}
+.wb-head { display: flex; align-items: center; gap: 10px; }
+.wb-title { font-weight: 700; font-size: 14px; color: var(--ink-soft); }
+.wb-back {
+  border: 1px solid var(--inner-border); background: var(--stripe-a); color: var(--sky-text);
+  border-radius: 8px; padding: 4px 9px; font-size: 12px; cursor: pointer;
+}
+.wb-intensity { position: relative; display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.wb-intensity.high { color: var(--lavender-text); font-weight: 700; }
+.wb-intensity input[type='range'] { width: 100%; }
+/* The 0.7 branch, drawn where it actually is — the slider is the one place the
+   escalation threshold stops being folklore. */
+.wb-mark {
+  position: absolute; bottom: 2px; width: 2px; height: 14px;
+  background: var(--lavender-deep); pointer-events: none;
+}
+.wb-section { display: flex; flex-direction: column; gap: 6px; }
+.wb-section h3 { margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-soft); }
+.wb-hint { margin: 0; font-size: 11px; color: var(--muted); }
+.wb-grid { display: flex; flex-wrap: wrap; gap: 5px; }
+.wb-btn {
+  border: 1px solid var(--inner-border); background: var(--stripe-b); color: var(--ink);
+  border-radius: 7px; padding: 4px 8px; font-size: 11px; cursor: pointer;
+}
+.wb-btn:hover { background: var(--stripe-a); }
+.wb-btn.on { background: var(--sky); border-color: var(--sky-deep); color: var(--sky-text); font-weight: 700; }
+.wb-flag { display: flex; align-items: center; gap: 7px; font-size: 11px; }
+.wb-readout p { margin: 0; font-size: 11px; font-family: ui-monospace, monospace; color: var(--ink-soft); word-break: break-word; }

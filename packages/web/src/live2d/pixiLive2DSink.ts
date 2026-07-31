@@ -6,6 +6,16 @@ import { createGlide } from './glide';
 import { petFraming } from './petFraming';
 import { DEFAULT_IDLE_PROFILE, IDLE_PROFILE_IDS, type IdleProfileId } from './faceData';
 import { AffectState, describeAffect } from './affect';
+import {
+  AFFECT_KEY,
+  GAZE_KEY,
+  IDLE_ACTIONS_KEY,
+  IDLE_PROFILE_KEY,
+  LIVE_PEAK_KEY,
+  SHORT_CLIPS_KEY,
+  flagOn,
+} from './perfFlags';
+import { debugBridgeEnabled } from '../workbenchMode';
 
 // The real Live2DSink: loads the configured Live2D model via pixi-live2d-display, drives it through a
 // FaceVm on the pixi ticker, and makes it draggable with a persisted offset. Returns null when no model
@@ -14,12 +24,6 @@ import { AffectState, describeAffect } from './affect';
 
 const POS_KEY = 'luna:live2d:pos';
 const ZOOM_KEY = 'luna:live2d:zoom';
-const GAZE_KEY = 'luna:gaze-follow';
-const IDLE_KEY = 'luna:idle-profile';
-const AFFECT_KEY = 'luna:affect';
-const LIVE_PEAK_KEY = 'luna:live-peak';
-const SHORT_CLIPS_KEY = 'luna:short-clips';
-const IDLE_ACTIONS_KEY = 'luna:idle-actions';
 const ZOOM_MIN = 0.4;
 const ZOOM_MAX = 2.5;
 type Offset = { dx: number; dy: number };
@@ -43,38 +47,11 @@ function saveZoom(z: number): void {
     /* storage unavailable — fine */
   }
 }
-function gazeFollowEnabled(): boolean {
-  return localStorage.getItem(GAZE_KEY) !== '0';
-}
-// v0.42.3: the continuous mood undertone is now the default — `luna:affect = '0'` is the escape
-// hatch, matching how every other proven feature in this repo is gated. Read per tick so the
-// settings toggle takes effect live, with no reload.
-function affectEnabled(): boolean {
-  try {
-    return localStorage.getItem(AFFECT_KEY) !== '0';
-  } catch {
-    return true;
-  }
-}
-// v0.43.3: the thaw. Same shape as the mood flag — on by default, `'0'` opts out, read per tick.
-function livePeakEnabled(): boolean {
-  try {
-    return localStorage.getItem(LIVE_PEAK_KEY) !== '0';
-  } catch {
-    return true;
-  }
-}
-// v0.43.4: the two levers on how a performance is paced and on whether she fidgets when left alone.
-function flagOn(key: string): boolean {
-  try {
-    return localStorage.getItem(key) !== '0';
-  } catch {
-    return true;
-  }
-}
+// v0.43.7: the five per-tick flags now share one key list with the settings card and the workbench
+// (`perfFlags.ts`) — `flagOn` is that module's reader, absent still means ON.
 function loadIdleProfile(): IdleProfileId {
   try {
-    const v = localStorage.getItem(IDLE_KEY);
+    const v = localStorage.getItem(IDLE_PROFILE_KEY);
     if (v && IDLE_PROFILE_IDS.includes(v)) return v as IdleProfileId;
   } catch {
     /* storage unavailable — fall through */
@@ -184,10 +161,10 @@ export async function createPixiLive2DSink(
   const affect = new AffectState();
   const faceVm = new FaceVm(driver, {
     idleProfile: loadIdleProfile(),
-    gazeActive: gazeFollowEnabled(),
+    gazeActive: flagOn(GAZE_KEY),
     affect,
-    affectEnabled,
-    livePeakEnabled,
+    affectEnabled: () => flagOn(AFFECT_KEY),
+    livePeakEnabled: () => flagOn(LIVE_PEAK_KEY),
     shortClipsEnabled: () => flagOn(SHORT_CLIPS_KEY),
     idleActionsEnabled: () => flagOn(IDLE_ACTIONS_KEY),
   });
@@ -251,12 +228,15 @@ export async function createPixiLive2DSink(
   });
 
   // ?dev: expose the model + faceVm so live params can be measured from the console.
-  if (typeof location !== 'undefined' && location.search.includes('dev')) {
+  // v0.43.7: `?workbench` gets the same bridge — the bench's readout panel is a CONSUMER of this,
+  // which is why the workbench needs no new method on the Live2DSink interface.
+  if (typeof location !== 'undefined' && debugBridgeEnabled(location.search)) {
     (globalThis as unknown as Record<string, unknown>)['__lunaDbg'] = {
       model,
       faceVm,
       affect,
       mood: () => describeAffect(affect.current),
+      playback: () => faceVm.currentPlayback(),
       param: (id: string) =>
         (
           model.internalModel.coreModel as unknown as { getParameterValueById(id: string): number }
@@ -310,7 +290,7 @@ export async function createPixiLive2DSink(
       focusController: { focus(x: number, y: number, instant?: boolean): void };
     }
   ).focusController;
-  let gazeOn = gazeFollowEnabled();
+  let gazeOn = flagOn(GAZE_KEY);
   const HEAD_FRAC = 0.18;
   const clamp1 = (v: number): number => Math.max(-1, Math.min(1, v));
   if (!gazeOn) focusController.focus(0, 0, true);

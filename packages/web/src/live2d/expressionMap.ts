@@ -17,7 +17,9 @@ type EmotionChoice = EmotionId | null | { low: EmotionId; high: EmotionId };
 
 // Above this, an affect performs its escalated form. Deliberately high: most turns should read as the
 // ordinary face, with the intense one reserved for when the model actually leaned on the intensity.
-const HIGH_INTENSITY = 0.7;
+// Exported since v0.43.7: the workbench draws this as a tick mark on its intensity slider, so the
+// mark and the branch cannot drift apart.
+export const HIGH_INTENSITY = 0.7;
 
 export const AFFECT_TO_EMOTION: Record<ExpressionKey, EmotionChoice> = {
   curious_attention: 'curious',
