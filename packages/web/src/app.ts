@@ -472,6 +472,14 @@ async function boot(): Promise<void> {
     // to being a still photograph on the very next frame.
     localStorage.setItem('luna:live-peak', refs.livePeakToggle.checked ? '1' : '0');
   });
+  refs.shortClipsToggle.addEventListener('change', () => {
+    // v0.43.4: read when a clip STARTS, not per frame — a performance that began long must finish
+    // long, or flipping this mid-expression would jump her out of the pose.
+    localStorage.setItem('luna:short-clips', refs.shortClipsToggle.checked ? '1' : '0');
+  });
+  refs.idleActionsToggle.addEventListener('change', () => {
+    localStorage.setItem('luna:idle-actions', refs.idleActionsToggle.checked ? '1' : '0');
+  });
   refs.idleSelect.addEventListener('change', () => {
     // idle animation switches live (no refresh) — FaceVm swaps the resting profile
     localStorage.setItem('luna:idle-profile', refs.idleSelect.value);

@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { FaceVm, type ParamWriter } from './faceVm';
 import { AffectState } from './affect';
-import { EMOTIONS, FACE_PARAM_GAIN } from './faceData';
+import { EMOTIONS, FACE_PARAM_GAIN, timelineFor } from './faceData';
 import { FACE_VM_PARAM_MAP, clampStateValue, type FaceStateKey } from './paramMap';
 
 function recorder(): { writer: ParamWriter; last: Map<string, number> } {
@@ -399,6 +399,7 @@ describe('FaceVm — the peak is no longer a still photograph', () => {
     pid: string,
     livePeak: boolean,
     clip: 'bright_delight' | 'shy_softness' = 'bright_delight',
+    opts: { short?: boolean; toMs?: number; fromMs?: number } = {},
   ): { frozenFrames: number; frames: number; range: number } {
     // One sample per FRAME, not per setParam call: the mouth channels are written twice a frame (the
     // main loop, then the lip-sync ownership block), and counting both would read the duplicate as a
@@ -407,12 +408,22 @@ describe('FaceVm — the peak is no longer a still photograph', () => {
     let now = 0;
     let frameValue: number | undefined;
     const writer: ParamWriter = { setParam: (p, v) => { if (p === pid) frameValue = v; } };
-    const vm = new FaceVm(writer, { rng: () => 0.5, livePeakEnabled: () => livePeak });
+    // Idle actions off: this probe is about what a CLIP does, and a spontaneous gesture landing
+    // mid-window would be measured as the clip breathing.
+    const vm = new FaceVm(writer, {
+      rng: () => 0.5,
+      livePeakEnabled: () => livePeak,
+      idleActionsEnabled: () => false,
+      shortClipsEnabled: () => opts.short ?? true,
+    });
     vm.setExpression(clip, 1);
-    for (now = 0; now <= 6000; now += 16) {
+    // The window sits strictly INSIDE perform, so nothing here measures the outro's slide back to
+    // baseline. Short timings: intro ≈0.8–1.0 s, perform ≈2.4–2.6 s.
+    const from = opts.fromMs ?? 1500;
+    for (now = 0; now <= (opts.toMs ?? 3300); now += 16) {
       frameValue = undefined;
       vm.tick(now);
-      if (now >= 2000 && frameValue !== undefined) vals.push(frameValue);
+      if (now >= from && frameValue !== undefined) vals.push(frameValue);
     }
     if (vals.length < 2) return { frozenFrames: 0, frames: vals.length, range: 0 };
     let frozen = 0;
@@ -436,14 +447,17 @@ describe('FaceVm — the peak is no longer a still photograph', () => {
     // perfectly visible. What was broken was not the size of the step but that there was no step.
     for (const [pid, clip] of THAWED) {
       const { frozenFrames, frames } = perform(pid, true, clip);
-      expect(`${pid}:${frozenFrames}/${frames > 200}`).toBe(`${pid}:0/true`);
+      expect(`${pid}:${frozenFrames}/${frames > 100}`).toBe(`${pid}:0/true`);
     }
   });
 
   test('…and the swing is large enough for a person to see, not merely for a test to measure', () => {
     // The v0.42.4 lesson: direction/ordering assertions pass happily on motion nobody can perceive.
+    // Measured over a LONG perform window: the wobble's period is 3.3–10.5 s, so a full cycle does not
+    // fit inside v0.43.4's ~2.4 s one. Amplitude is a property of the mechanism, not of clip length.
+    const long = { short: false, fromMs: 1500, toMs: 6500 };
     for (const [pid, clip] of THAWED) {
-      expect(`${pid}:${perform(pid, true, clip).range > 0.01}`).toBe(`${pid}:true`);
+      expect(`${pid}:${perform(pid, true, clip, long).range > 0.01}`).toBe(`${pid}:true`);
     }
   });
 
@@ -506,6 +520,143 @@ describe('FaceVm — the peak is no longer a still photograph', () => {
       for (let t = 0; t <= 9000; t += 16) { vm.tick(t); vm.flushPose(); }
     }
     expect(offenders).toEqual([]);
+  });
+});
+
+// --- v0.43.4: shorter performances + a face that does things unprompted --------------------------
+
+describe('timelines — a beat, not a sit', () => {
+  test('every clip performs for 2200–2800 ms when shortened', () => {
+    for (const [id, def] of Object.entries(EMOTIONS)) {
+      const t = timelineFor(def, true);
+      expect(`${id}:${t.performMs >= 2200 && t.performMs <= 2800}`).toBe(`${id}:true`);
+    }
+  });
+
+  test('the authored ordering survives the mapping — longer clips stay longer', () => {
+    const byAuthored = Object.values(EMOTIONS).sort((a, b) => a.timeline.performMs - b.timeline.performMs);
+    const shortened = byAuthored.map((d) => timelineFor(d, true).performMs);
+    for (let i = 1; i < shortened.length; i++) expect(shortened[i]!).toBeGreaterThanOrEqual(shortened[i - 1]!);
+  });
+
+  test('intro and outro are untouched — only the sit in the middle is cut', () => {
+    for (const def of Object.values(EMOTIONS)) {
+      const t = timelineFor(def, true);
+      expect(t.introMs).toBe(def.timeline.introMs);
+      expect(t.outroMs).toBe(def.timeline.outroMs);
+    }
+  });
+
+  test('the flag returns the authored timings exactly', () => {
+    for (const def of Object.values(EMOTIONS)) expect(timelineFor(def, false)).toEqual(def.timeline);
+  });
+
+  test('the floor keeps the t=3000ms pose assertions meaningful', () => {
+    // Those two tests sample at 3000 ms to prove a clip reached its pose. At performMs 1900 the sample
+    // lands after the clip is over (measured 0.018 where >0.5 is needed). This is why the floor is
+    // 2200 rather than the 1600–2200 the plan first proposed.
+    const shy = timelineFor(EMOTIONS.shy, true);
+    expect(shy.introMs + shy.performMs).toBeGreaterThan(3000);
+  });
+});
+
+describe('FaceVm — spontaneous idle actions', () => {
+  function lcg(seed: number): () => number {
+    let n = seed;
+    return () => ((n = (n * 9301 + 49297) % 233280), n / 233280);
+  }
+
+  function idleRun(ms: number, opts: { enabled?: boolean; mood?: AffectState } = {}): string[] {
+    // Which action fired is inferred from the head/body channels the actions drive; simplest reliable
+    // signal is that SOMETHING wrote a pose param away from the idle's own value, so instead we count
+    // scheduler picks through a spy on the rng-driven pool by observing distinct action starts.
+    const fired: string[] = [];
+    const writer: ParamWriter = { setParam: () => {} };
+    const vm = new FaceVm(writer, {
+      rng: lcg(12345),
+      idleActionsEnabled: () => opts.enabled ?? true,
+      affect: opts.mood,
+      affectEnabled: () => opts.mood !== undefined,
+    });
+    for (let t = 0; t <= ms; t += 16) {
+      const before = vm.activeActionIds();
+      vm.tick(t);
+      for (const id of vm.activeActionIds()) if (!before.includes(id)) fired.push(id);
+    }
+    return fired;
+  }
+
+  test('she does something on her own every 8–20 s — ≥20 gestures in five minutes', () => {
+    expect(idleRun(300_000).length).toBeGreaterThanOrEqual(20);
+  });
+
+  test('no gesture repeats within three of itself', () => {
+    const names = idleRun(300_000).map((id) => id.split(':')[1]!);
+    for (let i = 3; i < names.length; i++) {
+      expect(names.slice(i - 3, i)).not.toContain(names[i]!);
+    }
+  });
+
+  test('nothing fires with the flag off', () => {
+    expect(idleRun(300_000, { enabled: false })).toEqual([]);
+  });
+
+  test('nothing fires while a clip is performing — that is what avoids the ownership fight', () => {
+    // applyActions hard-sets and does not consult `owned`, so an overlapping gesture would punch
+    // straight through a performance.
+    const writer: ParamWriter = { setParam: () => {} };
+    const vm = new FaceVm(writer, { rng: lcg(99), idleActionsEnabled: () => true });
+    for (let t = 0; t <= 300_000; t += 2000) {
+      vm.setExpression('bright_delight', 1); // keep a clip permanently active
+      for (let k = 0; k < 125; k++) vm.tick(t + k * 16);
+      expect(vm.activeActionIds().filter((id) => id.startsWith('idle:'))).toEqual([]);
+    }
+  });
+
+  test('the mood biases which gesture she reaches for', () => {
+    const warm = new AffectState({ ambient: 0, baseline: { valence: 0.9, arousal: -0.4, dominance: -0.1 } });
+    const cold = new AffectState({ ambient: 0, baseline: { valence: -0.9, arousal: 0.2, dominance: 0.5 } });
+    const warmNames = idleRun(600_000, { mood: warm }).map((id) => id.split(':')[1]!);
+    const coldNames = idleRun(600_000, { mood: cold }).map((id) => id.split(':')[1]!);
+    const count = (xs: string[], n: string): number => xs.filter((x) => x === n).length;
+    expect(count(warmNames, 'bodyLeanInSoft')).toBeGreaterThan(count(coldNames, 'bodyLeanInSoft'));
+    expect(count(coldNames, 'bodyLeanBackGuarded')).toBeGreaterThan(count(warmNames, 'bodyLeanBackGuarded'));
+  });
+
+  test('the eyelid invariant survives: a gesture may close her eyes, and gives them back', () => {
+    let writes = 0;
+    let lastValue = 1;
+    const writer: ParamWriter = { setParam: (p, v) => { if (p === 'ParamEyeOpenL') { writes++; lastValue = v; } } };
+    const vm = new FaceVm(writer, { rng: lcg(4242), idleActionsEnabled: () => true });
+    for (let t = 0; t <= 300_000; t += 16) vm.tick(t);
+    // slowBlinkAffection / lookAwayThenBack legitimately drive the eyelids — they are time-bounded,
+    // which is exactly what v0.43.0's invariant permits. What must not happen is a permanent hold.
+    expect(writes).toBeGreaterThan(0);
+    expect(Math.abs(lastValue - 1)).toBeLessThan(0.05);
+  });
+});
+
+describe('physicsPassthrough — the field finally has a reader', () => {
+  test('adorable hands its eyelids back, so she blinks through the cutest clip', () => {
+    // Declared in faceData since the clip was authored; unread until v0.43.4, which meant `adorable`
+    // pinned both eyelids at 1 for its entire perform window.
+    expect(EMOTIONS.adorable.physicsPassthrough).toContain('eyeOpenL');
+    let writes = 0;
+    const writer: ParamWriter = { setParam: (p) => { if (p === 'ParamEyeOpenL') writes++; } };
+    const vm = new FaceVm(writer, { rng: () => 0.5, idleActionsEnabled: () => false });
+    vm.setExpression('bright_delight', 1);
+    for (let t = 0; t <= 5000; t += 16) vm.tick(t);
+    expect(writes).toBe(0);
+  });
+
+  test('a clip WITHOUT the declaration still owns its eyelids', () => {
+    expect(EMOTIONS.shy.physicsPassthrough).toEqual([]);
+    let writes = 0;
+    const writer: ParamWriter = { setParam: (p) => { if (p === 'ParamEyeOpenL') writes++; } };
+    const vm = new FaceVm(writer, { rng: () => 0.5, idleActionsEnabled: () => false });
+    vm.setExpression('shy_softness', 1);
+    for (let t = 0; t <= 3000; t += 16) vm.tick(t);
+    expect(writes).toBeGreaterThan(0);
   });
 });
 

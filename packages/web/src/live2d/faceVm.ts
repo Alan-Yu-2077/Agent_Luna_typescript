@@ -19,6 +19,7 @@ import {
   IDLE_PROFILES,
   IDLE_PROFILE_IDS,
   OVERLAYS,
+  timelineFor,
   type ActionDef,
   type EmotionDef,
   type EmotionId,
@@ -27,7 +28,7 @@ import {
   type Pose,
 } from './faceData';
 import { affectToEmotion } from './expressionMap';
-import type { AffectState } from './affect';
+import type { AffectState, Vad } from './affect';
 import { affectPose, restingState } from './affectPose';
 
 // The high-fidelity FaceVM (v0.13.2) — a faithful port of Python's layered
@@ -112,6 +113,26 @@ const JITTER_AMPLITUDE = 0.035;
 // right but the motion was too slow to register as motion at all.)
 const JITTER_RATES = [0.6, 0.73, 0.91, 1.07, 1.24, 1.41, 1.63, 1.9];
 
+// v0.43.4 — spontaneous idle actions. The nine authored actions and how each one leans on the mood
+// axes; a positive coefficient means "more likely when this axis is high".
+const IDLE_ACTION_POOL: ReadonlyArray<{ name: string; v: number; a: number; d: number }> = [
+  { name: 'headLiftAlert', v: 0.1, a: 0.7, d: 0.2 },
+  { name: 'bodyLeanInSoft', v: 0.6, a: 0.1, d: -0.2 },
+  { name: 'slowBlinkAffection', v: 0.7, a: -0.5, d: -0.1 },
+  { name: 'bodySwayTenderSlow', v: 0.5, a: -0.4, d: 0 },
+  { name: 'bodyLeanBackGuarded', v: -0.5, a: 0.1, d: 0.3 },
+  { name: 'lookAwayThenBack', v: -0.2, a: 0.2, d: -0.4 },
+  { name: 'bodyPresentRight', v: 0.3, a: 0.3, d: 0.6 },
+  { name: 'sighRelease', v: -0.6, a: -0.3, d: -0.2 },
+  { name: 'headLowerShy', v: 0.1, a: -0.2, d: -0.7 },
+];
+const IDLE_ACTION_MIN_MS = 8_000;
+const IDLE_ACTION_MAX_MS = 20_000;
+// Softer than a clip's 0.95: these are things she does while nobody asked, not a performance.
+const IDLE_ACTION_INTENSITY = 0.72;
+// How many recent picks are barred from repeating, so a run never stutters on the same gesture.
+const IDLE_ACTION_MEMORY = 3;
+
 // Pupil microsaccade: a small offset, re-picked on a dwell, applied to a channel nothing else owns.
 const SACCADE_RANGE = 0.15;
 const SACCADE_DWELL_MIN_MS = 420;
@@ -135,6 +156,10 @@ export type FaceVmOptions = {
   // v0.43.3: the thaw — a clip's owned face channels keep a fraction of the idle underneath them.
   // Read per tick like `affectEnabled`, so the escape hatch works live.
   livePeakEnabled?: () => boolean;
+  // v0.43.4: shorter performances — the aftertaste is the continuous field's job now.
+  shortClipsEnabled?: () => boolean;
+  // v0.43.4: let the nine authored actions fire on their own while she is idle.
+  idleActionsEnabled?: () => boolean;
 };
 
 // Simple state-layer biases (kept from v0.13.1; rich speaking/thinking procedural
@@ -170,6 +195,10 @@ export class FaceVm {
   private readonly affect: AffectState | null;
   private readonly affectEnabled: () => boolean;
   private readonly livePeakEnabled: () => boolean;
+  private readonly shortClipsEnabled: () => boolean;
+  private readonly idleActionsEnabled: () => boolean;
+  private nextIdleActionAt = -1;
+  private readonly recentIdleActions: string[] = [];
   private saccade = { x: 0, y: 0, until: -1 };
 
   constructor(
@@ -182,10 +211,19 @@ export class FaceVm {
     this.affect = opts.affect ?? null;
     this.affectEnabled = opts.affectEnabled ?? (() => false);
     this.livePeakEnabled = opts.livePeakEnabled ?? (() => true);
+    this.shortClipsEnabled = opts.shortClipsEnabled ?? (() => true);
+    this.idleActionsEnabled = opts.idleActionsEnabled ?? (() => true);
   }
 
   setState(state: Live2DState): void {
     this.state = state;
+  }
+
+  // v0.43.4: the action layer's only observation point. Spontaneous gestures are the one behaviour
+  // here with no direct parameter signature — they share channels with the idle — so scheduling is
+  // asserted on the queue rather than inferred from the output stream.
+  activeActionIds(): string[] {
+    return [...this.actions.keys()];
   }
 
   // Switch the resting-state idle animation. Unknown ids are ignored (guarded).
@@ -273,6 +311,7 @@ export class FaceVm {
     // v0.43.3: AFTER the clip, not before — the residue is added on top of the authored pose, which
     // is the whole point. Ordering it earlier would just have it overwritten.
     if (this.livePeakEnabled()) this.applyIdleResidue(target, idle, rest, owned, this.lip !== null, now);
+    this.updateIdleActions(now, mood);
     this.applyActions(target, now);
 
     this.updateSaccade(now);
@@ -333,13 +372,16 @@ export class FaceVm {
       return;
     }
     const def: EmotionDef = EMOTIONS[id];
+    // v0.43.4: resolved once, at trigger time — a clip that started long must FINISH long, or flipping
+    // the flag mid-performance would jump her out of a pose.
+    const timeline = timelineFor(def, this.shortClipsEnabled());
     this.playback = {
       id,
       intensity,
       startedAt: now,
-      introMs: def.timeline.introMs,
-      performMs: def.timeline.performMs,
-      outroMs: def.timeline.outroMs,
+      introMs: timeline.introMs,
+      performMs: timeline.performMs,
+      outroMs: timeline.outroMs,
       entrySnapshot: this.snapshot(id),
       outroStartAt: null,
       actionsQueued: false,
@@ -400,6 +442,7 @@ export class FaceVm {
       ...(Object.keys(def.entryState) as FaceStateKey[]),
       ...(Object.keys(def.sustainedState) as FaceStateKey[]),
     ]);
+    for (const k of FaceVm.passthrough(def)) keys.delete(k); // v0.43.4 — see ownedKeys
     const out: Pose = {};
     for (const k of keys) {
       const base = FACE_VM_DEFAULT_STATE[k];
@@ -442,14 +485,76 @@ export class FaceVm {
     });
   }
 
+  // v0.43.4 — the nine authored actions were only ever reachable as a clip's `actionRefs`, and six of
+  // the ten reachable clips list none, so the action layer sat almost entirely idle: left alone, she
+  // did nothing but breathe and sway. Now they fire on their own.
+  //
+  // Only ever while NO clip is playing. That sidesteps the whole arbitration question — `applyActions`
+  // hard-sets and does not consult `owned`, so a spontaneous action overlapping a performance would
+  // silently punch through it.
+  private updateIdleActions(now: number, mood: Vad | null): void {
+    if (!this.idleActionsEnabled() || this.playback || this.lip || this.state === 'sleeping') {
+      // Reschedule from now so she does not fire the instant a conversation stops.
+      this.nextIdleActionAt = -1;
+      return;
+    }
+    if (this.nextIdleActionAt < 0) {
+      this.nextIdleActionAt = now + IDLE_ACTION_MIN_MS + this.rng() * (IDLE_ACTION_MAX_MS - IDLE_ACTION_MIN_MS);
+      return;
+    }
+    if (now < this.nextIdleActionAt) return;
+
+    const pick = this.pickIdleAction(mood);
+    if (pick) {
+      this.actions.set(`idle:${pick}:${Math.round(now)}`, {
+        action: ACTIONS[pick]!,
+        startAt: now,
+        intensity: IDLE_ACTION_INTENSITY,
+      });
+      this.recentIdleActions.push(pick);
+      if (this.recentIdleActions.length > IDLE_ACTION_MEMORY) this.recentIdleActions.shift();
+    }
+    this.nextIdleActionAt = now + IDLE_ACTION_MIN_MS + this.rng() * (IDLE_ACTION_MAX_MS - IDLE_ACTION_MIN_MS);
+  }
+
+  // Weighted by the current mood, so a warm Luna leans in and a guarded one leans back — the same VAD
+  // field that tints her face also decides what she does with her hands off the keyboard.
+  private pickIdleAction(mood: Vad | null): string | null {
+    const v = mood?.valence ?? 0;
+    const a = mood?.arousal ?? 0;
+    const d = mood?.dominance ?? 0;
+    const candidates = IDLE_ACTION_POOL.filter((c) => !this.recentIdleActions.includes(c.name) && ACTIONS[c.name]);
+    if (!candidates.length) return null;
+    // Never negative: a mood should bias the draw, never veto an action outright.
+    const weights = candidates.map((c) => Math.max(0.05, 1 + c.v * v + c.a * a + c.d * d));
+    const total = weights.reduce((s, w) => s + w, 0);
+    let r = this.rng() * total;
+    for (let i = 0; i < candidates.length; i++) {
+      r -= weights[i]!;
+      if (r <= 0) return candidates[i]!.name;
+    }
+    return candidates[candidates.length - 1]!.name;
+  }
+
+  // v0.43.4 — `physicsPassthrough` finally has a reader. `adorable` has declared
+  // `['eyeOpenL','eyeOpenR','eyeSquintL','eyeSquintR','eyeSize']` since it was authored, and nothing
+  // in the repo ever looked at it: the field WAS the author's note that this clip should hand its eyes
+  // back to the built-in controllers. Unread, it meant `adorable` pinned both eyelids at 1 for its
+  // whole 6.2 s — the biggest, cutest expression she has, performed with an unblinking stare.
+  private static passthrough(def: EmotionDef): Set<FaceStateKey> {
+    return new Set(def.physicsPassthrough);
+  }
+
   private ownedKeys(now: number): Set<FaceStateKey> {
     const owned = new Set<FaceStateKey>();
     const pb = this.playback;
     if (!pb || this.stage(now).phase === 'inactive') return owned;
     const def: EmotionDef = EMOTIONS[pb.id];
+    const pass = FaceVm.passthrough(def);
     for (const ch of def.owns) for (const k of FACE_CHANNEL_GROUPS[ch]) if (!SOFT_BLEND_KEYS.has(k)) owned.add(k);
     for (const k of Object.keys(def.entryState) as FaceStateKey[]) if (!SOFT_BLEND_KEYS.has(k)) owned.add(k);
     for (const k of Object.keys(def.sustainedState) as FaceStateKey[]) if (!SOFT_BLEND_KEYS.has(k)) owned.add(k);
+    for (const k of pass) owned.delete(k);
     return owned;
   }
 

@@ -28,6 +28,8 @@ export type LayoutRefs = {
   gazeToggle: HTMLInputElement;
   affectToggle: HTMLInputElement;
   livePeakToggle: HTMLInputElement;
+  shortClipsToggle: HTMLInputElement;
+  idleActionsToggle: HTMLInputElement;
   idleSelect: HTMLSelectElement;
   petToggle: HTMLInputElement;
   serverSettings: HTMLElement;
@@ -186,6 +188,8 @@ export function buildLayout(root: HTMLElement): LayoutRefs {
   const gazeToggle = toggleRow(avatarCard, 'Gaze follow', localStorage.getItem('luna:gaze-follow') !== '0');
   const affectToggle = toggleRow(avatarCard, 'Mood memory', localStorage.getItem('luna:affect') !== '0');
   const livePeakToggle = toggleRow(avatarCard, 'Living expressions', localStorage.getItem('luna:live-peak') !== '0');
+  const shortClipsToggle = toggleRow(avatarCard, 'Brief performances', localStorage.getItem('luna:short-clips') !== '0');
+  const idleActionsToggle = toggleRow(avatarCard, 'Idle gestures', localStorage.getItem('luna:idle-actions') !== '0');
   const idleSelect = selectRow(
     avatarCard,
     'Idle animation',
@@ -280,6 +284,6 @@ export function buildLayout(root: HTMLElement): LayoutRefs {
     statusBadge, chatLog, chatHeader: header, input, inputRow, sendBtn, collapseBtn, dreamBtn, modelStage,
     moodPip, scrollPill, dreamOverlay, dreamWakeBtn, dreamCaption,
     settingsBtn, settingsPanel, settingsBackdrop, ttsToggle, live2dToggle, gazeToggle, idleSelect,
-    petToggle, serverSettings, avatarTab, avatarRailBtn, affectToggle, livePeakToggle,
+    petToggle, serverSettings, avatarTab, avatarRailBtn, affectToggle, livePeakToggle, shortClipsToggle, idleActionsToggle,
   };
 }

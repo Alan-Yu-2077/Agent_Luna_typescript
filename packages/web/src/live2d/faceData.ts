@@ -18,6 +18,34 @@ export type EmotionDef = {
   physicsPassthrough: FaceStateKey[];
 };
 
+// v0.43.4 — the authored `performMs` values run 5200–6800 ms, which was right when a clip ending meant
+// the face returned to exact baseline with nothing left over. Since v0.42.x a mood outlives the clip
+// (6 s hold floor, ~38 s half-life), so the performance should be a beat, not a sit — the aftertaste
+// is the continuous field's job now.
+//
+// Mapped rather than re-authored: the relative ordering the poses were tuned with is preserved, and
+// the two sets coexist so the flag is a real rollback rather than a diff to revert.
+//
+// The floor is NOT lower than 2200 for a concrete reason: `faceVm.test.ts` samples at t=3000 ms to
+// assert a clip has reached its pose. At performMs 1900 that sample lands after the clip is over
+// (measured 0.018 where >0.5 is required); 1600 gives 0.216. 2200 is the smallest value that keeps
+// those assertions meaningful instead of retuned to match the code.
+const SHORT_PERFORM_MIN = 2200;
+const SHORT_PERFORM_MAX = 2800;
+const AUTHORED_PERFORM_MIN = 5200;
+const AUTHORED_PERFORM_MAX = 6800;
+
+export function timelineFor(def: EmotionDef, short: boolean): EmotionDef['timeline'] {
+  if (!short) return def.timeline;
+  const t = def.timeline;
+  const span = AUTHORED_PERFORM_MAX - AUTHORED_PERFORM_MIN;
+  const frac = (t.performMs - AUTHORED_PERFORM_MIN) / span;
+  const performMs = Math.round(
+    SHORT_PERFORM_MIN + Math.max(0, Math.min(1, frac)) * (SHORT_PERFORM_MAX - SHORT_PERFORM_MIN),
+  );
+  return { introMs: t.introMs, performMs, outroMs: t.outroMs };
+}
+
 export type Keyframe = { at: number; value: number };
 export type ActionDef = { durationMs: number; tracks: Partial<Record<FaceStateKey, Keyframe[]>> };
 

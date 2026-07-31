@@ -18,6 +18,8 @@ const GAZE_KEY = 'luna:gaze-follow';
 const IDLE_KEY = 'luna:idle-profile';
 const AFFECT_KEY = 'luna:affect';
 const LIVE_PEAK_KEY = 'luna:live-peak';
+const SHORT_CLIPS_KEY = 'luna:short-clips';
+const IDLE_ACTIONS_KEY = 'luna:idle-actions';
 const ZOOM_MIN = 0.4;
 const ZOOM_MAX = 2.5;
 type Offset = { dx: number; dy: number };
@@ -58,6 +60,14 @@ function affectEnabled(): boolean {
 function livePeakEnabled(): boolean {
   try {
     return localStorage.getItem(LIVE_PEAK_KEY) !== '0';
+  } catch {
+    return true;
+  }
+}
+// v0.43.4: the two levers on how a performance is paced and on whether she fidgets when left alone.
+function flagOn(key: string): boolean {
+  try {
+    return localStorage.getItem(key) !== '0';
   } catch {
     return true;
   }
@@ -178,6 +188,8 @@ export async function createPixiLive2DSink(
     affect,
     affectEnabled,
     livePeakEnabled,
+    shortClipsEnabled: () => flagOn(SHORT_CLIPS_KEY),
+    idleActionsEnabled: () => flagOn(IDLE_ACTIONS_KEY),
   });
   // Drive FaceVm from the model's OWN update cycle, on 'beforeModelUpdate' — the
   // point inside InternalModel.update() right after the built-in controllers
