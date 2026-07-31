@@ -385,6 +385,46 @@ describe('FaceVm — the eyelid invariant', () => {
     expect(w.l).toBeGreaterThan(100);
     expect(w.values).toContain('0.000');
   });
+});
+
+// --- v0.43.1: the model's own peak assets reach the screen ---------------------------------------
+
+describe('FaceVm — native peak overlays', () => {
+  function peak(id: 'bright_delight' | 'playful_brightness' | 'awkward_lightness' | 'shy_softness', pid: string): number {
+    const { writer, last } = recorder();
+    const vm = new FaceVm(writer, { rng: () => 0.5 });
+    vm.setExpression(id, 1);
+    run(vm, 0, 3000); // past the intro, inside perform
+    return last.get(pid) ?? 0;
+  }
+
+  test('delight lights up the heart eyes', () => {
+    expect(peak('bright_delight', 'Paramheart')).toBeGreaterThan(0.5);
+  });
+
+  test('playfulness lights up the star eyes', () => {
+    expect(peak('playful_brightness', 'Paramxingxing')).toBeGreaterThan(0.5);
+  });
+
+  test('awkwardness lights up the swirl eyes', () => {
+    expect(peak('awkward_lightness', 'Paramwenxiang')).toBeGreaterThan(0.5);
+  });
+
+  test('an unrelated emotion lights up none of them — the whitelist is not leaky', () => {
+    for (const pid of ['Paramheart', 'Paramxingxing', 'Paramwenxiang', 'Paramtear']) {
+      expect(`${pid}:${peak('shy_softness', pid)}`).toBe(`${pid}:0`);
+    }
+  });
+
+  test('the asset is released when the clip ends — it does not latch on', () => {
+    const { writer, last } = recorder();
+    const vm = new FaceVm(writer, { rng: () => 0.5 });
+    vm.setExpression('bright_delight', 1);
+    run(vm, 0, 3000);
+    expect(last.get('Paramheart') ?? 0).toBeGreaterThan(0.5);
+    run(vm, 3016, 14_000); // past intro 780 + perform 6200 + outro 1100
+    expect(last.get('Paramheart') ?? 0).toBe(0);
+  });
 
   test('the rest of the face is untouched: mood still reaches mouth, smile and brows', () => {
     const { writer, last } = recorder();

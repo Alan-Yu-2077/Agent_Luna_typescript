@@ -49,13 +49,30 @@ export const FACE_PARAM_GAIN: Partial<Record<FaceStateKey, number>> = {
 };
 
 // overlayRefs → special reference-model params (config.js EXPRESSION_MAP).
+//
+// v0.43.1: these are the model's own drawn peak assets — the artist's work, not parameters we tune.
+// Yumi ships 17 `.exp3.json` files and NONE of them were ever played: `yumi.model3.json`'s
+// `FileReferences` has no `Expressions` key at all. It turns out none is needed — every one of those
+// files is a single `{Id, Value: 1.0, Blend: 'Add'}` toggle on a custom parameter, which is exactly
+// what this table already drives. So "loading expressions" is a table entry, not a subsystem.
+//
+// The four added here are the emotional half that was still dark. The other assets in that folder are
+// COSTUME AND PROPS (Paramarmup L/R, Paramhuatong, Paramxiaogou, Paramyanzhao, Paramlonghair/2) and
+// must never appear here: any automatic selection over them produces nonsense (she pulls out a
+// microphone mid-apology). `faceData.test.ts` enforces that as a hard assertion, not a convention.
 export const OVERLAYS: Record<string, Record<string, number>> = {
   脸红: { Paramsmileshy: 1 },
   俯身: { Paramdown1: 1 },
   黑脸: { Paramheilian: 1 },
   泪汪汪: { Paramleiwangwang: 1 },
+  爱心眼: { Paramheart: 1 },
+  星星眼: { Paramxingxing: 1 },
+  眼泪: { Paramtear: 1 },
+  蚊香眼: { Paramwenxiang: 1 },
 };
-export const ALL_OVERLAY_PARAMS = ['Paramsmileshy', 'Paramdown1', 'Paramheilian', 'Paramleiwangwang'];
+// Every param any overlay can touch — `flushPose` writes the whole set each frame so a released
+// overlay is actively zeroed rather than left latched on.
+export const ALL_OVERLAY_PARAMS = Object.values(OVERLAYS).flatMap((o) => Object.keys(o));
 
 export const EMOTIONS = {
   focused: {
@@ -77,14 +94,14 @@ export const EMOTIONS = {
     owns: ['brows', 'eyes', 'mouth', 'gaze', 'pose', 'specials'],
     entryState: { headPitch: -1.8, headYaw: -2.4, headRoll: -8.5, bow: 1, bowPress: 1, bodyYaw: -1.8, bodyRoll: -2.8, bodyLift: 0.8, gazeX: 0.04, gazeY: 0.08, eyeOpenL: 1, eyeOpenR: 1, browLY: -0.96, browRY: -0.96, browLX: -0.28, browRX: 0.28, browLAngle: 1, browRAngle: 1, browLForm: -0.72, browRForm: -0.72, mouthOpen: 0, mouthForm: 0, mouthShift: 0, mouthPucker: -0.5, mouthShrug: 1.5, cheekPuff: 1 },
     sustainedState: { headPitch: -3.2, headYaw: -3.4, headRoll: -12.5, bow: 1, bowPress: 1, bodyYaw: -2.8, bodyRoll: -4.2, bodyLift: 1.2, gazeX: 0.08, gazeY: 0.12, eyeOpenL: 1, eyeOpenR: 1, browLY: -1, browRY: -1, browLX: -0.28, browRX: 0.28, browLAngle: 1, browRAngle: 1, browLForm: -0.72, browRForm: -0.72, mouthOpen: 0, mouthForm: 0, mouthShift: 0, mouthPucker: -0.5, mouthShrug: 1.5, cheekPuff: 1 },
-    actionRefs: [], overlayRefs: ['脸红', '俯身'], physicsPassthrough: ['eyeOpenL', 'eyeOpenR', 'eyeSquintL', 'eyeSquintR', 'eyeSize'],
+    actionRefs: [], overlayRefs: ['脸红', '俯身', '爱心眼'], physicsPassthrough: ['eyeOpenL', 'eyeOpenR', 'eyeSquintL', 'eyeSquintR', 'eyeSize'],
   },
   playful: {
     timeline: { introMs: 760, performMs: 6200, outroMs: 1000 },
     owns: ['brows', 'eyes', 'mouth', 'pose', 'gaze', 'specials'],
     entryState: { headPitch: 1, headRoll: -5.8, headYaw: 3.2, bodyRoll: -1.8, bodyYaw: 1.4, gazeX: 0.08, gazeY: 0.02, eyeOpenL: 0.7, eyeOpenR: 0.88, eyeSquintL: 0.1, eyeSquintR: 0.04, browLY: 0.04, browRY: 0.12, browLAngle: -0.04, browRAngle: -0.08, browLForm: 0.04, browRForm: 0.1, mouthForm: 0.22, mouthShift: 0.12, mouthOpen: 0.04, mouthPucker: -0.08, mouthShrug: 0.18, tongueOut: 0.04 },
     sustainedState: { headPitch: 1.8, headRoll: -8.4, headYaw: 4.8, bodyRoll: -2.8, bodyYaw: 2, gazeX: 0.16, gazeY: 0, eyeOpenL: 0.62, eyeOpenR: 0.94, eyeSquintL: 0.14, eyeSquintR: 0.05, browLY: 0.08, browRY: 0.18, browLAngle: -0.08, browRAngle: -0.14, browLForm: 0.1, browRForm: 0.16, mouthForm: 0.3, mouthShift: 0.24, mouthOpen: 0.08, mouthPucker: -0.14, mouthShrug: 0.24, tongueOut: 0.08 },
-    actionRefs: [], overlayRefs: [], physicsPassthrough: [],
+    actionRefs: [], overlayRefs: ['星星眼'], physicsPassthrough: [],
   },
   shy: {
     timeline: { introMs: 980, performMs: 5600, outroMs: 1300 },
@@ -105,7 +122,7 @@ export const EMOTIONS = {
     owns: ['brows', 'eyes', 'mouth', 'gaze', 'pose', 'specials'],
     entryState: { headPitch: -3.8, headYaw: 1.1, headRoll: -1.2, bodyYaw: 0.8, bodyRoll: -0.6, bodyLift: -0.2, gazeX: 0.02, gazeY: 0.54, eyeOpenL: 0.68, eyeOpenR: 0.7, eyeSquintL: 0.12, eyeSquintR: 0.12, browLY: 0.16, browRY: 0.16, browLAngle: 0.02, browRAngle: 0.02, browLForm: -0.46, browRForm: -0.46, mouthForm: 0.2, mouthShift: 0.03, mouthOpen: 0.04, mouthPucker: -0.22, mouthShrug: 0.3, cheekPuff: 0.04 },
     sustainedState: { headPitch: -6.0, headYaw: 1.8, headRoll: -2.6, bodyYaw: 1.2, bodyRoll: -1.0, bodyLift: -0.4, gazeX: 0.04, gazeY: 0.78, eyeOpenL: 0.56, eyeOpenR: 0.6, eyeSquintL: 0.2, eyeSquintR: 0.2, browLY: 0.28, browRY: 0.28, browLAngle: 0.04, browRAngle: 0.04, browLForm: -0.62, browRForm: -0.62, mouthForm: 0.24, mouthShift: 0.04, mouthOpen: 0.05, mouthPucker: -0.3, mouthShrug: 0.38, cheekPuff: 0.08 },
-    actionRefs: [], overlayRefs: ['脸红'], physicsPassthrough: [],
+    actionRefs: [], overlayRefs: ['脸红', '蚊香眼'], physicsPassthrough: [],
   },
   annoyed: {
     timeline: { introMs: 820, performMs: 5400, outroMs: 1200 },
@@ -154,7 +171,7 @@ export const EMOTIONS = {
     owns: ['brows', 'eyes', 'mouth', 'gaze', 'pose'],
     entryState: { headPitch: 2.8, headYaw: -0.8, headRoll: 1.4, bodyYaw: -0.5, bodyRoll: 0.2, bodyLift: -0.8, bow: 0.08, gazeX: -0.04, gazeY: 0.28, eyeOpenL: 0.64, eyeOpenR: 0.66, eyeSquintL: 0.08, eyeSquintR: 0.08, browLY: 0.08, browRY: 0.08, browLAngle: 0.18, browRAngle: 0.18, browLForm: -0.22, browRForm: -0.22, mouthForm: -0.12, mouthOpen: 0.05, jawOpen: 0.08, mouthShift: -0.02, mouthPucker: -0.16, mouthShrug: 0.24 },
     sustainedState: { headPitch: 4.6, headYaw: -1.2, headRoll: 2.2, bodyYaw: -0.8, bodyRoll: 0.4, bodyLift: -1.3, bow: 0.16, gazeX: -0.06, gazeY: 0.46, eyeOpenL: 0.52, eyeOpenR: 0.56, eyeSquintL: 0.12, eyeSquintR: 0.12, browLY: 0.14, browRY: 0.14, browLAngle: 0.26, browRAngle: 0.26, browLForm: -0.32, browRForm: -0.32, mouthForm: -0.26, mouthOpen: 0.08, jawOpen: 0.12, mouthShift: -0.03, mouthPucker: -0.24, mouthShrug: 0.36 },
-    actionRefs: ['sighRelease', 'headLowerShy'], overlayRefs: ['泪汪汪'], physicsPassthrough: [],
+    actionRefs: ['sighRelease', 'headLowerShy'], overlayRefs: ['泪汪汪', '眼泪'], physicsPassthrough: [],
   },
 } satisfies Record<string, EmotionDef>;
 
