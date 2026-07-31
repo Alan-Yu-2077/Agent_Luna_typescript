@@ -11,6 +11,7 @@ import {
   GAZE_KEY,
   IDLE_ACTIONS_KEY,
   IDLE_PROFILE_KEY,
+  LISTENING_KEY,
   LIVE_PEAK_KEY,
   SHORT_CLIPS_KEY,
   flagOn,
@@ -168,6 +169,7 @@ export async function createPixiLive2DSink(
     livePeakEnabled: () => flagOn(LIVE_PEAK_KEY),
     shortClipsEnabled: () => flagOn(SHORT_CLIPS_KEY),
     idleActionsEnabled: () => flagOn(IDLE_ACTIONS_KEY),
+    listeningEnabled: () => flagOn(LISTENING_KEY),
   });
   // v0.43.10: whatever the owner last put on her. Reuses v0.43.8's per-frame `setManualParam`
   // verbatim, so persistence cost the engine nothing.
@@ -367,6 +369,7 @@ export async function createPixiLive2DSink(
     setIdleProfile: (id) => faceVm.setIdleProfile(id),
     listIdleProfiles: () => faceVm.listIdleProfiles(),
     playAction: (name, intensity) => faceVm.playAction(name, intensity),
+    setListening: (on) => faceVm.setListening(on),
     setManualParam: (pid, value) => faceVm.setManualParam(pid, value),
   };
 }

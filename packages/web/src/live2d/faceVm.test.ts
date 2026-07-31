@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
-import { FaceVm, approach, type ParamWriter } from './faceVm';
+import { FaceVm, approach, type FaceVmOptions, type ParamWriter } from './faceVm';
 import { AffectState } from './affect';
-import { EMOTIONS, FACE_PARAM_GAIN, timelineFor } from './faceData';
+import { ACTIONS, EMOTIONS, FACE_PARAM_GAIN, timelineFor } from './faceData';
 import { FACE_VM_PARAM_MAP, clampStateValue, type FaceStateKey } from './paramMap';
 
 function recorder(): { writer: ParamWriter; last: Map<string, number> } {
@@ -949,9 +949,9 @@ describe('FaceVm — manual gesture single-shot (v0.43.8)', () => {
     expect(peak).toBeGreaterThan(2);
   });
 
-  test('listActions names all nine authored gestures', () => {
+  test('listActions names every authored gesture, derived from the table', () => {
     const { writer } = recorder();
-    expect(new FaceVm(writer).listActions().length).toBe(9);
+    expect(new FaceVm(writer).listActions()).toEqual(Object.keys(ACTIONS));
   });
 });
 
@@ -1105,5 +1105,150 @@ describe('FaceVm — compose mode (v0.43.9)', () => {
     vm.triggerEmotion('__preview__');
     run(vm, 0, 500);
     expect(vm.currentPlayback()).toBeNull();
+  });
+});
+
+// v0.43.11 — listening. Half of every conversation is her NOT talking; these are the two halves of
+// that half: attention while you type, and visible thought while she waits on the model.
+describe('FaceVm — the listening bias (v0.43.11)', () => {
+  // The bias is small and rides UNDER a live idle that also drives headYaw, so an absolute reading
+  // would be measuring the sway. Two VMs on the same clock and the same rng, one listening: the
+  // difference between them IS the bias, and nothing else.
+  function pair(opts: Partial<FaceVmOptions> = {}): { a: FaceVm; b: FaceVm; delta: (t: number) => number } {
+    const ra = recorder();
+    const rb = recorder();
+    const mk = (): FaceVm => new FaceVm(ra.writer, { rng: () => 0.5, idleActionsEnabled: () => false, ...opts });
+    const a = mk();
+    const b = new FaceVm(rb.writer, { rng: () => 0.5, idleActionsEnabled: () => false, ...opts });
+    return {
+      a,
+      b,
+      delta: () => {
+        a.flushPose();
+        b.flushPose();
+        return (ra.last.get('ParamAngleX') ?? 0) - (rb.last.get('ParamAngleX') ?? 0);
+      },
+    };
+  }
+
+  test('turning toward you is a fade, not a jump, and it fades back', () => {
+    const { a: listening, b: control, delta } = pair();
+    run(listening, 0, 500);
+    run(control, 0, 500);
+    expect(Math.abs(delta(500))).toBeLessThan(0.01); // identical until asked
+    listening.setListening(true);
+    expect(listening.isListening()).toBe(true);
+    for (let t = 516; t <= 1516; t += 16) {
+      listening.tick(t);
+      control.tick(t);
+    }
+    expect(Math.abs(delta(1516))).toBeGreaterThan(1); // turned toward the panel
+    listening.setListening(false);
+    for (let t = 1532; t <= 3600; t += 16) {
+      listening.tick(t);
+      control.tick(t);
+    }
+    expect(Math.abs(delta(3600))).toBeLessThan(0.3); // and back, smoothly
+  });
+
+  // The gaze arbitration from v0.13.x is untouched: while mouse-follow owns the eyes, listening must
+  // move the head and body and nothing else.
+  test('listening never writes the eyeballs while gaze-follow owns them', () => {
+    const { writer, writes } = countingWriter();
+    const vm = new FaceVm(writer, { rng: () => 0.5, gazeActive: true, idleActionsEnabled: () => false });
+    vm.setListening(true);
+    for (let i = 0; i < 200; i++) {
+      vm.tick(i * 16);
+      vm.flushPose();
+    }
+    expect(writes.has('ParamEyeBallX')).toBe(false);
+    expect(writes.has('ParamEyeBallY')).toBe(false);
+    expect(writes.has('ParamAngleX')).toBe(true);
+  });
+
+  test('the flag off makes setListening a no-op', () => {
+    const { a: listening, b: control, delta } = pair({ listeningEnabled: () => false });
+    listening.setListening(true);
+    for (let t = 0; t <= 2000; t += 16) {
+      listening.tick(t);
+      control.tick(t);
+    }
+    expect(Math.abs(delta(2000))).toBeLessThan(0.01);
+  });
+});
+
+describe('FaceVm — thinking choreography (v0.43.11)', () => {
+  const THINKING = ['gazeUpRecall', 'browKnit', 'lookAwayThenBack'];
+  const nameOf = (id: string): string => id.split(':')[1] ?? '';
+
+  function collect(vm: FaceVm, ms: number): string[] {
+    const seen = new Set<string>();
+    for (let t = 0; t <= ms; t += 16) {
+      vm.tick(t);
+      for (const id of vm.activeActionIds()) seen.add(nameOf(id));
+    }
+    return [...seen];
+  }
+
+  test('thinking draws from the thinking pool, at the denser cadence', () => {
+    const { writer } = recorder();
+    const vm = new FaceVm(writer, { rng: () => 0.5 });
+    vm.setState('thinking');
+    const fired = collect(vm, 60_000);
+    expect(fired.length).toBeGreaterThan(0);
+    for (const name of fired) expect(THINKING).toContain(name);
+    // 60 s at 3.5–8 s intervals is at least six firings; the set is capped at 3 distinct names, so
+    // count the scheduling instead.
+    let firings = 0;
+    const vm2 = new FaceVm(recorder().writer, { rng: () => 0.5 });
+    vm2.setState('thinking');
+    const live = new Set<string>();
+    for (let t = 0; t <= 60_000; t += 16) {
+      vm2.tick(t);
+      for (const id of vm2.activeActionIds()) {
+        if (!live.has(id)) {
+          live.add(id);
+          firings++;
+        }
+      }
+    }
+    expect(firings).toBeGreaterThanOrEqual(6);
+  });
+
+  test('back to neutral, she goes back to the idle pool and its slower pace', () => {
+    const { writer } = recorder();
+    const vm = new FaceVm(writer, { rng: () => 0.5 });
+    vm.setState('neutral');
+    const fired = collect(vm, 60_000);
+    expect(fired.length).toBeGreaterThan(0);
+    for (const name of fired) expect(THINKING.includes(name) && name !== 'lookAwayThenBack').toBe(false);
+  });
+
+  test('the flag off leaves thinking on the ordinary idle pool', () => {
+    const { writer } = recorder();
+    const vm = new FaceVm(writer, { rng: () => 0.5, listeningEnabled: () => false });
+    vm.setState('thinking');
+    const fired = collect(vm, 60_000);
+    for (const name of fired) expect(['gazeUpRecall', 'browKnit']).not.toContain(name);
+  });
+
+  // v0.43.0's invariant, stated exactly: PERSISTENT layers never write an eyelid; TIME-BOUNDED ones
+  // may, and must release. The two gestures added here take the simple route and declare no eyelid
+  // track at all; `lookAwayThenBack` (reused from the idle pool) does drive them, and v0.43.4
+  // deliberately REJECTED stripping that — so the assertion on it is that it gives them back.
+  test('the new thinking gestures declare no eyelid track', () => {
+    for (const name of ['gazeUpRecall', 'browKnit']) {
+      const tracks = Object.keys(ACTIONS[name]?.tracks ?? {});
+      expect(tracks).not.toContain('eyeOpenL');
+      expect(tracks).not.toContain('eyeOpenR');
+    }
+  });
+
+  test('the one thinking gesture that does drive the eyelids returns them', () => {
+    for (const key of ['eyeOpenL', 'eyeOpenR'] as const) {
+      const kfs = ACTIONS['lookAwayThenBack']?.tracks[key] ?? [];
+      expect(kfs.length).toBeGreaterThan(0);
+      expect(kfs[kfs.length - 1]?.value).toBeCloseTo(kfs[0]?.value ?? -1, 6);
+    }
   });
 });

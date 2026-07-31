@@ -78,13 +78,14 @@ describe('workbenchSections — derived from the engine tables, never hand-liste
     expect(INTENSITY_MARK).toBe(HIGH_INTENSITY);
   });
 
-  test('the flag list covers the five per-tick keys the engine reads', () => {
+  test('the flag list covers every per-tick key the engine reads', () => {
     expect(PERF_FLAGS.map((f) => f.key)).toEqual([
       'luna:gaze-follow',
       'luna:affect',
       'luna:live-peak',
       'luna:short-clips',
       'luna:idle-actions',
+      'luna:listening',
     ]);
   });
 });
@@ -223,7 +224,8 @@ describe('workbenchSections — the gesture section (v0.43.8)', () => {
   test('one button per authored gesture, derived from ACTIONS', () => {
     const section = workbenchSections().find((s) => s.id === 'action');
     expect(section?.controls.map((c) => c.id)).toEqual(Object.keys(ACTIONS));
-    expect(section?.controls.length).toBe(9);
+    // Derived, not counted: v0.43.11 added two thinking gestures and this needed no edit.
+    expect(section?.controls.length).toBe(Object.keys(ACTIONS).length);
   });
 });
 

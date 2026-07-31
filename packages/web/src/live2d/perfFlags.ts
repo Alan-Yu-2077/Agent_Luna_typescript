@@ -13,6 +13,7 @@ export const AFFECT_KEY = 'luna:affect';
 export const LIVE_PEAK_KEY = 'luna:live-peak';
 export const SHORT_CLIPS_KEY = 'luna:short-clips';
 export const IDLE_ACTIONS_KEY = 'luna:idle-actions';
+export const LISTENING_KEY = 'luna:listening';
 export const IDLE_PROFILE_KEY = 'luna:idle-profile';
 
 // Labels match the Avatar settings card word for word — the workbench and the shipped panel must
@@ -23,6 +24,7 @@ export const PERF_FLAGS: readonly PerfFlag[] = [
   { key: LIVE_PEAK_KEY, label: 'Living expressions', hint: 'idle leaks through a playing clip' },
   { key: SHORT_CLIPS_KEY, label: 'Brief performances', hint: '~2.5 s clips instead of ~6 s' },
   { key: IDLE_ACTIONS_KEY, label: 'Idle gestures', hint: 'a gesture every 8–20 s when idle' },
+  { key: LISTENING_KEY, label: 'Attentive listening', hint: 'turns toward you while you type; thinks visibly' },
 ];
 
 export function flagOn(key: string, storage?: Pick<Storage, 'getItem'> | null): boolean {

@@ -134,6 +134,27 @@ const IDLE_ACTION_POOL: ReadonlyArray<{ name: string; v: number; a: number; d: n
 ];
 const IDLE_ACTION_MIN_MS = 8_000;
 const IDLE_ACTION_MAX_MS = 20_000;
+
+// v0.43.11 — while she is thinking, a different pool at a different pace. The scheduler's gate
+// (`!playback && !lip && !sleeping`) already let `thinking` through; all that was missing was
+// something worth playing there. `lookAwayThenBack` is reused ("weighing it"), joined by the two
+// gestures v0.43.11 adds. Mood coefficients stay near zero: what she is thinking about is not the
+// same axis as how she feels, and letting a warm mood pick "recall" would be a coincidence, not a
+// meaning.
+const THINKING_ACTION_POOL: ReadonlyArray<{ name: string; v: number; a: number; d: number }> = [
+  { name: 'gazeUpRecall', v: 0, a: 0.2, d: 0 },
+  { name: 'browKnit', v: -0.2, a: 0.15, d: 0 },
+  { name: 'lookAwayThenBack', v: 0, a: 0, d: -0.15 },
+];
+// Denser than the idle cadence: a pause in a conversation is short, and a gesture every 8–20 s would
+// mean most thinking pauses show nothing at all.
+const THINKING_ACTION_MIN_MS = 3_500;
+const THINKING_ACTION_MAX_MS = 8_000;
+
+// v0.43.11 — the listening bias. Small on purpose: this rides UNDER whatever else is happening and
+// has to read as attention, not as a pose. Head and body only — the eyes are the focus controller's
+// (gaze-follow) or the idle's, and the brows get the faintest "oh?" lift.
+const LISTENING_BIAS: Pose = { headYaw: -3, bodyYaw: -1.5, browLY: 0.05, browRY: 0.05 };
 // Softer than a clip's 0.95: these are things she does while nobody asked, not a performance.
 const IDLE_ACTION_INTENSITY = 0.72;
 // How many recent picks are barred from repeating, so a run never stutters on the same gesture.
@@ -194,6 +215,9 @@ export type FaceVmOptions = {
   idleActionsEnabled?: () => boolean;
   // v0.43.5: per-organ smoothing speeds on top of the frame-rate-independent approach.
   smoothingEnabled?: () => boolean;
+  // v0.43.11 — gates BOTH halves of listening: the typing bias and the thinking gesture pool. One
+  // flag, because they are one behaviour (she attends to the pauses) seen from two sides.
+  listeningEnabled?: () => boolean;
 };
 
 // Simple state-layer biases (kept from v0.13.1; rich speaking/thinking procedural
@@ -232,8 +256,10 @@ export class FaceVm {
   private readonly shortClipsEnabled: () => boolean;
   private readonly idleActionsEnabled: () => boolean;
   private readonly smoothingEnabled: () => boolean;
+  private readonly listeningEnabled: () => boolean;
   private composePose: Pose | null = null;
   private previewDef: EmotionDef | null = null;
+  private listening = false;
   private readonly manualParams = new Map<string, number>();
   private readonly manualRelease = new Set<string>();
   private lastTickAt = -1;
@@ -254,6 +280,7 @@ export class FaceVm {
     this.shortClipsEnabled = opts.shortClipsEnabled ?? (() => true);
     this.idleActionsEnabled = opts.idleActionsEnabled ?? (() => true);
     this.smoothingEnabled = opts.smoothingEnabled ?? (() => true);
+    this.listeningEnabled = opts.listeningEnabled ?? (() => true);
   }
 
   setState(state: Live2DState): void {
@@ -294,6 +321,16 @@ export class FaceVm {
   // must not write gaze; off, the idle wanders the gaze itself.
   setGazeActive(on: boolean): void {
     this.gazeActive = on;
+  }
+
+  // v0.43.11: she notices you typing. A LEVEL, not a pulse — the caller holds it true while there is
+  // input and drops it on a debounce, so per-keystroke jitter is impossible by construction. The bias
+  // is added under everything else and fades in and out through the ordinary smoothing.
+  setListening(on: boolean): void {
+    this.listening = on;
+  }
+  isListening(): boolean {
+    return this.listening;
   }
   // Lip-sync owns the mouth while speaking: a frame overrides the 4 mouth params
   // (raw, post-emotion, no extra smoothing — it's already smoothed); null releases
@@ -443,6 +480,9 @@ export class FaceVm {
       const owned = this.ownedKeys(now);
       const idle = this.applyIdle(target, now, owned); // lowest layer — state/emotion/actions override
       applyPose(target, STATE_BIAS[this.state], owned);
+      // v0.43.11: attention, ADDED so it rides under whatever else is playing rather than replacing
+      // it. Head and body only; the gaze stays with whoever owns it (focus controller or idle).
+      if (this.listening && this.listeningEnabled()) addPose(target, LISTENING_BIAS, owned);
       // v0.42.1: the mood undertone. ADDED, not set — the idle below it is real motion that must
       // survive. Rides under the clip, so a performance still reads cleanly on top of the mood.
       if (mood) addPose(target, affectPose(mood), owned);
@@ -667,13 +707,22 @@ export class FaceVm {
       this.nextIdleActionAt = -1;
       return;
     }
+    // v0.43.11: which pool and which pace, decided per tick from the state — so a reply arriving
+    // (thinking → neutral) returns her to the idle cadence with no extra bookkeeping.
+    const thinking = this.state === 'thinking' && this.listeningEnabled();
+    const pool = thinking ? THINKING_ACTION_POOL : IDLE_ACTION_POOL;
+    const minMs = thinking ? THINKING_ACTION_MIN_MS : IDLE_ACTION_MIN_MS;
+    const maxMs = thinking ? THINKING_ACTION_MAX_MS : IDLE_ACTION_MAX_MS;
+    const reschedule = (): void => {
+      this.nextIdleActionAt = now + minMs + this.rng() * (maxMs - minMs);
+    };
     if (this.nextIdleActionAt < 0) {
-      this.nextIdleActionAt = now + IDLE_ACTION_MIN_MS + this.rng() * (IDLE_ACTION_MAX_MS - IDLE_ACTION_MIN_MS);
+      reschedule();
       return;
     }
     if (now < this.nextIdleActionAt) return;
 
-    const pick = this.pickIdleAction(mood);
+    const pick = this.pickIdleAction(pool, mood);
     if (pick) {
       this.actions.set(`idle:${pick}:${Math.round(now)}`, {
         action: ACTIONS[pick]!,
@@ -683,16 +732,24 @@ export class FaceVm {
       this.recentIdleActions.push(pick);
       if (this.recentIdleActions.length > IDLE_ACTION_MEMORY) this.recentIdleActions.shift();
     }
-    this.nextIdleActionAt = now + IDLE_ACTION_MIN_MS + this.rng() * (IDLE_ACTION_MAX_MS - IDLE_ACTION_MIN_MS);
+    reschedule();
   }
 
   // Weighted by the current mood, so a warm Luna leans in and a guarded one leans back — the same VAD
   // field that tints her face also decides what she does with her hands off the keyboard.
-  private pickIdleAction(mood: Vad | null): string | null {
+  private pickIdleAction(
+    pool: ReadonlyArray<{ name: string; v: number; a: number; d: number }>,
+    mood: Vad | null,
+  ): string | null {
     const v = mood?.valence ?? 0;
     const a = mood?.arousal ?? 0;
     const d = mood?.dominance ?? 0;
-    const candidates = IDLE_ACTION_POOL.filter((c) => !this.recentIdleActions.includes(c.name) && ACTIONS[c.name]);
+    const known = pool.filter((c) => ACTIONS[c.name]);
+    // v0.43.11: the no-repeat memory is 3, and the thinking pool has exactly 3 entries — applied
+    // literally it would starve after three picks and she would stop moving mid-thought. So the
+    // memory is a preference, and a pool with nothing fresh left falls back to all of it.
+    const fresh = known.filter((c) => !this.recentIdleActions.includes(c.name));
+    const candidates = fresh.length > 0 ? fresh : known;
     if (!candidates.length) return null;
     // Never negative: a mood should bias the draw, never veto an action outright.
     const weights = candidates.map((c) => Math.max(0.05, 1 + c.v * v + c.a * a + c.d * d));

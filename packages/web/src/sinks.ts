@@ -34,6 +34,9 @@ export interface Live2DSink {
   // v0.43.8 (workbench): fire one authored gesture by name — the manual counterpart to the clip
   // `actionRefs` and the spontaneous scheduler, which were the only two ways in before.
   playAction?(name: string, intensity?: number): void;
+  // v0.43.11: she is being spoken TO — held true while the user types, dropped on a debounce. A
+  // level, not an event: the sink must be free to fade the bias in and out.
+  setListening?(on: boolean): void;
   // v0.43.8 (workbench, and v0.43.10's costume runtime): wear a raw model parameter, written every
   // frame until released with `null`. Deliberately raw ids: these address drawn assets the parameter
   // vocabulary in `faceData` does not model.

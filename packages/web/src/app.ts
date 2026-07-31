@@ -45,6 +45,9 @@ const DREAM_MIN_MS = 1500;
 // Where the workbench remembers the URL it was opened from, so "← Back" returns to the exact
 // instance (ws port, pet mode and all) rather than a bare '/'.
 const WORKBENCH_RETURN_KEY = 'luna:workbench-return';
+// v0.43.11: how long after the last keystroke she stops leaning in. Long enough to survive thinking
+// mid-sentence, short enough that an abandoned draft does not hold her turned for a minute.
+const TYPING_IDLE_MS = 1500;
 
 async function boot(): Promise<void> {
   const root = document.getElementById('app');
@@ -331,6 +334,7 @@ async function boot(): Promise<void> {
     // Collapsed (log hidden) → the message would otherwise vanish; let it float up and out instead.
     if (isCollapsed) riseBubbles.spawn(text);
     refs.input.value = '';
+    live2d.setListening?.(false); // v0.43.11: the message is gone — nothing left to lean toward
   }
   refs.sendBtn.addEventListener('click', send);
 
@@ -473,6 +477,29 @@ async function boot(): Promise<void> {
     // isComposing covers modern browsers; keyCode 229 is the legacy WebView signal.
     if (e.key === 'Enter' && !e.isComposing && e.keyCode !== 229) send();
   });
+  // v0.43.11: she notices you typing. A LEVEL held while there is input and dropped on a debounce —
+  // a per-keystroke pulse would make her twitch. `send()` clears it directly: the message is gone,
+  // there is nothing left to lean toward, and waiting out the debounce would look like a lag.
+  let typingTimer: ReturnType<typeof setTimeout> | undefined;
+  const setListening = (on: boolean): void => {
+    clearTimeout(typingTimer);
+    typingTimer = undefined;
+    live2d.setListening?.(on);
+  };
+  refs.input.addEventListener('input', () => {
+    if (refs.input.value === '') {
+      setListening(false);
+      return;
+    }
+    live2d.setListening?.(true);
+    clearTimeout(typingTimer);
+    typingTimer = setTimeout(() => live2d.setListening?.(false), TYPING_IDLE_MS);
+  });
+  refs.input.addEventListener('blur', () => setListening(false));
+  refs.input.addEventListener('focus', () => {
+    if (refs.input.value !== '') live2d.setListening?.(true);
+  });
+
   refs.dreamBtn.addEventListener('click', () => client.send({ type: 'dream.enter' }));
   refs.dreamWakeBtn.addEventListener('click', () => client.send({ type: 'dream.wake' }));
 
@@ -516,6 +543,9 @@ async function boot(): Promise<void> {
   });
   refs.idleActionsToggle.addEventListener('change', () => {
     localStorage.setItem('luna:idle-actions', refs.idleActionsToggle.checked ? '1' : '0');
+  });
+  refs.listeningToggle.addEventListener('change', () => {
+    localStorage.setItem('luna:listening', refs.listeningToggle.checked ? '1' : '0');
   });
   refs.idleSelect.addEventListener('change', () => {
     // idle animation switches live (no refresh) — FaceVm swaps the resting profile
