@@ -36,13 +36,15 @@ describe('affectPose — sign correctness', () => {
     expect(p.browLForm!).toBeGreaterThan(0);
   });
 
-  test('arousal opens the eyes and lifts the brows; calm does the opposite to the eyes', () => {
+  test('arousal lifts the brows; being becalmed squints instead', () => {
     const hot = affectPose(vad(0, 0.9, 0));
-    expect(hot.eyeOpenL!).toBeGreaterThan(0);
     expect(hot.browLY!).toBeGreaterThan(0);
 
+    // v0.43.0: arousal no longer touches the eyelids at all (see the eyelid invariant below).
+    // What low arousal still does is narrow the eyes via the SQUINT channel, which is a separate
+    // parameter from the blink one and therefore safe to drive.
     const cold = affectPose(vad(0, -0.9, 0));
-    expect(cold.eyeOpenL!).toBeLessThan(0);
+    expect(cold.eyeSquintL!).toBeGreaterThan(0);
   });
 
   test('submission looks down and tilts; dominance lifts the chin', () => {
@@ -138,6 +140,45 @@ describe('restingState — the pose she relaxes TO', () => {
 
   test('a warm mood rests warmer than a sour one', () => {
     expect(restingState(vad(0.8, 0, 0)).mouthForm).toBeGreaterThan(restingState(vad(-0.8, 0, 0)).mouthForm);
+  });
+});
+
+// --- v0.43.0: the eyelid invariant --------------------------------------------------------------
+
+import { AFFECT_VAD } from './affect';
+
+describe('the eyelid invariant — the mood never touches the blink parameter', () => {
+  // The regression this locks down: v0.42.3 shipped an `eyeOpen` term, and because FaceVm writes
+  // after the built-in CubismEyeBlink, it pinned ParamEyeOpenL at a constant 1.000 for 599 of every
+  // 600 frames. She stopped blinking. Eyelids belong to the blink controller; nothing else may bid.
+  const CORNERS: Vad[] = [];
+  for (const v of [-1, 0, 1]) for (const a of [-1, 0, 1]) for (const d of [-1, 0, 1]) CORNERS.push(vad(v, a, d));
+
+  test('no affect in the table produces an eyeOpen offset', () => {
+    const offenders = Object.entries(AFFECT_VAD)
+      .filter(([, v]) => 'eyeOpenL' in affectPose(v) || 'eyeOpenR' in affectPose(v))
+      .map(([key]) => key);
+    expect(offenders).toEqual([]);
+  });
+
+  test('nor does any of the 27 lattice points of the VAD cube', () => {
+    for (const v of CORNERS) {
+      const pose = affectPose(v);
+      expect('eyeOpenL' in pose).toBe(false);
+      expect('eyeOpenR' in pose).toBe(false);
+    }
+  });
+
+  test('restingState leaves the eyelids at exactly the engine default everywhere', () => {
+    for (const v of CORNERS) {
+      const rest = restingState(v);
+      expect(rest.eyeOpenL).toBe(FACE_VM_DEFAULT_STATE.eyeOpenL);
+      expect(rest.eyeOpenR).toBe(FACE_VM_DEFAULT_STATE.eyeOpenR);
+    }
+  });
+
+  test('the squint channel is still free to carry mood — it is not the blink parameter', () => {
+    expect(affectPose(vad(0, -0.9, 0)).eyeSquintL!).toBeGreaterThan(0);
   });
 });
 

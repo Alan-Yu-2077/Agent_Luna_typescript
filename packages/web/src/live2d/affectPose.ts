@@ -63,17 +63,22 @@ export function affectPose(vad: Vad): Pose {
   // Mouth — the strongest single carrier of valence.
   put(pose, 'mouthForm', positive * 0.13 + calm * positive * 0.05 - negative * 0.1 - calm * negative * 0.04);
 
-  // Eyes: smiling comes from warmth, squint from displeasure-with-standing or from being becalmed,
-  // aperture from arousal (bright and wide when lit up, heavy when low).
+  // Eyes: smiling comes from warmth, squint from displeasure-with-standing or from being becalmed.
+  //
+  // v0.43.0 — the aperture term (`eyeOpen = aroused*0.08 − calm*0.07 − negative*0.035`) is GONE, and
+  // deliberately so. It cost her the blink: FaceVm writes after the built-in CubismEyeBlink, so an
+  // eyeOpen value here pins ParamEyeOpenL every frame (measured: 599 of 600 frames at a constant
+  // 1.000). And it bought nothing — the default state already sits at eyeOpen 1, so `clampStateValue`
+  // discarded the entire positive-arousal half, leaving only the low-arousal half, which widened her
+  // eyes in exactly the moods that should look heavy-lidded. Mood belongs on brows/mouth/gaze; the
+  // eyelids belong to the blink controller. If "wide-eyed" is ever wanted, `eyeSize`
+  // (`Parammetamasize`) is the channel for it — not the blink parameter.
   const eyeSmile = positive * 0.08 + calm * positive * 0.035;
   put(pose, 'eyeSmileL', eyeSmile);
   put(pose, 'eyeSmileR', eyeSmile);
   const eyeSquint = negative * dominant * 0.08 + calm * 0.035;
   put(pose, 'eyeSquintL', eyeSquint);
   put(pose, 'eyeSquintR', eyeSquint);
-  const eyeOpen = aroused * 0.08 - calm * 0.07 - negative * 0.035;
-  put(pose, 'eyeOpenL', eyeOpen);
-  put(pose, 'eyeOpenR', eyeOpen);
 
   // Brows carry most of the readable nuance: height from arousal, inner-raise from distress or
   // deference, angle from displeasure held with authority.

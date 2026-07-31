@@ -106,9 +106,17 @@ export type FaceVmOptions = {
 
 // Simple state-layer biases (kept from v0.13.1; rich speaking/thinking procedural
 // motion is deferred). Applied additively-as-set, skipping emotion-owned keys.
+//
+// v0.43.0 — THE EYELID INVARIANT: no layer may write eyeOpenL/R except `sleeping`. The model's
+// Groups declare `EyeBlink: [ParamEyeOpenL, ParamEyeOpenR]` and the built-in CubismEyeBlink drives
+// them, but FaceVm writes at 'beforeModelUpdate' — i.e. AFTER blink — so any eyeOpen write here
+// wins every frame and the blink never survives. `thinking` used to carry 0.85 (measured: 501/501
+// frames pinned), which is why she stared without blinking while waiting for a reply. The pensive
+// read comes from headPitch/gazeY/brows, not from half-lidded eyes. `sleeping`'s 0 is deliberate
+// and stays — eyes shut is the whole point of that state.
 const STATE_BIAS: Record<Live2DState, Pose> = {
   neutral: {},
-  thinking: { headPitch: -6, gazeY: -0.4, browLForm: -0.3, browRForm: -0.3, eyeOpenL: 0.85, eyeOpenR: 0.85 },
+  thinking: { headPitch: -6, gazeY: -0.4, browLForm: -0.3, browRForm: -0.3 },
   speaking: { headPitch: 2 },
   sleeping: { eyeOpenL: 0, eyeOpenR: 0, headPitch: -10, headRoll: 6 },
 };

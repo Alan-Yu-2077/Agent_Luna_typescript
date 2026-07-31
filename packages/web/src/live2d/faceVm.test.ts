@@ -308,3 +308,92 @@ describe('FaceVm — living baseline (v0.42.2)', () => {
     expect(puckerAfter(0.9, 300)).toBeLessThan(puckerAfter(-0.9, 300));
   });
 });
+
+// --- v0.43.0: she blinks again ------------------------------------------------------------------
+
+describe('FaceVm — the eyelid invariant', () => {
+  // THE INVARIANT: the PERSISTENT layers (idle, state bias, mood) must never write eyeOpen, because
+  // FaceVm writes after the built-in CubismEyeBlink and a persistent writer therefore pins the
+  // parameter forever — she simply stops blinking. The TIME-BOUNDED layers (the 14 hand-authored
+  // clips, the 9 actions) may write it: `playful`'s 0.62/0.94 and `skeptical`'s 0.62/0.86 are
+  // authored asymmetries that carry a lot of her character, and they end. `sleeping` is the one
+  // persistent exception, and shutting her eyes is the entire point of that state.
+  //
+  // Counts every setParam touching an id, not just the last value: the failure mode guarded here is
+  // "written every single frame with the same number", which a last-value probe cannot see.
+  function eyeWrites(opts: {
+    state?: 'neutral' | 'thinking' | 'speaking' | 'sleeping';
+    affectOn?: boolean;
+    expression?: 'bright_delight' | 'shy_softness' | 'annoyed_resistance';
+    fromMs?: number;
+    toMs?: number;
+  }): { l: number; r: number; values: string[] } {
+    const seen: number[] = [];
+    let l = 0;
+    let r = 0;
+    let now = 0;
+    const from = opts.fromMs ?? 0;
+    const writer: ParamWriter = {
+      setParam: (id, v) => {
+        if (now < from) return;
+        if (id === 'ParamEyeOpenL') { l++; seen.push(v); }
+        if (id === 'ParamEyeOpenR') r++;
+      },
+    };
+    const affect = new AffectState();
+    const vm = new FaceVm(writer, { rng: () => 0.5, affect, affectEnabled: () => opts.affectOn ?? true });
+    if (opts.state) vm.setState(opts.state);
+    if (opts.expression) vm.setExpression(opts.expression, 1);
+    for (now = 0; now <= (opts.toMs ?? 9600); now += 16) vm.tick(now);
+    return { l, r, values: [...new Set(seen.map((v) => v.toFixed(3)))] };
+  }
+
+  test('a mood alone never touches the eyelids — 0 writes across 600 frames', () => {
+    // Measured before this version: 599 of 600 frames, every one of them the constant 1.000.
+    const w = eyeWrites({ affectOn: true, toMs: 9600 });
+    expect(w.l).toBe(0);
+    expect(w.r).toBe(0);
+  });
+
+  test('…nor does a sour mood (the negative-arousal half of the removed term)', () => {
+    const w = eyeWrites({ affectOn: true, state: 'speaking', toMs: 9600 });
+    expect(w.l).toBe(0);
+  });
+
+  test('a clip may own the eyelids while it performs — that asymmetry is authored character', () => {
+    // `playful` sustains eyeOpenL 0.62 / eyeOpenR 0.94. Time-bounded, so the blink resumes after.
+    const w = eyeWrites({ affectOn: true, expression: 'shy_softness', toMs: 3000 });
+    expect(w.l).toBeGreaterThan(0);
+  });
+
+  test('…and MUST give them back when it ends — no residue after the timeline', () => {
+    // shy: intro 980 + perform 5600 + outro 1300 ≈ 7.9 s. Sample well past that.
+    const w = eyeWrites({ affectOn: true, expression: 'shy_softness', fromMs: 9000, toMs: 14_000 });
+    expect(w.l).toBe(0);
+    expect(w.r).toBe(0);
+  });
+
+  test('thinking no longer stares — this path predates v0.42.3 and was never affect-related', () => {
+    // Measured before this version: 501 of 501 frames pinned at a constant 0.85.
+    const w = eyeWrites({ state: 'thinking', affectOn: false, toMs: 8000 });
+    expect(w.l).toBe(0);
+    expect(w.r).toBe(0);
+  });
+
+  test('sleeping still shuts her eyes — the one deliberate writer, not collateral damage', () => {
+    const w = eyeWrites({ state: 'sleeping', affectOn: false, toMs: 3200 });
+    expect(w.l).toBeGreaterThan(100);
+    expect(w.values).toContain('0.000');
+  });
+
+  test('the rest of the face is untouched: mood still reaches mouth, smile and brows', () => {
+    const { writer, last } = recorder();
+    const affect = new AffectState({ ambient: 0 });
+    const vm = new FaceVm(writer, { rng: () => 0.5, affect, affectEnabled: () => true });
+    vm.setExpression('bright_delight', 1);
+    run(vm, 0, 20_000);
+    expect(last.get('ParamMouthForm') ?? 0).toBeGreaterThan(0.1);
+    expect(last.get('ParamEyeSmileL') ?? 0).toBeGreaterThan(0.1);
+    expect(last.get('ParamBrowYL') ?? 0).toBeGreaterThan(0.05);
+  });
+});
