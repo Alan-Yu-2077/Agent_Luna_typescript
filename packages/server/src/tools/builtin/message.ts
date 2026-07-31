@@ -31,14 +31,23 @@ const Input = z
       .max(MAX_CHARS)
       .describe(`what you say to the user, spoken style, at most ${MAX_CHARS} characters`),
     expression: ExpressionKey.optional().describe(
-      'how your face/body reads while saying this; pick the closest key',
+      'how your face/body reads while saying this; pick the closest key. A few carry drawn extras: ' +
+        'bright_delight gives you heart eyes, playful_brightness star eyes, shy_softness a blush, ' +
+        'a mild awkward_lightness swirl eyes. Your mood lingers — a strong affect keeps tinting ' +
+        'your resting face for tens of seconds after the clip ends.',
     ),
     emotion: z
       .number()
       .min(0)
       .max(1)
       .optional()
-      .describe('expression intensity, 0 = barely visible, 1 = full'),
+      .describe(
+        'expression intensity, 0 = barely visible, 1 = full. At 0.7 and above some affects ' +
+          'escalate into a different performance: annoyed_resistance becomes a cheek-puffed sulk, ' +
+          'awkward_lightness properly flustered, guarded_distance a defensive bristle, ' +
+          'gentle_concern visible dismay with welling tears. Omitting it never escalates — pass a ' +
+          'high value deliberately when the moment calls for it.',
+      ),
     voice_params: VoiceParams.optional().describe('per-message TTS overrides; usually omit'),
     is_final: z
       .boolean()

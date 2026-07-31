@@ -92,6 +92,44 @@ describe('message input schema (humanity caps as Zod)', () => {
   });
 });
 
+// v0.43.6 — the tool schema is the only thing present on every single turn, so it is the only place
+// the performance levers can be taught. Keyword assertions, not full text: the wording will be tuned
+// against the workbench, and pinning prose would turn every re-tune into a red suite.
+describe('message schema teaches the performance levers', () => {
+  const describeOf = (field: string): string => {
+    const raw = zodToJsonSchema(messageTool.input, { $refStrategy: 'none' }) as {
+      properties: Record<string, { description?: string }>;
+    };
+    return raw.properties[field]?.description ?? '';
+  };
+
+  test('expression names the drawn extras and the lingering mood', () => {
+    const d = describeOf('expression');
+    expect(d).toContain('heart eyes');
+    expect(d).toContain('star eyes');
+    expect(d).toContain('lingers');
+  });
+
+  test('emotion states the 0.7 escalation and that omitting never escalates', () => {
+    const d = describeOf('emotion');
+    expect(d).toContain('0.7');
+    expect(d).toContain('escalate');
+    expect(d).toContain('Omitting it never escalates');
+  });
+
+  test('every escalating affect is named by its wire key', () => {
+    const d = describeOf('emotion');
+    for (const key of [
+      'annoyed_resistance',
+      'awkward_lightness',
+      'guarded_distance',
+      'gentle_concern',
+    ]) {
+      expect(d).toContain(key);
+    }
+  });
+});
+
 describe('message execute (delivery envelope)', () => {
   test('derives segments with pacing metadata', async () => {
     const e = await run({ text: '你好。今天的雪很大，我有点想出去看看！', is_final: true });
