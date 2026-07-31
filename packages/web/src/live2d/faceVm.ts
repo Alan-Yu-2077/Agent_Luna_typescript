@@ -28,7 +28,7 @@ import {
 } from './faceData';
 import { affectToEmotion } from './expressionMap';
 import type { AffectState } from './affect';
-import { affectPose } from './affectPose';
+import { affectPose, restingState } from './affectPose';
 
 // The high-fidelity FaceVM (v0.13.2) — a faithful port of Python's layered
 // engine. Per tick: idle profile (procedural resting motion) → state bias →
@@ -204,23 +204,34 @@ export class FaceVm {
     this.consumePending(now);
     this.updatePlayback(now);
 
-    const target: Record<FaceStateKey, number> = { ...FACE_VM_DEFAULT_STATE };
+    // The mood advances once per frame, before anything reads it — and it advances even when the
+    // layer is disabled, so flipping the flag mid-session never snaps the face.
+    this.affect?.tick(now);
+    const mood = this.affect && this.affectEnabled() ? this.affect.current : null;
+
+    // v0.42.2: the pose she relaxes TO is a function of mood. With no mood this is exactly
+    // FACE_VM_DEFAULT_STATE, so both the target and the write-gate below stay bit-identical.
+    const rest = mood ? restingState(mood) : FACE_VM_DEFAULT_STATE;
+
+    const target: Record<FaceStateKey, number> = { ...rest };
     const owned = this.ownedKeys(now);
     this.applyIdle(target, now, owned); // lowest layer — state/emotion/actions override
     applyPose(target, STATE_BIAS[this.state], owned);
     // v0.42.1: the mood undertone. ADDED, not set — the idle below it is real motion that must
     // survive. Rides under the clip, so a performance still reads cleanly on top of the mood.
-    // The state is ticked even when the layer is off, so enabling it mid-session doesn't snap.
-    if (this.affect) {
-      this.affect.tick(now);
-      if (this.affectEnabled()) addPose(target, affectPose(this.affect.current), owned);
-    }
+    if (mood) addPose(target, affectPose(mood), owned);
     this.applyEmotion(target, now);
     this.applyActions(target, now);
 
-    const sm = this.state === 'sleeping' ? 0.34 : this.state === 'thinking' ? 0.24 : 0.18;
+    const smBase = this.state === 'sleeping' ? 0.34 : this.state === 'thinking' ? 0.24 : 0.18;
+    // v0.42.2 (`deriveParameterSmoothing`, absorbed): an agitated face should move snappier and a
+    // becalmed one languid. Larger sm = faster approach here; bounded either way so no mood can make
+    // her either twitchy or syrupy.
+    const sm = mood
+      ? Math.max(smBase * 0.6, Math.min(smBase * 1.6, smBase * (1 + 0.55 * mood.arousal)))
+      : smBase;
     for (const key of FACE_STATE_KEYS) {
-      const def = FACE_VM_DEFAULT_STATE[key];
+      const def = rest[key];
       let next = this.cur[key] + (target[key] - this.cur[key]) * sm;
       if (Math.abs(target[key] - next) < 0.001) next = target[key];
       this.cur[key] = next;

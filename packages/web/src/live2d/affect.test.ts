@@ -13,8 +13,10 @@ function run(s: AffectState, seconds: number, from = 0, stepMs = 16): number {
 }
 
 // A fresh state whose clock has been started (the first tick only initialises `last`).
+// Ambient drift is OFF by default here: these cases test the core dynamics, and a wandering offset
+// would blur every assertion about where the state actually settles. Drift has its own block below.
 function started(opts?: ConstructorParameters<typeof AffectState>[0]): { s: AffectState; t: number } {
-  const s = new AffectState(opts);
+  const s = new AffectState({ ambient: 0, ...opts });
   s.tick(0);
   return { s, t: 0 };
 }
@@ -230,5 +232,87 @@ describe('AffectState — robustness', () => {
     s.setBaseline({ valence: 0.5 });
     run(s, 400, t);
     expect(s.current.valence).toBeCloseTo(0.5, 1);
+  });
+});
+
+// --- v0.42.2: ambient drift -------------------------------------------------------------------
+
+// A deterministic rng that sweeps 0..1 so the drift picks span its whole range across re-picks.
+function sweepRng(): () => number {
+  let i = 0;
+  const seq = [0, 0.13, 0.29, 0.5, 0.71, 0.87, 1, 0.42, 0.66, 0.08];
+  return () => seq[i++ % seq.length]!;
+}
+
+describe('AffectState — ambient drift (v0.42.2)', () => {
+  test('drift is bounded: it never exceeds the stated magnitude on any axis', () => {
+    const s = new AffectState({ rng: sweepRng() });
+    s.tick(0);
+    let t = 0;
+    let maxV = 0;
+    let maxA = 0;
+    let maxD = 0;
+    for (let i = 0; i < 4000; i++) {
+      t += 16;
+      s.tick(t);
+      maxV = Math.max(maxV, Math.abs(s.current.valence));
+      maxA = Math.max(maxA, Math.abs(s.current.arousal));
+      maxD = Math.max(maxD, Math.abs(s.current.dominance));
+    }
+    expect(maxV).toBeLessThanOrEqual(0.05 + 1e-9);
+    expect(maxA).toBeLessThanOrEqual(0.07 + 1e-9);
+    expect(maxD).toBeLessThanOrEqual(0.03 + 1e-9);
+  });
+
+  test('drift does NOT walk the mood away — she wanders around rest, she does not leave it', () => {
+    const s = new AffectState({ rng: sweepRng() });
+    s.tick(0);
+    let t = 0;
+    for (let i = 0; i < 20000; i++) {
+      t += 16;
+      s.tick(t);
+    }
+    // Five minutes of wandering later, still within one drift magnitude of baseline.
+    expect(Math.abs(s.current.valence)).toBeLessThanOrEqual(0.05 + 1e-9);
+    expect(Math.abs(s.current.arousal)).toBeLessThanOrEqual(0.07 + 1e-9);
+  });
+
+  test('drift actually moves her — a settled state is not mathematically frozen', () => {
+    const s = new AffectState({ rng: sweepRng() });
+    s.tick(0);
+    const seen = new Set<string>();
+    let t = 0;
+    for (let i = 0; i < 3000; i++) {
+      t += 16;
+      s.tick(t);
+      seen.add(s.current.arousal.toFixed(4));
+    }
+    expect(seen.size).toBeGreaterThan(20);
+  });
+
+  test('ambient: 0 is exactly still — the byte-identity regressions depend on this', () => {
+    const s = new AffectState({ ambient: 0, rng: sweepRng() });
+    s.tick(0);
+    let t = 0;
+    for (let i = 0; i < 500; i++) {
+      t += 16;
+      s.tick(t);
+    }
+    expect(s.current).toEqual({ valence: 0, arousal: 0, dominance: 0 });
+  });
+
+  test('determinism holds with a seeded rng', () => {
+    const mk = (): AffectState => {
+      const s = new AffectState({ rng: sweepRng() });
+      s.tick(0);
+      let t = 0;
+      s.nudge('playful_brightness', 0.7);
+      for (let i = 0; i < 300; i++) {
+        t += 16;
+        s.tick(t);
+      }
+      return s;
+    };
+    expect(mk().current).toEqual(mk().current);
   });
 });

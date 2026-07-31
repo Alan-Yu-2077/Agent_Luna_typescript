@@ -105,3 +105,38 @@ describe('affectPose — purity', () => {
     expect(input).toEqual(snapshot);
   });
 });
+
+// --- v0.42.2: the living baseline ---------------------------------------------------------------
+
+import { restingState } from './affectPose';
+import { FACE_STATE_KEYS, FACE_VM_DEFAULT_STATE, clampStateValue } from './paramMap';
+
+describe('restingState — the pose she relaxes TO', () => {
+  test('at a dead-neutral mood it is EXACTLY the old default (the zero-at-rest guarantee)', () => {
+    expect(restingState(vad(0, 0, 0))).toEqual(FACE_VM_DEFAULT_STATE);
+  });
+
+  test('a mood shifts the resting pose by exactly REST_SHARE of the undertone', () => {
+    const v = vad(0.8, 0, 0);
+    const offset = affectPose(v).mouthForm!;
+    const rest = restingState(v);
+    expect(rest.mouthForm - FACE_VM_DEFAULT_STATE.mouthForm).toBeCloseTo(offset * 0.6, 9);
+  });
+
+  test('every channel stays inside its per-key clamp at all 8 VAD corners', () => {
+    for (const a of [-1, 1]) {
+      for (const b of [-1, 1]) {
+        for (const c of [-1, 1]) {
+          const rest = restingState(vad(a, b, c));
+          for (const k of FACE_STATE_KEYS) {
+            expect(rest[k]).toBe(clampStateValue(k, rest[k]));
+          }
+        }
+      }
+    }
+  });
+
+  test('a warm mood rests warmer than a sour one', () => {
+    expect(restingState(vad(0.8, 0, 0)).mouthForm).toBeGreaterThan(restingState(vad(-0.8, 0, 0)).mouthForm);
+  });
+});

@@ -1,6 +1,6 @@
 import type { Vad } from './affect';
 import type { Pose } from './faceData';
-import type { FaceStateKey } from './paramMap';
+import { FACE_STATE_KEYS, FACE_VM_DEFAULT_STATE, clampStateValue, type FaceStateKey } from './paramMap';
 
 // VAD → face undertone (Initiative 29, v0.42.1).
 //
@@ -91,4 +91,26 @@ export function affectPose(vad: Vad): Pose {
   put(pose, 'cheekPuff', positive * submissive * 0.16);
 
   return pose;
+}
+
+// How much of the undertone is baked into REST rather than only added on top. The rest of the offset
+// still applies as a live layer, so a mood reads a little stronger while it is fresh.
+const REST_SHARE = 0.6;
+
+// v0.42.2, absorbed from the SDK's `deriveNeutralParams`: the pose she RELAXES TO is itself a
+// function of mood. This is the difference between "she reacts, then returns to zero" and "she
+// reacts, then returns to how she currently feels" — and it is what the smoother pulls toward and
+// what the write-gate compares against, so it changes resting behaviour, not just peaks.
+//
+// At a zero VAD this returns FACE_VM_DEFAULT_STATE exactly, which is what keeps the disabled path
+// and the at-rest path byte-identical to the pre-v0.42.x engine.
+export function restingState(vad: Vad): Record<FaceStateKey, number> {
+  const offset = affectPose(vad);
+  const out = { ...FACE_VM_DEFAULT_STATE };
+  for (const key of FACE_STATE_KEYS) {
+    const d = offset[key];
+    if (d === undefined) continue;
+    out[key] = clampStateValue(key, out[key] + d * REST_SHARE);
+  }
+  return out;
 }

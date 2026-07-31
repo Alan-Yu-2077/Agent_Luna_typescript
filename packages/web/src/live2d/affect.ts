@@ -25,6 +25,10 @@ export type AffectOptions = {
   holdSeconds?: number; // intensity-scaled hold ON TOP of a 6 s floor
   reactivity?: number; // global impulse gain — 0 makes her affectively flat
   baseline?: Vad; // her resting temperament; decay pulls here, not to zero
+  // v0.42.2: ambient drift scale. 1 = the default wander; 0 = mathematically still (used by the
+  // byte-identity regressions, which need a state that provably contributes nothing).
+  ambient?: number;
+  rng?: () => number; // injectable for deterministic tests, matching the FaceVm convention
 };
 
 // Dead neutral, deliberately. A non-zero resting temperament is the whole subject of v0.42.2 (the
@@ -44,6 +48,13 @@ const DEFAULTS = {
 // focus, so the per-tick advance is capped regardless of wall-clock gap.
 const MAX_DT_SECONDS = 0.25;
 const HOLD_FLOOR_SECONDS = 6;
+
+// v0.42.2 ambient drift, absorbed from the SDK's wandering offset. A settled state is mathematically
+// still, and a mathematically still face reads as frozen — this keeps her breathing emotionally
+// without ever walking the mood away from where it settled (it is an OFFSET, never integrated).
+const AMBIENT_MAGNITUDE: Vad = { valence: 0.05, arousal: 0.07, dominance: 0.03 };
+const AMBIENT_MIN_MS = 1700;
+const AMBIENT_SPAN_MS = 4200;
 
 // All 15 affects as VAD coordinates — no fan-in. The existing AFFECT_TO_EMOTION collapses these to 11
 // clips (three of them land on `tender` alone); that lookup still governs the CLIP layer, but the
@@ -96,14 +107,31 @@ export class AffectState {
   private holdRemaining = 0;
   private last = -1; // <0 = initialise the clock on the next tick (dt 0, no jump)
 
+  private readonly ambientScale: number;
+  private readonly rng: () => number;
+  private ambient: Vad = { valence: 0, arousal: 0, dominance: 0 };
+  private ambientUntil = -1; // <0 = pick one on the next tick
+
   constructor(opts: AffectOptions = {}) {
     this.approachRate = opts.approachRate ?? DEFAULTS.approachRate;
     this.decayRate = opts.decayRate ?? DEFAULTS.decayRate;
     this.holdSeconds = opts.holdSeconds ?? DEFAULTS.holdSeconds;
     this.reactivity = opts.reactivity ?? DEFAULTS.reactivity;
+    this.ambientScale = Math.max(0, opts.ambient ?? 1);
+    this.rng = opts.rng ?? (() => Math.random());
     this.base = copy(opts.baseline ?? DEFAULT_BASELINE);
     this.cur = copy(this.base);
     this.target = copy(this.base);
+  }
+
+  private repickAmbient(now: number): void {
+    const s = this.ambientScale;
+    this.ambient = {
+      valence: (this.rng() * 2 - 1) * AMBIENT_MAGNITUDE.valence * s,
+      arousal: (this.rng() * 2 - 1) * AMBIENT_MAGNITUDE.arousal * s,
+      dominance: (this.rng() * 2 - 1) * AMBIENT_MAGNITUDE.dominance * s,
+    };
+    this.ambientUntil = now + AMBIENT_MIN_MS + this.rng() * AMBIENT_SPAN_MS;
   }
 
   // An affect never SETS the state — it perturbs the target, which is what makes two messages with
@@ -125,10 +153,22 @@ export class AffectState {
     this.last = now;
     if (dt === 0) return;
 
+    // The wander is re-picked on its own slow schedule, far slower than the smoother's response, so
+    // it reads as life rather than jitter. Scale 0 keeps `ambient` at exactly zero.
+    if (this.ambientScale > 0 && (this.ambientUntil < 0 || now >= this.ambientUntil)) {
+      this.repickAmbient(now);
+    }
+
     // Frame-rate independent exponential approach: the same wall-clock produces the same motion at
-    // 30 fps and 144 fps.
+    // 30 fps and 144 fps. `current` chases the target PLUS the wander — the wander never enters the
+    // target itself, so it can never accumulate into a drifting mood.
     const approach = 1 - Math.exp(-dt * this.approachRate);
-    this.cur = lerpVad(this.cur, this.target, approach);
+    const chased: Vad = {
+      valence: this.target.valence + this.ambient.valence,
+      arousal: this.target.arousal + this.ambient.arousal,
+      dominance: this.target.dominance + this.ambient.dominance,
+    };
+    this.cur = lerpVad(this.cur, chased, approach);
 
     // The hold is what makes a mood *stick* right after it lands, instead of starting to fade the
     // instant it arrives.
@@ -162,6 +202,8 @@ export class AffectState {
     this.target = copy(this.base);
     this.holdRemaining = 0;
     this.last = -1;
+    this.ambient = { valence: 0, arousal: 0, dominance: 0 };
+    this.ambientUntil = -1;
   }
 }
 

@@ -175,9 +175,12 @@ function streamRecorder(): { writer: ParamWriter; stream: string[] } {
   return { writer: { setParam: (id, v) => stream.push(`${id}=${v.toFixed(9)}`) }, stream };
 }
 
+// `ambient: 0` so the mood contributes exactly nothing until it is nudged — the byte-identity
+// regressions below are about the LAYER being silent, not about drift being absent (drift has its
+// own coverage in affect.test.ts, and it is deliberately alive in production).
 function runWithAffect(on: boolean, drive?: (vm: FaceVm) => void): string[] {
   const { writer, stream } = streamRecorder();
-  const affect = new AffectState();
+  const affect = new AffectState({ ambient: 0 });
   const vm = new FaceVm(writer, { rng: () => 0.5, affect, affectEnabled: () => on });
   drive?.(vm);
   run(vm, 0, 4000);
@@ -244,12 +247,64 @@ describe('FaceVm — affect undertone (v0.42.1)', () => {
     expect(last.get('ParamMouthForm')).toBeCloseTo(0.3, 6);
   });
 
-  test('a clip that owns a channel is not muddied by the mood while it performs', () => {
-    // `shy` owns the mouth; during perform the mouth must match the no-affect run exactly.
+  test('a clip that owns a channel converges to the SAME value with or without a mood', () => {
+    // `shy` owns the mouth. Since v0.42.2 the smoothing rate itself is arousal-dependent, so the two
+    // runs take slightly different *paths* — what must not change is where an owned channel lands.
     const pluck = (s: string[], id: string): number[] =>
       s.filter((e) => e.startsWith(`${id}=`)).map((e) => Number(e.split('=')[1]));
     const off = runWithAffect(false, (vm) => vm.setExpression('shy_softness', 1));
     const on = runWithAffect(true, (vm) => vm.setExpression('shy_softness', 1));
-    expect(pluck(on, 'ParamMouthpucker')).toEqual(pluck(off, 'ParamMouthpucker'));
+    const a = pluck(on, 'ParamMouthpucker');
+    const b = pluck(off, 'ParamMouthpucker');
+    expect(a.length).toBe(b.length);
+    expect(a[a.length - 1]!).toBeCloseTo(b[b.length - 1]!, 2);
+  });
+});
+
+describe('FaceVm — living baseline (v0.42.2)', () => {
+  // THE INITIATIVE'S HEADLINE CLAIM, asserted numerically: the clip is a performance, the mood is
+  // what remains. Run well past intro+perform+outro and the face must still be displaced.
+  test('the mood outlives the clip by a wide margin', () => {
+    const readAt = (on: boolean, endMs: number): Map<string, number> => {
+      const { writer, last } = recorder();
+      const affect = new AffectState({ ambient: 0 });
+      const vm = new FaceVm(writer, { rng: () => 0.5, affect, affectEnabled: () => on });
+      vm.setExpression('bright_delight', 1);
+      run(vm, 0, endMs);
+      return last;
+    };
+    // 25 s is far past any clip timeline in faceData (longest ≈ 8.5 s total).
+    const withMood = readAt(true, 25_000);
+    const without = readAt(false, 25_000);
+
+    const form = (m: Map<string, number>): number => m.get('ParamMouthForm') ?? 0;
+    expect(form(withMood)).toBeGreaterThan(form(without) + 0.01);
+  });
+
+  test('the resting pose itself moved — a sour mood rests differently from a bright one', () => {
+    const restAfter = (key: 'bright_delight' | 'annoyed_resistance'): number => {
+      const { writer, last } = recorder();
+      const affect = new AffectState({ ambient: 0 });
+      const vm = new FaceVm(writer, { rng: () => 0.5, affect, affectEnabled: () => true });
+      vm.setExpression(key, 1);
+      run(vm, 0, 20_000);
+      return last.get('ParamMouthForm') ?? 0;
+    };
+    expect(restAfter('bright_delight')).toBeGreaterThan(restAfter('annoyed_resistance'));
+  });
+
+  test('smoothing follows arousal: an alert mood converges faster than a becalmed one', () => {
+    // Probe `mouthPucker`: the `shy` clip drives it hard, and affectPose deliberately never touches
+    // it — so the ONLY thing differing between the two runs is the arousal-modulated smoothing rate.
+    const puckerAfter = (arousal: number, ms: number): number => {
+      const { writer, last } = recorder();
+      const affect = new AffectState({ ambient: 0, baseline: { valence: 0, arousal, dominance: 0 } });
+      const vm = new FaceVm(writer, { rng: () => 0.5, affect, affectEnabled: () => true });
+      vm.triggerEmotion('shy', 1);
+      run(vm, 0, ms);
+      return last.get('ParamMouthpucker') ?? 0;
+    };
+    // Early in the intro the alert run has travelled further toward the (negative) target.
+    expect(puckerAfter(0.9, 300)).toBeLessThan(puckerAfter(-0.9, 300));
   });
 });
