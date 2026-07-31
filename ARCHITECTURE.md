@@ -121,6 +121,21 @@ A framework-free TypeScript app.
 - **`live2d/`** — the avatar: a PIXI + Live2D Cubism renderer, an expression/pose mapper, gaze-follow, and
   a lip-sync engine that drives the mouth parameter from audio. (The Live2D Cubism Core runtime is
   proprietary and vendored as a pre-built file — see [`THIRD_PARTY_LICENSES`](THIRD_PARTY_LICENSES).)
+
+  The face is a **layered per-frame engine**, not a preset switcher. `FaceVm` composes, in order:
+  procedural **idle** (five selectable profiles) → coarse **state bias** (neutral/thinking/speaking/
+  sleeping) → the **mood undertone** → the **emotion clip** (intro→perform→outro) → **staggered
+  actions** → smoothing → per-channel gain and clamp, writing 33 named channels to raw Cubism
+  parameter ids. Each layer skips the channels an upper layer *owns*, which is how lip-sync keeps the
+  mouth and gaze-follow keeps the eyes without any layer knowing about the others.
+
+  The mood undertone is the continuous half (Initiative 29). An affect arriving on the wire is an
+  **impulse** into a 3-axis VAD field (`affect.ts`), not a selection: a fast `current` chases a
+  slowly-decaying `target`, so a mood *outlives the clip that announced it* instead of snapping back
+  to neutral. `affectPose.ts` projects that field onto the 33 channels as a small additive offset and
+  — the part that makes it a mood rather than a tint — also moves the **resting pose itself**, so "at
+  rest" means "at rest in this mood". Arousal modulates the smoothing rate, and a bounded ambient
+  wander keeps a settled state from reading as frozen. `luna:affect = '0'` opts out.
 - **`audio/`** + **`sinks.ts`** — TTS playback with a serial speech queue (one utterance finishes before
   the next starts) and pluggable audio sinks; a text-only degrade path keeps working when no voice
   backend is configured.

@@ -5,7 +5,7 @@ import { FaceVm } from './faceVm';
 import { createGlide } from './glide';
 import { petFraming } from './petFraming';
 import { DEFAULT_IDLE_PROFILE, IDLE_PROFILE_IDS, type IdleProfileId } from './faceData';
-import { AffectState } from './affect';
+import { AffectState, describeAffect } from './affect';
 
 // The real Live2DSink: loads the configured Live2D model via pixi-live2d-display, drives it through a
 // FaceVm on the pixi ticker, and makes it draggable with a persisted offset. Returns null when no model
@@ -43,13 +43,14 @@ function saveZoom(z: number): void {
 function gazeFollowEnabled(): boolean {
   return localStorage.getItem(GAZE_KEY) !== '0';
 }
-// v0.42.1: the continuous mood undertone. Opt-IN this version (the repo's pattern for anything that
-// can change how she looks), read per tick so it can be flipped from the console without a reload.
+// v0.42.3: the continuous mood undertone is now the default — `luna:affect = '0'` is the escape
+// hatch, matching how every other proven feature in this repo is gated. Read per tick so the
+// settings toggle takes effect live, with no reload.
 function affectEnabled(): boolean {
   try {
-    return localStorage.getItem(AFFECT_KEY) === '1';
+    return localStorage.getItem(AFFECT_KEY) !== '0';
   } catch {
-    return false;
+    return true;
   }
 }
 function loadIdleProfile(): IdleProfileId {
@@ -232,6 +233,8 @@ export async function createPixiLive2DSink(
     (globalThis as unknown as Record<string, unknown>)['__lunaDbg'] = {
       model,
       faceVm,
+      affect,
+      mood: () => describeAffect(affect.current),
       param: (id: string) =>
         (
           model.internalModel.coreModel as unknown as { getParameterValueById(id: string): number }

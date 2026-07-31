@@ -209,3 +209,24 @@ export class AffectState {
 
 // Exported for tests that need to assert axis-wise properties without hardcoding key names.
 export const VAD_AXES = AXES;
+
+// v0.42.3: the state is invisible by construction, which makes it hard to trust. This turns a VAD
+// vector into something a human can read at a glance on the `?dev` bridge or in a log line.
+function band(value: number, words: readonly string[]): string {
+  // Split −1..1 into `words.length` equal bands; the top edge belongs to the last band.
+  const idx = Math.min(words.length - 1, Math.floor(((value + 1) / 2) * words.length));
+  return words[Math.max(0, idx)]!;
+}
+
+const VALENCE_WORDS = ['cold', 'reserved', 'neutral', 'warm', 'radiant'] as const;
+const AROUSAL_WORDS = ['drowsy', 'calm', 'present', 'alert', 'electric'] as const;
+const DOMINANCE_WORDS = ['yielding', 'even', 'assertive'] as const;
+
+function signed(v: number): string {
+  return `${v < 0 ? '−' : '+'}${Math.abs(v).toFixed(2)}`;
+}
+
+export function describeAffect(vad: Vad): string {
+  const words = `${band(vad.valence, VALENCE_WORDS)} · ${band(vad.arousal, AROUSAL_WORDS)} · ${band(vad.dominance, DOMINANCE_WORDS)}`;
+  return `${words} (v${signed(vad.valence)} a${signed(vad.arousal)} d${signed(vad.dominance)})`;
+}

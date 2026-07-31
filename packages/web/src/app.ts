@@ -462,6 +462,11 @@ async function boot(): Promise<void> {
     localStorage.setItem('luna:gaze-follow', refs.gazeToggle.checked ? '1' : '0');
     live2d.setGazeFollow?.(refs.gazeToggle.checked);
   });
+  refs.affectToggle.addEventListener('change', () => {
+    // v0.42.3: mood memory takes effect live — the sink re-reads this key every tick, so turning it
+    // off drops the undertone on the next frame without disturbing anything else.
+    localStorage.setItem('luna:affect', refs.affectToggle.checked ? '1' : '0');
+  });
   refs.idleSelect.addEventListener('change', () => {
     // idle animation switches live (no refresh) — FaceVm swaps the resting profile
     localStorage.setItem('luna:idle-profile', refs.idleSelect.value);

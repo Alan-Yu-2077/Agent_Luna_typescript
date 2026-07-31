@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { AFFECT_VAD, AffectState, DEFAULT_BASELINE, VAD_AXES, type Vad } from './affect';
+import { AFFECT_VAD, AffectState, DEFAULT_BASELINE, VAD_AXES, describeAffect, type Vad } from './affect';
 
 // Drive the state with an explicit clock so every assertion is deterministic arithmetic, not feel.
 function run(s: AffectState, seconds: number, from = 0, stepMs = 16): number {
@@ -314,5 +314,33 @@ describe('AffectState — ambient drift (v0.42.2)', () => {
       return s;
     };
     expect(mk().current).toEqual(mk().current);
+  });
+});
+
+// --- v0.42.3: the readout -----------------------------------------------------------------------
+
+describe('describeAffect (v0.42.3)', () => {
+  test('a neutral state reads neutral, with a signed two-decimal tail', () => {
+    expect(describeAffect({ valence: 0, arousal: 0, dominance: 0 })).toBe(
+      'neutral · present · even (v+0.00 a+0.00 d+0.00)',
+    );
+  });
+
+  test('the extremes hit the outer bands on every axis', () => {
+    expect(describeAffect({ valence: 1, arousal: 1, dominance: 1 })).toContain('radiant · electric · assertive');
+    expect(describeAffect({ valence: -1, arousal: -1, dominance: -1 })).toContain('cold · drowsy · yielding');
+  });
+
+  test('a warm, calm, deferring mood reads as words a human can check', () => {
+    const s = describeAffect({ valence: 0.55, arousal: -0.15, dominance: -0.4 });
+    expect(s).toContain('warm');
+    expect(s).toContain('yielding');
+    expect(s).toContain('v+0.55');
+    expect(s).toContain('a−0.15'); // negative uses a real minus sign, not a hyphen
+  });
+
+  test('bands are monotonic across the range', () => {
+    const words = [-1, -0.5, 0, 0.5, 1].map((v) => describeAffect({ valence: v, arousal: 0, dominance: 0 }).split(' ')[0]);
+    expect(new Set(words).size).toBeGreaterThan(3);
   });
 });
