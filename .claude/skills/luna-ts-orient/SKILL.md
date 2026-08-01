@@ -44,6 +44,28 @@ remote (`Agent_Luna_typescript.git`, public, branch `main`); `github.com/Alan-Yu
 ARCHIVED read-only showcase and no longer a remote here. There are no installers or releases, and no
 distribution/packaging/platform work may be proposed. See `luna-ts-dev`'s header for the full list.
 
+## The Live2D workbench (v0.43.7–v0.43.9) — the debugging surface for the face
+
+`http://127.0.0.1:5177/?workbench=1` (or any browser pointed at the desktop shell's static server;
+`&model=<url>` overrides model resolution). An early-exit URL mode beside `?setup` — **no WS, no chat
+UI, no boot gate** — that mounts the *same* `createPixiLive2DSink` on the shipped bundle. Not a second
+app: a bench with its own renderer would let a face be tuned that the app then performs differently.
+
+- Every 15 affects / 14 clips / 4 states / 5 idle profiles / 9 gestures as a button, all **derived
+  from the engine's own tables** (`ExpressionKey.options`, `EMOTIONS`, `ACTIONS`, `IDLE_PROFILES`).
+- All 17 shipped `.exp3.json` assets try-on-able, split emotion / costume; emotional rows light up
+  while the clip layer drives them. The five costume items persist via `luna:costume`.
+- A 35-channel **pose composer**: freezes every living layer but keeps the gain path, loads any clip
+  as a starting point, A/B-plays the result as a real clip, exports paste-ready `EmotionDef` JSON.
+- A live readout (mood / clip+phase / gestures / stress lamp) and the seven `luna:*` performance
+  flags, all read from `live2d/perfFlags.ts` — the single key list the engine, the settings card and
+  the bench share.
+
+Reading order for the face today: `ARCHITECTURE.md` §`live2d/` (layers, the three arbitration rules,
+speech & listening) → `live2d/faceVm.ts` → `live2d/faceData.ts`. Initiative 30 (v0.43.0–v0.43.13) is
+✅ COMPLETE as of 2026-08-01; its four deferred Open Questions are listed at the bottom of
+`docs/roadmap/performance-thaw-2026-07/README.md`.
+
 > ⚠️ Everything below this line was written around v0.15.4–v0.33 and has NOT been re-verified against
 > the current tree. Treat it as *shape*, not as fact: the package layout, wire-contract discipline and
 > memory-layer concepts still hold, but **any specific version number, test count, "planned next", or
