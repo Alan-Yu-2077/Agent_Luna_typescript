@@ -37,6 +37,10 @@ export interface Live2DSink {
   // v0.43.11: she is being spoken TO — held true while the user types, dropped on a debounce. A
   // level, not an event: the sink must be free to fade the bias in and out.
   setListening?(on: boolean): void;
+  // v0.43.13: fire one additive pulse — the punctuation gestures the controller derives from a
+  // sentence's final mark. Same layer v0.43.12's stress nods use; this adds a trigger, not a
+  // mechanism. Gated by the speaking-performance flag inside the sink.
+  pulse?(pose: Partial<Record<string, number>>, durationMs: number): void;
   // v0.43.8 (workbench, and v0.43.10's costume runtime): wear a raw model parameter, written every
   // frame until released with `null`. Deliberately raw ids: these address drawn assets the parameter
   // vocabulary in `faceData` does not model.

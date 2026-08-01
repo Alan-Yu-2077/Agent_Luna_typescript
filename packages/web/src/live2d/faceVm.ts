@@ -390,6 +390,13 @@ export class FaceVm {
   addPulse(pose: Pose, durationMs: number): void {
     this.pulses.push({ startAt: this.lastTickAt, durationMs, pose });
   }
+  // v0.43.13: the same layer, but behind the speaking-performance flag — the entry point the
+  // controller's punctuation gestures use. `addPulse` stays raw for the workbench, which is a
+  // debugging surface and must not be silenced by a product toggle.
+  pulseSpeech(pose: Pose, durationMs: number): void {
+    if (!this.speechPerformanceEnabled()) return;
+    this.addPulse(pose, durationMs);
+  }
   activePulseCount(now = -1): number {
     const t = now < 0 ? this.lastTickAt : now;
     return this.pulses.filter((p) => t >= p.startAt && t - p.startAt <= p.durationMs).length;

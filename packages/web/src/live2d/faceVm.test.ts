@@ -1388,3 +1388,32 @@ describe('FaceVm — stress pulses while speaking (v0.43.12)', () => {
     expect(vm.activePulseCount()).toBe(0);
   });
 });
+
+// v0.43.13 — the punctuation gestures ride v0.43.12's layer through a gated door, so the product
+// toggle silences them while the workbench (which calls `addPulse` directly) keeps working.
+describe('FaceVm — pulseSpeech is the gated door onto the pulse layer (v0.43.13)', () => {
+  test('with the flag on it is exactly addPulse', () => {
+    const { writer } = recorder();
+    const vm = new FaceVm(writer, { rng: () => 0.5 });
+    run(vm, 0, 100);
+    vm.pulseSpeech({ headRoll: 4.5 }, 700);
+    expect(vm.activePulseCount()).toBe(1);
+  });
+
+  test('with the flag off it does nothing', () => {
+    const { writer } = recorder();
+    const vm = new FaceVm(writer, { rng: () => 0.5, speechPerformanceEnabled: () => false });
+    run(vm, 0, 100);
+    vm.pulseSpeech({ headRoll: 4.5 }, 700);
+    expect(vm.activePulseCount()).toBe(0);
+  });
+
+  // The bench is a debugging surface: a product toggle must not make it lie about what it can drive.
+  test('the flag never silences the workbench path', () => {
+    const { writer } = recorder();
+    const vm = new FaceVm(writer, { rng: () => 0.5, speechPerformanceEnabled: () => false });
+    run(vm, 0, 100);
+    vm.addPulse({ headRoll: 4.5 }, 700);
+    expect(vm.activePulseCount()).toBe(1);
+  });
+});

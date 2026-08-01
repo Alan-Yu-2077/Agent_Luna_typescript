@@ -373,6 +373,7 @@ export async function createPixiLive2DSink(
     listIdleProfiles: () => faceVm.listIdleProfiles(),
     playAction: (name, intensity) => faceVm.playAction(name, intensity),
     setListening: (on) => faceVm.setListening(on),
+    pulse: (pose, durationMs) => faceVm.pulseSpeech(pose, durationMs),
     setManualParam: (pid, value) => faceVm.setManualParam(pid, value),
   };
 }

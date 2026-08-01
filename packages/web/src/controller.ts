@@ -1,6 +1,7 @@
 import { MessageDelivery, assertNever, type ServerEvent, type Setting } from '@luna/protocol';
 import type { BubbleView } from './bubbles';
 import type { AudioSink, Live2DSink } from './sinks';
+import { UtteranceGestures } from './live2d/utterance';
 
 // The frontend consumption controller (Initiative 6, first pass) — the TS port
 // of the Python agent-app.js event consumer, modeled on its handler switch but
@@ -42,6 +43,9 @@ export function createController(deps: ControllerDeps): { handle: (e: ServerEven
   // Trimmed text of the last finalized luna bubble — used to drop a verbatim-
   // consecutive duplicate the model occasionally stutters out (v0.21.10).
   let lastLunaText = '';
+  // v0.43.13: one per conversation. It remembers only the direction it last tilted, so three
+  // questions in a row alternate instead of reading as a stuck animation.
+  const gestures = new UtteranceGestures();
   function reflectTyping(): void {
     deps.view.setThinking(turnActive && !textStreaming && messageBubbles.size === 0);
   }
@@ -138,7 +142,23 @@ export function createController(deps: ControllerDeps): { handle: (e: ServerEven
                 lastLunaText = t;
                 deps.view.finalize(e.call_id, d.text);
                 if (d.expression) deps.live2d.setExpression(d.expression, d.emotion);
-                void deps.audio.speak(d.text, d.voice_params);
+                // v0.43.13: the sentence's final mark says what kind of sentence it was, and voice
+                // is played serially with a start callback and a finish promise — so the gesture
+                // lands where the intonation is. An exclamation's emphasis runs through the whole
+                // utterance (`onStart`); a question's tilt belongs in the pause AFTER it, which is
+                // exactly when the promise resolves.
+                const gesture = gestures.next(d.text);
+                const firePulse = (): void => {
+                  if (gesture) deps.live2d.pulse?.(gesture.pose, gesture.durationMs);
+                };
+                void deps.audio
+                  .speak(d.text, d.voice_params, gesture?.when === 'start' ? firePulse : undefined)
+                  .then(() => {
+                    if (gesture?.when === 'end') firePulse();
+                  })
+                  .catch(() => {
+                    /* synthesis failed — the fallback rung already handled the words; no gesture */
+                  });
               }
             } else {
               deps.view.finalize(e.call_id, ''); // delivery shape unexpected — degrade, don't crash

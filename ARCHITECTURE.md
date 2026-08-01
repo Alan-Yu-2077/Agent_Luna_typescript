@@ -157,6 +157,32 @@ A framework-free TypeScript app.
   mild and an escalated performance, which is what makes all fourteen authored clips reachable from
   fifteen affects. Left alone, she plays one of nine authored gestures every 8–20 s, drawn with
   mood-weighted probability and only while nothing else is performing.
+
+  **Speech and listening** are the other half of a conversation — the stretches where she is waiting
+  or talking rather than reacting. Three sources feed one mechanism:
+
+  - **Attention** while the user types is a *level*, not an event: a small head-and-body bias held
+    while there is input and released on a debounce, so per-keystroke jitter is impossible rather
+    than merely tuned away. While she is `thinking` the gesture scheduler swaps to a denser pool
+    (3.5–8 s) of retrieval and deliberation gestures.
+  - **Stress**, from the audio. `LipSyncFrame.open` is already a per-frame energy envelope; a rolling
+    baseline over it detects the peaks, and each becomes a 1–3° nod. Because head pitch is written in
+    the pre-physics pass, her hair follows for free.
+  - **Sentence shape**, from the text. A sentence's final punctuation maps to a gesture, timed
+    against the serial speech queue: emphasis on the audio's start, a question's tilt on its
+    resolution — where the rise actually is. There is no pitch tracking, so this is the honest
+    approximation, and it is deliberately a second, independent signal rather than an extension of
+    the first.
+
+  All three are **additive pulses** — a pose plus a duration, sampled under a half-sine so they leave
+  no residue — and all three obey the three arbitration rules above unchanged. The browser fallback
+  voice publishes no envelope, so the stress layer stays silent there rather than faking a
+  performance. `luna:listening` and `luna:speech-performance` opt out.
+
+  A `?workbench=1` URL mode mounts the *same* renderer with every affect, clip, state, idle profile,
+  gesture, drawn asset and flag on a button, plus a 35-channel pose composer that exports a
+  paste-ready clip definition. It is deliberately not a second app: a bench with its own renderer
+  would let a face be tuned that the app then performs differently.
 - **`audio/`** + **`sinks.ts`** — TTS playback with a serial speech queue (one utterance finishes before
   the next starts) and pluggable audio sinks; a text-only degrade path keeps working when no voice
   backend is configured.

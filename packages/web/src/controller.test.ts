@@ -426,3 +426,124 @@ describe('frontend controller — settings.state (v0.27.1)', () => {
     h.handle(state); // no onSettings dep — must not throw
   });
 });
+
+// v0.43.13 — punctuation gestures. The mapping itself is tested in `utterance.test.ts`; what matters
+// here is the TIMING, because that is what the controller owns: an exclamation's emphasis has to run
+// through the utterance, and a question's tilt has to land in the pause after it.
+describe('frontend controller — punctuation gestures (v0.43.13)', () => {
+  function speechHarness() {
+    const pulses: Array<{ at: 'start' | 'end'; pose: Record<string, number>; durationMs: number }> = [];
+    let phase: 'start' | 'end' = 'start';
+    const live2d: Live2DSink = {
+      setExpression: () => {},
+      setState: () => {},
+      setMouth: () => {},
+      clear: () => {},
+      pulse: (pose, durationMs) => pulses.push({ at: phase, pose: pose as Record<string, number>, durationMs }),
+    };
+    const audio: AudioSink = {
+      // Mirrors the real sink's contract: onStart fires when audio begins, the promise resolves when
+      // playback ends. Everything between the two is "while she is saying it".
+      speak: async (_t, _v, onStart) => {
+        phase = 'start';
+        onStart?.();
+        await Promise.resolve();
+        phase = 'end';
+      },
+      stop: () => {},
+    };
+    const view: BubbleView = {
+      open: () => {},
+      append: () => {},
+      finalize: () => {},
+      discard: () => {},
+      chip: () => {},
+      setThinking: () => {},
+    };
+    const { handle } = createController({ view, live2d, audio });
+    return { handle, pulses };
+  }
+
+  const say = async (h: { handle: (e: ServerEvent) => void }, id: string, text: string): Promise<void> => {
+    h.handle({ type: 'tool.started', call_id: id, tool_name: 'message', input: {} });
+    h.handle(okMessage(id, delivery({ text })));
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+  };
+
+  test('a question tilts AFTER the sentence finishes playing', async () => {
+    const h = speechHarness();
+    await say(h, 'm1', '你今天过得怎么样？');
+    expect(h.pulses.length).toBe(1);
+    expect(h.pulses[0]?.at).toBe('end');
+    expect(h.pulses[0]?.pose['headRoll']).toBeGreaterThan(0);
+  });
+
+  test('an exclamation leans in as the sentence begins', async () => {
+    const h = speechHarness();
+    await say(h, 'm1', '太好了！');
+    expect(h.pulses.length).toBe(1);
+    expect(h.pulses[0]?.at).toBe('start');
+    expect(h.pulses[0]?.pose['bodyLift']).toBeGreaterThan(0);
+  });
+
+  test('a plain statement produces no gesture at all', async () => {
+    const h = speechHarness();
+    await say(h, 'm1', '今天下雪了。');
+    expect(h.pulses.length).toBe(0);
+  });
+
+  test('three questions in a row alternate rather than repeating', async () => {
+    const h = speechHarness();
+    await say(h, 'm1', '真的吗？');
+    await say(h, 'm2', '是吗？');
+    await say(h, 'm3', '你确定？');
+    const rolls = h.pulses.map((p) => p.pose['headRoll'] ?? 0);
+    expect(rolls.length).toBe(3);
+    expect(Math.sign(rolls[0] ?? 0)).not.toBe(Math.sign(rolls[1] ?? 0));
+    expect(Math.sign(rolls[1] ?? 0)).not.toBe(Math.sign(rolls[2] ?? 0));
+  });
+
+  // A sink from a build without the pulse layer, or one with the flag off, must not break speech.
+  test('a sink with no pulse support still speaks', async () => {
+    const spoken: string[] = [];
+    const view: BubbleView = {
+      open: () => {}, append: () => {}, finalize: () => {}, discard: () => {},
+      chip: () => {}, setThinking: () => {},
+    };
+    const live2d: Live2DSink = {
+      setExpression: () => {}, setState: () => {}, setMouth: () => {}, clear: () => {},
+    };
+    const audio: AudioSink = {
+      speak: async (t) => {
+        spoken.push(t);
+      },
+      stop: () => {},
+    };
+    const { handle } = createController({ view, live2d, audio });
+    handle({ type: 'tool.started', call_id: 'm1', tool_name: 'message', input: {} });
+    handle(okMessage('m1', delivery({ text: '真的吗？' })));
+    await Promise.resolve();
+    expect(spoken).toEqual(['真的吗？']);
+  });
+
+  test('a failed synthesis fires no gesture and does not reject', async () => {
+    const pulses: unknown[] = [];
+    const view: BubbleView = {
+      open: () => {}, append: () => {}, finalize: () => {}, discard: () => {},
+      chip: () => {}, setThinking: () => {},
+    };
+    const live2d: Live2DSink = {
+      setExpression: () => {}, setState: () => {}, setMouth: () => {}, clear: () => {},
+      pulse: (pose) => pulses.push(pose),
+    };
+    const audio: AudioSink = { speak: () => Promise.reject(new Error('no voice')), stop: () => {} };
+    const { handle } = createController({ view, live2d, audio });
+    handle({ type: 'tool.started', call_id: 'm1', tool_name: 'message', input: {} });
+    handle(okMessage('m1', delivery({ text: '真的吗？' })));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(pulses).toEqual([]);
+  });
+});
