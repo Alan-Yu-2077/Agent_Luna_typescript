@@ -835,13 +835,16 @@ async function smokeProbe(win: BrowserWindow): Promise<void> {
   );
   await new Promise((r) => setTimeout(r, 6000));
   const probe = (await win.webContents.executeJavaScript(
-    `(() => {
+    `(async () => {
       // v0.27.1: open the settings panel so we can assert the server-driven rows + the pet toggle
       // actually rendered inside the packaged shell (the desktop-specific wiring a page probe misses).
       document.querySelector('.settings-panel')?.classList.add('on');
       const petInput = [...document.querySelectorAll('.settings-panel label')]
         .find((l) => l.textContent.includes('Desktop pet'))?.querySelector('input');
+      // v0.44.2: the data surface, THROUGH the same-origin forward — proves serve.ts → sidecar.
+      const dataStatus = await fetch('/api/data/diaries').then((r) => r.status).catch(() => 0);
       return JSON.stringify({
+        dataStatus,
         canvas: !!document.querySelector('.model-stage canvas'),
         placeholder: !!document.querySelector('.model-placeholder'),
         headX: document.querySelector('.model-stage')?.style.getPropertyValue('--luna-head-x') || null,
@@ -860,6 +863,7 @@ async function smokeProbe(win: BrowserWindow): Promise<void> {
     })()`,
   )) as string;
   const p = JSON.parse(probe) as {
+    dataStatus: number;
     canvas: boolean;
     placeholder: boolean;
     headX: string | null;
@@ -892,7 +896,7 @@ async function smokeProbe(win: BrowserWindow): Promise<void> {
   // canvas. (The WS + pet + bridge checks always hold — they prove the packaged shell wired up.)
   const rendered = p.canvas && p.headX !== null;
   const stageOk = rendered || (!p.canvas && p.placeholder);
-  const ok = stageOk && p.wsStatus === 'open' && petOk && bridgeOk;
+  const ok = stageOk && p.wsStatus === 'open' && petOk && bridgeOk && p.dataStatus === 200;
   console.log(JSON.stringify({ ok, rendered, menu: true, ...p }));
   supervisor?.stop();
   app.exit(ok ? 0 : 1);
@@ -997,6 +1001,8 @@ void app.whenReady().then(async () => {
         });
       app.quit();
     },
+    // v0.44.2: the /api/data/* forward target — the sidecar's HTTP face (same port as its WS).
+    () => SERVER_PORT,
   );
   supervisor = createSupervisor({
     command: p.serverBin,

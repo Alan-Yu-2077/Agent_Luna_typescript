@@ -41,6 +41,9 @@ export function startWebHost(
   // a 'error' event that, unhandled, crashes the process. Surface it to the caller (which shows a
   // dialog) instead. Electron-free by contract, so the handler is a callback, not a dialog here.
   onListenError: (err: Error) => void = (err) => console.error('[serve] listen error:', err.message),
+  // v0.44.2: where the sidecar's HTTP face lives — the /api/data/* forward target. A getter for the
+  // same reason as ttsEnv; 0/undefined = no data forward (dev callers, tests that don't need it).
+  dataPort: () => number = () => 0,
 ): Server {
   const root = resolve(distDir);
   const currentTtsEnv = typeof ttsEnv === 'function' ? ttsEnv : (): TtsEnv => ttsEnv;
@@ -55,6 +58,12 @@ export function startWebHost(
       // traversal like `/api/tts/..%2fadmin` decodes to an unknown subpath → 404, never reaching the
       // upstream. No path-based SSRF surface remains.
       void forwardTts(req, res, pathname.slice('/api/tts/'.length), currentTtsEnv(), voiceState);
+      return;
+    }
+    if (pathname.startsWith('/api/data/')) {
+      // Same shape as the tts forward: the target is CONSTRUCTED from an allowlist, never from the
+      // request path — `/api/data/..%2fsecret` matches nothing and 404s without touching upstream.
+      void forwardData(req, res, pathname.slice('/api/data/'.length), dataPort());
       return;
     }
     if (modelsRoot && pathname.startsWith('/models/') && serveModel(modelsRoot, pathname, res)) return;
@@ -79,6 +88,61 @@ export function startWebHost(
 // both ways — audio is a few hundred KB and this is a single local user, so streaming buys nothing. A
 // dead/absent or stalled upstream → 502, which the boot gate + webAudioSink already treat as "no
 // voice, stay muted".
+// v0.44.2 — the data forward. The upstream path is chosen from this exact allowlist, never taken
+// from the request, so no traversal or SSRF shape exists (the /api/tts discipline). Loopback to
+// loopback: the web page fetches same-origin relative paths, zero CORS.
+export const DATA_ROUTES: ReadonlyArray<{ sub: string; methods: readonly string[] }> = [
+  { sub: 'diaries', methods: ['GET'] },
+  { sub: 'skills', methods: ['GET'] },
+  { sub: 'dreams', methods: ['GET'] },
+  { sub: 'soul', methods: ['GET'] },
+  { sub: 'soul/fixed', methods: ['POST'] },
+];
+
+export function planDataForward(
+  subpath: string,
+  method: string,
+  port: number,
+): { kind: 'forward'; url: string } | { kind: 'error'; status: number } {
+  if (!port) return { kind: 'error', status: 502 };
+  // Strip a query before matching; re-attach after (limit= rides through).
+  const q = subpath.indexOf('?');
+  const bare = q >= 0 ? subpath.slice(0, q) : subpath;
+  const query = q >= 0 ? subpath.slice(q) : '';
+  const route = DATA_ROUTES.find((r) => r.sub === bare);
+  if (!route || !route.methods.includes(method)) return { kind: 'error', status: 404 };
+  return { kind: 'forward', url: `http://127.0.0.1:${port}/api/data/${route.sub}${query}` };
+}
+
+async function forwardData(
+  req: IncomingMessage,
+  res: ServerResponse,
+  subpath: string,
+  port: number,
+): Promise<void> {
+  // The URL object already split the query off pathname upstream; recover it from req.url so
+  // ?limit= survives the forward.
+  const rawQuery = req.url && req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
+  const plan = planDataForward(subpath + rawQuery, req.method ?? 'GET', port);
+  if (plan.kind === 'error') {
+    res.writeHead(plan.status).end(plan.status === 502 ? 'data upstream not configured' : 'not found');
+    return;
+  }
+  try {
+    const body = req.method === 'GET' || req.method === 'HEAD' ? undefined : await readBody(req);
+    const upstream = await fetch(plan.url, {
+      method: req.method ?? 'GET',
+      ...(body !== undefined ? { body } : {}),
+      headers: { 'content-type': 'application/json' },
+      signal: AbortSignal.timeout(10_000),
+    });
+    res.writeHead(upstream.status, { 'content-type': upstream.headers.get('content-type') ?? 'application/json' });
+    res.end(Buffer.from(await upstream.arrayBuffer()));
+  } catch {
+    res.writeHead(502).end('data upstream unreachable');
+  }
+}
+
 async function forwardTts(
   req: IncomingMessage,
   res: ServerResponse,

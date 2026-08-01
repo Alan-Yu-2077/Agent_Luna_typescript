@@ -22,6 +22,26 @@ Bun.serve({
   async fetch(req) {
     const { pathname } = new URL(req.url);
     // Translate /api/tts/{speak,health} directly into a GPT-SoVITS api_v2 call — no owner glue.
+    // v0.44.2: proxy the data surface to the dev sidecar so a plain-browser session reads her real
+    // diaries/skills/dreams same-origin (the packaged app's serve.ts does the same).
+    if (pathname.startsWith('/api/data/')) {
+      const target = `http://127.0.0.1:${Bun.env['LUNA_PORT'] ?? 8787}${pathname}${new URL(req.url).search}`;
+      try {
+        const body = req.method === 'GET' || req.method === 'HEAD' ? undefined : await req.text();
+        const upstream = await fetch(target, {
+          method: req.method,
+          ...(body !== undefined ? { body } : {}),
+          headers: { 'content-type': 'application/json' },
+          signal: AbortSignal.timeout(10_000),
+        });
+        return new Response(await upstream.arrayBuffer(), {
+          status: upstream.status,
+          headers: { 'content-type': upstream.headers.get('content-type') ?? 'application/json' },
+        });
+      } catch {
+        return new Response('data upstream unreachable', { status: 502 });
+      }
+    }
     if (pathname.startsWith('/api/tts/')) {
       const subpath = pathname.slice('/api/tts/'.length);
       const body = req.method === 'GET' || req.method === 'HEAD' ? '' : await req.text();

@@ -30,6 +30,7 @@ import { TraceStore } from './trace/store';
 import { setTraceStore } from './trace/instrument';
 import { traceViewerHandler } from './trace/viewer';
 import { workspaceHandler } from './workspace/workspace';
+import { dataApiHandler } from './data/dataApi';
 import { devChatHandler } from './devchat/devchat';
 import { setMemoryDb } from './memory/sessionStore';
 import { seedSoulOnBoot } from './memory/soulSeed';
@@ -228,6 +229,10 @@ const server = Bun.serve<WSData>({
       queueMicrotask(() => triggerShutdown('http'));
       return new Response('shutting down', { status: 200 });
     }
+    // v0.44.2 — the data surface, BEFORE the dev-tools gate: this is product, not debugging (M2).
+    // Loopback bind above is the security boundary, same as the WS (S1).
+    const dataResponse = await dataApiHandler(req);
+    if (dataResponse) return dataResponse;
     if (viewerEnabled) {
       const viewerResponse = traceViewerHandler(req, traceStore);
       if (viewerResponse) return viewerResponse;

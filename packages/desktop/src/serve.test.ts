@@ -3,7 +3,7 @@ import { createServer, type Server } from 'node:http';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { startWebHost } from './serve';
+import { startWebHost, planDataForward } from './serve';
 import type { TtsEnv } from '../../web/src/tts/apiV2';
 
 const servers: Server[] = [];
@@ -186,5 +186,43 @@ describe('startWebHost /api/tts → api_v2 forwarding', () => {
     // The legit health route still works.
     const ok = await fetch(`http://127.0.0.1:${web}/api/tts/health`);
     expect(ok.status).toBe(200);
+  });
+});
+
+// v0.44.2 — the data forward: allowlisted target construction, the /api/tts discipline.
+describe('planDataForward (v0.44.2)', () => {
+  it('every allowlisted route forwards to a fixed loopback target', () => {
+    expect(planDataForward('diaries', 'GET', 8787)).toEqual({
+      kind: 'forward',
+      url: 'http://127.0.0.1:8787/api/data/diaries',
+    });
+    expect(planDataForward('soul/fixed', 'POST', 8787)).toEqual({
+      kind: 'forward',
+      url: 'http://127.0.0.1:8787/api/data/soul/fixed',
+    });
+  });
+
+  it('?limit rides through untouched', () => {
+    expect(planDataForward('diaries?limit=5', 'GET', 8787)).toEqual({
+      kind: 'forward',
+      url: 'http://127.0.0.1:8787/api/data/diaries?limit=5',
+    });
+  });
+
+  // The target is constructed from the allowlist, never the request — a traversal matches nothing.
+  it('traversal and unknown subpaths 404 without touching upstream', () => {
+    expect(planDataForward('../secret', 'GET', 8787)).toEqual({ kind: 'error', status: 404 });
+    expect(planDataForward('..%2fsecret', 'GET', 8787)).toEqual({ kind: 'error', status: 404 });
+    expect(planDataForward('soul/../../x', 'GET', 8787)).toEqual({ kind: 'error', status: 404 });
+    expect(planDataForward('unknown', 'GET', 8787)).toEqual({ kind: 'error', status: 404 });
+  });
+
+  it('the method is part of the allowlist — writing to a read route is a 404, not a forward', () => {
+    expect(planDataForward('diaries', 'POST', 8787)).toEqual({ kind: 'error', status: 404 });
+    expect(planDataForward('soul/fixed', 'GET', 8787)).toEqual({ kind: 'error', status: 404 });
+  });
+
+  it('no configured port means 502, never a guessed target', () => {
+    expect(planDataForward('diaries', 'GET', 0)).toEqual({ kind: 'error', status: 502 });
   });
 });
