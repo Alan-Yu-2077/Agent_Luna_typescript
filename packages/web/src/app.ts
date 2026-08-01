@@ -33,6 +33,7 @@ import { menuEnabled } from './menuMode';
 import { mountMainMenu } from './ui/mainMenu';
 import { runSequence, SLEEP_STEPS, WAKE_STEPS } from './wakeSequence';
 import { createReturnGate } from './returnGate';
+import { mountDiaryBook } from './ui/diaryBook';
 
 // Browser entry — builds the cute UI shell + the live Live2D avatar + voice, and
 // wires the v0.12.0 consumption controller plus the v0.13.4 polish chrome (dream
@@ -724,6 +725,9 @@ async function boot(): Promise<void> {
           wsClient?.send({ type: 'dream.enter' });
         },
         openSettings: () => setSettingsOpen(true),
+        // v0.44.3: the diary book rides the HTTP data surface — reading her diary never wakes her
+        // (no WS is touched anywhere in the book).
+        pageBody: (id) => (id === 'diary' ? mountDiaryBook(document) : null),
         ...(quitBridge ? { quit: () => quitBridge() } : {}),
       });
     };

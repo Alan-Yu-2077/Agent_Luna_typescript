@@ -1062,3 +1062,68 @@ body.pet { background: none; }
   transition: color 0.3s ease;
 }
 .menu-return-btn:hover { color: var(--sky-text); }
+
+/* ── v0.44.3: the diary book ──────────────────────────────────────────────────
+   Two pages around a spine; paper colors; the turn is compositor-only
+   (transform/opacity), origin on the spine. */
+.diary-book { --paper: #fdfaf3; --paper-deep: #f3ecdd; --paper-ink: #5c5344; --paper-faint: #b4a88f;
+  margin-top: 26px; max-width: 980px; height: min(66vh, 560px); outline: none; }
+.book-spread { position: relative; display: grid; grid-template-columns: 1fr 14px 1fr; height: 100%;
+  perspective: 1600px; }
+.book-page { background: var(--paper); border: 1px solid #e2d9c6; border-radius: 8px; padding: 26px 30px;
+  display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 6px 22px rgba(92, 83, 68, 0.08); }
+.book-page.left { border-radius: 12px 4px 4px 12px; }
+.book-page.right { border-radius: 4px 12px 12px 4px; position: relative; z-index: 1;
+  transform-origin: left center; transition: transform 0.5s ease; }
+.book-spine { background: linear-gradient(90deg, rgba(92,83,68,0.16), rgba(92,83,68,0.02) 40%, rgba(92,83,68,0.16));
+  border-radius: 2px; }
+/* E — the full turn: the OLD face swings away around the spine over the new content. */
+.book-page.right.turning { position: absolute; inset: 0 0 0 calc(50% + 7px); z-index: 3;
+  will-change: transform, opacity; backface-visibility: hidden;
+  transition: transform 1.6s cubic-bezier(0.55, 0.02, 0.25, 1), opacity 1.6s ease; }
+.book-page.right.turning.away { transform: rotateY(-172deg); opacity: 0.25;
+  box-shadow: -28px 8px 40px rgba(92, 83, 68, 0.28); }
+/* the half turn for Diary|Dream — lighter than crossing days */
+.book-page.right.half { transform: rotateY(-90deg); }
+.book-date { margin: 0 0 10px; font-size: 13px; letter-spacing: 0.14em; font-weight: 800; color: var(--paper-faint); }
+.book-body { flex: 1; overflow-y: auto; color: var(--paper-ink); font-size: 14.5px; line-height: 1.85;
+  scrollbar-width: thin; scrollbar-color: var(--paper-deep) transparent; white-space: pre-wrap; }
+.book-dream p { margin: 0 0 8px; }
+.book-dream.broken p { font-style: italic; color: var(--paper-faint); }
+.book-face-switch { display: flex; gap: 6px; margin-bottom: 12px; }
+.book-face-switch button { appearance: none; border: none; background: none; cursor: pointer; padding: 2px 8px;
+  font-family: inherit; font-size: 12px; font-weight: 700; color: var(--paper-faint); border-radius: 6px; }
+.book-face-switch button.on { color: var(--paper-ink); background: var(--paper-deep); }
+.book-foot { margin-top: 10px; font-size: 11px; color: var(--paper-faint); }
+.book-cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;
+  font-size: 13px; font-weight: 800; letter-spacing: 0.12em; color: var(--paper-ink); }
+.book-cal-head button { appearance: none; border: none; background: none; cursor: pointer;
+  font-size: 18px; color: var(--paper-faint); padding: 0 8px; }
+.book-cal-head button:hover { color: var(--paper-ink); }
+.book-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; flex: 1; align-content: start; }
+.book-cal-cell { appearance: none; border: none; background: none; position: relative;
+  font-family: inherit; font-size: 13px; padding: 8px 0 12px; border-radius: 8px;
+  color: #cfc6b2; cursor: default; }
+.book-cal-cell.lit { color: var(--paper-ink); font-weight: 700; cursor: pointer; }
+.book-cal-cell.lit:hover { background: var(--paper-deep); }
+.book-cal-cell.current { background: var(--paper-deep); }
+.book-cal-cell.focus { outline: 2px solid var(--lavender-deep); outline-offset: 1px; }
+.book-cal-cell.has-diary::after { content: ''; position: absolute; left: 50%; bottom: 4px;
+  width: 5px; height: 5px; border-radius: 50%; background: var(--lavender-deep); transform: translateX(-50%); }
+.book-cal-cell.has-dream::before { content: '☾'; position: absolute; right: 4px; top: 2px;
+  font-size: 8px; color: var(--paper-faint); }
+.book-skeleton { height: 100%; background: var(--paper); border-radius: 12px; padding: 40px;
+  display: flex; flex-direction: column; gap: 16px; }
+.book-skeleton div { height: 13px; border-radius: 6px; background: var(--paper-deep);
+  animation: book-shimmer 1.1s ease-in-out infinite alternate; }
+.book-skeleton div:nth-child(2) { width: 82%; } .book-skeleton div:nth-child(3) { width: 64%; }
+.book-skeleton div:nth-child(4) { width: 88%; } .book-skeleton div:nth-child(5) { width: 40%; }
+@keyframes book-shimmer { to { opacity: 0.45; } }
+.book-empty { color: var(--muted); font-size: 14px; }
+/* narrow window: one page at a time (the calendar stacks above the content) */
+@media (max-width: 900px) {
+  .book-spread { grid-template-columns: 1fr; grid-template-rows: auto auto; perspective: none; }
+  .book-spine { display: none; }
+  .diary-book { height: auto; }
+  .book-page.right.turning { inset: auto 0 0 0; }
+}
