@@ -362,6 +362,12 @@ function createWindow(mode: 'app' | 'setup' = 'app'): BrowserWindow {
   return win;
 }
 
+// v0.44.0: the menu's Quit — the same clean shutdown the window close runs (sidecar stop rides the
+// existing quit hooks).
+ipcMain.on('luna:quit', () => {
+  app.quit();
+});
+
 ipcMain.on('luna:set-ignore-mouse', (event, ignore: unknown) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   win?.setIgnoreMouseEvents(ignore === true, { forward: true });
@@ -790,6 +796,42 @@ ipcMain.handle('luna:provision-start', () => {
 
 async function smokeProbe(win: BrowserWindow): Promise<void> {
   await new Promise((r) => setTimeout(r, 6000));
+  // v0.44.0 phase 1 — the packaged app's true first screen is now the MENU: she renders asleep and
+  // the WS is never even constructed (the status badge's dataset stays unset — only a live client
+  // writes it). Asserted here, then the window reloads with `?menu=0` so phase 2 exercises the full
+  // session path and every pre-menu guarantee (wsStatus open, bridge, pet, server rows) stays held.
+  const menuProbe = (await win.webContents.executeJavaScript(
+    `JSON.stringify({
+      menu: !!document.querySelector('.main-menu'),
+      items: document.querySelectorAll('.main-menu .menu-item').length,
+      quitItem: !!document.querySelector('.main-menu [data-item="quit"]'),
+      canvas: !!document.querySelector('.model-stage canvas'),
+      zzz: !!document.querySelector('.menu-zzz'),
+      wsTouched: document.querySelector('.status-badge')?.dataset.status ?? null,
+    })`,
+  )) as string;
+  const m = JSON.parse(menuProbe) as {
+    menu: boolean;
+    items: number;
+    quitItem: boolean;
+    canvas: boolean;
+    zzz: boolean;
+    wsTouched: string | null;
+  };
+  // Six items on the desktop (Quit has a bridge here), zzz only when a model actually mounted.
+  const menuOk = m.menu && m.items === 6 && m.quitItem && m.wsTouched === null && (!m.canvas || m.zzz);
+  if (!menuOk) {
+    console.log(JSON.stringify({ ok: false, stage: 'menu', ...m }));
+    supervisor?.stop();
+    app.exit(1);
+    return;
+  }
+  // Phase 2 — the direct boot, byte-for-byte today's app. The pet path never sees the menu at all,
+  // so its URL needs no bypass; adding it anyway is harmless and keeps one shape.
+  const direct = new URL(win.webContents.getURL());
+  direct.searchParams.set('menu', '0');
+  await win.loadURL(direct.toString());
+  await new Promise((r) => setTimeout(r, 6000));
   const probe = (await win.webContents.executeJavaScript(
     `(() => {
       // v0.27.1: open the settings panel so we can assert the server-driven rows + the pet toggle
@@ -849,7 +891,7 @@ async function smokeProbe(win: BrowserWindow): Promise<void> {
   const rendered = p.canvas && p.headX !== null;
   const stageOk = rendered || (!p.canvas && p.placeholder);
   const ok = stageOk && p.wsStatus === 'open' && petOk && bridgeOk;
-  console.log(JSON.stringify({ ok, rendered, ...p }));
+  console.log(JSON.stringify({ ok, rendered, menu: true, ...p }));
   supervisor?.stop();
   app.exit(ok ? 0 : 1);
 }

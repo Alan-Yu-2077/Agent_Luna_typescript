@@ -29,6 +29,8 @@ import { mountWorkbench, type ComposeTarget, type DebugBridge } from './ui/workb
 import type { EmotionDef } from './live2d/faceData';
 import { costumeWrites, loadCostume, saveCostume, toggleCostume } from './live2d/costume';
 import { isWorkbenchMode, workbenchModelUrl } from './workbenchMode';
+import { menuEnabled } from './menuMode';
+import { mountMainMenu } from './ui/mainMenu';
 
 // Browser entry — builds the cute UI shell + the live Live2D avatar + voice, and
 // wires the v0.12.0 consumption controller plus the v0.13.4 polish chrome (dream
@@ -114,9 +116,23 @@ async function boot(): Promise<void> {
   // the warm-up boot gate. v0.43.14 retired the third option, the browser's Web Speech voice.
   const ttsBackend = resolveTtsBackend();
 
+  // v0.28.1: pet mode fixes the model as a half-body portrait (no drag/zoom) — the sink needs to
+  // know at creation time. Computed once here; the pet-interaction block below reuses it.
+  const isPet = new URLSearchParams(location.search).has('pet');
+
+  // v0.44.0 — the cold lobby. Boot is now two halves. The LOBBY half runs immediately: layout, the
+  // Live2D sink (model loads as always), and the menu with her asleep. The SESSION half — the WS
+  // client, its connect, the controller wiring, geo, voice — is `activateSession()` below, and in
+  // menu mode it does not run at all: the backend stays untouched until Talk (v0.44.1). The TTS
+  // sidecar itself is the desktop process's child and starts with the app regardless (M1 boundary:
+  // only the WS session is deferred). Direct-boot paths (pet / agent-only / luna:menu=0 / ?menu=0)
+  // activate immediately and behave exactly as before this version.
+  const lobbyOn = menuEnabled({ search: location.search, storage: localStorage, agentOnly });
+
   // Boot gate: for the http voice backend, block the UI until it has warmed its model. Skippable, and
-  // degrades fast (no block) if no sidecar is up. The rest of boot (Live2D, WS) proceeds behind it.
-  if (ttsBackend === 'http') {
+  // degrades fast (no block) if no sidecar is up. In lobby mode there is nothing to gate — warming
+  // belongs to Talk (the wake gate, v0.44.1), not to a menu that makes no sound.
+  if (!lobbyOn && ttsBackend === 'http') {
     const gate = createBootGate(root);
     let skipped = false;
     gate.onSkip(() => {
@@ -150,10 +166,6 @@ async function boot(): Promise<void> {
       globalThis.setTimeout(() => gate.done(), res === 'ready' ? 300 : 900);
     });
   }
-
-  // v0.28.1: pet mode fixes the model as a half-body portrait (no drag/zoom) — the sink needs to
-  // know at creation time. Computed once here; the pet-interaction block below reuses it.
-  const isPet = new URLSearchParams(location.search).has('pet');
 
   let live2d: Live2DSink = consoleLive2DSink;
   // No model ships by default (bring-your-own). Resolve an installed one; when there's none, WebGL is
@@ -198,49 +210,9 @@ async function boot(): Promise<void> {
   let isCollapsed = localStorage.getItem('luna:collapsed') === '1';
   const view = new RouterBubbleView(windowView, speechStack);
 
+  // v0.44.0: the audio sink is session-half state — created in activateSession, noop until then.
+  // Boot-scoped because the ?dev globals and the speech gate close over the variable.
   let audio: AudioSink = noopAudioSink;
-  if (ttsBackend === 'http') {
-    // v0.43.14: the second rung of v0.37.4's ladder is gone. An utterance the GPT voice cannot
-    // speak (hard failure / the 60 s mute window) is now SKIPPED — logged, and the serial queue
-    // moves on to the next one. It used to be handed to the browser voice, which meant a stranger
-    // finished her sentence every time api_v2 hiccuped. `onUnspoken` still fires, so the failure is
-    // never silent to the log; it is only silent to the room.
-    audio = new WebAudioSink({
-      onMouth: (frame) => live2d.setMouth(frame),
-      onUnspoken: (text) => {
-        console.warn(`[voice] her voice is unavailable — skipping this line: ${text.slice(0, 40)}`);
-      },
-    });
-  }
-  // Speech-gate the stack: when Luna actually begins speaking a reply, restart the newest bubble's
-  // life so its ~10s aligns with the utterance (playback is serialized, so emit ≠ speak time). When
-  // she FINISHES speaking (the speak promise resolves), that bubble detaches and falls (v0.36.2).
-  // Only wired for real voice backends — the voiceless noop sink resolves instantly, so it relies on
-  // the hang TTL to trigger the fall instead of dropping the bubble the moment it appears.
-  const hasVoice = ttsBackend === 'http';
-  const speechGatedAudio: AudioSink = {
-    speak: (text, voice, onStart) => {
-      const p = audio.speak(text, voice, () => {
-        speechStack.noteSpeechStart();
-        onStart?.();
-      });
-      if (hasVoice) void p.then(() => speechStack.noteSpeechEnd()).catch(() => {});
-      return p;
-    },
-    stop: () => audio.stop(),
-  };
-
-  const controller = createController({
-    view,
-    live2d,
-    audio: speechGatedAudio,
-    // `client` is declared below; settings.state only arrives over the socket, so this
-    // closure never runs before the client exists.
-    onSettings: (settings) =>
-      renderServerSettings(refs.serverSettings, settings, (key, value) =>
-        client.send({ type: 'settings.set', key, value }),
-      ),
-  });
 
   let dreaming = false;
   let dreamShownAt = 0;
@@ -284,48 +256,99 @@ async function boot(): Promise<void> {
     (globalThis as { lunaSetup?: { openSetup?: () => void } }).lunaSetup?.openSetup,
   );
 
-  const client = new LunaWsClient({
-    url: WS_URL,
-    onEvent: (e) => {
-      // The typing indicator is owned by the controller now (v0.21.9): it keeps the
-      // dots up for the whole turn and hides them on turn.result / proactive.finished,
-      // instead of this open-only show that the first tool/message used to kill.
-      if (e.type === 'dream.status') setDream(e.is_dreaming);
-      if (e.type === 'dream.step') refs.dreamCaption.textContent = e.detail || e.step;
-      // barge-in: a new user turn clears the beside-model stack (the window keeps the full log).
-      if (e.type === 'turn.started') speechStack.clearAll();
-      if (e.type === 'tool.finished' && e.result.kind === 'ok') {
-        const parsed = MessageDelivery.safeParse(e.result.data);
-        if (parsed.success && parsed.data.expression) updateMood(parsed.data.expression);
-      }
-      controller.handle(e);
-    },
-    onStatus: (s) => {
-      refs.statusBadge.textContent = STATUS_TEXT[s];
-      refs.statusBadge.dataset['status'] = s;
-      // v0.35.6: a broken config (dead backend, reconnect loop) surfaces the way back to the
-      // wizard right on the badge — no hunting through Settings while nothing works.
-      updateReconfigure(s);
-      // Re-send the cached GPS fix on every (re)connect so a server restart still
-      // gets the location (the server holds it in-memory).
-      if (s === 'open') {
-        const fix = lastGeoFix();
-        if (fix) client.send({ type: 'client.geo', lat: fix.lat, lon: fix.lon });
-      }
-    },
-  });
-  client.connect();
-  // Watch the browser for the user's location (one-time permission prompt). Fires on the
-  // initial fix AND every real move (v0.37.17 — the old one-shot froze at page-load time);
-  // onStatus re-sends the newest fix on later reconnects. Silently no-ops if
-  // denied/unavailable → the LUNA_LAT_LON env fallback.
-  requestGeolocation((fix) => client.send({ type: 'client.geo', lat: fix.lat, lon: fix.lon }));
+  // v0.44.0 — the SESSION half. Everything here used to run inline at this exact spot in boot, and
+  // for the direct-boot paths it still does (the call sits right below, same position in the
+  // sequence). In menu mode nothing here runs until Talk: no WS construction, no controller, no
+  // voice sink, no geolocation prompt. `wsClient` is the null-until-activated seam the lobby-safe
+  // listeners below guard on.
+  let wsClient: LunaWsClient | null = null;
+  const activateSession = (): void => {
+    if (wsClient) return;
+    if (ttsBackend === 'http') {
+      // v0.43.14: the second rung of v0.37.4's ladder is gone. An utterance the GPT voice cannot
+      // speak (hard failure / the 60 s mute window) is now SKIPPED — logged, and the serial queue
+      // moves on to the next one. `onUnspoken` still fires, so the failure is never silent to the
+      // log; it is only silent to the room.
+      audio = new WebAudioSink({
+        onMouth: (frame) => live2d.setMouth(frame),
+        onUnspoken: (text) => {
+          console.warn(`[voice] her voice is unavailable — skipping this line: ${text.slice(0, 40)}`);
+        },
+      });
+    }
+    // Speech-gate the stack: when Luna actually begins speaking a reply, restart the newest bubble's
+    // life so its ~10s aligns with the utterance (playback is serialized, so emit ≠ speak time). When
+    // she FINISHES speaking (the speak promise resolves), that bubble detaches and falls (v0.36.2).
+    // Only wired for real voice backends — the voiceless noop sink resolves instantly, so it relies
+    // on the hang TTL to trigger the fall instead of dropping the bubble the moment it appears.
+    const hasVoice = ttsBackend === 'http';
+    const speechGatedAudio: AudioSink = {
+      speak: (text, voice, onStart) => {
+        const p = audio.speak(text, voice, () => {
+          speechStack.noteSpeechStart();
+          onStart?.();
+        });
+        if (hasVoice) void p.then(() => speechStack.noteSpeechEnd()).catch(() => {});
+        return p;
+      },
+      stop: () => audio.stop(),
+    };
+
+    const controller = createController({
+      view,
+      live2d,
+      audio: speechGatedAudio,
+      onSettings: (settings) =>
+        renderServerSettings(refs.serverSettings, settings, (key, value) =>
+          client.send({ type: 'settings.set', key, value }),
+        ),
+    });
+
+    const client = new LunaWsClient({
+      url: WS_URL,
+      onEvent: (e) => {
+        // The typing indicator is owned by the controller now (v0.21.9): it keeps the
+        // dots up for the whole turn and hides them on turn.result / proactive.finished,
+        // instead of this open-only show that the first tool/message used to kill.
+        if (e.type === 'dream.status') setDream(e.is_dreaming);
+        if (e.type === 'dream.step') refs.dreamCaption.textContent = e.detail || e.step;
+        // barge-in: a new user turn clears the beside-model stack (the window keeps the full log).
+        if (e.type === 'turn.started') speechStack.clearAll();
+        if (e.type === 'tool.finished' && e.result.kind === 'ok') {
+          const parsed = MessageDelivery.safeParse(e.result.data);
+          if (parsed.success && parsed.data.expression) updateMood(parsed.data.expression);
+        }
+        controller.handle(e);
+      },
+      onStatus: (s) => {
+        refs.statusBadge.textContent = STATUS_TEXT[s];
+        refs.statusBadge.dataset['status'] = s;
+        // v0.35.6: a broken config (dead backend, reconnect loop) surfaces the way back to the
+        // wizard right on the badge — no hunting through Settings while nothing works.
+        updateReconfigure(s);
+        // Re-send the cached GPS fix on every (re)connect so a server restart still
+        // gets the location (the server holds it in-memory).
+        if (s === 'open') {
+          const fix = lastGeoFix();
+          if (fix) client.send({ type: 'client.geo', lat: fix.lat, lon: fix.lon });
+        }
+      },
+    });
+    wsClient = client;
+    client.connect();
+    // Watch the browser for the user's location (one-time permission prompt). Fires on the
+    // initial fix AND every real move (v0.37.17 — the old one-shot froze at page-load time);
+    // onStatus re-sends the newest fix on later reconnects. Silently no-ops if
+    // denied/unavailable → the LUNA_LAT_LON env fallback.
+    requestGeolocation((fix) => client.send({ type: 'client.geo', lat: fix.lat, lon: fix.lon }));
+  };
+  if (!lobbyOn) activateSession();
 
   function send(): void {
     const text = refs.input.value.trim();
-    if (!text || dreaming) return;
+    if (!text || dreaming || !wsClient) return;
     windowView.userMessage(text);
-    client.send({ type: 'chat.send', text });
+    wsClient.send({ type: 'chat.send', text });
     // Collapsed (log hidden) → the message would otherwise vanish; let it float up and out instead.
     if (isCollapsed) riseBubbles.spawn(text);
     refs.input.value = '';
@@ -420,7 +443,9 @@ async function boot(): Promise<void> {
   // it (reconnects re-send the newest) and forward it as client.geo.
   bridge?.onGeoFix?.((fix) => {
     setGeoFix(fix);
-    client.send({ type: 'client.geo', lat: fix.lat, lon: fix.lon });
+    // v0.44.0: the CACHE half always runs (fixes arriving during the menu are kept); the send half
+    // waits for the session — onStatus 'open' re-sends the newest cached fix on connect anyway.
+    wsClient?.send({ type: 'client.geo', lat: fix.lat, lon: fix.lon });
   });
   if (isPet) {
     document.body.classList.add('pet');
@@ -495,8 +520,8 @@ async function boot(): Promise<void> {
     if (refs.input.value !== '') live2d.setListening?.(true);
   });
 
-  refs.dreamBtn.addEventListener('click', () => client.send({ type: 'dream.enter' }));
-  refs.dreamWakeBtn.addEventListener('click', () => client.send({ type: 'dream.wake' }));
+  refs.dreamBtn.addEventListener('click', () => wsClient?.send({ type: 'dream.enter' }));
+  refs.dreamWakeBtn.addEventListener('click', () => wsClient?.send({ type: 'dream.wake' }));
 
   // v0.36.4: the VTS panel glides in with a click-to-close backdrop; Escape closes it too.
   const setSettingsOpen = (open: boolean): void => {
@@ -633,6 +658,23 @@ async function boot(): Promise<void> {
     const scan = voiceBridge.scanVoicePack.bind(voiceBridge);
     const install = voiceBridge.installVoicePack.bind(voiceBridge);
     mountPackDrop(document, { scanVoicePack: scan, installVoicePack: install });
+  }
+
+  // v0.44.0 — the front door. Mounted last so every lobby-safe wire above exists behind it; the
+  // session half stays dark until Talk (v0.44.1 — this version's Talk is deliberately a no-op, and
+  // Dream renders disabled). Settings opens the existing panel gliding over the menu.
+  if (lobbyOn) {
+    const quitBridge = (globalThis as { lunaPet?: { quit?: () => void } }).lunaPet?.quit;
+    mountMainMenu(root, {
+      stage: refs.modelStage,
+      sink: live2d,
+      hasAvatar: modelState === 'ok',
+      onTalk: () => {
+        /* v0.44.1 wires the wake — until then the door does not open */
+      },
+      openSettings: () => setSettingsOpen(true),
+      ...(quitBridge ? { quit: () => quitBridge() } : {}),
+    });
   }
 
   startTimestampRefresh(refs.chatLog);

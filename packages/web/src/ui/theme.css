@@ -970,3 +970,73 @@ body.pet { background: none; }
 /* v0.43.12: the stress indicator — the calibration loop for a detector whose
    constants are a feel judgement, not a derivation. */
 .wb-accent.on { color: #c9556b; font-weight: 800; }
+
+/* ── v0.44.0: the main menu — her front door ──────────────────────────────────
+   D1: floating text over the room, no button shells, no containers. The menu
+   overlays the chat panel's own grid slot (the panel keeps its space, hidden),
+   which is what lets Talk wake her IN PLACE — she never belonged to a page. */
+.menu-mode .chat-panel { visibility: hidden; pointer-events: none; }
+.menu-mode .status-badge, .menu-mode .settings-btn,
+.menu-mode .dream-btn, .menu-mode .mood-pip { opacity: 0; pointer-events: none; }
+
+.main-menu {
+  position: absolute; inset: 0 auto 0 0; width: 42%; z-index: 30;
+  display: flex; flex-direction: column; justify-content: center; gap: 14px;
+  padding-left: clamp(48px, 7vw, 110px);
+  transition: transform 0.6s ease, opacity 0.6s ease;
+}
+.menu-mark {
+  font-size: 15px; font-weight: 800; letter-spacing: 0.42em; color: #8fa6bf;
+  margin-bottom: 26px; user-select: none;
+}
+.menu-item {
+  appearance: none; background: none; border: none; padding: 2px 0; cursor: pointer;
+  text-align: left; width: fit-content; color: #8fa6bf; font-family: inherit;
+  transform-origin: left center;
+  transition: transform 0.35s var(--spring-ease, ease), color 0.3s ease;
+}
+.menu-item.primary { font-size: 38px; font-weight: 800; }
+.menu-item.secondary { font-size: 27px; font-weight: 700; margin-top: 2px; }
+.menu-item:hover, .menu-item:focus-visible { color: var(--sky-text); transform: translateX(14px) scale(1.06); }
+.menu-item:focus-visible { outline: 2px solid var(--lavender-deep); outline-offset: 6px; border-radius: 4px; }
+.menu-item[aria-disabled='true'] { color: #c3cfdc; cursor: default; }
+.menu-item[aria-disabled='true']:hover { transform: none; }
+
+/* D3 — transition I: the menu is pushed away as the page rises. */
+.main-menu.leaving { transform: scale(1.16); opacity: 0; pointer-events: none; }
+.menu-mode .model-stage { transition: opacity 0.6s ease; }
+.menu-mode .model-stage.menu-away { opacity: 0; }
+
+.menu-zzz {
+  position: absolute; z-index: 8; pointer-events: none;
+  left: calc(var(--luna-head-x, 50%) + var(--luna-head-gap, 120px) * 0.4);
+  top: calc(var(--luna-head-y, 30%) - 46px);
+  color: var(--sky-text); font-weight: 800; opacity: 0.75;
+}
+.menu-zzz span {
+  display: inline-block; margin-right: 5px; font-size: 15px;
+  animation: zzz-drift 3.2s ease-in-out infinite;
+}
+.menu-zzz span:nth-child(2) { font-size: 19px; }
+.menu-zzz span:nth-child(3) { font-size: 24px; }
+@keyframes zzz-drift {
+  0% { transform: translateY(4px); opacity: 0; }
+  30% { opacity: 0.9; }
+  100% { transform: translateY(-16px); opacity: 0; }
+}
+
+.menu-page {
+  position: absolute; inset: 0; z-index: 40; padding: 72px clamp(48px, 8vw, 130px);
+  background: var(--stripe-b);
+  opacity: 0; transform: translateY(30px);
+  transition: transform 0.9s var(--ease-pop, cubic-bezier(0.34, 1.56, 0.64, 1)), opacity 0.9s ease;
+}
+.menu-page.in { opacity: 1; transform: translateY(0); }
+.menu-page h2 { margin: 14px 0 0; font-size: 34px; font-weight: 800; color: var(--sky-text); }
+.menu-page-back {
+  appearance: none; background: none; border: none; cursor: pointer; padding: 0;
+  font-family: inherit; font-size: 15px; font-weight: 700; color: #8fa6bf;
+  transition: color 0.3s ease;
+}
+.menu-page-back:hover { color: var(--sky-text); }
+.menu-page-placeholder { color: var(--muted); font-size: 15px; }

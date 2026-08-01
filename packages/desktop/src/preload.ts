@@ -36,6 +36,11 @@ contextBridge.exposeInMainWorld('lunaPet', {
   onGeoFix: (cb: (fix: { lat: number; lon: number }) => void): void => {
     ipcRenderer.on('luna:geo-fix', (_e, fix: { lat: number; lon: number }) => cb(fix));
   },
+  // v0.44.0: the main menu's Quit item. Only the desktop can quit; a browser tab has no such door
+  // and the renderer hides the item when this method is absent.
+  quit: (): void => {
+    ipcRenderer.send('luna:quit');
+  },
 });
 
 // Inject the desktop-resolved config (LUNA_MODEL_URL / LUNA_TTS_BACKEND / LUNA_TTS_URL / LUNA_UI_MODE)
