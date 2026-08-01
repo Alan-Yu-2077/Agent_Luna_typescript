@@ -88,7 +88,10 @@ export type MainMenuDeps = {
   pageBody?: (id: 'diary' | 'skills') => HTMLElement | null;
 };
 
-export function mountMainMenu(root: HTMLElement, deps: MainMenuDeps): { dispose: () => void } {
+export function mountMainMenu(
+  root: HTMLElement,
+  deps: MainMenuDeps,
+): { dispose: () => void; leaveForTalk: () => void } {
   const doc = root.ownerDocument;
   root.classList.add('menu-mode');
   // The lobby pose. Sleeping is a pure front-end state — the FaceVm shuts the idle layer down and
@@ -216,15 +219,24 @@ export function mountMainMenu(root: HTMLElement, deps: MainMenuDeps): { dispose:
     }
   };
 
-  return {
-    dispose: () => {
-      clearTimeout(pageTimer);
-      menu.removeEventListener('keydown', keydown);
-      menu.remove();
-      page?.remove();
-      zzz?.remove();
-      deps.stage.classList.remove('menu-away');
-      root.classList.remove('menu-mode');
-    },
+  const dispose = (): void => {
+    clearTimeout(pageTimer);
+    menu.removeEventListener('keydown', keydown);
+    menu.remove();
+    page?.remove();
+    zzz?.remove();
+    deps.stage.classList.remove('menu-away');
+    root.classList.remove('menu-mode');
   };
+
+  // v0.44.1 — Talk's own exit (D4), distinct from transition I: the text column fades LEFT (0.5s),
+  // the zzz scatters in 0.2s, and the whole menu goes pointer-inert on the click frame so a double
+  // Talk cannot exist. The caller owns the chat reveal and calls dispose when the swap completes —
+  // the menu does not know what replaces it, only how to leave.
+  const leaveForTalk = (): void => {
+    menu.classList.add('talk-leaving');
+    zzz?.classList.add('gone');
+  };
+
+  return { dispose, leaveForTalk };
 }

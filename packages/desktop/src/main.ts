@@ -826,11 +826,13 @@ async function smokeProbe(win: BrowserWindow): Promise<void> {
     app.exit(1);
     return;
   }
-  // Phase 2 — the direct boot, byte-for-byte today's app. The pet path never sees the menu at all,
-  // so its URL needs no bypass; adding it anyway is harmless and keeps one shape.
-  const direct = new URL(win.webContents.getURL());
-  direct.searchParams.set('menu', '0');
-  await win.loadURL(direct.toString());
+  // Phase 2 — v0.44.1: walk through the door the owner walks through. CLICK Talk, let the wake
+  // animation and the session activation run, then assert everything the direct boot used to
+  // prove — wsStatus 'open' now demonstrates the REAL activation path end to end. (The pet path
+  // never sees a menu and still boots direct; `?menu=0` remains for hand-testing.)
+  await win.webContents.executeJavaScript(
+    `document.querySelector('.main-menu [data-item="talk"]')?.click()`,
+  );
   await new Promise((r) => setTimeout(r, 6000));
   const probe = (await win.webContents.executeJavaScript(
     `(() => {

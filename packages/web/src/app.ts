@@ -31,6 +31,8 @@ import { costumeWrites, loadCostume, saveCostume, toggleCostume } from './live2d
 import { isWorkbenchMode, workbenchModelUrl } from './workbenchMode';
 import { menuEnabled } from './menuMode';
 import { mountMainMenu } from './ui/mainMenu';
+import { runSequence, SLEEP_STEPS, WAKE_STEPS } from './wakeSequence';
+import { createReturnGate } from './returnGate';
 
 // Browser entry — builds the cute UI shell + the live Live2D avatar + voice, and
 // wires the v0.12.0 consumption controller plus the v0.13.4 polish chrome (dream
@@ -262,8 +264,19 @@ async function boot(): Promise<void> {
   // voice sink, no geolocation prompt. `wsClient` is the null-until-activated seam the lobby-safe
   // listeners below guard on.
   let wsClient: LunaWsClient | null = null;
+  // v0.44.1: ← Menu closes the socket politely; Talk after that reuses the same client — connect()
+  // resets its deliberate-close latch. `wsLive` is the belt against a double activate.
+  let wsLive = false;
+  const returnGate = createReturnGate();
+  let dreamWakePending = false;
   const activateSession = (): void => {
-    if (wsClient) return;
+    if (wsClient) {
+      if (!wsLive) {
+        wsLive = true;
+        wsClient.connect();
+      }
+      return;
+    }
     if (ttsBackend === 'http') {
       // v0.43.14: the second rung of v0.37.4's ladder is gone. An utterance the GPT voice cannot
       // speak (hard failure / the 60 s mute window) is now SKIPPED — logged, and the serial queue
@@ -307,6 +320,14 @@ async function boot(): Promise<void> {
     const client = new LunaWsClient({
       url: WS_URL,
       onEvent: (e) => {
+        // v0.44.1: the polite-disconnect gate watches the turn lifecycle; and a dream entered
+        // straight from the menu wakes her when it ENDS (she slept into it, so the wake she skipped
+        // on the way in plays on the way out).
+        returnGate.onEvent(e);
+        if (e.type === 'dream.status' && !e.is_dreaming && dreamWakePending) {
+          dreamWakePending = false;
+          runSequence(live2d, WAKE_STEPS);
+        }
         // The typing indicator is owned by the controller now (v0.21.9): it keeps the
         // dots up for the whole turn and hides them on turn.result / proactive.finished,
         // instead of this open-only show that the first tool/message used to kill.
@@ -335,6 +356,7 @@ async function boot(): Promise<void> {
       },
     });
     wsClient = client;
+    wsLive = true;
     client.connect();
     // Watch the browser for the user's location (one-time permission prompt). Fires on the
     // initial fix AND every real move (v0.37.17 — the old one-shot froze at page-load time);
@@ -660,21 +682,70 @@ async function boot(): Promise<void> {
     mountPackDrop(document, { scanVoicePack: scan, installVoicePack: install });
   }
 
-  // v0.44.0 — the front door. Mounted last so every lobby-safe wire above exists behind it; the
-  // session half stays dark until Talk (v0.44.1 — this version's Talk is deliberately a no-op, and
-  // Dream renders disabled). Settings opens the existing panel gliding over the menu.
+  // v0.44.0/v0.44.1 — the front door. Mounted last so every lobby-safe wire above exists behind it.
+  // Talk swaps menu for chat while she wakes IN PLACE (D4); ← Menu disconnects politely and she
+  // sleeps again; Dream connects and enters the dream without waking her first.
   if (lobbyOn) {
     const quitBridge = (globalThis as { lunaPet?: { quit?: () => void } }).lunaPet?.quit;
-    mountMainMenu(root, {
-      stage: refs.modelStage,
-      sink: live2d,
-      hasAvatar: modelState === 'ok',
-      onTalk: () => {
-        /* v0.44.1 wires the wake — until then the door does not open */
-      },
-      openSettings: () => setSettingsOpen(true),
-      ...(quitBridge ? { quit: () => quitBridge() } : {}),
+    let menuHandle: { dispose: () => void; leaveForTalk: () => void } | null = null;
+    let swapTimer: ReturnType<typeof setTimeout> | undefined;
+
+    // The menu→chat swap both Talk and Dream ride: the text column fades left, the chat fades in
+    // over it (CSS `.waking`), and once the reveal lands the menu DOM is gone entirely.
+    const swapToChat = (): void => {
+      menuHandle?.leaveForTalk();
+      root.classList.add('waking');
+      swapTimer = setTimeout(() => {
+        menuHandle?.dispose();
+        menuHandle = null;
+        root.classList.remove('waking');
+      }, 1000);
+    };
+
+    const mountMenu = (): void => {
+      menuHandle = mountMainMenu(root, {
+        stage: refs.modelStage,
+        sink: live2d,
+        hasAvatar: modelState === 'ok',
+        onTalk: () => {
+          swapToChat();
+          // She starts waking on the click frame; the WS connects and the voice warms UNDER the
+          // 1.8s animation — the wake gate is the wake itself, not an overlay that would hide it.
+          runSequence(live2d, WAKE_STEPS);
+          activateSession();
+          if (ttsBackend === 'http') void warmUpTts('/api/tts', () => {});
+        },
+        onDream: () => {
+          // Straight from sleep into the dream — a sleeper does not wake to fall asleep. The wake
+          // she skipped here plays when the dream ENDS (the dream.status tap above).
+          swapToChat();
+          dreamWakePending = true;
+          activateSession();
+          wsClient?.send({ type: 'dream.enter' });
+        },
+        openSettings: () => setSettingsOpen(true),
+        ...(quitBridge ? { quit: () => quitBridge() } : {}),
+      });
+    };
+    mountMenu();
+
+    // ← Menu lives in the chat header, and the disconnect is POLITE: mid-turn it waits for the
+    // turn's end (returnGate), then closes the socket and she goes back down.
+    const returnBtn = document.createElement('button');
+    returnBtn.type = 'button';
+    returnBtn.className = 'menu-return-btn';
+    returnBtn.textContent = '← Menu';
+    returnBtn.addEventListener('click', () => {
+      returnGate.request(() => {
+        clearTimeout(swapTimer);
+        wsClient?.close();
+        wsLive = false;
+        menuHandle?.dispose();
+        mountMenu(); // re-asserts menu-mode + sleeping; the SLEEP sequence is that single beat
+        runSequence(live2d, SLEEP_STEPS);
+      });
     });
+    refs.chatHeader.appendChild(returnBtn);
   }
 
   startTimestampRefresh(refs.chatLog);

@@ -1040,3 +1040,25 @@ body.pet { background: none; }
 }
 .menu-page-back:hover { color: var(--sky-text); }
 .menu-page-placeholder { color: var(--muted); font-size: 15px; }
+
+/* ── v0.44.1: Talk — she wakes in place ───────────────────────────────────────
+   The menu's own exit (distinct from transition I): the text column fades LEFT
+   and the chat fades in over the same slot. She is not part of either — the
+   wake is the FaceVm's, not the DOM's. */
+.main-menu.talk-leaving {
+  transform: translateX(-28px); opacity: 0; pointer-events: none;
+  transition-duration: 0.5s;
+}
+.menu-mode.waking .chat-panel {
+  visibility: visible; pointer-events: auto;
+  opacity: 0; animation: menu-chat-reveal 0.6s ease 0.3s forwards;
+}
+@keyframes menu-chat-reveal { to { opacity: 1; } }
+.menu-zzz { transition: opacity 0.2s ease; }
+.menu-zzz.gone { opacity: 0; }
+.menu-return-btn {
+  appearance: none; background: none; border: none; cursor: pointer; padding: 0 0 0 10px;
+  margin-left: auto; font-family: inherit; font-size: 12px; font-weight: 700; color: #8fa6bf;
+  transition: color 0.3s ease;
+}
+.menu-return-btn:hover { color: var(--sky-text); }
