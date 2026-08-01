@@ -86,7 +86,7 @@ describe('resolveManagedRuntime', () => {
     ).toBeNull();
   });
 
-  test('NO installed pack → null: GPT-SoVITS is zero-shot, never launch voiceless (browser voice until a pack drops)', () => {
+  test('NO installed pack → null: GPT-SoVITS is zero-shot, never launch voiceless (she stays silent until a pack drops)', () => {
     const fs = fakeFs({ files: byoCheckoutFiles, packYamls: [] });
     expect(
       resolveManagedRuntime({ LUNA_TTS_MANAGED: '1', LUNA_TTS_RUNTIME_DIR: BYO }, { userData: UD, fs }),
@@ -190,7 +190,7 @@ describe('resolveManagedRuntime', () => {
   });
 
   // …but on macOS/Linux the SAME old marker points at a byte-identical tree, so it must still launch —
-  // invalidating it would drop a working install to the browser voice for no reason (the regression
+  // invalidating it would drop a working install into silence for no reason (the regression
   // the platform-aware markerIsCurrent exists to prevent).
   test('mac: a pre-v0.40 ready marker still launches — the POSIX tree did not change', () => {
     const fs = fakeFs({

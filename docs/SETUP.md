@@ -1,7 +1,7 @@
 # Setup — bring your own model & voice
 
 Luna ships with **no avatar model and no voice weights** — you supply your own. A fresh clone runs
-text-only with a zero-setup browser voice; this guide covers adding an avatar and (optionally) a
+text-only and silent; this guide covers adding an avatar and (optionally) a
 higher-quality voice.
 
 ## The guided way (desktop app) — recommended
@@ -79,12 +79,12 @@ the box. Per-model presets are a planned follow-up.
 
 ## 2. Voice options
 
-Set the backend in `.env` (or per-browser via `localStorage['luna:tts-backend']`): `browser` (default)
-| `http` (self-hosted GPT-SoVITS) | `none` (silent).
+Set the backend in `.env` (or per-browser via `localStorage['luna:tts-backend']`):
+`http` (self-hosted GPT-SoVITS) | `none` (silent — and the default when unset).
 
-### Browser (default, zero setup)
-
-`LUNA_TTS_BACKEND=browser` — the Web Speech API. Works immediately, quality varies by OS/browser.
+She has exactly one voice. v0.43.14 removed the zero-setup browser voice that used to stand in for
+it: until GPT-SoVITS is configured she simply does not speak, rather than borrowing a system voice
+that isn't hers.
 
 ### GPT-SoVITS (custom cloned voice) — one-click in the desktop app
 
@@ -104,8 +104,8 @@ The highest-quality option, and since v0.37 the desktop wizard can do ALL of it 
 
 On every launch the app shows a loading page until the voice has genuinely cold-started, then enters
 (skippable after ~20s — a broken voice never locks you out). If an utterance ever can't be spoken
-(the server is restarting), it falls back to the browser voice for that sentence instead of being
-dropped.
+(the server is restarting), that line is **skipped and logged** — she stays quiet for it rather than
+finishing the sentence in a stranger's voice. The next line retries, so recovery needs no action.
 
 #### Advanced: bring your own runtime / server
 

@@ -153,11 +153,13 @@ export function createController(deps: ControllerDeps): { handle: (e: ServerEven
                 };
                 void deps.audio
                   .speak(d.text, d.voice_params, gesture?.when === 'start' ? firePulse : undefined)
-                  .then(() => {
-                    if (gesture?.when === 'end') firePulse();
+                  .then((spoken) => {
+                    // v0.43.14: only if it was actually voiced. A skipped line has no pause to tilt
+                    // into. `void` (a sink that does not report) still counts as spoken.
+                    if (spoken !== false && gesture?.when === 'end') firePulse();
                   })
                   .catch(() => {
-                    /* synthesis failed — the fallback rung already handled the words; no gesture */
+                    /* the sink reports failure by resolving false; a throw is a bug, not a silence */
                   });
               }
             } else {

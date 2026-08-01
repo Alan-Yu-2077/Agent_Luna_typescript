@@ -51,10 +51,10 @@ LUNA_WEB_SEARCH_API_KEY=
 LUNA_UI_MODE=
 
 # Avatar & voice (bring-your-own — see docs/SETUP.md). The "Choose model folder…" picker sets
-# LUNA_MODEL_URL for you. Voice defaults to the browser; set LUNA_TTS_BACKEND=http + a GPT-SoVITS
-# api_v2 server (services/tts) for a custom voice.
+# LUNA_MODEL_URL for you. v0.43.14: voice is OFF until configured — set LUNA_TTS_BACKEND=http plus a
+# GPT-SoVITS api_v2 server (the wizard can deploy one) to give her a voice.
 LUNA_MODEL_URL=
-LUNA_TTS_BACKEND=browser
+LUNA_TTS_BACKEND=
 LUNA_TTS_URL=
 # v0.37.0: 1 = Luna spawns + supervises the GPT-SoVITS api_v2 server herself (from the wizard-
 # provisioned runtime or LUNA_TTS_RUNTIME_DIR) — no terminal. Unset/0 = bring-your-own (you run it).

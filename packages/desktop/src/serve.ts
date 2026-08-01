@@ -9,7 +9,7 @@ import type { VoiceProcState } from './ttsRuntime';
 // (/models, /live2dcubismcore.min.js) and localStorage (all luna:* settings) keep working unchanged.
 // Standalone module so it can compile into a sidecar unchanged. /api/tts/* translates directly to a
 // bring-your-own GPT-SoVITS api_v2 backend (LUNA_TTS_URL) — no owner glue; mirrors dev-server.ts. With
-// no upstream configured it keeps the 502 (→ the boot gate degrades to muted / the browser voice).
+// no upstream configured it keeps the 502 (→ the boot gate degrades to muted).
 
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',

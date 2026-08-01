@@ -423,7 +423,10 @@ export function mountSetupWizard(root: HTMLElement, opts: { preview?: boolean } 
   let values = new Map<string, string>();
   let configuredSecrets = new Set<string>();
   const probeStates = new Map<string, ProbeState>(); // per-step; reset to 'none' when its fields change
-  let voiceBackend = 'browser';
+  // v0.43.14: unconfigured means SILENT. Defaulting to 'http' would write a backend the owner may
+  // have no server for — and would promote a legacy 'browser' to 'http' on Finish, the exact
+  // promotion `resolveTtsBackend` refuses. The voice step's deploy/drop UI is what opts in.
+  let voiceBackend = 'none';
   let avatarInstalled = false;
   let busy = false;
   const voice: VoiceState = { picks: {}, transcript: '', promptLang: 'en' };
@@ -550,8 +553,8 @@ export function mountSetupWizard(root: HTMLElement, opts: { preview?: boolean } 
       const radio = doc.createElement('div');
       radio.className = 'wizard-radio-row';
       for (const [value, key] of [
-        ['browser', 'step.voice.browser'],
         ['http', 'step.voice.http'],
+        ['none', 'step.voice.none'],
       ] as const) {
         const lab = doc.createElement('label');
         const input = doc.createElement('input');
@@ -1140,9 +1143,10 @@ export function mountSetupWizard(root: HTMLElement, opts: { preview?: boolean } 
       values = h.values;
       configuredSecrets = h.configured;
       const backend = (saved['LUNA_TTS_BACKEND'] ?? '').trim();
-      // Only a backend the voice step can actually represent. A stored 'none' is what an agent run
-      // pinned; adopting it would re-write 'none' on a switch back to full and leave her mute.
-      if (backend === 'browser' || backend === 'http') voiceBackend = backend;
+      // Mirrors `resolveTtsBackend`: only 'http' is a voice. A stored 'browser' predates v0.43.14
+      // and reads as silence, which is exactly what the running app is already doing — so the step
+      // shows "not yet" rather than pre-selecting a backend that isn't there.
+      voiceBackend = backend === 'http' ? 'http' : 'none';
       const savedMode = (saved['LUNA_UI_MODE'] ?? '').trim();
       if (savedMode === 'agent' || savedMode === 'full') {
         uiMode = savedMode;

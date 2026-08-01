@@ -3,7 +3,7 @@
 //
 // Voice is bring-your-own and needs no process here: the web dev-server forwards /api/tts/* to a
 // GPT-SoVITS api_v2 backend at LUNA_TTS_URL (inherited from the environment). Unset → the app uses the
-// zero-setup browser voice (or runs muted). See docs/SETUP.md.
+// silent unless LUNA_TTS_BACKEND=http names a running api_v2. See docs/SETUP.md.
 
 const BUN = process.execPath; // the bun binary running this script
 const TTS_URL = Bun.env['LUNA_TTS_URL'];

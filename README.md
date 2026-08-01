@@ -44,7 +44,7 @@ machine. Read the code, clone it, take the parts you want.</sub>
   distills herself.
 - 🎭 **Embodied** — a Live2D avatar with emotion-driven expressions, gaze follow, idle animation
   profiles, phoneme lip-sync, and a transparent always-on-top **desktop pet mode**.
-- 🗣 **Your voice** — zero-setup browser TTS out of the box, or a GPT-SoVITS custom voice with no
+- 🗣 **Her voice** — a GPT-SoVITS cloned voice, set up with no
   terminal anywhere: the wizard downloads & deploys the runtime in one click, you drag a voice pack
   in, and Luna starts + supervises the voice server herself. Drop a new pack onto the running app
   to swap voices.

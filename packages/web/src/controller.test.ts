@@ -488,6 +488,51 @@ describe('frontend controller — punctuation gestures (v0.43.13)', () => {
     expect(h.pulses[0]?.pose['bodyLift']).toBeGreaterThan(0);
   });
 
+  // v0.43.14: with the browser fallback gone, a line the voice could not speak is SKIPPED — and a
+  // question's head-tilt belongs in the pause after a question that was actually asked out loud.
+  // Before this, `speak` always resolved and the tilt fired into a silence nobody heard.
+  test('a skipped line gets no end-of-sentence gesture', async () => {
+    const pulses: unknown[] = [];
+    const view: BubbleView = {
+      open: () => {}, append: () => {}, finalize: () => {}, discard: () => {},
+      chip: () => {}, setThinking: () => {},
+    };
+    const live2d: Live2DSink = {
+      setExpression: () => {}, setState: () => {}, setMouth: () => {}, clear: () => {},
+      pulse: (pose) => pulses.push(pose),
+    };
+    const audio: AudioSink = { speak: async () => false, stop: () => {} };
+    const { handle } = createController({ view, live2d, audio });
+    handle({ type: 'tool.started', call_id: 'm1', tool_name: 'message', input: {} });
+    handle(okMessage('m1', delivery({ text: '真的吗？' })));
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(pulses).toEqual([]);
+  });
+
+  // A sink that does not report (the console/noop stubs, and every pre-v0.43.14 test double) is
+  // treated as "assume spoken" — silence about the outcome must not silence the performance.
+  test('a sink that reports nothing still gets its gesture', async () => {
+    const pulses: unknown[] = [];
+    const view: BubbleView = {
+      open: () => {}, append: () => {}, finalize: () => {}, discard: () => {},
+      chip: () => {}, setThinking: () => {},
+    };
+    const live2d: Live2DSink = {
+      setExpression: () => {}, setState: () => {}, setMouth: () => {}, clear: () => {},
+      pulse: (pose) => pulses.push(pose),
+    };
+    const audio: AudioSink = { speak: async () => {}, stop: () => {} };
+    const { handle } = createController({ view, live2d, audio });
+    handle({ type: 'tool.started', call_id: 'm1', tool_name: 'message', input: {} });
+    handle(okMessage('m1', delivery({ text: '真的吗？' })));
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(pulses.length).toBe(1);
+  });
+
   test('a plain statement produces no gesture at all', async () => {
     const h = speechHarness();
     await say(h, 'm1', '今天下雪了。');

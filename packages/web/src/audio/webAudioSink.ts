@@ -15,8 +15,9 @@ export type WebAudioSinkOpts = {
   onMouth: (frame: LipSyncFrame | null) => void;
   apiBase?: string;
   // v0.37.4: the fallback rung — called (serialized, in playback order) with an utterance the http
-  // voice could NOT speak (hard failure / the mute window). The app wires this to the browser voice
-  // so words are never silently dropped; a barge-in abort is NOT "unspoken".
+  // voice could NOT speak (hard failure / the mute window). Since v0.43.14 the app wires this to a
+  // console warning and skips the line: the words are dropped from the room but never from the log.
+  // A barge-in abort is NOT "unspoken".
   onUnspoken?: (text: string, voice?: VoiceParams) => void;
   fetchSpeechFn?: typeof fetchSpeech; // injectable for tests (no AudioContext in bun)
 };
@@ -44,28 +45,43 @@ export class WebAudioSink implements AudioSink {
     addEventListener('keydown', unlock, { once: true });
   }
 
-  speak(text: string, voice?: VoiceParams, onStart?: () => void): Promise<void> {
-    if (!text.trim()) return Promise.resolve();
+  // v0.43.14: resolves TRUE only if the words actually reached the room. Until now every line got
+  // out somehow — http, or the browser voice behind it — so "the promise resolved" was a fair proxy
+  // for "she said it". With the fallback gone it is not, and the caller has consumers that care:
+  // v0.43.13 fires a question's head-tilt when this resolves, and tilting after a sentence nobody
+  // heard is a gesture about nothing.
+  speak(text: string, voice?: VoiceParams, onStart?: () => void): Promise<boolean> {
+    if (!text.trim()) return Promise.resolve(false);
     const signal = this.aborter.signal;
     if (Date.now() < this.mutedUntil) {
-      // The mute window IS the fallback-voice window: http is known-bad, so hand the words to the
-      // fallback rung (still serialized) instead of dropping them for 60s.
-      return this.queue.run(async () => {
-        if (!signal.aborted) this.opts.onUnspoken?.(text, voice);
-      });
+      // Inside the mute window http is known-bad, so the line is reported unspoken immediately
+      // rather than re-attempted for 60 s. Still serialized, so ordering is unaffected.
+      return this.queue
+        .run(async () => {
+          if (!signal.aborted) this.opts.onUnspoken?.(text, voice);
+          return false;
+        })
+        .then((v) => v ?? false);
     }
     // Prefetch the audio now (concurrent), but gate PLAYBACK on the serial queue so
     // the next utterance only starts after the previous one has fully ended.
     const audio = this.fetch(text, voice, signal);
-    return this.queue.run(async () => {
-      if (signal.aborted) return; // barged-in while waiting in the queue
-      const data = await audio;
-      if (data === 'failed') {
-        this.opts.onUnspoken?.(text, voice); // v0.37.4: never silently dropped
-        return;
-      }
-      if (data && !signal.aborted) await this.playToEnd(data, signal, onStart);
-    });
+    return this.queue
+      .run(async () => {
+        if (signal.aborted) return false; // barged-in while waiting in the queue
+        const data = await audio;
+        if (data === 'failed') {
+          this.opts.onUnspoken?.(text, voice); // v0.37.4: never silently dropped
+          return false;
+        }
+        if (data && !signal.aborted) {
+          await this.playToEnd(data, signal, onStart);
+          return true;
+        }
+        return false;
+      })
+      // A clear() (barge-in) skips the task entirely — undefined, and she did not say it.
+      .then((v) => v ?? false);
   }
 
   stop(): void {

@@ -76,7 +76,7 @@ async function warnIfVoiceDown(): Promise<void> {
     await fetch(url, { signal: AbortSignal.timeout(1200) });
   } catch {
     console.log(`[app] note: LUNA_TTS_BACKEND=http but ${url} is unreachable — start your GPT-SoVITS`);
-    console.log('[app]       api_v2 for voice (see docs/SETUP.md), or set LUNA_TTS_BACKEND=browser.');
+    console.log('[app]       api_v2 for voice (see docs/SETUP.md), or set LUNA_TTS_BACKEND=none.');
   }
 }
 

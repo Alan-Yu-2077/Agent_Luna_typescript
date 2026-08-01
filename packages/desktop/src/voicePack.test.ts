@@ -38,7 +38,7 @@ function setupEnv(): { ttsDir: string; envFile: string } {
   const base = tmp();
   const ttsDir = join(base, 'tts');
   const envFile = join(base, 'luna.env');
-  writeFileSync(envFile, '# cfg\nLUNA_TTS_BACKEND=browser\nLUNA_TTS_URL=\n');
+  writeFileSync(envFile, '# cfg\nLUNA_TTS_BACKEND=none\nLUNA_TTS_URL=\n');
   return { ttsDir, envFile };
 }
 

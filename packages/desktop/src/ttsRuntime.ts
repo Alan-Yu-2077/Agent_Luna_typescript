@@ -124,7 +124,7 @@ export function resolveManagedRuntime(
   // The voice to load = the most recently installed pack's yaml. NO pack → NO launch (v0.37.2,
   // Open Q4): GPT-SoVITS is zero-shot — without a pack there are no custom weights, and the stock
   // config points at pretrained checkpoints the lean provisioned runtime deliberately omits. The app
-  // keeps the browser voice until the first pack drops; the wizard says so plainly.
+  // stays silent until the first pack drops; the wizard says so plainly.
   const packYamls = fs.listPackYamls(ttsDir).sort((a, b) => b.mtimeMs - a.mtimeMs);
   const yamlPath = packYamls[0]?.path;
   if (yamlPath === undefined) return null;

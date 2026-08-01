@@ -672,7 +672,7 @@ ipcMain.handle('luna:install-voice-pack', async (_event, raw: VoiceInstallRaw) =
       if (rt) {
         const ready = await swapManagedTts(rt);
         // v0.37.15 (audit): the renderer built its audio sink from LUNA_TTS_BACKEND at load. Arming
-        // MANAGED + starting api_v2 is invisible to a window still on the browser voice — the cloned
+        // MANAGED + starting api_v2 is invisible to a window that booted silent — the cloned
         // voice runs but nothing plays it, while packDrop cheerfully says "✓ Voice swapped". Switch
         // the backend and reload the running (non-setup) windows so they rebuild as the http sink.
         writeFileSync(paths.envFile, mergeEnvFile(readFileSync(paths.envFile, 'utf8'), { LUNA_TTS_BACKEND: 'http' }));
@@ -933,7 +933,7 @@ void app.whenReady().then(async () => {
   // upstream config lives in luna.env — NOT in this process's process.env (the v0.34.15 lesson) — so
   // it's threaded in as a per-request GETTER (v0.35.3): a wizard voice-pack install or a hand edit
   // applies on the very next /api/tts call, no host restart. Unset → the forward 502s and the app
-  // runs voiceless / with browser voice. It also serves any picker-installed model from userData/models.
+  // runs voiceless. It also serves any picker-installed model from userData/models.
   startWebHost(
     p.webDist,
     DESKTOP_WEB_PORT,

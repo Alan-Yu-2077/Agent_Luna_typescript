@@ -9,7 +9,7 @@ import { planTtsForward, readTtsEnv } from './src/tts/apiV2';
 const PUBLIC = join(import.meta.dir, 'public');
 const port = Number(Bun.env['PORT'] ?? 5173);
 // Voice is bring-your-own: /api/tts/* translates to a GPT-SoVITS api_v2 backend at LUNA_TTS_URL.
-// Unset → the forward answers 502 and the app degrades to silence (or the browser voice).
+// Unset → the forward answers 502 and the app degrades to silence.
 const TTS_ENV = readTtsEnv(Bun.env as unknown as Record<string, string | undefined>);
 
 Bun.serve({

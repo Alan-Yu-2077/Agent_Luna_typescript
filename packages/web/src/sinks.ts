@@ -54,7 +54,9 @@ export interface AudioSink {
   // resolves when playback finishes (or immediately for the stub); onStart fires
   // when audio actually begins, so the controller can drive on-audio-start Live2D
   // commands later (the Python on_audio_start_commands seam).
-  speak(text: string, voice?: VoiceParams, onStart?: () => void): Promise<void>;
+  // v0.43.14: `true`/`false` = whether the words actually reached the room; `void` = the sink does
+  // not track it (the console + noop stubs), which callers treat as "assume spoken".
+  speak(text: string, voice?: VoiceParams, onStart?: () => void): Promise<boolean | void>;
   stop(): void;
 }
 

@@ -103,7 +103,7 @@ export const SETUP_COPY: CopyTable = {
   },
 
   'step.voice.title': { zh: '语音', en: 'Voice' },
-  'step.voice.browser': { zh: '浏览器语音(零配置)', en: 'Browser voice (zero setup)' },
+  'step.voice.none': { zh: '暂不配置(她保持安静)', en: 'Not yet (she stays quiet)' },
   'step.voice.http': { zh: 'GPT-SoVITS(自定义音色)', en: 'GPT-SoVITS (custom voice)' },
   'step.voice.url': { zh: 'api_v2 地址', en: 'api_v2 URL' },
   'step.voice.drop': { zh: '把下载好的音色包文件夹拖到这里', en: 'Drag the downloaded voice pack folder here' },

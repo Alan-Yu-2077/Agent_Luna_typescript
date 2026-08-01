@@ -428,7 +428,7 @@ wordsegment
 # v0.40.0: also sdist-only, and it needs CMake + a C++ toolchain on top. Windows omits it, which is
 # safe because GPT-SoVITS resolves language modules lazily (cleaner.py __import__s per language), so
 # text.japanese — the only importer — never loads for zh/en. Japanese input on Windows fails the
-# utterance, and the v0.37.4 ladder speaks it with the browser voice rather than dropping it.
+# utterance; since v0.43.14 that line is skipped rather than spoken in a borrowed voice.
 pyopenjtalk>=0.4; sys_platform != 'win32'
 fast-langdetect
 # text/LangSegmenter/langsegmenter.py imports it; nothing else pulls it in
@@ -493,7 +493,7 @@ const RECIPE = 2;
 // recipe-2 trees are byte-identical: the manifest is unchanged and the only requirements edits are
 // `; sys_platform != 'win32'` markers that no-op off Windows. So an older POSIX marker still points
 // at a launchable runtime, and invalidating it would force a pointless multi-GB re-provision plus a
-// silent drop to the browser voice. This floor says "the POSIX tree has not changed since recipe 1";
+// silent fall back to no voice at all. This floor says "the POSIX tree has not changed since recipe 1";
 // a FUTURE recipe that alters the POSIX layout must raise it to its own number.
 const POSIX_TREE_UNCHANGED_SINCE = 1;
 type Marker = {

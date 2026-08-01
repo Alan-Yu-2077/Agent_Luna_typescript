@@ -182,9 +182,14 @@ describe('modeValues', () => {
     expect(modeValues('agent', 'http')).toEqual({ LUNA_UI_MODE: 'agent', LUNA_TTS_BACKEND: 'none' });
   });
 
-  test('coming back to full OVERWRITES the pinned none — otherwise the full Luna returns mute', () => {
-    expect(modeValues('full', 'browser')).toEqual({ LUNA_UI_MODE: 'full', LUNA_TTS_BACKEND: 'browser' });
-    expect(modeValues('full', 'http')['LUNA_TTS_BACKEND']).toBe('http');
+  // v0.43.14 CHANGED what this guards, so the name changed with it. It used to prove that returning
+  // to full mode overwrites an agent run's pinned 'none' — back when 'none' was never a thing the
+  // owner could choose. It is now a legal choice (the voice step offers it), so the guarantee is the
+  // weaker, truer one: full mode writes THROUGH whatever was chosen. Two distinct inputs, because
+  // one input asserted twice would still pass if the full branch hardcoded a backend.
+  test('full mode writes the CHOSEN backend through, both of them', () => {
+    expect(modeValues('full', 'http')).toEqual({ LUNA_UI_MODE: 'full', LUNA_TTS_BACKEND: 'http' });
+    expect(modeValues('full', 'none')).toEqual({ LUNA_UI_MODE: 'full', LUNA_TTS_BACKEND: 'none' });
   });
 
   test('merged last, it beats a stale backend the voice step left in the collected values', () => {

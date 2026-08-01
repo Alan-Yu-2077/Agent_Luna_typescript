@@ -19,7 +19,6 @@ import { createPixiLive2DSink } from './live2d/pixiLive2DSink';
 import { resolveModelUrl } from './live2d/resolveModelUrl';
 import { webglAvailable } from './live2d/cubismRuntime';
 import { WebAudioSink } from './audio/webAudioSink';
-import { WebSpeechSink } from './audio/webSpeechSink';
 import { resolveTtsBackend } from './audio/ttsBackend';
 import { createBootGate, warmUpTts } from './ui/bootGate';
 import { mountPhysicsScene } from './physics/scene';
@@ -98,6 +97,9 @@ async function boot(): Promise<void> {
   // v0.36.0: Reduce-motion is gone (Initiative 26 constitution — the app is always alive). Clean up
   // the stale persisted key so a previously-on instance doesn't carry a dead flag forever.
   localStorage.removeItem('luna:reduce-motion');
+  // v0.43.14: the browser voice is gone, and with it the picker that named which system voice to
+  // borrow. Clear the stale key so a previously-set preference does not linger forever unread.
+  localStorage.removeItem('luna:voice');
 
   // v0.39.2: agent-only — the same brain with nothing but the conversation. No avatar is resolved or
   // rendered, no voice is set up, and the model stage takes no width (theme.css `.agent-only`).
@@ -107,9 +109,9 @@ async function boot(): Promise<void> {
   if (agentOnly) root.classList.add('agent-only');
   const windowView = new CuteBubbleView(refs.chatLog, refs.scrollPill);
 
-  // Voice backend: 'browser' (zero-setup Web Speech — the default a fresh install speaks with) |
-  // 'http' (self-hosted GPT-SoVITS via the /api/tts forward) | 'none'. Only the http backend loads a
-  // model, so only it gets the warm-up boot gate; the browser voice needs no warm-up.
+  // Voice backend: 'http' (self-hosted GPT-SoVITS via the /api/tts forward) | 'none' (silent, and
+  // the default when nothing is configured). Only the http backend loads a model, so only it gets
+  // the warm-up boot gate. v0.43.14 retired the third option, the browser's Web Speech voice.
   const ttsBackend = resolveTtsBackend();
 
   // Boot gate: for the http voice backend, block the UI until it has warmed its model. Skippable, and
@@ -196,33 +198,26 @@ async function boot(): Promise<void> {
   let isCollapsed = localStorage.getItem('luna:collapsed') === '1';
   const view = new RouterBubbleView(windowView, speechStack);
 
-  // v0.37.12: an explicit browser-voice choice, e.g. localStorage['luna:voice'] = 'Ting-Ting'.
-  // Unset → voicePick chooses (language-matched, female-preferred, never the OS default man).
-  const preferredVoice = localStorage.getItem('luna:voice') ?? undefined;
   let audio: AudioSink = noopAudioSink;
   if (ttsBackend === 'http') {
-    // v0.37.4: the two-rung ladder — an utterance the GPT voice can't speak (hard failure / the
-    // 60s mute window) falls to the browser voice instead of being silently dropped; the next
-    // utterance retries http, so recovery re-promotes by itself. Never a silent downgrade: each
-    // fallback is logged with the reason surface (the console is the desktop shell's log).
-    let fallbackVoice: WebSpeechSink | null = null;
+    // v0.43.14: the second rung of v0.37.4's ladder is gone. An utterance the GPT voice cannot
+    // speak (hard failure / the 60 s mute window) is now SKIPPED — logged, and the serial queue
+    // moves on to the next one. It used to be handed to the browser voice, which meant a stranger
+    // finished her sentence every time api_v2 hiccuped. `onUnspoken` still fires, so the failure is
+    // never silent to the log; it is only silent to the room.
     audio = new WebAudioSink({
       onMouth: (frame) => live2d.setMouth(frame),
-      onUnspoken: (text, voice) => {
-        console.warn('[voice] GPT voice unavailable — speaking via the browser voice this once');
-        fallbackVoice ??= new WebSpeechSink({ onMouth: (frame) => live2d.setMouth(frame), ...(preferredVoice ? { preferredVoice } : {}) });
-        void fallbackVoice.speak(text, voice);
+      onUnspoken: (text) => {
+        console.warn(`[voice] her voice is unavailable — skipping this line: ${text.slice(0, 40)}`);
       },
     });
-  } else if (ttsBackend === 'browser') {
-    audio = new WebSpeechSink({ onMouth: (frame) => live2d.setMouth(frame), ...(preferredVoice ? { preferredVoice } : {}) });
   }
   // Speech-gate the stack: when Luna actually begins speaking a reply, restart the newest bubble's
   // life so its ~10s aligns with the utterance (playback is serialized, so emit ≠ speak time). When
   // she FINISHES speaking (the speak promise resolves), that bubble detaches and falls (v0.36.2).
   // Only wired for real voice backends — the voiceless noop sink resolves instantly, so it relies on
   // the hang TTL to trigger the fall instead of dropping the bubble the moment it appears.
-  const hasVoice = ttsBackend === 'http' || ttsBackend === 'browser';
+  const hasVoice = ttsBackend === 'http';
   const speechGatedAudio: AudioSink = {
     speak: (text, voice, onStart) => {
       const p = audio.speak(text, voice, () => {

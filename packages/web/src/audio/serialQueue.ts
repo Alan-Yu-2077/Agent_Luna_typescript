@@ -11,16 +11,21 @@ export class SerialQueue {
   private gen = 0;
 
   // Run `task` after every previously-enqueued task settles. Returns a promise
-  // that resolves when THIS task finishes (or is skipped by a clear()).
-  run(task: () => Promise<void>): Promise<void> {
+  // that resolves when THIS task finishes, or `undefined` if a clear() skipped it.
+  // v0.43.14: generic, so a caller can learn what its task returned — `speak` uses it to report
+  // whether the utterance actually played, and a skipped task is exactly "it did not".
+  run<T>(task: () => Promise<T>): Promise<T | undefined> {
     const gen = this.gen;
     const prev = this.tail;
-    const p = (async () => {
+    const p = (async (): Promise<T | undefined> => {
       await prev.catch(() => undefined);
-      if (gen !== this.gen) return; // cancelled by a clear() while we waited
-      await task();
+      if (gen !== this.gen) return undefined; // cancelled by a clear() while we waited
+      return task();
     })();
-    this.tail = p.catch(() => undefined);
+    this.tail = p.then(
+      () => undefined,
+      () => undefined,
+    );
     return p;
   }
 
