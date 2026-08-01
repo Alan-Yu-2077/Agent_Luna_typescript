@@ -367,7 +367,7 @@ export async function createPixiLive2DSink(
       faceVm.setGazeActive(on); // off → the idle profile wanders the gaze itself
       if (!on) focusController.focus(0, 0, false); // ease head/body/eyes back to center
     },
-    triggerEmotion: (id, intensity) => faceVm.triggerEmotion(id, intensity),
+    triggerEmotion: (id) => faceVm.triggerEmotion(id),
     listEmotions: () => faceVm.listEmotions(),
     setIdleProfile: (id) => faceVm.setIdleProfile(id),
     listIdleProfiles: () => faceVm.listIdleProfiles(),

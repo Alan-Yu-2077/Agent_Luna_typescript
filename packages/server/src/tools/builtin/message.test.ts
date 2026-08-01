@@ -117,6 +117,16 @@ describe('message schema teaches the performance levers', () => {
     expect(d).toContain('Omitting it never escalates');
   });
 
+  // v0.43.15: the field stopped scaling amplitude, so a describe that still called it an intensity
+  // dial would be teaching her a lever the engine no longer has. Asserted as an ABSENCE, because the
+  // failure mode is a stale sentence surviving a behaviour change.
+  test('emotion is described as a variant selector, not a volume knob', () => {
+    const d = describeOf('emotion');
+    expect(d).toContain('full strength');
+    expect(d).not.toContain('barely visible');
+    expect(d).not.toContain('0 = ');
+  });
+
   test('every escalating affect is named by its wire key', () => {
     const d = describeOf('emotion');
     for (const key of [

@@ -98,13 +98,13 @@ export function workbenchSections(): WorkbenchSection[] {
     {
       id: 'affect',
       title: 'Affect',
-      hint: `the 15 wire keys — the slider crosses the ${INTENSITY_MARK} branch`,
+      hint: `the 15 wire keys — the slider picks which variant, at the ${INTENSITY_MARK} branch`,
       controls: ExpressionKey.options.map((id) => ({ kind: 'affect', id, label: titleCase(id) })),
     },
     {
       id: 'clip',
       title: 'Clip',
-      hint: 'every authored performance, played directly',
+      hint: 'every authored performance, played directly — always at full amplitude',
       controls: Object.keys(EMOTIONS).map((id) => ({ kind: 'clip', id, label: titleCase(id) })),
     },
     {
@@ -146,7 +146,8 @@ export function applyControl(target: ControlTarget, c: WorkbenchControl, intensi
       target.setExpression(c.id, intensity);
       return;
     case 'clip':
-      target.triggerEmotion?.(c.id, intensity);
+      // v0.43.15: no intensity — a named clip plays at full amplitude by definition.
+      target.triggerEmotion?.(c.id);
       return;
     case 'state':
       target.setState(c.id);
@@ -270,7 +271,7 @@ export type WorkbenchReadout = { mood: string; playback: string; actions: string
 
 export type DebugBridge = {
   mood?: () => string;
-  playback?: () => { id: string; intensity: number; phase: string } | null;
+  playback?: () => { id: string; phase: string } | null;
   faceVm?: {
     activeActionIds(): string[];
     activeOverlayParams?(): Record<string, number>;
@@ -283,7 +284,7 @@ export function readout(bridge: DebugBridge | undefined): WorkbenchReadout {
   const actions = bridge?.faceVm?.activeActionIds() ?? [];
   return {
     mood: bridge?.mood?.() ?? '—',
-    playback: pb ? `${pb.id} · ${pb.phase} · ${pb.intensity.toFixed(2)}` : 'idle',
+    playback: pb ? `${pb.id} · ${pb.phase}` : 'idle',
     actions: actions.length > 0 ? actions.join(', ') : '—',
     // v0.43.12: the stress indicator. The detector's constants are a feel judgement, and this lamp
     // is the calibration loop — it lights while a stress pulse is live, so the owner can check it
@@ -373,7 +374,9 @@ export function mountWorkbench(root: HTMLElement, deps: WorkbenchDeps): { stage:
   slider.value = '0.95';
   let intensity = parseIntensity(slider.value);
   const paintIntensity = (): void => {
-    intensityLabel.textContent = `Intensity ${intensity.toFixed(2)}${intensity >= INTENSITY_MARK ? ' · escalated' : ''}`;
+    // v0.43.15: it selects a variant, it does not scale one. Saying "intensity" alone would keep
+    // teaching the volume-knob reading the engine just stopped honouring.
+    intensityLabel.textContent = `Affect intensity ${intensity.toFixed(2)} · ${intensity >= INTENSITY_MARK ? 'escalated variant' : 'mild variant'}`;
     intensityRow.classList.toggle('high', intensity >= INTENSITY_MARK);
   };
   slider.addEventListener('input', () => {

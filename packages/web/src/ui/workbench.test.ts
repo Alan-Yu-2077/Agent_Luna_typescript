@@ -36,7 +36,7 @@ function recorder(): { target: ControlTarget; calls: Call[] } {
     target: {
       setExpression: (key, emotion) => calls.push(['setExpression', key, emotion]),
       setState: (state) => calls.push(['setState', state]),
-      triggerEmotion: (id, intensity) => calls.push(['triggerEmotion', id, intensity]),
+      triggerEmotion: (id) => calls.push(['triggerEmotion', id]),
       setIdleProfile: (id) => calls.push(['setIdleProfile', id]),
       playAction: (name, intensity) => calls.push(['playAction', name, intensity]),
       setManualParam: (pid, v) => calls.push(['setManualParam', pid, v]),
@@ -104,7 +104,7 @@ describe('applyControl — each kind reaches the sink method that performs it', 
     for (const c of controls) applyControl(target, c, 0.5);
     expect(calls).toEqual([
       ['setExpression', 'bright_delight', 0.5],
-      ['triggerEmotion', 'poutyAnnoyed', 0.5],
+      ['triggerEmotion', 'poutyAnnoyed'], // v0.43.15: a clip carries no amplitude argument
       ['setState', 'thinking'],
       ['setIdleProfile', 'cuteSwayV1'],
       ['playAction', 'sighRelease', 0.5],
@@ -153,12 +153,12 @@ describe('readout — the live panel degrades instead of lying', () => {
     expect(
       readout({
         mood: () => 'warm · calm · yielding (v+0.55 a-0.10 d-0.20)',
-        playback: () => ({ id: 'adorable', intensity: 0.9, phase: 'perform' }),
+        playback: () => ({ id: 'adorable', phase: 'perform' }),
         faceVm: { activeActionIds: () => ['sighRelease', 'headLowerShy'] },
       }),
     ).toEqual({
       mood: 'warm · calm · yielding (v+0.55 a-0.10 d-0.20)',
-      playback: 'adorable · perform · 0.90',
+      playback: 'adorable · perform', // v0.43.15: no amplitude to report — clips play at full
       actions: 'sighRelease, headLowerShy',
       accent: false,
     });

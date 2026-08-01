@@ -23,8 +23,9 @@ export interface Live2DSink {
   // optional — only the real pixi sink implements these:
   // toggle pointer gaze-follow (autoFocus) vs pure performance-choreography mode
   setGazeFollow?(on: boolean): void;
-  // play a named preset emotion directly (dev / manual trigger)
-  triggerEmotion?(id: string, intensity?: number): void;
+  // play a named preset emotion directly (dev / manual trigger). v0.43.15: no intensity — a clip
+  // plays at full amplitude or not at all.
+  triggerEmotion?(id: string): void;
   // the available preset emotion ids (for a dev trigger UI)
   listEmotions?(): string[];
   // switch the resting-state idle animation (settings switcher)

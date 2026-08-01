@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test';
+import type { ExpressionKey } from '@luna/protocol';
 import { FaceVm, PULSE_MAX_HEAD_DEG, approach, type FaceVmOptions, type ParamWriter } from './faceVm';
 import { AffectState } from './affect';
-import { ACTIONS, EMOTIONS, FACE_PARAM_GAIN, timelineFor } from './faceData';
+import { ACTIONS, EMOTIONS, FACE_PARAM_GAIN, timelineFor, type EmotionDef } from './faceData';
 import { FACE_VM_PARAM_MAP, clampStateValue, type FaceStateKey } from './paramMap';
 
 function recorder(): { writer: ParamWriter; last: Map<string, number> } {
@@ -87,24 +88,14 @@ describe('FaceVm — emotion engine', () => {
     expect(vm.listEmotions()).toContain('shy');
     vm.triggerEmotion('does-not-exist'); // guarded — must not throw or queue
     run(vm, 0, 100);
-    vm.triggerEmotion('shy', 1);
+    vm.triggerEmotion('shy');
     run(vm, 116, 3000);
     expect(last.get('Paramsmileshy') ?? 0).toBeGreaterThan(0.5);
   });
 
-  test('emotion intensity scales expression strength', () => {
-    const full = recorder();
-    const fvm = new FaceVm(full.writer, { rng: () => 0.5 });
-    fvm.setExpression('annoyed_resistance', 1);
-    run(fvm, 0, 3000);
-    const half = recorder();
-    const hvm = new FaceVm(half.writer, { rng: () => 0.5 });
-    hvm.setExpression('annoyed_resistance', 0.5);
-    run(hvm, 0, 3000);
-    expect(Math.abs(full.last.get('ParamMouthForm') ?? 0)).toBeGreaterThan(
-      Math.abs(half.last.get('ParamMouthForm') ?? 0),
-    );
-  });
+  // v0.43.15 DELETED 'emotion intensity scales expression strength' — it asserted precisely the
+  // coupling this version removes. Its replacement (amplitude is intensity-INDEPENDENT) lives in the
+  // v0.43.15 block at the end of this file, together with the visibility floor that is the real point.
 });
 
 describe('FaceVm — idle profiles', () => {
@@ -302,7 +293,7 @@ describe('FaceVm — living baseline (v0.42.2)', () => {
       const { writer, last } = recorder();
       const affect = new AffectState({ ambient: 0, baseline: { valence: 0, arousal, dominance: 0 } });
       const vm = new FaceVm(writer, { rng: () => 0.5, affect, affectEnabled: () => true });
-      vm.triggerEmotion('shy', 1);
+      vm.triggerEmotion('shy');
       run(vm, 0, ms);
       return last.get('ParamMouthpucker') ?? 0;
     };
@@ -468,6 +459,33 @@ describe('FaceVm — the peak is no longer a still photograph', () => {
     }
   });
 
+  // v0.43.15 WIDENED this limit and the honest thing is to enumerate it rather than let it be
+  // discovered later. While `emotion` scaled amplitude, a model-typical 0.3 kept these brows well
+  // inside the clamp, so they breathed — invisibly, along with the rest of the expression. At full
+  // amplitude they sit ON the clamp and provably cannot. That is the trade the version makes:
+  // a visible face whose most extreme brows are static, over a breathing face nobody could see.
+  // Lowering the authored peaks would recover both, and that is the owner's taste call, not a fix
+  // to smuggle in here.
+  test('KNOWN LIMIT (widened by v0.43.15): every brow channel now permanently at its clamp', () => {
+    const saturated: string[] = [];
+    for (const [id, def] of Object.entries(EMOTIONS) as Array<[string, EmotionDef]>) {
+      for (const key of ['browLY', 'browRY', 'browLAngle', 'browRAngle'] as const) {
+        const v = def.sustainedState[key];
+        if (v === undefined) continue;
+        if (Math.abs(v) * (FACE_PARAM_GAIN[key] ?? 1) > 1) saturated.push(`${id}.${key}`);
+      }
+    }
+    // Exact, not a count: a new clip that saturates a brow has to be added here deliberately.
+    expect(saturated.sort()).toEqual(
+      [
+        'adorable.browLAngle', 'adorable.browLY', 'adorable.browRAngle', 'adorable.browRY',
+        'annoyed.browLAngle', 'annoyed.browRAngle',
+        'fakeFierce.browLAngle', 'fakeFierce.browLY', 'fakeFierce.browRAngle', 'fakeFierce.browRY',
+        'poutyAnnoyed.browLAngle', 'poutyAnnoyed.browRAngle',
+      ].sort(),
+    );
+  });
+
   test('KNOWN LIMIT: a channel authored at its clamp cannot breathe, and we do not pretend it can', () => {
     // `adorable` sets browLY = -1 with FACE_PARAM_GAIN 1.35. Both -1 and -1+jitter map past the clamp
     // after the gain, so the written value is identical every frame. Fixing it means lowering the
@@ -516,7 +534,7 @@ describe('FaceVm — the peak is no longer a still photograph', () => {
     };
     for (const id of Object.keys(EMOTIONS)) {
       const vm = new FaceVm(writer, { rng: () => 0.5, livePeakEnabled: () => true });
-      vm.triggerEmotion(id, 1);
+      vm.triggerEmotion(id);
       for (let t = 0; t <= 9000; t += 16) { vm.tick(t); vm.flushPose(); }
     }
     expect(offenders).toEqual([]);
@@ -861,17 +879,9 @@ describe('FaceVm — native peak overlays', () => {
     expect(rises).toBe(0);
   });
 
-  test('overlay strength follows the affect intensity, like the pose already did', () => {
-    const at = (intensity: number): number => {
-      const { writer, last } = recorder();
-      const vm = new FaceVm(writer, { rng: () => 0.5 });
-      vm.setExpression('bright_delight', intensity);
-      run(vm, 0, 3000);
-      return last.get('Paramheart') ?? 0;
-    };
-    expect(at(0.3)).toBeLessThan(at(1));
-    expect(at(0.3)).toBeGreaterThan(0);
-  });
+  // v0.43.15 DELETED 'overlay strength follows the affect intensity, like the pose already did' —
+  // it demanded heart eyes at 30% concentration, which measurement showed is not a subtler delight
+  // but an invisible one. Replaced by the visibility floor in the v0.43.15 block.
 
   test('the asset is released when the clip ends — it does not latch on', () => {
     const { writer, last } = recorder();
@@ -1415,5 +1425,93 @@ describe('FaceVm — pulseSpeech is the gated door onto the pulse layer (v0.43.1
     run(vm, 0, 100);
     vm.addPulse({ headRoll: 4.5 }, 700);
     expect(vm.activePulseCount()).toBe(1);
+  });
+});
+
+// v0.43.15 — intensity stopped being a volume knob.
+//
+// The measurement that forced this: `bright_delight` at emotion 0.3 moved `mouthPucker` by 0.147 and
+// lit the heart eyes to 0.300, while `defaultIdleV1` on its own swings `mouthForm` by ±0.22. The
+// expression was smaller than her breathing. And the model, left to choose, chose low — so the whole
+// escalated half of v0.43.2 was being performed at a strength nobody could see. `emotion` now selects
+// WHICH clip; both clips play at full amplitude.
+describe('FaceVm — amplitude is decoupled from intensity (v0.43.15)', () => {
+  const peakAt = (key: ExpressionKey, intensity: number, param: string): number => {
+    const { writer, last } = recorder();
+    const vm = new FaceVm(writer, { rng: () => 0.5 });
+    vm.setExpression(key, intensity);
+    run(vm, 0, 3000);
+    return last.get(param) ?? 0;
+  };
+
+  // Not "close" — IDENTICAL. A tolerance here would let a scaling factor creep back in under it.
+  test('the same clip at 0.3 / 0.5 / 1.0 reaches frame-identical peaks', () => {
+    for (const param of ['ParamMouthpucker', 'ParamCheekpuff', 'Paramheart', 'ParamBrowYL']) {
+      const low = peakAt('bright_delight', 0.3, param);
+      const mid = peakAt('bright_delight', 0.5, param);
+      const full = peakAt('bright_delight', 1, param);
+      expect(low).toBe(full);
+      expect(mid).toBe(full);
+    }
+  });
+
+  // v0.42.4's lesson, written as an assertion: measurable ≠ visible. There is no longer a legal
+  // input that produces a performance too faint to see.
+  test('no legal intensity produces an invisible performance', () => {
+    for (const intensity of [0, 0.1, 0.3, 0.5, 0.69, 0.7, 1]) {
+      expect(peakAt('bright_delight', intensity, 'Paramheart')).toBeGreaterThan(0.9);
+      expect(peakAt('bright_delight', intensity, 'ParamCheekpuff')).toBeGreaterThan(0.9);
+    }
+  });
+
+  test('an omitted intensity performs at full amplitude too', () => {
+    const { writer, last } = recorder();
+    const vm = new FaceVm(writer, { rng: () => 0.5 });
+    vm.setExpression('bright_delight'); // no emotion on the wire at all
+    run(vm, 0, 3000);
+    expect(last.get('Paramheart') ?? 0).toBeGreaterThan(0.9);
+  });
+
+  // The most important regression guard in this version: decoupling amplitude must NOT collapse the
+  // branch. Locking `emotion` to 1 — the owner's first instinct — would have made `annoyed`,
+  // `skeptical` and `awkwardV2` unreachable and taken the swirl-eyes overlay with them.
+  test('the escalation branch is untouched: the mild clips are still reachable', () => {
+    const clipFor = (key: ExpressionKey, intensity: number): string | null => {
+      const { writer } = recorder();
+      const vm = new FaceVm(writer, { rng: () => 0.5 });
+      vm.setExpression(key, intensity);
+      run(vm, 0, 1500);
+      return vm.currentPlayback()?.id ?? null;
+    };
+    expect(clipFor('annoyed_resistance', 0.3)).toBe('annoyed');
+    expect(clipFor('annoyed_resistance', 0.9)).toBe('poutyAnnoyed');
+    expect(clipFor('guarded_distance', 0.3)).toBe('skeptical');
+    expect(clipFor('guarded_distance', 0.9)).toBe('fakeFierce');
+    expect(clipFor('awkward_lightness', 0.3)).toBe('awkwardV2');
+    expect(clipFor('awkward_lightness', 0.9)).toBe('embarrassed');
+  });
+
+  // The one place intensity still scales something, kept deliberately: how long the mood lingers is
+  // a real judgement, and consecutive messages accumulate it — unlike a single frame's amplitude,
+  // a small value there is brief rather than invisible.
+  test('the VAD impulse still scales with intensity', () => {
+    // `target` is private, so measure through the public face: let `current` chase it for a second
+    // and compare where each lands. That is also the honest measurement — it is what gets rendered.
+    const displacement = (intensity: number): number => {
+      const affect = new AffectState({ ambient: 0 });
+      affect.tick(0);
+      affect.nudge('bright_delight', intensity);
+      for (let t = 16; t <= 1000; t += 16) affect.tick(t);
+      return Math.abs(affect.current.valence);
+    };
+    expect(displacement(1)).toBeGreaterThan(displacement(0.3));
+  });
+
+  test('a clip plays at full amplitude however it was triggered', () => {
+    const { writer, last } = recorder();
+    const vm = new FaceVm(writer, { rng: () => 0.5 });
+    vm.triggerEmotion('adorable');
+    run(vm, 0, 3000);
+    expect(last.get('Paramheart') ?? 0).toBeGreaterThan(0.9);
   });
 });

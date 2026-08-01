@@ -56,7 +56,6 @@ type Phase = 'intro' | 'perform' | 'outro' | 'inactive';
 type Stage = { phase: Phase; weight: number };
 type Playback = {
   id: EmotionId;
-  intensity: number;
   startedAt: number;
   introMs: number;
   performMs: number;
@@ -265,7 +264,7 @@ export class FaceVm {
   private lip: LipSyncFrame | null = null;
   private playback: Playback | null = null;
   private readonly actions = new Map<string, ActionInstance>();
-  private pending: { id: EmotionId | null; intensity: number } | undefined;
+  private pending: { id: EmotionId | null } | undefined;
 
   private readonly rng: () => number;
   private idleProfile: IdleProfileId;
@@ -323,12 +322,12 @@ export class FaceVm {
   // v0.43.7: the clip layer's observation point, the counterpart to `activeActionIds`. Read-only and
   // deliberately snapshot-shaped — the workbench polls this at 2 Hz to name what is on screen, and a
   // bench that reported a phase the renderer is not in would be worse than no readout at all.
-  currentPlayback(now = -1): { id: EmotionId; intensity: number; phase: Stage['phase'] } | null {
+  currentPlayback(now = -1): { id: EmotionId; phase: Stage['phase'] } | null {
     const pb = this.playback;
     if (!pb) return null;
     const phase = this.stage(now < 0 ? this.lastTickAt : now).phase;
     if (phase === 'inactive') return null;
-    return { id: pb.id, intensity: pb.intensity, phase };
+    return { id: pb.id, phase };
   }
 
   // Switch the resting-state idle animation. Unknown ids are ignored (guarded).
@@ -420,15 +419,22 @@ export class FaceVm {
     // `emotion` is optional on the wire. The 0.95 fallback is how strongly to RENDER the pose; the
     // raw (possibly undefined) value is what decides whether the affect escalates into its other
     // clip — an unstated intensity must never mean "maximum".
-    const intensity = clamp01(emotion ?? 0.95);
-    this.pending = { id: affectToEmotion(key, emotion), intensity };
-    this.affect?.nudge(key, intensity);
+    // v0.43.15: `emotion` no longer scales the pose. It keeps exactly two jobs, both deliberate:
+    //   1. WHICH clip — `affectToEmotion` reads the RAW value, so "omitted never escalates" holds.
+    //   2. how long the mood lingers — the VAD impulse and its hold still scale, because "how long
+    //      did that land for" is a real judgement, and consecutive messages accumulate it. Unlike a
+    //      single frame's amplitude, a small value there is not invisible, just brief.
+    // Do not "unify" these onto the constant the amplitude now uses.
+    this.pending = { id: affectToEmotion(key, emotion) };
+    this.affect?.nudge(key, clamp01(emotion ?? 0.95));
   }
   // Dev / manual trigger: play a named emotion directly (bypassing affect→emotion
   // mapping) so every preset performance is visibly triggerable. Guards bad ids.
-  triggerEmotion(id: string, intensity = 0.95): void {
+  // v0.43.15: no intensity argument — a clip plays at full amplitude or not at all. The workbench's
+  // slider still matters, but only where intensity still means something: which clip an AFFECT picks.
+  triggerEmotion(id: string): void {
     if (!(id in EMOTIONS)) return;
-    this.pending = { id: id as EmotionId, intensity: clamp01(intensity) };
+    this.pending = { id: id as EmotionId };
   }
   listEmotions(): string[] {
     return Object.keys(EMOTIONS);
@@ -493,10 +499,10 @@ export class FaceVm {
   // v0.43.9: run an unauthored pose through a real intro→perform→outro. A pose that reads well as a
   // still is not necessarily a pose that reads well arriving and leaving, and the whole point of the
   // composer is to answer that before the numbers reach `faceData.ts`.
-  previewPose(def: EmotionDef, intensity = 0.95): void {
+  previewPose(def: EmotionDef): void {
     this.previewDef = def;
     this.composePose = null; // a preview is motion; compose is a freeze — they cannot both be on
-    this.pending = { id: PREVIEW_EMOTION_ID, intensity: clamp01(intensity) };
+    this.pending = { id: PREVIEW_EMOTION_ID };
   }
 
   // The one indirection the preview needs: every clip lookup goes through here, so a transient def
@@ -516,7 +522,7 @@ export class FaceVm {
     return out;
   }
   clear(): void {
-    this.pending = { id: null, intensity: 0 };
+    this.pending = { id: null };
     this.state = 'neutral';
     this.lip = null;
   }
@@ -640,7 +646,7 @@ export class FaceVm {
 
   private consumePending(now: number): void {
     if (this.pending === undefined) return;
-    const { id, intensity } = this.pending;
+    const { id } = this.pending;
     this.pending = undefined;
     if (!id) {
       if (this.playback && this.playback.outroStartAt === null) this.playback.outroStartAt = now;
@@ -652,7 +658,6 @@ export class FaceVm {
     const timeline = timelineFor(def, this.shortClipsEnabled());
     this.playback = {
       id,
-      intensity,
       startedAt: now,
       introMs: timeline.introMs,
       performMs: timeline.performMs,
@@ -732,7 +737,12 @@ export class FaceVm {
         const from = def.sustainedState[k] ?? def.entryState[k] ?? base;
         raw = lerp(from, base, stage.weight);
       }
-      out[k] = lerp(base, raw, pb.intensity); // affect intensity scales expression strength
+      // v0.43.15: full amplitude, always. This used to be `lerp(base, raw, pb.intensity)`, and the
+      // model's own choice of intensity turned out to be the thing that hid the performance: at
+      // emotion 0.3 a `bright_delight` moved `mouthPucker` by 0.147 while `defaultIdleV1` alone
+      // swings `mouthForm` by ±0.22 — the expression was literally smaller than her breathing.
+      // `emotion` still chooses WHICH clip (the ≥0.7 branch); it no longer chooses how loud.
+      out[k] = raw;
     }
     return out;
   }
@@ -897,10 +907,9 @@ export class FaceVm {
     for (const ref of def.overlayRefs) {
       const ov = OVERLAYS[ref];
       if (!ov) continue;
-      // v0.43.2: scale by intensity as well, matching how the pose is already `lerp(base, raw,
-      // intensity)`. Without it a barely-felt concern arrived with tears at full strength — and with
-      // v0.43.1 wiring the drawn peak assets in, that mismatch became a lot more visible.
-      for (const [pid, base] of Object.entries(ov)) out[pid] = base * w * pb.intensity;
+      // v0.43.15: `w` is the intro/outro fade and stays; the intensity factor is gone with the pose's.
+      // Heart eyes at 30% concentration were not a subtler delight, they were an invisible one.
+      for (const [pid, base] of Object.entries(ov)) out[pid] = base * w;
     }
     return out;
   }

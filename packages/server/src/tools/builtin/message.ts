@@ -42,11 +42,12 @@ const Input = z
       .max(1)
       .optional()
       .describe(
-        'expression intensity, 0 = barely visible, 1 = full. At 0.7 and above some affects ' +
-          'escalate into a different performance: annoyed_resistance becomes a cheek-puffed sulk, ' +
-          'awkward_lightness properly flustered, guarded_distance a defensive bristle, ' +
-          'gentle_concern visible dismay with welling tears. Omitting it never escalates — pass a ' +
-          'high value deliberately when the moment calls for it.',
+        'which VERSION of the expression, not how loud — every performance plays at full strength. ' +
+          'At 0.7 and above some affects switch to a heavier one: annoyed_resistance becomes a ' +
+          'cheek-puffed sulk, awkward_lightness properly flustered, guarded_distance a defensive ' +
+          'bristle, gentle_concern visible dismay with welling tears. Below that you get the lighter ' +
+          'version, equally visible. It also sets how long the mood lingers afterwards. Omitting it ' +
+          'never escalates — pass a high value deliberately when the moment calls for it.',
       ),
     voice_params: VoiceParams.optional().describe('per-message TTS overrides; usually omit'),
     is_final: z
