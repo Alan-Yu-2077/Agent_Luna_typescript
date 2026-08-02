@@ -82,10 +82,9 @@ export type MainMenuDeps = {
   onTalk: () => void;
   // undefined = the item renders disabled (v0.44.0 ships it grey; v0.44.1 wires it).
   onDream?: () => void;
-  openSettings: () => void;
   quit?: () => void;
-  // v0.44.3/4 replace the built-in placeholder with the real page for these ids.
-  pageBody?: (id: 'diary' | 'skills') => HTMLElement | null;
+  // v0.44.3/4/5 provide the real page bodies (the diary book, the skills shelf, the settings IA).
+  pageBody?: (id: 'diary' | 'skills' | 'settings') => HTMLElement | null;
 };
 
 export function mountMainMenu(
@@ -157,7 +156,7 @@ export function mountMainMenu(
   let page: HTMLElement | null = null;
   let pageTimer: ReturnType<typeof setTimeout> | undefined;
 
-  const leaveToPage = (id: 'diary' | 'skills'): void => {
+  const leaveToPage = (id: 'diary' | 'skills' | 'settings'): void => {
     menu.classList.add('leaving');
     deps.stage.classList.add('menu-away');
     page = doc.createElement('section');
@@ -169,14 +168,17 @@ export function mountMainMenu(
     back.textContent = '← Menu';
     back.addEventListener('click', returnToMenu);
     const title = doc.createElement('h2');
-    title.textContent = id === 'diary' ? 'Diary' : 'Skills';
+    title.textContent = id === 'diary' ? 'Diary' : id === 'skills' ? 'Skills' : 'Settings';
     page.append(back, title);
     const body = deps.pageBody?.(id) ?? null;
     if (body) page.appendChild(body);
     else {
       const ph = doc.createElement('p');
       ph.className = 'menu-page-placeholder';
-      ph.textContent = id === 'diary' ? 'Her diary opens here soon.' : 'Her skills gather here soon.';
+      ph.textContent =
+        id === 'diary' ? 'Her diary opens here soon.'
+        : id === 'skills' ? 'Her skills gather here soon.'
+        : 'Settings assemble here soon.';
       page.appendChild(ph);
     }
     root.appendChild(page);
@@ -205,14 +207,13 @@ export function mountMainMenu(
         return;
       case 'diary':
       case 'skills':
+      case 'settings':
         leaveToPage(id);
         return;
       case 'dream':
         deps.onDream?.();
         return;
-      case 'settings':
-        deps.openSettings();
-        return;
+
       case 'quit':
         deps.quit?.();
         return;

@@ -35,6 +35,7 @@ import { runSequence, SLEEP_STEPS, WAKE_STEPS } from './wakeSequence';
 import { createReturnGate } from './returnGate';
 import { mountDiaryBook } from './ui/diaryBook';
 import { mountSkillsPage } from './ui/skillsPage';
+import { mountSettingsPage } from './ui/settingsPage';
 
 // Browser entry — builds the cute UI shell + the live Live2D avatar + voice, and
 // wires the v0.12.0 consumption controller plus the v0.13.4 polish chrome (dream
@@ -725,10 +726,13 @@ async function boot(): Promise<void> {
           activateSession();
           wsClient?.send({ type: 'dream.enter' });
         },
-        openSettings: () => setSettingsOpen(true),
-        // v0.44.3: the diary book rides the HTTP data surface — reading her diary never wakes her
-        // (no WS is touched anywhere in the book).
-        pageBody: (id) => (id === 'diary' ? mountDiaryBook(document) : mountSkillsPage(document)),
+        // v0.44.3/4/5: the three real pages. The diary book rides the HTTP data surface (reading
+        // her diary never wakes her); the settings page ADOPTS the old panel's live rows, so the
+        // controls keep their exact wiring wherever they are displayed.
+        pageBody: (id) =>
+          id === 'diary' ? mountDiaryBook(document)
+          : id === 'skills' ? mountSkillsPage(document)
+          : mountSettingsPage(document, refs),
         ...(quitBridge ? { quit: () => quitBridge() } : {}),
       });
     };
@@ -751,6 +755,16 @@ async function boot(): Promise<void> {
       });
     });
     refs.chatHeader.appendChild(returnBtn);
+
+    // v0.44.5: in lobby boots the old slide-in panel is unreachable BY DESIGN — Settings lives
+    // behind the menu, one hierarchy, no back doors. The ⚙ button therefore goes; the panel DOM
+    // stays as the donor the settings page adopts its rows from. Esc in chat = the quick way home.
+    refs.settingsBtn.style.display = 'none';
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && menuHandle === null && !refs.settingsPanel.classList.contains('on')) {
+        returnBtn.click();
+      }
+    });
   }
 
   startTimestampRefresh(refs.chatLog);

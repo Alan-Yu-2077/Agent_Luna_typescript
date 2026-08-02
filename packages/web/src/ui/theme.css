@@ -1148,3 +1148,26 @@ body.pet { background: none; }
 .skills-retired-head { margin: 14px 0 0; font-size: 12px; font-weight: 800; letter-spacing: 0.08em;
   text-transform: uppercase; color: var(--muted); }
 .skills-empty { color: var(--muted); font-size: 14px; }
+
+/* ── v0.44.5: settings, by which part of her ──────────────────────────────────
+   A full page behind the menu (the old slide-in panel survives only for
+   luna:menu='0' boots). Left rail = five text categories (no icons — D1's
+   no-emoji discipline); right = the adopted rows, one section at a time. */
+.settings-page { margin-top: 26px; max-width: 860px; display: grid;
+  grid-template-columns: 200px 1fr; gap: 26px; align-items: start; }
+.settings-page-rail { display: flex; flex-direction: column; gap: 4px; }
+.settings-page-cat { appearance: none; background: none; border: none; cursor: pointer;
+  text-align: left; padding: 8px 12px; border-radius: 9px; font-family: inherit;
+  font-size: 14px; font-weight: 700; color: #8fa6bf; transition: color 0.3s ease, background 0.3s ease; }
+.settings-page-cat:hover { color: var(--sky-text); }
+.settings-page-cat.on { color: var(--sky-text); background: var(--inner); }
+.settings-page-section { display: none; background: var(--inner); border: 1px solid var(--inner-border);
+  border-radius: 14px; padding: 20px 24px; animation: chat-in var(--m-soft) var(--ease-pop); }
+.settings-page-section.on { display: flex; flex-direction: column; gap: 10px; }
+.settings-page-section h3 { margin: 0; font-size: 17px; font-weight: 800; color: var(--sky-text); }
+.settings-page-blurb { margin: 0 0 6px; font-size: 12px; color: var(--muted); }
+.settings-page-section > label { display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; font-size: 13.5px; color: var(--ink); padding: 4px 0; }
+.settings-page-section .settings-card { border: none; padding: 0; background: none; box-shadow: none; }
+.settings-page-note, .settings-voice-health { margin: 0; font-size: 13px; color: var(--ink-soft); }
+.settings-page-tools { padding-top: 6px; }
