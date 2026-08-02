@@ -46,6 +46,10 @@ export interface Live2DSink {
   // frame until released with `null`. Deliberately raw ids: these address drawn assets the parameter
   // vocabulary in `faceData` does not model.
   setManualParam?(pid: string, value: number | null): void;
+  // v0.44.8: frame the model inside a rect [left, left+width] instead of the whole canvas. The lobby
+  // uses this to span the canvas across the whole window (no interior clip seam) while keeping her
+  // base position exactly where the session slot would put her. null restores the plain frame.
+  setFrame?(get: (() => { left: number; width: number }) | null): void;
   // v0.25.2: run a layout change and GLIDE the model between its before/after positions (FLIP on
   // the pixi ticker). Callers without a real sink just run `mutate()`.
   glideLayout?(mutate: () => void): void;

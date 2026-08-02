@@ -1006,23 +1006,33 @@ body.pet { background: none; }
 .main-menu.leaving { transform: scale(1.16); opacity: 0; pointer-events: none; }
 .menu-mode .model-stage { transition: opacity 0.6s ease; }
 .menu-mode .model-stage.menu-away { opacity: 0; }
+/* v0.44.8 (owner correction): while the menu is up the canvas spans the whole stage, so a zoomed
+   model extends naturally and only the WINDOW edge crops her — no interior clip seam where the
+   session slot's left boundary used to slice her. Her base position stays in the slot via the
+   sink's frame inset, so Talk never moves her; the re-clip to the slot happens under the chat
+   panel's fade-in. Applied only when a model actually rendered (app.ts gates on modelState),
+   so the empty-state card keeps its normal slot. */
+.menu-wide .model-stage { position: absolute; inset: 0; }
 
 .menu-zzz {
   position: absolute; z-index: 8; pointer-events: none;
-  left: calc(var(--luna-head-x, 50%) + var(--luna-head-gap, 120px) * 0.4);
-  top: calc(var(--luna-head-y, 30%) - 46px);
+  left: calc(var(--luna-head-x, 50%) + var(--luna-head-gap, 120px) * 0.55);
+  top: calc(var(--luna-head-y, 30%) - 40px);
   color: var(--sky-text); font-weight: 800; opacity: 0.75;
 }
+/* v0.44.8 (owner): bigger zzz — the old 15–24px read as dust from across the room. Drift travel
+   and headroom scale with the glyphs; the 3.2s ambient clock is unchanged. */
 .menu-zzz span {
-  display: inline-block; margin-right: 5px; font-size: 15px;
+  display: inline-block; margin-right: 9px; font-size: 26px;
   animation: zzz-drift 3.2s ease-in-out infinite;
+  text-shadow: 0 2px 0 rgba(255, 255, 255, 0.55);
 }
-.menu-zzz span:nth-child(2) { font-size: 19px; }
-.menu-zzz span:nth-child(3) { font-size: 24px; }
+.menu-zzz span:nth-child(2) { font-size: 33px; }
+.menu-zzz span:nth-child(3) { font-size: 42px; }
 @keyframes zzz-drift {
-  0% { transform: translateY(4px); opacity: 0; }
+  0% { transform: translateY(7px); opacity: 0; }
   30% { opacity: 0.9; }
-  100% { transform: translateY(-16px); opacity: 0; }
+  100% { transform: translateY(-28px); opacity: 0; }
 }
 
 .menu-page {

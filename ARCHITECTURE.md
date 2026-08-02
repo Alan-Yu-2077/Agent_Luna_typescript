@@ -206,7 +206,10 @@ proactive pathway rides the socket that was never built. Pet, agent-only, `?setu
 **Talk wakes her in place** (she belongs to no page): the menu overlays the chat panel's own grid
 slot, so the swap changes the room around a girl who never moves, while a four-beat wake sequence
 plays over existing engine layers and the TTS warms underneath the animation instead of behind a
-gate. ← Menu disconnects politely — mid-turn it waits for the turn (and proactive-turn) end. Dream
+gate. While the menu is up the canvas itself spans the whole stage (`.menu-wide`, v0.44.8) so a
+zoomed model is cropped only by the window, never by an interior slot edge — a frame rect
+(`Live2DSink.setFrame`) keeps her base position exactly where the session slot puts her, and the
+re-clip at Talk lands under the chat panel's fade-in. ← Menu disconnects politely — mid-turn it waits for the turn (and proactive-turn) end. Dream
 connects and enters the dream without waking her first; the skipped wake plays when the dream ends.
 
 **Diary, Skills, Settings are pages over the read-only data surface** (`/api/data/*` — product HTTP,

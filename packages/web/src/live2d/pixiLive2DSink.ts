@@ -19,6 +19,7 @@ import {
 } from './perfFlags';
 import { debugBridgeEnabled } from '../workbenchMode';
 import { costumeWrites, loadCostume } from './costume';
+import { framedBaseX, frameClampWidth, type Frame } from './frame';
 
 // The real Live2DSink: loads the configured Live2D model via pixi-live2d-display, drives it through a
 // FaceVm on the pixi ticker, and makes it draggable with a persisted offset. Returns null when no model
@@ -120,6 +121,8 @@ export async function createPixiLive2DSink(
 
   const off = loadOffset();
   let zoom = loadZoom();
+  // v0.44.8: the lobby's frame — null means today's plain frame (the whole canvas), bit for bit.
+  let frameOf: (() => Frame) | null = null;
   const fit = (): void => {
     const hostH = host.clientHeight || 600;
     const hostW = host.clientWidth || 400;
@@ -135,11 +138,13 @@ export async function createPixiLive2DSink(
     }
     const baseScale = (hostH * 0.92) / model.height;
     model.scale.set(baseScale * zoom);
-    driver.setBase((hostW - model.width) / 2, (hostH - model.height) / 2);
+    // v0.44.8: centre inside the FRAME, not the host — with no frame this is the old expression.
+    const frame = frameOf?.() ?? { left: 0, width: hostW };
+    driver.setBase(framedBaseX(frame, model.width), (hostH - model.height) / 2);
     // v0.25.2 review fix: re-clamp the persisted drag against the CURRENT host dims (the pointermove
     // clamp only ran at drag time — a drag saved in full-width collapsed mode could strand her
     // entirely off-canvas after expand shrinks the host; persisted, so she stayed gone on reload).
-    const healedDx = clampOffset(off.dx, hostW * 0.5);
+    const healedDx = clampOffset(off.dx, frameClampWidth(frame) * 0.5);
     const healedDy = clampOffset(off.dy, hostH * 0.5);
     if (healedDx !== off.dx || healedDy !== off.dy) {
       off.dx = healedDx;
@@ -272,7 +277,10 @@ export async function createPixiLive2DSink(
   });
   canvas.addEventListener('pointermove', (e) => {
     if (!drag || e.pointerId !== drag.id) return;
-    off.dx = clampOffset(off.dx + (e.clientX - drag.x), host.clientWidth * 0.5);
+    // v0.44.8: clamp against the FRAME, not the raw host — in the wide lobby canvas a drag that
+    // used the whole window could strand her outside the slot she returns to at Talk.
+    const dragW = frameOf ? frameClampWidth(frameOf()) : host.clientWidth;
+    off.dx = clampOffset(off.dx + (e.clientX - drag.x), dragW * 0.5);
     off.dy = clampOffset(off.dy + (e.clientY - drag.y), host.clientHeight * 0.5);
     drag.x = e.clientX;
     drag.y = e.clientY;
@@ -373,6 +381,10 @@ export async function createPixiLive2DSink(
     listIdleProfiles: () => faceVm.listIdleProfiles(),
     playAction: (name, intensity) => faceVm.playAction(name, intensity),
     setListening: (on) => faceVm.setListening(on),
+    setFrame: (get) => {
+      frameOf = get;
+      fit();
+    },
     pulse: (pose, durationMs) => faceVm.pulseSpeech(pose, durationMs),
     setManualParam: (pid, value) => faceVm.setManualParam(pid, value),
   };

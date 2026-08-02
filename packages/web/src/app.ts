@@ -693,6 +693,34 @@ async function boot(): Promise<void> {
     let menuHandle: { dispose: () => void; leaveForTalk: () => void } | null = null;
     let swapTimer: ReturnType<typeof setTimeout> | undefined;
 
+    // v0.44.8 (owner correction): in menu mode the canvas spans the whole stage so a zoomed model
+    // is never sliced by the session slot's left edge — only the window crops her. The frame rect
+    // keeps her BASE exactly where the slot puts her, so Talk wakes her in place (D4) and the
+    // re-clip lands under the chat panel's fade-in.
+    const GAP_PX = 20; // mirrors theme.css `.stage { gap: 20px }`
+    const PAD_PX = 22; // mirrors theme.css `.stage { padding: 0 22px }`
+    const panelEl = refs.chatHeader.closest<HTMLElement>('.chat-panel');
+    const slotFrame = (): { left: number; width: number } => {
+      const hostR = refs.modelStage.getBoundingClientRect();
+      const hostW = refs.modelStage.clientWidth || 1;
+      const plain = { left: 0, width: hostW };
+      const stageR = refs.modelStage.parentElement?.getBoundingClientRect();
+      if (!stageR) return plain;
+      // The slot the SESSION layout would give the canvas: from the chat panel's right edge plus
+      // the flex gap, to the stage's right padding edge — both in canvas coordinates.
+      const left = (panelEl?.getBoundingClientRect().right ?? 0) + GAP_PX - hostR.left;
+      const width = stageR.right - PAD_PX - hostR.left - left;
+      // Side-by-side session layout only: in collapsed/column layouts the canvas is already full
+      // width — there is no slot edge to mimic, so the frame is the plain canvas.
+      return left > 0 && left < hostW * 0.75 && width > 50 ? { left, width } : plain;
+    };
+    const wideStage = (on: boolean): void => {
+      const wide = on && modelState === 'ok'; // empty-state card keeps its normal slot
+      root.classList.toggle('menu-wide', wide);
+      live2d.setFrame?.(wide ? slotFrame : null);
+      globalThis.dispatchEvent(new Event('resize')); // pixi resizeTo re-measures the host
+    };
+
     // The menu→chat swap both Talk and Dream ride: the text column fades left, the chat fades in
     // over it (CSS `.waking`), and once the reveal lands the menu DOM is gone entirely.
     const swapToChat = (): void => {
@@ -702,10 +730,14 @@ async function boot(): Promise<void> {
         menuHandle?.dispose();
         menuHandle = null;
         root.classList.remove('waking');
+        // Re-clip to the session slot only now, with the chat panel opaque over that edge — the
+        // seam change is invisible and she does not move (base was already the slot's centre).
+        wideStage(false);
       }, 1000);
     };
 
     const mountMenu = (): void => {
+      wideStage(true);
       menuHandle = mountMainMenu(root, {
         stage: refs.modelStage,
         sink: live2d,
