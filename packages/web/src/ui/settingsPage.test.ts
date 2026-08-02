@@ -9,12 +9,16 @@ import { COSTUME_KEY } from '../live2d/costume';
 // is the map; the packaged smoke and the live check pin the furniture.
 
 describe('the settings IA — every control accounted for, none twice (v0.44.5)', () => {
-  test('five categories, in the approved order', () => {
+  // v0.44.6 grew the five to seven: Persona (about HER, not widgets) and Modules (four cards would
+  // have buried System) each earned their own rail entry.
+  test('seven categories, in the approved order', () => {
     expect(SETTINGS_CATEGORIES.map((c) => c.id)).toEqual([
       'voice',
       'expression',
       'appearance',
       'behaviour',
+      'persona',
+      'modules',
       'system',
     ]);
   });

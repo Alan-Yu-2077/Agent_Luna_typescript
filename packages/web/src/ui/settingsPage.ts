@@ -1,4 +1,6 @@
 import type { LayoutRefs } from './layout';
+import { mountModulesSection, type ModulesBridges } from './modulesConfig';
+import { mountPersonaSection } from './personaEditor';
 
 // v0.44.5 — settings, reorganised by WHICH PART OF HER a control touches. The old VTS side panel
 // grew three tabs and a dozen switches; finding one meant guessing. Five categories now, entered
@@ -9,7 +11,14 @@ import type { LayoutRefs } from './layout';
 // contracts physically cannot drift, because they are the same nodes. In `luna:menu='0'` boots the
 // page never mounts and the old panel keeps its rows, untouched.
 
-export type SettingsCategoryId = 'voice' | 'expression' | 'appearance' | 'behaviour' | 'system';
+export type SettingsCategoryId =
+  | 'voice'
+  | 'expression'
+  | 'appearance'
+  | 'behaviour'
+  | 'persona'
+  | 'modules'
+  | 'system';
 
 export type SettingsCategory = { id: SettingsCategoryId; label: string; blurb: string };
 
@@ -18,6 +27,10 @@ export const SETTINGS_CATEGORIES: readonly SettingsCategory[] = [
   { id: 'expression', label: 'Expression & Motion', blurb: '她的表情与动作' },
   { id: 'appearance', label: 'Appearance', blurb: '她的样子与这间屋子' },
   { id: 'behaviour', label: 'Behaviour', blurb: '她自己的行为' },
+  // v0.44.6: persona is its own category (it is ABOUT her, not about widgets), and the four module
+  // cards get their own too — four cards under System would have buried both.
+  { id: 'persona', label: 'Persona', blurb: '她是谁' },
+  { id: 'modules', label: 'Modules', blurb: '接进来的能力' },
   { id: 'system', label: 'System', blurb: '底层与工具' },
 ];
 
@@ -37,6 +50,8 @@ export const SETTINGS_IA: Record<SettingsCategoryId, readonly string[]> = {
   ],
   appearance: ['luna:live2d', 'luna:gaze-follow', 'luna:costume'],
   behaviour: [],
+  persona: [], // HTTP-backed (the soul endpoints), not localStorage
+  modules: [], // luna.env-backed through the desktop bridge, not localStorage
   system: [], // the server registry card is WS-driven, not localStorage-backed
 };
 
@@ -134,6 +149,29 @@ export function mountSettingsPage(doc: Document, refs: LayoutRefs): HTMLElement 
   note.className = 'settings-page-note';
   note.textContent = '她的主动行为(何时来找你、多久说一次)暂时还住在配置文件里——搬进这里是之后的一版。';
   sections.get('behaviour')?.appendChild(note);
+
+  // ── Persona (v0.44.6) — the soul endpoints; the self-edit firewall lives in the tool layer. ──
+  sections.get('persona')?.appendChild(mountPersonaSection(doc));
+
+  // ── Modules (v0.44.6) — four uniform cards over the wizard's own bridges. ──
+  const setup = (globalThis as { lunaSetup?: Record<string, unknown> }).lunaSetup as
+    | {
+        wizardPrefill?: ModulesBridges['prefill'];
+        probe?: ModulesBridges['probeChat'];
+        probeProvider?: ModulesBridges['probeProvider'];
+        saveConfig?: ModulesBridges['saveConfig'];
+      }
+    | undefined;
+  const pet = (globalThis as { lunaPet?: { relaunch?: () => void } }).lunaPet;
+  sections.get('modules')?.appendChild(
+    mountModulesSection(doc, {
+      ...(setup?.wizardPrefill ? { prefill: setup.wizardPrefill.bind(setup) } : {}),
+      ...(setup?.probe ? { probeChat: setup.probe.bind(setup) } : {}),
+      ...(setup?.probeProvider ? { probeProvider: setup.probeProvider.bind(setup) } : {}),
+      ...(setup?.saveConfig ? { saveConfig: setup.saveConfig.bind(setup) } : {}),
+      ...(pet?.relaunch ? { relaunch: pet.relaunch.bind(pet) } : {}),
+    }),
+  );
 
   // ── System — the server registry card is adopted whole; its render pipeline is untouched. ──
   adopt('system', refs.serverSettings);

@@ -41,6 +41,10 @@ contextBridge.exposeInMainWorld('lunaPet', {
   quit: (): void => {
     ipcRenderer.send('luna:quit');
   },
+  // v0.44.6: the module cards' "Restart Luna" — friendlier than quit-and-reopen after a config save.
+  relaunch: (): void => {
+    ipcRenderer.send('luna:relaunch');
+  },
 });
 
 // Inject the desktop-resolved config (LUNA_MODEL_URL / LUNA_TTS_BACKEND / LUNA_TTS_URL / LUNA_UI_MODE)
@@ -102,4 +106,8 @@ contextBridge.exposeInMainWorld('lunaSetup', {
   // secrets come back as NAMES (`configured`), never as values.
   wizardPrefill: (): Promise<{ values?: Record<string, string>; configured?: string[] }> =>
     ipcRenderer.invoke('luna:wizard-prefill'),
+  // v0.44.6: the module cards' save — mergeEnvFile only (whitelisted fields, luna.env.bak first),
+  // NO sidecar restart and NO window swap; "takes effect after restart" is the stated semantics.
+  saveConfig: (fields: Record<string, string>): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('luna:save-config', fields),
 });

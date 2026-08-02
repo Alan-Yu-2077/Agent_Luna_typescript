@@ -747,6 +747,30 @@ function firstFileByExt(dir: string, ext: string): string | undefined {
 
 // v0.37.8: what is already configured, so "Re-run setup" preserves it instead of overwriting it
 // with the stock defaults. Secret VALUES never cross the bridge — only their key names do.
+// v0.44.6: the module cards' save path. Whitelist-filtered fields merged into luna.env — the same
+// discipline as the wizard finish, minus its restart-and-swap. A .bak of the previous file lands
+// first, so a bad save is one copy away from undone.
+ipcMain.handle('luna:save-config', (_e, raw: unknown) => {
+  if (!paths) return { ok: false, error: 'Not ready — try again in a moment.' };
+  const fields = filterWizardFields(raw);
+  if (Object.keys(fields).length === 0) return { ok: false, error: 'Nothing to save.' };
+  try {
+    const current = readFileSync(paths.envFile, 'utf8');
+    writeFileSync(`${paths.envFile}.bak`, current);
+    writeFileSync(paths.envFile, mergeEnvFile(current, fields));
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'write failed' };
+  }
+});
+
+// v0.44.6: restart after a config save — provider construction is boot-time, and a hot swap is
+// complexity a single-machine app does not need.
+ipcMain.on('luna:relaunch', () => {
+  app.relaunch();
+  app.quit();
+});
+
 ipcMain.handle('luna:wizard-prefill', () => {
   if (!paths) return { values: {}, configured: [] };
   return wizardPrefill(parseEnvFile(readFileSync(paths.envFile, 'utf8')));

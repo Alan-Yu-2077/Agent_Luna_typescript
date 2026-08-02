@@ -59,6 +59,7 @@ export const WIZARD_KEYS = [
   'ANTHROPIC_BASE_URL',
   'ANTHROPIC_API_KEY',
   'LUNA_MODEL',
+  'LUNA_MAX_TOKENS', // v0.44.6: the Chat LLM module card edits it alongside the model
   'LUNA_EMBEDDING_MODEL',
   'LUNA_EMBEDDING_API_KEY',
   'LUNA_EMBEDDING_BASE_URL',
