@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, test } from 'bun:test';
 import { ALL_OVERLAY_PARAMS, EMOTIONS, OVERLAYS } from './faceData';
@@ -6,6 +6,10 @@ import { ALL_OVERLAY_PARAMS, EMOTIONS, OVERLAYS } from './faceData';
 // The model's real parameter inventory, read from the file the artist shipped. Overlays address raw
 // Cubism ids by string, so a typo is otherwise a silent no-op — the face just quietly lacks a feature.
 const MODEL_DIR = join(import.meta.dir, '../../public/models/yumi');
+// Bring-your-own asset: the model tree is gitignored, so CI runners have none. These assertions are
+// about the REAL installed model (a fixture would test nothing) — they run on the owner's machine
+// and skip, loudly named, anywhere the model is absent.
+const MODEL_INSTALLED = existsSync(join(MODEL_DIR, 'yumi.cdi3.json'));
 function modelParamIds(): Set<string> {
   const cdi: { Parameters: { Id: string }[] } = JSON.parse(readFileSync(join(MODEL_DIR, 'yumi.cdi3.json'), 'utf8'));
   return new Set(cdi.Parameters.map((p) => p.Id));
@@ -23,7 +27,7 @@ const COSTUME_AND_PROPS = [
 ];
 
 describe('OVERLAYS — the model\'s own peak assets', () => {
-  test('every overlay param actually exists on the model', () => {
+  test.skipIf(!MODEL_INSTALLED)('every overlay param actually exists on the model', () => {
     const ids = modelParamIds();
     const missing = ALL_OVERLAY_PARAMS.filter((p) => !ids.has(p));
     expect(missing).toEqual([]);

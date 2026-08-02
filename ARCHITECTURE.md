@@ -193,6 +193,35 @@ No avatar model or voice weights ship in this repo. The front end renders a frie
 Live2D model is installed; voice is bring-your-own. See [`.env.example`](.env.example) for the
 configuration surface.
 
+## The front door (v0.44.x)
+
+Opening the app lands on a **main menu**, not mid-conversation: she sleeps on the right (a pure
+front-end state — the backend is not connected), and Talk / Diary / Skills / Dream / Settings / Quit
+float on the left. Boot is two halves: the lobby half runs immediately (layout, the Live2D sink, the
+menu), and the session half — the WS client, controller, voice, geolocation — is `activateSession()`,
+which in menu mode does not run until Talk. The menu is therefore **cold by construction**: every
+proactive pathway rides the socket that was never built. Pet, agent-only, `?setup`, `?workbench` and
+`luna:menu='0'` boot directly, byte-identical to the pre-menu app.
+
+**Talk wakes her in place** (she belongs to no page): the menu overlays the chat panel's own grid
+slot, so the swap changes the room around a girl who never moves, while a four-beat wake sequence
+plays over existing engine layers and the TTS warms underneath the animation instead of behind a
+gate. ← Menu disconnects politely — mid-turn it waits for the turn (and proactive-turn) end. Dream
+connects and enters the dream without waking her first; the skipped wake plays when the dream ends.
+
+**Diary, Skills, Settings are pages over the read-only data surface** (`/api/data/*` — product HTTP,
+loopback-bounded, zod-guarded at both ends, forwarded same-origin by the desktop's allowlist).
+Reading her diary cannot wake her because the book is HTTP and the session is WS. The diary is a
+two-page book (lit-days-only calendar, a spine page-turn, dreams translated from the consolidation
+pipeline into what she did that night); Skills is a growth record (self-taught marked); Settings is
+seven categories over ADOPTED live rows plus the module cards (whitelisted env merge, restart to
+apply) and the persona editor (fixed core owner-editable behind a diff preview; evolving read-only;
+her self-edit tool still cannot touch fixed).
+
+Motion holds two bands (audited by test): stage moments 1.5–2s built from orchestrated phases, micro
+feedback ~0.3s; `prefers-reduced-motion` collapses stages to a 0.2s fade with every destination
+still reachable.
+
 ## The desktop shell (`desktop`)
 
 An Electron app that packages the built web front end, spawns and supervises the server process, resolves

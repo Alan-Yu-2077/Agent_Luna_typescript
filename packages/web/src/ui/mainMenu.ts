@@ -1,4 +1,5 @@
 import type { Live2DSink } from '../sinks';
+import { LUNA_VERSION } from '../version';
 
 // v0.44.0 — the main menu, her front door. Opening the app no longer drops you mid-conversation:
 // she sleeps on the right (pure front-end state, the backend is not even connected), and the left
@@ -123,6 +124,12 @@ export function mountMainMenu(
     buttons.push(b);
     menu.appendChild(b);
   }
+  // README OQ3, landed: the version, one muted line, bottom-left. No memory counts — the menu is
+  // a front door, not a dashboard.
+  const ver = doc.createElement('div');
+  ver.className = 'menu-version';
+  ver.textContent = LUNA_VERSION;
+  menu.appendChild(ver);
   root.appendChild(menu);
 
   // zzz over her head, riding the same --luna-head-x/y anchor the speech bubbles use. Only when a

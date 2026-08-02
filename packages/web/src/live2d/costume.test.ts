@@ -1,8 +1,10 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, test } from 'bun:test';
 import { COSTUME, COSTUME_IDS, ALL_OVERLAY_PARAMS } from './faceData';
 import { costumeWrites, parseCostume, toggleCostume, type CostumeState } from './costume';
+
+const MODEL_INSTALLED = existsSync(join(import.meta.dir, '../../public/models/yumi/yumi.cdi3.json'));
 
 const modelParamIds = (): Set<string> => {
   const cdi: { Parameters: { Id: string }[] } = JSON.parse(
@@ -12,7 +14,7 @@ const modelParamIds = (): Set<string> => {
 };
 
 describe('COSTUME — the third semantic (v0.43.10)', () => {
-  test('every costume param exists on the model', () => {
+  test.skipIf(!MODEL_INSTALLED)('every costume param exists on the model', () => {
     const ids = modelParamIds();
     expect(Object.values(COSTUME).filter((c) => !ids.has(c.pid)).map((c) => c.pid)).toEqual([]);
   });

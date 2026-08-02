@@ -14,9 +14,20 @@ describe('v0.36.0 motion revival — reduce-motion is gone', () => {
   const sink = read('../live2d/pixiLive2DSink.ts');
   const layout = read('layout.ts');
 
-  test('no reduce-motion class or media query survives in the stylesheet', () => {
-    expect(css).not.toContain('reduce-motion');
-    expect(css).not.toContain('prefers-reduced-motion');
+  // v0.44.7 amendment: the constitution bans the MANUAL setting (a user-facing switch that gutted
+  // her aliveness) — that ban stands, and the `reduce-motion` class/key machinery stays dead. The
+  // OS accessibility preference `prefers-reduced-motion` is a different thing: an accessibility
+  // contract, honored for UI STAGE transitions only (menu, pages, the book turn). Her engine-level
+  // aliveness — idle, breath, the wake — has no off-switch, exactly as v0.36.0 decided.
+  test('the manual reduce-motion machinery stays dead; the OS preference is honored for UI only', () => {
+    expect(css).not.toContain('reduce-motion:'); // no such class selector or key
+    expect(css).not.toContain('.reduce-motion');
+    expect(css).toContain('@media (prefers-reduced-motion: reduce)');
+    // The media block must never reach into her engine's aliveness selectors.
+    const block = css.slice(css.indexOf('@media (prefers-reduced-motion: reduce)'));
+    for (const engineSel of ['.model-stage canvas', 'faceVm', '.mood-pip']) {
+      expect(block).not.toContain(engineSel);
+    }
   });
 
   test('the sink no longer has a reduced-motion snap branch', () => {
@@ -27,7 +38,6 @@ describe('v0.36.0 motion revival — reduce-motion is gone', () => {
   test('app.ts only touches the key to CLEAN it up, never to re-apply the class', () => {
     expect(app).not.toContain("classList.add('reduce-motion')");
     expect(app).not.toContain("classList.toggle('reduce-motion'");
-    expect(app).not.toContain('prefers-reduced-motion');
     // the one allowed reference is the stale-key cleanup
     expect(app).toContain("removeItem('luna:reduce-motion')");
   });

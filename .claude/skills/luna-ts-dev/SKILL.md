@@ -45,8 +45,11 @@ Consequences that bind every version you plan or build:
 
 - **Never propose** distribution, packaging, installers, platform ports, code signing, or acceptance
   testing on hardware the owner has to go find. That tier is permanently closed.
-- **CI no longer runs.** `bun test` on this machine is the *only* real gate. Treat a red suite as a
-  hard stop, not a CI problem.
+- **CI runs on every `push origin`** (ubuntu + windows, `.github/workflows/ci.yml`) and a red run
+  EMAILS the owner. Local `bun test` green is not the finish line — after pushing, check the run
+  (`gh run list`); red = a real problem or an environment regression to fix, never to ignore.
+  (An older revision of this skill said "CI no longer runs" — that stale line caused a month of
+  failure mail. Environment-dependent tests must `test.skipIf` their missing prerequisites.)
 - Judge ideas by what they do for *her* — memory, personality, presence, expressiveness — and for the
   readability of the engineering. Not by reach.
 - **The win32 branches in the code stay.** They are unit-tested cross-platform hygiene, and the

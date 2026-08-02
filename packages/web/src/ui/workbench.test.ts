@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, test } from 'bun:test';
 import { ExpressionKey } from '@luna/protocol';
@@ -185,6 +185,7 @@ describe('readout — the live panel degrades instead of lying', () => {
 // cannot enumerate it), so the guard is the same one v0.43.1 used: check it against the file the
 // artist shipped. A typo'd id is otherwise a checkbox that silently does nothing.
 describe('MODEL_ASSETS — the hardcoded catalog matches the real model', () => {
+  const MODEL_INSTALLED = existsSync(join(import.meta.dir, '../../public/models/yumi/yumi.cdi3.json'));
   const modelParamIds = (): Set<string> => {
     const cdi: { Parameters: { Id: string }[] } = JSON.parse(
       readFileSync(join(import.meta.dir, '../../public/models/yumi/yumi.cdi3.json'), 'utf8'),
@@ -192,7 +193,7 @@ describe('MODEL_ASSETS — the hardcoded catalog matches the real model', () => 
     return new Set(cdi.Parameters.map((p) => p.Id));
   };
 
-  test('every asset param exists on the model', () => {
+  test.skipIf(!MODEL_INSTALLED)('every asset param exists on the model', () => {
     const ids = modelParamIds();
     expect(MODEL_ASSETS.filter((a) => !ids.has(a.pid)).map((a) => a.pid)).toEqual([]);
   });

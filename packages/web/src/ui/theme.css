@@ -1206,3 +1206,20 @@ body.pet { background: none; }
   padding: 12px 14px; font-family: inherit; font-size: 12.5px; line-height: 1.7; color: var(--ink-soft);
   white-space: pre-wrap; max-height: 260px; overflow-y: auto; }
 .persona-section h4 { margin: 6px 0 0; font-size: 13px; font-weight: 800; color: var(--ink-soft); }
+
+/* ── v0.44.7: close-out ───────────────────────────────────────────────────────
+   The version line, and the reduced-motion pass: every stage transition drops
+   to a 0.2s fade, ambient loops stop, and the spring hover becomes a plain
+   color change — the destinations all remain reachable, just undramatic. */
+.menu-version { position: absolute; left: clamp(48px, 7vw, 110px); bottom: 26px;
+  font-size: 11px; color: var(--muted); letter-spacing: 0.08em; user-select: none; }
+@media (prefers-reduced-motion: reduce) {
+  .main-menu, .main-menu.talk-leaving, .menu-item,
+  .menu-page, .book-page.right, .book-page.right.turning,
+  .menu-mode .model-stage, .menu-mode.waking .chat-panel {
+    transition-duration: 0.2s !important; animation-duration: 0.2s !important;
+  }
+  .menu-item:hover, .menu-item:focus-visible { transform: none; }
+  .menu-zzz span, .book-skeleton div { animation: none; }
+  .menu-zzz span { opacity: 0.6; }
+}

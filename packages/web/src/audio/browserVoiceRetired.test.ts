@@ -30,7 +30,9 @@ function sourceFiles(dir: string, exts: readonly string[]): string[] {
   return out;
 }
 
-const rel = (f: string): string => f.slice(REPO.length);
+// Windows walks with backslashes; every allowlist and needle here speaks '/' — normalise once.
+// (The Windows CI leg CAUGHT this guard's own portability bug, which is exactly why that leg stays.)
+const rel = (f: string): string => f.slice(REPO.length).replaceAll('\\', '/');
 
 function hits(needle: string, exts: readonly string[]): string[] {
   return sourceFiles(REPO, exts)
