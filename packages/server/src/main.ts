@@ -37,7 +37,7 @@ import { devChatHandler } from './devchat/devchat';
 import { setMemoryDb } from './memory/sessionStore';
 import { seedSoulOnBoot } from './memory/soulSeed';
 import { initCustomSqlite } from './memory/recall/vecRuntime';
-import { bootReconcile, dreamStatus, isDreaming, shutdownDreamDue } from './dream/dreamState';
+import { bootReconcile, dreamStatus, dreamWindowOpen, isDreaming, parseDreamWindow, shutdownDreamDue } from './dream/dreamState';
 import { runDreamCycle } from './dream/cycle';
 import { setOnWeatherRefresh, startWeatherRefresh } from './tools/web/weather/snapshot';
 import { setOnTrackChange, startNowPlaying, stopNowPlaying } from './tools/media/nowPlaying';
@@ -195,8 +195,14 @@ if (Bun.env['ANTHROPIC_API_KEY']) {
     try {
       const rawGap = Number(Bun.env['LUNA_SHUTDOWN_DREAM_MIN_GAP_MS']);
       const minGapMs = Number.isFinite(rawGap) && rawGap >= 0 ? rawGap : 21_600_000;
-      const due = shutdownDreamDue(dreamStatus().last_dream_ms, Date.now(), minGapMs);
-      if (Bun.env['LUNA_SHUTDOWN_DREAM'] !== '0' && !isDreaming() && due) {
+      const lastAttemptMs = dreamStatus().last_dream_ms;
+      const due = shutdownDreamDue(lastAttemptMs, Date.now(), minGapMs);
+      // v0.45.7 (Initiative 33): shutdown dreams belong to the night — local 21:00–06:00 by the
+      // owner's rule (LUNA_SHUTDOWN_DREAM_WINDOW overrides, "H-H"). Outside the window NO
+      // shutdown dream fires, first-ever included (D1). The menu's dream.enter is untouched (D2).
+      const window = parseDreamWindow(Bun.env['LUNA_SHUTDOWN_DREAM_WINDOW'], (m) => console.warn(m));
+      const windowOpen = dreamWindowOpen(Date.now(), window);
+      if (Bun.env['LUNA_SHUTDOWN_DREAM'] !== '0' && !isDreaming() && due && windowOpen) {
         console.log(`[luna-server] ${signal} — running a shutdown dream…`);
         const deadlineMs = Number(Bun.env['LUNA_SHUTDOWN_DREAM_TIMEOUT_MS'] ?? 120_000);
         const dreams = (async () => {
@@ -205,8 +211,16 @@ if (Bun.env['ANTHROPIC_API_KEY']) {
           }
         })();
         await Promise.race([dreams, Bun.sleep(deadlineMs)]);
+      } else if (Bun.env['LUNA_SHUTDOWN_DREAM'] !== '0' && !isDreaming() && !windowOpen) {
+        // The gate's five-day silent failure (M2) taught the lesson: every skip says why.
+        console.log(
+          `[luna-server] ${signal} — skipping shutdown dream: window_closed (dreams ${window.startHour}:00–${window.endHour}:00 local)`,
+        );
       } else if (Bun.env['LUNA_SHUTDOWN_DREAM'] !== '0' && !isDreaming() && !due) {
-        console.log(`[luna-server] ${signal} — last dream too recent, skipping shutdown dream`);
+        const hrs = lastAttemptMs === null ? '?' : ((Date.now() - lastAttemptMs) / 3_600_000).toFixed(1);
+        console.log(
+          `[luna-server] ${signal} — skipping shutdown dream: not_due (last attempt ${hrs}h ago)`,
+        );
       }
     } catch (e) {
       console.error('[luna-server] shutdown dream failed:', e);

@@ -50,7 +50,11 @@ export type EnterResult = { ok: true; cycleId: string } | { ok: false; error: st
 export function enterDream(): EnterResult {
   if (state.is_dreaming === 1) return { ok: false, error: 'already_dreaming' };
   const cycleId = `dream-${state.cycle_count + 1}-${Date.now().toString(36)}`;
-  state = { ...state, is_dreaming: 1, current_step: null, cycle_id: cycleId };
+  // v0.45.7: stamp on ATTEMPT, not completion. The 6h gate guards LLM budget, and a try has
+  // already spent it — before this, aborted dreams never stamped, the stamp froze at the last
+  // COMPLETED dream, and every shutdown was perpetually "due" (four dreams in 40 minutes on
+  // 8/8, all aborted). parkFinishedIdle's completion stamp stays — a harmless later overwrite.
+  state = { ...state, is_dreaming: 1, current_step: null, cycle_id: cycleId, last_dream_ms: Date.now() };
   writeThrough();
   return { ok: true, cycleId };
 }
@@ -111,6 +115,32 @@ export function resetDreamStateForTests(): void {
 // it: a shutdown dream is only "due" when the last dream is at least `minGapMs`
 // old (or there has never been one). Pure so the decision is unit-tested without
 // the process-exit handler. minGapMs === 0 restores the old always-dream.
+// v0.45.7 (Initiative 33) — the owner's rule: shutdown-triggered dreams belong to the night.
+// Local-clock family (the cadence C3 convention): hours via getHours(). Crossing midnight is the
+// normal case (21-6). The MANUAL dream.enter path never consults this (D2).
+export type DreamWindow = { startHour: number; endHour: number };
+export const DEFAULT_DREAM_WINDOW: DreamWindow = { startHour: 21, endHour: 6 };
+
+export function parseDreamWindow(raw: string | undefined, warn?: (m: string) => void): DreamWindow {
+  if (raw === undefined || raw.trim() === '') return DEFAULT_DREAM_WINDOW;
+  const m = raw.trim().match(/^(\d{1,2})-(\d{1,2})$/);
+  const start = m ? Number(m[1]) : NaN;
+  const end = m ? Number(m[2]) : NaN;
+  if (!m || start > 23 || end > 23 || start === end) {
+    warn?.(`[dream] invalid LUNA_SHUTDOWN_DREAM_WINDOW "${raw}" — using default 21-6`);
+    return DEFAULT_DREAM_WINDOW;
+  }
+  return { startHour: start, endHour: end };
+}
+
+// [start, end) in local hours; start > end wraps midnight: 21-6 = h >= 21 || h < 6.
+export function dreamWindowOpen(nowMs: number, w: DreamWindow = DEFAULT_DREAM_WINDOW): boolean {
+  const h = new Date(nowMs).getHours();
+  return w.startHour < w.endHour
+    ? h >= w.startHour && h < w.endHour
+    : h >= w.startHour || h < w.endHour;
+}
+
 export function shutdownDreamDue(
   lastDreamMs: number | null,
   nowMs: number,
