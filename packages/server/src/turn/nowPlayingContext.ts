@@ -6,6 +6,7 @@
 
 import { positionAt, type NowPlaying } from '@luna/music-cli';
 import { getNowPlaying } from '../tools/media/nowPlaying';
+import { lyricLinesFor } from '../tools/media/enrichment';
 
 // Default ON riding LUNA_MUSIC (the provider's own gate); LUNA_MUSIC_AMBIENT=0 is the off
 // switch — the tools stay mounted, only the ambient block disappears.
@@ -75,8 +76,18 @@ export function buildMusicBlock(f: MusicFacts): string {
 }
 
 // The per-turn read: null when dormant, idle, or between tracks — the prompt shows no trace.
+// v0.45.3: when enrichment knows this song, append the line(s) around the extrapolated position
+// (≤2 — a passing fragment, never the sheet; the full lyric in the prompt would be token waste
+// and a recitation trap). Unenriched/untimestamped songs render exactly the v0.45.1 block.
 export function musicBlockFor(now = new Date()): string | null {
   const s = getNowPlaying();
   if (s === null || s.track === null) return null;
-  return buildMusicBlock(musicFactsOf(s.track, s.playing, now));
+  let block = buildMusicBlock(musicFactsOf(s.track, s.playing, now));
+  if (s.playing) {
+    const lines = lyricLinesFor(s.track, now);
+    if (lines.length > 0) {
+      block += ` The lyric just now: ${lines.map((l) => `「${l}」`).join(' ')}`;
+    }
+  }
+  return block;
 }

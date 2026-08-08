@@ -86,13 +86,16 @@ export function commitMusicMoment(
 
 // The seed the proactive framing appends (the v0.22.0 seed channel — README OQ3 resolved to the
 // lighter option: no fourth intent). Scalars from trackPhrase only; artwork cannot appear here.
-export function musicSeedFor(track: NowPlaying): string {
+export function musicSeedFor(track: NowPlaying, hotComment: string | null = null): string {
   const album = track.album && track.album !== track.title ? ` (album "${track.album}")` : '';
+  // v0.45.3: one truncated hot comment as extra mood, when enrichment knows the song — she may
+  // pick up the comment section's feeling, never recite it. The channel is unchanged (seed).
+  const comment = hotComment ? ` One of its top comments: 「${hotComment}」 — you may catch its mood, or ignore it.` : '';
   return (
     `(He just put on ${trackPhrase(track)}${album} — you are hearing it too. If a natural ` +
     'half-sentence about it surfaces — a feeling, a memory, what this song is to either of you — ' +
     'you may hand it over, light as a passing musing; it needs no reply. If nothing genuine ' +
-    'comes, stay quiet.)'
+    `comes, stay quiet.${comment})`
   );
 }
 

@@ -28,6 +28,7 @@ import {
   saveMusicMoment,
 } from './musicMoment';
 import { getNowPlaying } from '../tools/media/nowPlaying';
+import { hotCommentFor } from '../tools/media/enrichment';
 
 // v0.22.2 (Initiative 15): the universal proactive entry point + the REAL single-turn lock.
 // `withProactiveLock` flips a synchronous per-session in-flight flag BEFORE any await, so racing
@@ -123,7 +124,7 @@ export async function maybeFireProactive(opts: MaybeFireOpts): Promise<FireOutco
             registry: opts.registry,
             emit: opts.emit,
             intent: 'spontaneous',
-            seed: musicSeedFor(moment),
+            seed: musicSeedFor(moment, hotCommentFor(moment.id)),
           });
           const base = commitLadderPhase(cadence, decision.phase, decision.nudgesSent);
           saveCadence(session.id, spoke ? commitProactive(base, nowMs) : commitProactiveSilent(base, nowMs));

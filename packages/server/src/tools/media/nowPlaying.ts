@@ -39,6 +39,13 @@ type Deps = {
 let state: MusicState = { track: null, playing: false, changedAtMs: 0 };
 let active = false;
 let controller: AbortController | null = null;
+// v0.45.3: fired on every 'track' event (a NEW song settled). Enrichment subscribes here when
+// LUNA_MUSIC_ENRICH=1; a hook failure must never touch the stream loop.
+let onTrackChange: ((t: NowPlaying) => void) | null = null;
+
+export function setOnTrackChange(fn: ((t: NowPlaying) => void) | null): void {
+  onTrackChange = fn;
+}
 
 export function musicProviderActive(): boolean {
   return active;
@@ -54,6 +61,11 @@ export function getNowPlaying(): MusicState | null {
 export function applyMusicEvent(ev: MusicEvent, nowMs: number): void {
   if (ev.event === 'track') {
     state = { track: ev.track, playing: ev.track.playing, changedAtMs: nowMs };
+    try {
+      onTrackChange?.(ev.track);
+    } catch {
+      /* a subscriber must never break the stream loop */
+    }
   } else if (ev.event === 'state') {
     state = { ...state, track: ev.track, playing: ev.playing };
   } else {

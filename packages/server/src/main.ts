@@ -39,7 +39,8 @@ import { initCustomSqlite } from './memory/recall/vecRuntime';
 import { bootReconcile, dreamStatus, isDreaming, shutdownDreamDue } from './dream/dreamState';
 import { runDreamCycle } from './dream/cycle';
 import { setOnWeatherRefresh, startWeatherRefresh } from './tools/web/weather/snapshot';
-import { startNowPlaying, stopNowPlaying } from './tools/media/nowPlaying';
+import { setOnTrackChange, startNowPlaying, stopNowPlaying } from './tools/media/nowPlaying';
+import { enrichTrack, musicEnrichEnabled } from './tools/media/enrichment';
 import { activeSessionIds, preloadSessions } from './turn/session';
 import { initSettings } from './settings/store';
 import { setSkillsRecallMounted } from './skills/skillStore';
@@ -172,6 +173,11 @@ if (Bun.env['ANTHROPIC_API_KEY']) {
   // LUNA_MUSIC=1 on darwin with media-control installed. Fire-and-forget: the wake-or-sleep
   // decision must never block boot.
   void startNowPlaying();
+  // v0.45.3: enrichment subscribes to track changes only when opted in — LUNA_MUSIC_ENRICH unset
+  // means zero initialization, zero network, zero behavioural delta against v0.45.2.
+  if (musicEnrichEnabled()) {
+    setOnTrackChange((t) => void enrichTrack(t).catch(() => {}));
+  }
 
   // Shutdown dream (v0.21.7): on a graceful exit (Ctrl-C / SIGTERM) run one last
   // dream so the day's diary + memory consolidate before the process dies — the
