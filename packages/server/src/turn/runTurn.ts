@@ -35,6 +35,7 @@ import { renderHumanityBlock } from '../persona/humanity';
 import { renderL1Contract } from '../persona/l1Contract';
 import { buildTimeBlock, resolveTz, timeAwareEnabled } from './temporalContext';
 import { buildWeatherBlock, weatherAmbientEnabled } from './weatherContext';
+import { musicAmbientEnabled, musicBlockFor } from './nowPlayingContext';
 import { getSnapshot } from '../tools/web/weather/snapshot';
 import { memoryEpoch } from '../memory/epoch';
 import { cleanHistoryEnabled, stripThinking, stripCorrectiveDirectives } from '../memory/cleanHistory';
@@ -333,6 +334,17 @@ const graph: Graph<TurnState, TurnNode> = {
         if (snap) blocks.push({ type: 'text', text: buildWeatherBlock(snap) });
       } catch (e) {
         console.warn('[weather] buildWeatherBlock failed — omitting the weather block:', e);
+      }
+    }
+    // Initiative 32 (v0.45.1): the current track, same contract — synchronous read of the
+    // resident provider's memory (the stream pushed it here), volatile → UNCACHED user tail
+    // only. No track → no block; a builder failure skips the block, never the turn.
+    if (musicAmbientEnabled()) {
+      try {
+        const block = musicBlockFor();
+        if (block) blocks.push({ type: 'text', text: block });
+      } catch (e) {
+        console.warn('[music] musicBlockFor failed — omitting the music block:', e);
       }
     }
     blocks.push({ type: 'text', text: s.userText });
