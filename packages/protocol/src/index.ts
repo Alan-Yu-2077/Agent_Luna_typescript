@@ -5,3 +5,4 @@ export * from './message';
 export * from './tools';
 export * from './trace';
 export * from './utils';
+export * from './music';

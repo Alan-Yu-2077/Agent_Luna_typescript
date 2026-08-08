@@ -30,6 +30,7 @@ import type { EmotionDef } from './live2d/faceData';
 import { costumeWrites, loadCostume, saveCostume, toggleCostume } from './live2d/costume';
 import { isWorkbenchMode, workbenchModelUrl } from './workbenchMode';
 import { menuEnabled } from './menuMode';
+import { mountPlayerCard } from './ui/playerCard';
 import { mountMainMenu } from './ui/mainMenu';
 import { runSequence, SLEEP_STEPS, WAKE_STEPS } from './wakeSequence';
 import { createReturnGate } from './returnGate';
@@ -272,7 +273,17 @@ async function boot(): Promise<void> {
   let wsLive = false;
   const returnGate = createReturnGate();
   let dreamWakePending = false;
+  // v0.45.4: the player card mounts once, at first session activation — Talk in a lobby boot,
+  // immediately on a direct boot. Pet and agent-only never mount it (no session surface for it);
+  // setup/workbench boot different roots entirely; menu mode hides it via CSS (pure sleep mood).
+  let playerMounted = false;
+  const mountPlayer = (): void => {
+    if (playerMounted || isPet || agentOnly) return;
+    playerMounted = true;
+    mountPlayerCard(document);
+  };
   const activateSession = (): void => {
+    mountPlayer();
     if (wsClient) {
       if (!wsLive) {
         wsLive = true;

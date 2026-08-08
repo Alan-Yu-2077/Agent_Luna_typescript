@@ -32,6 +32,7 @@ import { setTraceStore } from './trace/instrument';
 import { traceViewerHandler } from './trace/viewer';
 import { workspaceHandler } from './workspace/workspace';
 import { dataApiHandler } from './data/dataApi';
+import { musicApiHandler } from './data/musicApi';
 import { devChatHandler } from './devchat/devchat';
 import { setMemoryDb } from './memory/sessionStore';
 import { seedSoulOnBoot } from './memory/soulSeed';
@@ -249,6 +250,9 @@ const server = Bun.serve<WSData>({
     // Loopback bind above is the security boundary, same as the WS (S1).
     const dataResponse = await dataApiHandler(req);
     if (dataResponse) return dataResponse;
+    // v0.45.4: the player card's face — same posture, rides LUNA_MUSIC (off = never consulted).
+    const musicResponse = await musicApiHandler(req);
+    if (musicResponse) return musicResponse;
     if (viewerEnabled) {
       const viewerResponse = traceViewerHandler(req, traceStore);
       if (viewerResponse) return viewerResponse;

@@ -1223,7 +1223,81 @@ body.pet { background: none; }
    color change — the destinations all remain reachable, just undramatic. */
 .menu-version { position: absolute; left: clamp(48px, 7vw, 110px); bottom: 26px;
   font-size: 11px; color: var(--muted); letter-spacing: 0.08em; user-select: none; }
+
+/* v0.45.4: the player card「小唱机」 (Initiative 32, candidate A) — session page only, top-left,
+   below the status badge. Signature values locked at the 2026-08-08 player-lab pick: tonearm
+   -38° ↔ -5° over 0.55s, 3.6s/turn linear spin (animation-play-state stops it), rise entrance
+   0.9s, exit 0.6s. The menu keeps its pure sleep mood: hidden there outright. */
+.player-card {
+  position: fixed; top: 44px; left: 14px; z-index: 6;
+  display: flex; align-items: center; gap: 10px;
+  width: 252px; padding: 10px 12px 10px 10px;
+  background: var(--panel); border-radius: 16px;
+  box-shadow: 0 4px 0 var(--lavender-deep), 0 10px 24px rgba(60, 80, 120, 0.18);
+  font-family: var(--font);
+  opacity: 0; transform: translateY(14px) scale(0.96);
+  transition: opacity 0.9s cubic-bezier(0.22, 1.2, 0.36, 1), transform 0.9s cubic-bezier(0.22, 1.2, 0.36, 1);
+}
+.player-card.in { opacity: 1; transform: translateY(0) scale(1); }
+.player-card.leaving {
+  opacity: 0; transform: translateY(10px) scale(0.94);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+.player-card.stale { filter: grayscale(0.7) opacity(0.8); }
+.menu-mode .player-card { display: none; }
+
+.pc-disc {
+  position: relative; width: 56px; height: 56px; border-radius: 50%; flex: none;
+  background: #2a2a30; overflow: hidden;
+  animation: pc-spin 3.6s linear infinite;
+}
+.player-card.paused .pc-disc { animation-play-state: paused; }
+.pc-cover { position: absolute; inset: 0; background-size: cover; background-position: center; opacity: 0.9; }
+.pc-groove {
+  position: absolute; inset: 0; border-radius: 50%;
+  background: repeating-radial-gradient(circle at 50% 50%, transparent 0 3px, rgba(0, 0, 0, 0.16) 3px 4px);
+}
+.pc-spindle {
+  position: absolute; left: 50%; top: 50%; width: 10px; height: 10px; border-radius: 50%;
+  transform: translate(-50%, -50%); background: var(--panel);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35);
+}
+@keyframes pc-spin { to { transform: rotate(360deg); } }
+
+.pc-arm {
+  position: absolute; left: 52px; top: 4px; width: 4px; height: 30px; border-radius: 2px;
+  background: linear-gradient(#9aa6b8, #7d8aa0); transform-origin: 2px 3px;
+  transform: rotate(-38deg); transition: transform 0.55s cubic-bezier(0.34, 1.4, 0.44, 1);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+.pc-arm::after {
+  content: ''; position: absolute; left: -2px; bottom: -4px; width: 8px; height: 8px;
+  border-radius: 2px; background: #7d8aa0;
+}
+.player-card:not(.paused) .pc-arm { transform: rotate(-5deg); }
+
+.pc-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.pc-title {
+  font-size: 13px; font-weight: 600; color: var(--sky-text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.pc-artist { font-size: 11px; opacity: 0.72; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pc-progress { height: 4px; border-radius: 999px; background: #e4ecf5; overflow: hidden; }
+.pc-progress-fill { height: 100%; width: 0; border-radius: 999px; background: var(--lavender-deep); }
+.pc-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.pc-time { font-size: 10px; opacity: 0.7; font-variant-numeric: tabular-nums; }
+.pc-buttons { display: flex; gap: 4px; }
+.pc-btn {
+  font: inherit; font-size: 11px; width: 24px; height: 24px; border: none; border-radius: 50%;
+  background: #e9f0f8; color: var(--sky-text); cursor: pointer; line-height: 1; padding: 0;
+}
+.pc-btn:hover { background: #dbe7f4; }
+.pc-play { background: var(--lavender-deep); color: #fff; }
+
 @media (prefers-reduced-motion: reduce) {
+  .pc-disc { animation: none; }
+  .pc-arm, .player-card { transition-duration: 0.2s; }
+
   .main-menu, .main-menu.talk-leaving, .menu-item,
   .menu-page, .book-page.right, .book-page.right.turning,
   .menu-mode .model-stage, .menu-mode.waking .chat-panel {

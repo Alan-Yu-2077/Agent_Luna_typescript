@@ -1,3 +1,6 @@
+import { readdirSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { basename, join } from 'node:path';
 import { doctor, watch, type MusicEvent, type NowPlaying } from '@luna/music-cli';
 
 // Music observation (Initiative 32, v0.45.0) — the resident now-playing provider, the music
@@ -24,6 +27,25 @@ export type MusicState = {
 export const MAX_STREAM_RESTARTS = 5;
 export function restartDelayMs(attempt: number): number {
   return Math.min(60_000, 1000 * 2 ** attempt);
+}
+
+// v0.45.4: where the CLI drops artwork files (hash-named). The desktop supervisor points this at
+// userData; standalone falls back to a tmp dir. Read by the /api/music/artwork endpoint.
+export function artworkDir(): string {
+  return Bun.env['LUNA_MUSIC_ARTWORK_DIR'] ?? join(tmpdir(), 'luna-music-artwork');
+}
+
+// Keep only the current track's file — replays overwrite by hash, and a listening day must not
+// leave a trail of covers on disk (the plan's no-accumulation rule).
+function sweepArtwork(dir: string, keepPath: string | null): void {
+  try {
+    const keep = keepPath === null ? null : basename(keepPath);
+    for (const f of readdirSync(dir)) {
+      if (f !== keep) rmSync(join(dir, f), { force: true });
+    }
+  } catch {
+    /* dir may not exist yet — nothing to sweep */
+  }
 }
 
 type Deps = {
@@ -61,6 +83,7 @@ export function getNowPlaying(): MusicState | null {
 export function applyMusicEvent(ev: MusicEvent, nowMs: number): void {
   if (ev.event === 'track') {
     state = { track: ev.track, playing: ev.track.playing, changedAtMs: nowMs };
+    if (ev.track.artworkPath !== null) sweepArtwork(artworkDir(), ev.track.artworkPath);
     try {
       onTrackChange?.(ev.track);
     } catch {
@@ -101,7 +124,7 @@ export async function startNowPlaying(deps: Deps = {}): Promise<void> {
   active = true;
   controller = new AbortController();
   const signal = controller.signal;
-  const watchFn = deps.watchFn ?? watch;
+  const watchFn = deps.watchFn ?? ((opts: { signal: AbortSignal }) => watch({ ...opts, artworkDir: artworkDir() }));
   const sleep = deps.sleepFn ?? Bun.sleep;
   log('[music] now-playing observation started');
 

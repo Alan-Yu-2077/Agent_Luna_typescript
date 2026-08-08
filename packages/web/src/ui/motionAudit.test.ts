@@ -13,9 +13,9 @@ import { SLEEP_TOTAL_MS, WAKE_TOTAL_MS } from '../wakeSequence';
 // Micro band: hovers, reveals, phase segments of an orchestrated stage moment (0.5/0.6/0.9 are the
 // halves that COMPOSE the 1.6s totals). Stage band: the composed totals. Ambient loops (zzz drift,
 // skeleton shimmer) breathe on their own clock and are exempt by name, not silently.
-const MICRO_S = [0.2, 0.3, 0.35, 0.5, 0.6, 0.9];
+const MICRO_S = [0.2, 0.3, 0.35, 0.5, 0.55, 0.6, 0.9]; // 0.55 = the tonearm drop (v0.45.4)
 const STAGE_S = [1.0, 1.2, 1.6, 1.8];
-const AMBIENT_S = [3.2, 1.1]; // zzz-drift, book-shimmer
+const AMBIENT_S = [3.2, 1.1, 3.6]; // zzz-drift, book-shimmer, player-disc spin (v0.45.4)
 
 describe('the two-band motion discipline (v0.44.7)', () => {
   test('every duration in the initiative CSS belongs to a declared band', () => {

@@ -170,6 +170,9 @@ function sidecarEnv(p: Paths, userEnv: Record<string, string>): Record<string, s
     LUNA_DB_PATH: resolveSidecarDb({ sharedDb: p.sharedDb, userDb: p.db, smoke: SMOKE }),
     LUNA_MIGRATIONS_DIR: p.migrationsDir,
     LUNA_PERSONA_PATH: p.personaFile,
+    // v0.45.4: artwork drops under app-data (hash-named, swept to the current track) — the
+    // player card's /api/music/artwork reads from here.
+    LUNA_MUSIC_ARTWORK_DIR: join(dirname(p.db), 'music-artwork'),
   };
   // First-run degradation is the SHELL's job: an empty key would throw in the SDK constructor and
   // crash-loop the sidecar. A placeholder lets the app boot (the avatar renders if installed, the
@@ -883,6 +886,8 @@ async function smokeProbe(win: BrowserWindow): Promise<void> {
         // pet go/no-go asserts the drag surface exists AND no drag region hijacks the DOM.
         bridgeDrag: typeof window.lunaPet?.dragStart,
         noAppRegion: getComputedStyle(document.querySelector('.model-stage')).getPropertyValue('-webkit-app-region') !== 'drag',
+        // v0.45.4 negative: the smoke env has no LUNA_MUSIC, so the player card must not exist.
+        playerDom: !!document.querySelector('.player-card'),
       });
     })()`,
   )) as string;
@@ -899,6 +904,7 @@ async function smokeProbe(win: BrowserWindow): Promise<void> {
     serverRows: number;
     bridgeDrag: string;
     noAppRegion: boolean;
+    playerDom: boolean;
   };
   const shotPath = process.env['LUNA_SMOKE_OUT'];
   if (shotPath) {
@@ -920,7 +926,7 @@ async function smokeProbe(win: BrowserWindow): Promise<void> {
   // canvas. (The WS + pet + bridge checks always hold — they prove the packaged shell wired up.)
   const rendered = p.canvas && p.headX !== null;
   const stageOk = rendered || (!p.canvas && p.placeholder);
-  const ok = stageOk && p.wsStatus === 'open' && petOk && bridgeOk && p.dataStatus === 200;
+  const ok = stageOk && p.wsStatus === 'open' && petOk && bridgeOk && p.dataStatus === 200 && !p.playerDom;
   console.log(JSON.stringify({ ok, rendered, menu: true, ...p }));
   supervisor?.stop();
   app.exit(ok ? 0 : 1);

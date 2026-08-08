@@ -3,7 +3,7 @@ import { createServer, type Server } from 'node:http';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { startWebHost, planDataForward } from './serve';
+import { startWebHost, planDataForward, planMusicForward } from './serve';
 import type { TtsEnv } from '../../web/src/tts/apiV2';
 
 const servers: Server[] = [];
@@ -224,5 +224,34 @@ describe('planDataForward (v0.44.2)', () => {
 
   it('no configured port means 502, never a guessed target', () => {
     expect(planDataForward('diaries', 'GET', 0)).toEqual({ kind: 'error', status: 502 });
+  });
+});
+
+describe('planMusicForward (v0.45.4 — fixed-path allowlist, the data-forward discipline)', () => {
+  it('forwards the three endpoints with the query riding through', () => {
+    expect(planMusicForward('now', 'GET', 8787)).toEqual({
+      kind: 'forward',
+      url: 'http://127.0.0.1:8787/api/music/now',
+    });
+    expect(planMusicForward('control', 'POST', 8787)).toEqual({
+      kind: 'forward',
+      url: 'http://127.0.0.1:8787/api/music/control',
+    });
+    expect(planMusicForward('artwork?h=aabbccdd', 'GET', 8787)).toEqual({
+      kind: 'forward',
+      url: 'http://127.0.0.1:8787/api/music/artwork?h=aabbccdd',
+    });
+  });
+
+  it('unknown subpaths and traversal shapes 404 without touching upstream', () => {
+    expect(planMusicForward('../secret', 'GET', 8787)).toEqual({ kind: 'error', status: 404 });
+    expect(planMusicForward('now/../x', 'GET', 8787)).toEqual({ kind: 'error', status: 404 });
+    expect(planMusicForward('seek', 'POST', 8787)).toEqual({ kind: 'error', status: 404 });
+  });
+
+  it('wrong method 404s; no port 502s', () => {
+    expect(planMusicForward('control', 'GET', 8787)).toEqual({ kind: 'error', status: 404 });
+    expect(planMusicForward('now', 'POST', 8787)).toEqual({ kind: 'error', status: 404 });
+    expect(planMusicForward('now', 'GET', 0)).toEqual({ kind: 'error', status: 502 });
   });
 });

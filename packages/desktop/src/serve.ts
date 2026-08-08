@@ -66,6 +66,12 @@ export function startWebHost(
       void forwardData(req, res, pathname.slice('/api/data/'.length), dataPort());
       return;
     }
+    if (pathname.startsWith('/api/music/')) {
+      // v0.45.4: the player card's forward — same allowlist discipline; binary artwork buffers
+      // through like any other body.
+      void forwardMusic(req, res, pathname.slice('/api/music/'.length), dataPort());
+      return;
+    }
     if (modelsRoot && pathname.startsWith('/models/') && serveModel(modelsRoot, pathname, res)) return;
     const file = resolve(root, '.' + (pathname === '/' ? '/index.html' : pathname));
     if (!file.startsWith(root) || !existsSync(file) || !statSync(file).isFile()) {
@@ -99,6 +105,28 @@ export const DATA_ROUTES: ReadonlyArray<{ sub: string; methods: readonly string[
   { sub: 'soul/fixed', methods: ['POST'] },
 ];
 
+// v0.45.4: the player card's three endpoints, forwarded with the same fixed-path construction
+// (?h=/query rides through exactly like ?limit= does on the data routes).
+export const MUSIC_ROUTES: ReadonlyArray<{ sub: string; methods: readonly string[] }> = [
+  { sub: 'now', methods: ['GET'] },
+  { sub: 'control', methods: ['POST'] },
+  { sub: 'artwork', methods: ['GET'] },
+];
+
+export function planMusicForward(
+  subpath: string,
+  method: string,
+  port: number,
+): { kind: 'forward'; url: string } | { kind: 'error'; status: number } {
+  if (!port) return { kind: 'error', status: 502 };
+  const q = subpath.indexOf('?');
+  const bare = q >= 0 ? subpath.slice(0, q) : subpath;
+  const query = q >= 0 ? subpath.slice(q) : '';
+  const route = MUSIC_ROUTES.find((r) => r.sub === bare);
+  if (!route || !route.methods.includes(method)) return { kind: 'error', status: 404 };
+  return { kind: 'forward', url: `http://127.0.0.1:${port}/api/music/${route.sub}${query}` };
+}
+
 export function planDataForward(
   subpath: string,
   method: string,
@@ -112,6 +140,35 @@ export function planDataForward(
   const route = DATA_ROUTES.find((r) => r.sub === bare);
   if (!route || !route.methods.includes(method)) return { kind: 'error', status: 404 };
   return { kind: 'forward', url: `http://127.0.0.1:${port}/api/data/${route.sub}${query}` };
+}
+
+async function forwardMusic(
+  req: IncomingMessage,
+  res: ServerResponse,
+  subpath: string,
+  port: number,
+): Promise<void> {
+  const rawQuery = req.url && req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
+  const plan = planMusicForward(subpath + rawQuery, req.method ?? 'GET', port);
+  if (plan.kind === 'error') {
+    res.writeHead(plan.status).end(plan.status === 502 ? 'music upstream not configured' : 'not found');
+    return;
+  }
+  try {
+    const body = req.method === 'GET' || req.method === 'HEAD' ? undefined : await readBody(req);
+    const upstream = await fetch(plan.url, {
+      method: req.method ?? 'GET',
+      ...(body !== undefined ? { body } : {}),
+      headers: { 'content-type': 'application/json' },
+      signal: AbortSignal.timeout(10_000),
+    });
+    res.writeHead(upstream.status, {
+      'content-type': upstream.headers.get('content-type') ?? 'application/json',
+    });
+    res.end(Buffer.from(await upstream.arrayBuffer()));
+  } catch {
+    res.writeHead(502).end('music upstream unreachable');
+  }
 }
 
 async function forwardData(
