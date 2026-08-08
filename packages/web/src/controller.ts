@@ -234,8 +234,18 @@ export function createController(deps: ControllerDeps): { handle: (e: ServerEven
         // bug, when app.ts only hid on turn.result).
         resetTurnState();
         reflectTyping();
-        if (!e.spoke)
-          deps.view.chip('proactive', `${proactiveGlyph(e.cycle_id)} (quietly did something)`);
+        if (!e.spoke) {
+          // v0.45.11: a QUIET waking (she did something, note attached) grows a leaf — the
+          // bubble-less trace of her quiet life; pure rest stays as the soft chip. Views without
+          // a leaf renderer (pet/agent minimal views) fall back to the chip either way.
+          if (e.quiet_note && deps.view.leaf) {
+            deps.view.leaf(e.quiet_note);
+          } else if (e.quiet_note) {
+            deps.view.chip('proactive', `🍃 ${e.quiet_note}`);
+          } else {
+            deps.view.chip('proactive', `${proactiveGlyph(e.cycle_id)} (a quiet moment)`);
+          }
+        }
         return;
 
       case 'error':

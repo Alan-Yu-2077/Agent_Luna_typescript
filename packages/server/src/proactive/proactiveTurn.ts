@@ -206,16 +206,23 @@ export async function runProactiveTurn(opts: RunProactiveOptions): Promise<{ spo
   // v0.45.10: the outcome ledger — every waking records what it became (spoke/quiet/nothing),
   // with quiet turns carrying a one-line note (the leaf's copy) and a wander mark for the daily
   // budget. Gated with the feature: flag off = the exact pre-.10 behavior, no rows.
+  let quietNote = '';
   if (quietWorkEnabled()) {
     const kind = classifyOutcome(spoke, state.toolNamesThisTurn);
-    const note = kind === 'quiet' ? compressNote(state.toolNamesThisTurn) : '';
+    if (kind === 'quiet') quietNote = compressNote(state.toolNamesThisTurn);
     try {
-      recordOutcome(opts.session.id, kind, note, kind === 'quiet' && isWander(state.toolNamesThisTurn));
-      console.log(`[proactive] outcome=${kind}${note ? ` — ${note}` : ''}`);
+      recordOutcome(opts.session.id, kind, quietNote, kind === 'quiet' && isWander(state.toolNamesThisTurn));
+      console.log(`[proactive] outcome=${kind}${quietNote ? ` — ${quietNote}` : ''}`);
     } catch {
       /* the ledger must never break the turn */
     }
   }
-  opts.emit({ type: 'proactive.finished', cycle_id: opts.cycleId, spoke });
+  // v0.45.11: the leaf's payload — only a QUIET waking carries the note (additive field).
+  opts.emit({
+    type: 'proactive.finished',
+    cycle_id: opts.cycleId,
+    spoke,
+    ...(quietNote ? { quiet_note: quietNote } : {}),
+  });
   return { spoke };
 }

@@ -182,6 +182,11 @@ export const ProactiveFinishedEvent = z.object({
   type: z.literal('proactive.finished'),
   cycle_id: z.string(),
   spoke: z.boolean(),
+  // v0.45.11 (Initiative 35): the one-line human note of a QUIET waking (she did something
+  // without speaking) — the leaf's copy, verbatim from the outcome ledger. Optional/additive:
+  // absent on spoke and on pure-rest wakings, and old payloads parse untouched. This is a line
+  // of prose for the owner's eyes, not a data channel — do not repurpose.
+  quiet_note: z.string().optional(),
 });
 
 // Sent once on WS connect: replays the persisted conversation so a refresh

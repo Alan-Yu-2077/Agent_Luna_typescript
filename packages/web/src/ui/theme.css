@@ -1308,7 +1308,28 @@ body.pet { background: none; }
 .pc-btn:hover { background: #dbe7f4; }
 .pc-play { background: var(--lavender-deep); color: #fff; }
 
+
+/* v0.45.11: the quiet leaf — the sprout's bubble-less sibling. She did something without a
+   word; the leaf is the trace: smaller and fainter than a chip ("she did a small thing", not
+   "she said a thing"), click to unfold the one-line note. Appears on the micro band (0.3s). */
+.luna-leaf {
+  display: inline-flex; align-items: center; gap: 6px; align-self: flex-start;
+  border: none; background: none; cursor: pointer; padding: 2px 6px;
+  font: inherit; font-size: 12px; color: var(--sky-text); opacity: 0;
+  transform: translateY(4px); transition: opacity 0.3s ease, transform 0.3s ease;
+}
+.luna-leaf.in { opacity: 0.55; transform: translateY(0); }
+.luna-leaf.in:hover { opacity: 0.85; }
+.luna-leaf .leaf-glyph { font-size: 13px; }
+.luna-leaf .leaf-note {
+  max-width: 0; overflow: hidden; white-space: nowrap; opacity: 0;
+  transition: max-width 0.3s ease, opacity 0.3s ease;
+}
+.luna-leaf.open .leaf-note { max-width: 320px; opacity: 0.9; white-space: normal; }
+
 @media (prefers-reduced-motion: reduce) {
+  .luna-leaf, .luna-leaf .leaf-note { transition: none; }
+
   .pc-disc { animation: none; }
   .pc-arm, .player-card { transition-duration: 0.2s; }
 

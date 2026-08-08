@@ -51,6 +51,9 @@ export interface BubbleView {
   discard(id: string): void;
   // a non-bubble marker: tool/dream/proactive/expression/error
   chip(kind: ChipKind, text: string, href?: string): void;
+  // v0.45.11: the quiet leaf — she did something without a word; `note` is one line of prose
+  // shown on click. Optional; only the cute view renders it (pet/agent fall back to a chip).
+  leaf?(note: string): void;
   // show/hide the "she's still going" typing indicator. Driven by the controller
   // for the WHOLE turn (not just the opening) so the user can tell she hasn't
   // finished — shown whenever a turn/proactive is in flight and no visible bubble
@@ -112,6 +115,25 @@ export class DomBubbleView implements BubbleView {
     const b = this.bubbles.get(id);
     if (b) b.remove();
     this.bubbles.delete(id);
+  }
+
+  leaf(note: string): void {
+    const doc = this.host.ownerDocument;
+    const leaf = doc.createElement('button');
+    leaf.type = 'button';
+    leaf.className = 'luna-leaf';
+    leaf.setAttribute('aria-label', 'something she quietly did');
+    const glyph = doc.createElement('span');
+    glyph.className = 'leaf-glyph';
+    glyph.textContent = '🍃';
+    const line = doc.createElement('span');
+    line.className = 'leaf-note';
+    line.textContent = note;
+    leaf.append(glyph, line);
+    leaf.addEventListener('click', () => leaf.classList.toggle('open'));
+    this.host.appendChild(leaf);
+    requestAnimationFrame(() => leaf.classList.add('in'));
+    this.host.scrollTop = this.host.scrollHeight;
   }
 
   chip(kind: ChipKind, text: string, href?: string): void {
