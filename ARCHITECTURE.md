@@ -111,6 +111,27 @@ Both are heavily rail-guarded (idle floors, intervals, budgets) so agency never 
 - **Weather** — a pluggable provider (Open-Meteo keyless by default, or QWeather with a key) gated on a
   resolved location (`LUNA_LAT_LON`). Surfaces as a tool, as ambient context, and as a proactive
   weather-shift detector — all dormant until a location is configured.
+- **Music** — the same triple, the same dormancy (`LUNA_MUSIC=1`, darwin, `media-control` present).
+  The official NeteaseMusic.app plays; Luna **observes** the system-wide Now Playing record from
+  outside (macOS MediaRemote, vendored `packages/music-cli` — its adapter/library/lyrics modules are
+  each the ONLY file that knows the corresponding external format, everything else consumes the
+  `types.ts` contracts). Surfaces as tools, as ambient context, as a rate-limited track-change
+  moment, and as the session page's player card.
+
+  Two locked decisions (2026-08, owner):
+  1. **Observe, never wrap.** The community NetEase API keystone (`Binaryify/NeteaseCloudMusicApi`,
+     30.3k★, the de-facto standard) was archived 2024-02-28; `go-musicfox` is a pure TUI with no
+     scriptable command surface. External observation means zero reverse-engineering, zero DRM,
+     zero account credentials — and Apple Music / Spotify / browser playback compatible for free.
+  2. **Luna does not DJ — "Route 2" (Luna picks the songs) evaluated and REJECTED.** The official
+     client cannot be commanded to play a given track: `orpheus://` is a CEF-internal resource
+     protocol with no playback route, and there is no AppleScript `.sdef`. The only viable path is
+     a self-hosted player (mpv) fed by unofficial audio-URL APIs, measured against the owner's own
+     library (1411 tracks): **92% is VIP-gated** (fee=1: 47%, fee=8 hi-fi-needs-VIP: 45%);
+     unauthenticated playback covers ~6% at 64kbps; authenticating exposes the owner's VIP account
+     to platform risk control. Not worth it — shelved. To ever reopen: first verify a logged-in VIP
+     audio path end-to-end via `go-musicfox`, then talk. Transport commands (play/pause/next/prev)
+     stay — that is acting on the owner's request, not choosing for them.
 
 ## The front end (`web`)
 
