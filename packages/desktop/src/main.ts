@@ -148,8 +148,10 @@ function currentLunaConfig(): { modelUrl?: string; ttsBackend?: string; ttsUrl?:
   };
 }
 
-// v0.35.4 (Initiative 25 close): the wizard is the DEFAULT setup experience; LUNA_SETUP_WIZARD=0 is
-// the one-release escape hatch to the v0.28 single card. Read fresh (like currentLunaConfig) so a
+// v0.35.4 (Initiative 25 close): the wizard is the DEFAULT setup experience; LUNA_SETUP_WIZARD=0
+// falls back to the v0.28 single card. (v0.45.14 honesty pass: v0.35.4 called this a "one-release
+// escape hatch" — ten minors later it is simply a permanent switch; the fallback card still works
+// and costs nothing to keep.) Read fresh (like currentLunaConfig) so a
 // luna.env flip applies on the next setup-window load — the v0.34.15 lesson: the main process's
 // process.env never carries luna.env values by itself.
 function wizardEnabled(): boolean {

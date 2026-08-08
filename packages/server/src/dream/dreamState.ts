@@ -33,10 +33,6 @@ export function isDreaming(): boolean {
   return state.is_dreaming === 1;
 }
 
-export function currentStep(): string | null {
-  return state.current_step;
-}
-
 export function dreamStatus(): { is_dreaming: boolean; current_step: string | null; last_dream_ms: number | null } {
   return {
     is_dreaming: state.is_dreaming === 1,

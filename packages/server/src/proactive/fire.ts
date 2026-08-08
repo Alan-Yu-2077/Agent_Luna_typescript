@@ -42,10 +42,6 @@ import { hotCommentFor } from '../tools/media/enrichment';
 // The single-turn lock: session ids with a proactive turn acquiring or running.
 const inFlight = new Set<string>();
 
-export function proactiveInFlight(sessionId: string): boolean {
-  return inFlight.has(sessionId);
-}
-
 // The shared rail every proactive path applies: not already in-flight, no reactive turn, not
 // dreaming, proactive enabled. Acquires the lock SYNCHRONOUSLY — the has-check and the `add` run
 // with no await between them, and `runProactiveTurn` sets `session.activeTurn` synchronously before

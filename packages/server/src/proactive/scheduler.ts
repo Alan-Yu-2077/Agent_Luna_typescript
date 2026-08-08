@@ -31,13 +31,10 @@ export function startScheduler(deps: SchedulerDeps): void {
   timer = setInterval(() => {
     void runTick(deps).catch(logSwallowed('scheduler-tick'));
   }, tickMs);
-  // don't keep the process alive just for the heartbeat
+  // don't keep the process alive just for the heartbeat. Nothing ever stops this timer
+  // explicitly (v0.45.14 removed the never-called stopScheduler) — the unref means it
+  // simply dies with the process, which is the entire intended lifecycle.
   (timer as { unref?: () => void }).unref?.();
-}
-
-export function stopScheduler(): void {
-  if (timer) clearInterval(timer);
-  timer = null;
 }
 
 // Serializes ticks: a tick's proactive turn can outlast the tick interval; without this a
