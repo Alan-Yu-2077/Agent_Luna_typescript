@@ -118,8 +118,13 @@ describe('mount gate (boot-frozen, flag + platform)', () => {
     }
   });
 
-  test('registry group holds exactly the pair', () => {
-    expect(Object.keys(musicTools).sort()).toEqual(['music_control', 'music_now']);
+  test('registry group holds exactly the four music tools (v0.45.9 grew the shelf pair)', () => {
+    expect(Object.keys(musicTools).sort()).toEqual([
+      'music_control',
+      'music_library',
+      'music_lyrics',
+      'music_now',
+    ]);
   });
 });
 

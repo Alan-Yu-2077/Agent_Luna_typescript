@@ -42,6 +42,12 @@ export const ToolName = z.enum([
   // Deliberately NOT risk-marked ⇒ fail-closed 'surface' in proactive turns: she must
   // speak before touching his music.
   'music_control',
+  // Initiative 34 (v0.45.9) — browse his listening history in the local library
+  // (search/top/history/playlists). Read-only (D3) ⇒ 'safe'.
+  'music_library',
+  // Initiative 34 (v0.45.9) — re-read the current track's cached lyrics (zero network,
+  // the read-once-burn block's safety net). Read-only ⇒ 'safe'.
+  'music_lyrics',
 ]);
 export type ToolName = z.infer<typeof ToolName>;
 

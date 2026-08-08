@@ -25,6 +25,7 @@ import { webSearchTool } from './web/web_search';
 import { webFetchTool } from './web/web_fetch';
 import { weatherTool } from './builtin/weather';
 import { musicControlTool, musicNowTool } from './builtin/music';
+import { musicLibraryTool, musicLyricsTool } from './builtin/musicLibrary';
 import { resolveLocation } from '../turn/temporalContext';
 
 // Partial: `message` is mounted conditionally (LUNA_MESSAGE_TOOL), so a
@@ -256,6 +257,9 @@ export function withWeather(base: ToolRegistry): ToolRegistry {
 export const musicTools: ToolRegistry = {
   music_now: musicNowTool,
   music_control: musicControlTool,
+  // v0.45.9: the record-shelf pair — read-only library browsing + cached-lyrics re-read.
+  music_library: musicLibraryTool,
+  music_lyrics: musicLyricsTool,
 };
 
 export function musicEnabled(platform: string = process.platform): boolean {
