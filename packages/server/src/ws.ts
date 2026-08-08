@@ -1,4 +1,5 @@
 import type { ServerWebSocket } from 'bun';
+import { logSwallowed } from './swallow';
 import { ClientEvent, ToolName, assertNever } from '@luna/protocol';
 import { setRuntimeLocation } from './turn/temporalContext';
 import { startWeatherRefresh } from './tools/web/weather/snapshot';
@@ -53,6 +54,7 @@ function startDream(ws: ServerWebSocket<WSData>, session: Session): void {
     sessionId: session.id,
     llm: runtime.dreamLlm,
     emit: safeEmit(ws),
+    trigger: 'manual',
   });
   // enterDream runs synchronously inside runDreamCycle before its first await,
   // so the gate state is already accurate here.
@@ -129,7 +131,7 @@ function maybeFireOnReconnect(sessionId: string): void {
     dreamLlm: rt.dreamLlm,
     nowMs: now,
     nowHour: new Date(now).getHours(),
-  }).catch(() => {});
+  }).catch(logSwallowed('ws-reconnect-hook'));
 }
 
 export function handleClose(

@@ -12,6 +12,12 @@ const port = Number(Bun.env['PORT'] ?? 5173);
 // Unset → the forward answers 502 and the app degrades to silence.
 const TTS_ENV = readTtsEnv(Bun.env as unknown as Record<string, string | undefined>);
 
+// v0.45.12 (C7): the /api faces this dev server forwards to the sidecar. MUST stay in lockstep
+// with serve.ts (the packaged host) — the parity test in packages/desktop compares the two
+// lists, so forgetting one side goes red in CI instead of red on the owner's machine (the
+// v0.45.6 "flag that never arrived" class of bug).
+export const FORWARDED_API_PREFIXES = ['/api/tts/', '/api/data/', '/api/music/'] as const;
+
 Bun.serve({
   port,
   // A voice backend can load a large model on the first /speak, which far exceeds Bun's

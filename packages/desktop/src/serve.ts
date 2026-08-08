@@ -97,6 +97,10 @@ export function startWebHost(
 // v0.44.2 — the data forward. The upstream path is chosen from this exact allowlist, never taken
 // from the request, so no traversal or SSRF shape exists (the /api/tts discipline). Loopback to
 // loopback: the web page fetches same-origin relative paths, zero CORS.
+// v0.45.12 (C7): the /api faces this packaged host forwards — the parity twin of
+// dev-server.ts's FORWARDED_API_PREFIXES (see the parity test). Add a new face to BOTH.
+export const FORWARDED_API_PREFIXES = ['/api/tts/', '/api/data/', '/api/music/'] as const;
+
 export const DATA_ROUTES: ReadonlyArray<{ sub: string; methods: readonly string[] }> = [
   { sub: 'diaries', methods: ['GET'] },
   { sub: 'skills', methods: ['GET'] },

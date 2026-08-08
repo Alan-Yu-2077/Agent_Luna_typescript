@@ -37,6 +37,7 @@ import { devChatHandler } from './devchat/devchat';
 import { setMemoryDb } from './memory/sessionStore';
 import { seedSoulOnBoot } from './memory/soulSeed';
 import { initCustomSqlite } from './memory/recall/vecRuntime';
+import { logSwallowed } from './swallow';
 import { bootReconcile, dreamStatus, dreamWindowOpen, isDreaming, parseDreamWindow, shutdownDreamDue } from './dream/dreamState';
 import { runDreamCycle } from './dream/cycle';
 import { setOnWeatherRefresh, startWeatherRefresh } from './tools/web/weather/snapshot';
@@ -166,7 +167,7 @@ if (Bun.env['ANTHROPIC_API_KEY']) {
   // (default off); wired before startWeatherRefresh so the first refresh is covered.
   setOnWeatherRefresh(() => {
     if (Bun.env['LUNA_PROACTIVE_EVENT_HOOKS'] === '1') {
-      void fireProactiveForActiveSessions(schedulerDeps).catch(() => {});
+      void fireProactiveForActiveSessions(schedulerDeps).catch(logSwallowed('weather-hook'));
     }
   });
   startWeatherRefresh();
@@ -177,7 +178,7 @@ if (Bun.env['ANTHROPIC_API_KEY']) {
   // v0.45.3: enrichment subscribes to track changes only when opted in — LUNA_MUSIC_ENRICH unset
   // means zero initialization, zero network, zero behavioural delta against v0.45.2.
   if (musicEnrichEnabled()) {
-    setOnTrackChange((t) => void enrichTrack(t).catch(() => {}));
+    setOnTrackChange((t) => void enrichTrack(t).catch(logSwallowed('music-enrich')));
   }
 
   // Shutdown dream (v0.21.7): on a graceful exit (Ctrl-C / SIGTERM) run one last
@@ -207,7 +208,7 @@ if (Bun.env['ANTHROPIC_API_KEY']) {
         const deadlineMs = Number(Bun.env['LUNA_SHUTDOWN_DREAM_TIMEOUT_MS'] ?? 120_000);
         const dreams = (async () => {
           for (const sessionId of activeSessionIds()) {
-            await runDreamCycle({ sessionId, llm: dreamLlm, emit: broadcast });
+            await runDreamCycle({ sessionId, llm: dreamLlm, emit: broadcast, trigger: 'shutdown' });
           }
         })();
         await Promise.race([dreams, Bun.sleep(deadlineMs)]);

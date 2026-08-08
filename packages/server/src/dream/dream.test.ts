@@ -118,7 +118,7 @@ describe('dream cycle', () => {
     };
     addFact('core_facts', 'seed fact so refine is not skipped');
 
-    const cycle = runDreamCycle({ sessionId: 'default', llm: slowLlm, emit: () => {} });
+    const cycle = runDreamCycle({ sessionId: 'default', llm: slowLlm, emit: () => {}, trigger: 'manual' });
     expect(isDreaming()).toBe(true);
 
     expect(wake().ok).toBe(false);
@@ -134,8 +134,8 @@ describe('dream cycle', () => {
 
   test('2. double enter rejected; wake when not dreaming rejected', async () => {
     const { llm } = scriptedLlm();
-    const first = runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
-    const second = await runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
+    const first = runDreamCycle({ sessionId: 'default', llm, emit: () => {}, trigger: 'manual' });
+    const second = await runDreamCycle({ sessionId: 'default', llm, emit: () => {}, trigger: 'manual' });
     expect(second.ok).toBe(false);
     await first;
     wake();
@@ -149,7 +149,7 @@ describe('dream cycle', () => {
     ]);
     // listUnratedL2 is most-recent-first → unrated[0]='nice weather', [1]='Rex'.
     const { llm } = scriptedLlm({ salience: JSON.stringify({ scores: [5, 1] }) });
-    await runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
+    await runDreamCycle({ sessionId: 'default', llm, emit: () => {}, trigger: 'manual' });
 
     const rows = db.prepare('SELECT user_text, importance FROM l2_turns').all() as {
       user_text: string;
@@ -168,7 +168,7 @@ describe('dream cycle', () => {
       ['nice weather', 'mm'],
     ]);
     const { llm } = scriptedLlm({ salience: JSON.stringify({ scores: [4] }) }); // 1 score, 2 turns
-    await runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
+    await runDreamCycle({ sessionId: 'default', llm, emit: () => {}, trigger: 'manual' });
     const rows = db.prepare('SELECT importance FROM l2_turns').all() as { importance: number | null }[];
     expect(rows.every((r) => r.importance === null)).toBe(true);
   });
@@ -185,7 +185,7 @@ describe('dream cycle', () => {
       }),
     });
 
-    await runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
+    await runDreamCycle({ sessionId: 'default', llm, emit: () => {}, trigger: 'manual' });
 
     const active = listFacts({ category: 'preferences' });
     expect(active.length).toBe(1);
@@ -199,7 +199,7 @@ describe('dream cycle', () => {
   test('4. diaries: yesterday gets a day row; 7 day-diaries roll into a week', async () => {
     seedDialogue('default', [['we talked about tea', 'lovely']], 1);
     const { llm } = scriptedLlm();
-    await runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
+    await runDreamCycle({ sessionId: 'default', llm, emit: () => {}, trigger: 'manual' });
 
     const days = db.prepare("SELECT period_key FROM diaries WHERE kind = 'day'").all();
     expect(days.length).toBeGreaterThanOrEqual(1);
@@ -208,7 +208,7 @@ describe('dream cycle', () => {
     // regardless of alignment.
     for (let i = 2; i <= 15; i++) seedDialogue('default', [[`day ${i} chat`, 'noted']], i);
     resetDreamStateForTests();
-    await runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
+    await runDreamCycle({ sessionId: 'default', llm, emit: () => {}, trigger: 'manual' });
     const weeks = db.prepare("SELECT period_key FROM diaries WHERE kind = 'week'").all();
     expect(weeks.length).toBeGreaterThanOrEqual(1);
   });
@@ -224,7 +224,7 @@ describe('dream cycle', () => {
       ).run('day', key, `day ${key}`, Date.now());
     }
     const { llm } = scriptedLlm();
-    await runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
+    await runDreamCycle({ sessionId: 'default', llm, emit: () => {}, trigger: 'manual' });
 
     const months = db.prepare("SELECT period_key FROM diaries WHERE kind = 'month'").all() as {
       period_key: string;
@@ -233,7 +233,7 @@ describe('dream cycle', () => {
 
     // idempotent: a second cycle does not create a duplicate month entry
     resetDreamStateForTests();
-    await runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
+    await runDreamCycle({ sessionId: 'default', llm, emit: () => {}, trigger: 'manual' });
     const monthCount = (
       db
         .prepare("SELECT COUNT(*) c FROM diaries WHERE kind = 'month' AND period_key = '2026-05'")
@@ -258,7 +258,7 @@ describe('dream cycle', () => {
     seedDialogue('default', [['two days ago talk', 'noted']], 2);
     seedDialogue('default', [['yesterday talk', 'noted']], 1);
     seedDialogue('default', [['this morning', 'good morning']], 0);
-    await runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
+    await runDreamCycle({ sessionId: 'default', llm, emit: () => {}, trigger: 'manual' });
     const twoAfter1 = readDay(twoDaysAgo);
     const yAfter1 = readDay(yesterday);
     const todayAfter1 = readDay(today);
@@ -268,7 +268,7 @@ describe('dream cycle', () => {
 
     // a second dream the same day (old behavior: INSERT OR IGNORE skipped today)
     expect(wake().ok).toBe(true);
-    await runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
+    await runDreamCycle({ sessionId: 'default', llm, emit: () => {}, trigger: 'manual' });
 
     expect(readDay(today)).not.toBe(todayAfter1); // option 2: today refreshed
     expect(readDay(yesterday)).not.toBe(yAfter1); // v0.21.7: yesterday refreshed too
@@ -289,7 +289,7 @@ describe('dream cycle', () => {
     const { llm } = scriptedLlm({
       persona: JSON.stringify({ self_state: 'gentler now', relationship_status: 'trusted', reason: 'x' }),
     });
-    await runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
+    await runDreamCycle({ sessionId: 'default', llm, emit: () => {}, trigger: 'manual' });
     expect(getSoul().evolving_self).toBe('gentler now');
     expect(getSoul().evolving_bond).toBe('trusted');
     const audit = db.prepare('SELECT source FROM soul_audit ORDER BY id DESC LIMIT 1').get() as {
@@ -305,7 +305,7 @@ describe('dream cycle', () => {
     const { llm } = scriptedLlm({
       persona: JSON.stringify({ self_state: 'shifted, steadier', relationship_status: null }),
     });
-    await runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
+    await runDreamCycle({ sessionId: 'default', llm, emit: () => {}, trigger: 'manual' });
     expect(getSoul().fixed_text).toBe(before); // fixed core is unreachable to the dream
     expect(getSoul().evolving_self).toBe('shifted, steadier'); // only the evolving section moved
   });
@@ -315,7 +315,7 @@ describe('dream cycle', () => {
     updateEvolving({ self: 'steady', bond: 'warm' }, 'seed');
     seedDialogue('default', [['ordinary chatter', 'mm']]);
     const { llm } = scriptedLlm({ persona: NOOP_PERSONA });
-    await runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
+    await runDreamCycle({ sessionId: 'default', llm, emit: () => {}, trigger: 'manual' });
     expect(getSoul().evolving_self).toBe('steady');
     const dreamRows = db
       .prepare("SELECT COUNT(*) c FROM soul_audit WHERE source = 'dream'")
@@ -340,7 +340,7 @@ describe('dream cycle', () => {
     const auditCount = () =>
       (db.prepare('SELECT COUNT(*) c FROM soul_audit').get() as { c: number }).c;
 
-    await runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
+    await runDreamCycle({ sessionId: 'default', llm, emit: () => {}, trigger: 'manual' });
     expect(getSoul().evolving_self).toBe(BASE_SELF);
     const audit1 = auditCount();
 
@@ -350,7 +350,7 @@ describe('dream cycle', () => {
       relationship_status: REL,
     });
     expect(wake().ok).toBe(true);
-    await runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
+    await runDreamCycle({ sessionId: 'default', llm, emit: () => {}, trigger: 'manual' });
     expect(getSoul().evolving_self).toBe(BASE_SELF); // cosmetic drift dropped
     expect(auditCount()).toBe(audit1); // no new commit
 
@@ -359,7 +359,7 @@ describe('dream cycle', () => {
       'Something cracked open in me today. I feel raw and newly brave, less interested in being tidy and more in being true.';
     personaText = JSON.stringify({ self_state: NEW_SELF, relationship_status: REL });
     expect(wake().ok).toBe(true);
-    await runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
+    await runDreamCycle({ sessionId: 'default', llm, emit: () => {}, trigger: 'manual' });
     expect(getSoul().evolving_self).toBe(NEW_SELF);
     expect(auditCount()).toBe(audit1 + 1);
   });
@@ -373,7 +373,7 @@ describe('dream cycle', () => {
     const auditCount = () =>
       (db.prepare('SELECT COUNT(*) c FROM soul_audit').get() as { c: number }).c;
 
-    await runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
+    await runDreamCycle({ sessionId: 'default', llm, emit: () => {}, trigger: 'manual' });
     expect(getSoul().evolving_self).toBe(BASE_SELF);
     const audit1 = auditCount();
 
@@ -381,7 +381,7 @@ describe('dream cycle', () => {
     // it must NOT overwrite the still-true self_state with the word "null".
     personaText = JSON.stringify({ self_state: 'null', relationship_status: 'None' });
     expect(wake().ok).toBe(true);
-    await runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
+    await runDreamCycle({ sessionId: 'default', llm, emit: () => {}, trigger: 'manual' });
     expect(getSoul().evolving_self).toBe(BASE_SELF); // unchanged
     expect(auditCount()).toBe(audit1); // no commit
   });
@@ -434,11 +434,16 @@ describe('dream cycle', () => {
       };
       return row.cycle_id ?? '';
     }
-    await runDreamCycle({ sessionId: 'default', llm, emit: () => {} });
+    await runDreamCycle({ sessionId: 'default', llm, emit: () => {}, trigger: 'manual' });
     expect(tracesAtPersona).toBeGreaterThanOrEqual(2);
   });
 
   test('8. enter_dream tool: pending intent only; no dream activity before turn.result', async () => {
+    // v0.45.12: the tool now obeys the night window, and bun test pins TZ=UTC — pin an
+    // override window that contains "now" so this test is about the PENDING contract, not
+    // the clock. The window rejection has its own test below.
+    const h = new Date().getHours();
+    Bun.env['LUNA_SHUTDOWN_DREAM_WINDOW'] = `${h}-${(h + 2) % 24}`;
     const events: ServerEvent[] = [];
     const session = getSession('default');
     const toolContent = [
@@ -479,6 +484,59 @@ describe('dream cycle', () => {
     expect(session.pendingDream).toBe('long day');
     expect(isDreaming()).toBe(false);
     expect(events.at(-1)?.type).toBe('turn.result');
+    delete Bun.env['LUNA_SHUTDOWN_DREAM_WINDOW'];
+  });
+
+  test('8b. enter_dream outside the night window: recoverable err, no pending intent (v0.45.12 C2)', async () => {
+    const h = new Date().getHours();
+    Bun.env['LUNA_SHUTDOWN_DREAM_WINDOW'] = `${(h + 2) % 24}-${(h + 3) % 24}`; // now is outside
+    const events: ServerEvent[] = [];
+    const session = getSession('default');
+    const toolUses = [{ id: 'tu1', name: 'enter_dream', input: { reason: 'restless' } }];
+    const rounds: ProviderEvent[][] = [
+      [
+        {
+          kind: 'message_stop',
+          stopReason: 'tool_use',
+          toolUses,
+          assistantContent: toolUses.map((t) => ({
+            type: 'tool_use',
+            id: t.id,
+            name: t.name,
+            input: t.input,
+          })) as unknown as Anthropic.ContentBlock[],
+          usage: { input_tokens: 1, output_tokens: 1 },
+        },
+      ],
+      [
+        {
+          kind: 'message_stop',
+          stopReason: 'end_turn',
+          toolUses: [],
+          assistantContent: [] as unknown as Anthropic.ContentBlock[],
+          usage: { input_tokens: 1, output_tokens: 1 },
+        },
+      ],
+    ];
+    await runTurn({
+      session,
+      turnId: 't1',
+      userText: 'sleep now',
+      provider: new MockProvider(rounds),
+      registry: builtinRegistry,
+      emit: (e) => events.push(e),
+    });
+    expect(session.pendingDream).toBeNull();
+    const fin = events.find(
+      (e): e is Extract<ServerEvent, { type: 'tool.finished' }> => e.type === 'tool.finished',
+    );
+    expect(fin?.result.kind).toBe('err');
+    if (fin?.result.kind === 'err') {
+      expect(fin.result.recoverable).toBe(true);
+      expect(fin.result.message).toContain('night shift');
+      expect(fin.result.message).toContain('remember');
+    }
+    delete Bun.env['LUNA_SHUTDOWN_DREAM_WINDOW'];
   });
 
   test('9. boot reconciliation: stale dreaming state parks awake', () => {

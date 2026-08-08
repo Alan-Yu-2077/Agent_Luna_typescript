@@ -52,7 +52,7 @@ async function cycle(rig: { llm: DreamLLM; provider: MockProvider }): Promise<{ 
     if (e.type === 'dream.step') steps.push({ step: e.step, status: e.status, detail: e.detail });
   };
   resetDreamStateForTests();
-  const r = await runDreamCycle({ sessionId: 'default', llm: rig.llm, emit });
+  const r = await runDreamCycle({ sessionId: 'default', llm: rig.llm, emit, trigger: 'manual' });
   expect(r.ok).toBe(true);
   const s = steps.find((x) => x.step === 'distill_skills');
   if (!s) throw new Error('distill_skills step never ran');
@@ -228,6 +228,7 @@ describe('distill_skills (v0.32.2, dark launch)', () => {
       emit: (e: ServerEvent) => {
         if (e.type === 'dream.step') order.push(e.step);
       },
+      trigger: 'manual',
     });
     const di = order.indexOf('distill_skills');
     expect(di).toBeGreaterThan(order.indexOf('run_diaries'));

@@ -2,6 +2,7 @@ import type { ServerEvent } from '@luna/protocol';
 import type { Provider } from '../provider/types';
 import type { ToolRegistry } from '../tools/registry';
 import type { DreamLLM } from '../dream/llm';
+import { logSwallowed } from '../swallow';
 import { activeSessionIds, getSession } from '../turn/session';
 import { isDreaming } from '../dream/dreamState';
 import { maybeFireProactive } from './fire';
@@ -28,9 +29,7 @@ export function startScheduler(deps: SchedulerDeps): void {
   if (timer) return;
   const tickMs = Math.max(5, Number(Bun.env['LUNA_PROACTIVE_TICK_SECONDS'] ?? 60)) * 1000;
   timer = setInterval(() => {
-    void runTick(deps).catch(() => {
-      /* a tick must never crash the loop */
-    });
+    void runTick(deps).catch(logSwallowed('scheduler-tick'));
   }, tickMs);
   // don't keep the process alive just for the heartbeat
   (timer as { unref?: () => void }).unref?.();

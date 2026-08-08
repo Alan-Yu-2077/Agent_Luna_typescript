@@ -66,6 +66,7 @@ describe('rag_refresh embed-key fix (v0.32.1)', () => {
       sessionId: 'default',
       llm: garbageLlm(),
       emit: () => {},
+      trigger: 'manual',
       embedClient,
     });
     expect(r1.ok).toBe(true);
@@ -88,6 +89,7 @@ describe('rag_refresh embed-key fix (v0.32.1)', () => {
       sessionId: 'default',
       llm: garbageLlm(),
       emit: () => {},
+      trigger: 'manual',
       embedClient,
     });
     expect(r2.ok).toBe(true);

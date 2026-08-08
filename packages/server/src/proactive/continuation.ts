@@ -1,4 +1,5 @@
 import type { ServerEvent } from '@luna/protocol';
+import { logSwallowed } from '../swallow';
 import type { Provider } from '../provider/types';
 import type { ToolRegistry } from '../tools/registry';
 import type { Session } from '../turn/session';
@@ -60,9 +61,7 @@ export function maybeScheduleContinuation(deps: ContinuationDeps): void {
   if (!shouldContinue()) return;
   const pauseMs = Number(Bun.env['LUNA_SELFCONT_PAUSE_MS'] ?? 4000);
   const timer = setTimeout(() => {
-    void fireContinuation(deps).catch(() => {
-      /* continuation is best-effort */
-    });
+    void fireContinuation(deps).catch(logSwallowed('continuation'));
   }, pauseMs);
   // Never let a pending continuation hold the process open at shutdown.
   (timer as { unref?: () => void }).unref?.();

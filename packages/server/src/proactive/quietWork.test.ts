@@ -207,3 +207,40 @@ describe('runProactiveTurn integration', () => {
     expect(row.note).toBe('looked through her memories');
   });
 });
+
+describe('logSwallowed (v0.45.12 C4 — the breathing hole)', () => {
+  test('a swallowed error surfaces as one tagged warn, and the catch never rethrows', async () => {
+    const { logSwallowed } = await import('../swallow');
+    const warns: unknown[][] = [];
+    const orig = console.warn;
+    console.warn = (...a: unknown[]) => warns.push(a);
+    try {
+      await Promise.reject(new Error('tick exploded')).catch(logSwallowed('scheduler-tick'));
+    } finally {
+      console.warn = orig;
+    }
+    expect(warns.length).toBe(1);
+    expect(String(warns[0]?.[0])).toBe('[swallowed:scheduler-tick]');
+    expect(String(warns[0]?.[1])).toContain('tick exploded');
+  });
+});
+
+describe('maxToolIterations override (v0.45.12 C5)', () => {
+  test('unset/invalid → default 8; valid overrides', async () => {
+    const { MAX_TOOL_ITERATIONS, maxToolIterations } = await import('../turn/runTurn');
+    const prev = Bun.env['LUNA_MAX_TOOL_ITERATIONS'];
+    try {
+      delete Bun.env['LUNA_MAX_TOOL_ITERATIONS'];
+      expect(maxToolIterations()).toBe(MAX_TOOL_ITERATIONS);
+      Bun.env['LUNA_MAX_TOOL_ITERATIONS'] = '12';
+      expect(maxToolIterations()).toBe(12);
+      Bun.env['LUNA_MAX_TOOL_ITERATIONS'] = '0';
+      expect(maxToolIterations()).toBe(MAX_TOOL_ITERATIONS);
+      Bun.env['LUNA_MAX_TOOL_ITERATIONS'] = 'nope';
+      expect(maxToolIterations()).toBe(MAX_TOOL_ITERATIONS);
+    } finally {
+      if (prev === undefined) delete Bun.env['LUNA_MAX_TOOL_ITERATIONS'];
+      else Bun.env['LUNA_MAX_TOOL_ITERATIONS'] = prev;
+    }
+  });
+});

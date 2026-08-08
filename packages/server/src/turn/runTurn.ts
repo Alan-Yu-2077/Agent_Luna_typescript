@@ -49,6 +49,14 @@ import {
 } from '../proactive/safetyGate';
 
 export const MAX_TOOL_ITERATIONS = 8;
+// v0.45.12 (C5): the round cap, overridable — quiet-agency wander chains (search→open→read→
+// remember) run close to 8; the owner can widen without a code change. NaN/≤0 → the default.
+// NB the PROACTIVE budget is a different knob: LUNA_PROACTIVE_MAX_ACTIONS caps total tool
+// CALLS in a proactive cycle (safetyGate) — rounds here, calls there.
+export function maxToolIterations(): number {
+  const v = Number(Bun.env['LUNA_MAX_TOOL_ITERATIONS']);
+  return Number.isFinite(v) && v > 0 ? v : MAX_TOOL_ITERATIONS;
+}
 
 // v0.28.5 (the 390K-token-incident lesson: the bill was the only alarm): a LOUD per-request cost
 // tripwire. Fires per ROUND (each round re-sends the whole context, so one huge request — not the
@@ -602,7 +610,7 @@ const graph: Graph<TurnState, TurnNode> = {
       .filter((b): b is Anthropic.ToolResultBlockParam => b !== undefined);
     s.session.history.push({ role: 'user', content: ordered });
     s.iteration += 1;
-    if (s.iteration >= MAX_TOOL_ITERATIONS) {
+    if (s.iteration >= maxToolIterations()) {
       s.finishReason = 'max_iterations';
       return 'finalize';
     }

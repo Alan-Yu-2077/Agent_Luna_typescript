@@ -18,6 +18,7 @@ import {
   saveCadence,
 } from './cadence';
 import { evaluateLadder, ladderEnabled } from './ladder';
+import { logSwallowed } from '../swallow';
 import {
   commitMusicMoment,
   freshTrackMoment,
@@ -131,9 +132,12 @@ export async function maybeFireProactive(opts: MaybeFireOpts): Promise<FireOutco
           saveMusicMoment(session.id, commitMusicMoment(loadMusicMoment(session.id), nowMs, spoke));
           if (session.pendingDream !== null) {
             session.pendingDream = null;
-            void runDreamCycle({ sessionId: session.id, llm: opts.dreamLlm, emit: opts.emit }).catch(
-              () => {},
-            );
+            void runDreamCycle({
+              sessionId: session.id,
+              llm: opts.dreamLlm,
+              emit: opts.emit,
+              trigger: 'self',
+            }).catch(logSwallowed('dream-handoff'));
           }
           return { fired: true, spoke };
         }
@@ -164,9 +168,12 @@ export async function maybeFireProactive(opts: MaybeFireOpts): Promise<FireOutco
     // proactive path, so no overlap.
     if (session.pendingDream !== null) {
       session.pendingDream = null;
-      void runDreamCycle({ sessionId: session.id, llm: opts.dreamLlm, emit: opts.emit }).catch(
-        () => {},
-      );
+      void runDreamCycle({
+        sessionId: session.id,
+        llm: opts.dreamLlm,
+        emit: opts.emit,
+        trigger: 'self',
+      }).catch(logSwallowed('dream-handoff'));
     }
 
     return { fired: true, spoke };

@@ -502,6 +502,10 @@ export async function runDreamCycle(opts: {
   llm: DreamLLM;
   emit: (e: ServerEvent) => void;
   embedClient?: EmbedClient;
+  // v0.45.12 (C1): who pulled the trigger — 'shutdown' (exit path) | 'manual' (menu dream.enter)
+  // | 'self' (her own enter_dream via the proactive handoff). Forensics were a dead end without
+  // it: three trigger paths were indistinguishable in dream_reports.
+  trigger: 'shutdown' | 'manual' | 'self';
 }): Promise<StartDreamResult> {
   const entered = enterDream();
   if (!entered.ok) return { ok: false, error: entered.error };
@@ -519,14 +523,14 @@ export async function runDreamCycle(opts: {
 
   db?.prepare(
     'INSERT INTO dream_reports (cycle_id, started_ms, ended_ms, report_json) VALUES (?, ?, NULL, ?)',
-  ).run(entered.cycleId, startedMs, JSON.stringify({ steps: [] }));
+  ).run(entered.cycleId, startedMs, JSON.stringify({ steps: [], trigger: opts.trigger }));
 
   try {
     await runGraph(dreamGraph, 'rate_salience', state);
   } finally {
     db?.prepare('UPDATE dream_reports SET ended_ms = ?, report_json = ? WHERE cycle_id = ?').run(
       Date.now(),
-      JSON.stringify({ steps: state.steps }),
+      JSON.stringify({ steps: state.steps, trigger: opts.trigger }),
       entered.cycleId,
     );
     parkFinishedIdle();

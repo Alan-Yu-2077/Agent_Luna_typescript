@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { defineTool } from '../defineTool';
 import { getSession } from '../../turn/session';
+import { dreamWindowOpen, parseDreamWindow } from '../../dream/dreamState';
 
 const Input = z.object({
   reason: z.string().optional(),
@@ -25,6 +26,21 @@ export const enterDreamTool = defineTool({
   timeoutMs: 1000,
   summarize: () => 'dream pending — starts after this turn',
   execute: async function* (input, ctx) {
+    // v0.45.12 (C2): her SELF-initiated dreams obey the night window too — v0.45.7 only gated
+    // the exit path, and the quiet-agency work (Initiative 35) makes silent tool use MORE
+    // likely, not less. The owner's explicit menu action (ws dream.enter) stays ungated (D2).
+    const window = parseDreamWindow(Bun.env['LUNA_SHUTDOWN_DREAM_WINDOW']);
+    if (!dreamWindowOpen(Date.now(), window)) {
+      yield {
+        kind: 'err',
+        code: 'execution_exception',
+        message:
+          `the night shift starts at ${window.startHour}:00 — dreams belong to the night. If ` +
+          'something wants consolidating, `remember` the thought now and it will keep.',
+        recoverable: true,
+      };
+      return;
+    }
     const session = getSession(ctx.sessionId);
     session.pendingDream = input.reason ?? 'self-initiated';
     yield { kind: 'ok', data: { status: 'pending' as const } };

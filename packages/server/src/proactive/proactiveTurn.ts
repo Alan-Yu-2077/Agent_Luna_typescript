@@ -24,7 +24,10 @@ import {
 // does reach out.
 // Each proactive intent gets its own USER-role stage direction (never system —
 // the v0.27.1 hoisting lesson). All keep the companion-opener constraint.
-export type ProactiveIntent = 'spontaneous' | 'continuation' | 'consolidate';
+// v0.45.12 (C3): 'consolidate' deleted — defined since Initiative 5, wired to a full directive,
+// called from NOWHERE. Its semantics are covered for real by the shutdown night-dream (v0.45.7)
+// and her own night-time enter_dream; keeping the ghost only misleads audits (it misled one).
+export type ProactiveIntent = 'spontaneous' | 'continuation';
 
 const DIRECTIVES: Record<ProactiveIntent, string> = {
   spontaneous:
@@ -38,10 +41,6 @@ const DIRECTIVES: Record<ProactiveIntent, string> = {
     '(You just finished replying. Like a real person who paused and then thought of one more thing: ' +
     'if you have a SINGLE genuinely new thought to add — not a rephrase, not a summary, not "anyway" ' +
     'filler — say it now in one short message. If you have nothing truly new to add, do nothing.)',
-  consolidate:
-    '(It has been a long quiet stretch. This may be a good moment to fold the day inward: if it ' +
-    'feels right, enter a dream to consolidate your memories. Otherwise reflect quietly or do ' +
-    'nothing — you do not have to speak.)',
 };
 
 // v0.24.0 (Initiative 17): the silence-ladder's four restraint-graded scenario framings (port of
