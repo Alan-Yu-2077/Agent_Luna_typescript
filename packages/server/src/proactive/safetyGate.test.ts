@@ -14,7 +14,7 @@ import { runTurn } from '../turn/runTurn';
 import { TraceStore } from '../trace/store';
 import { setTraceStore } from '../trace/instrument';
 import { runProactiveTurn } from './proactiveTurn';
-import { isProactiveActionAllowed, proactiveRiskOf } from './safetyGate';
+import { isProactiveActionAllowed, proactiveRiskOf, maxProactiveActions } from './safetyGate';
 
 // A synthetic SURFACE-risk tool (no `shell` exists yet). Reuses the 'time_now'
 // ToolName slot but omits proactiveRisk → fail-closed to 'surface'.
@@ -180,4 +180,16 @@ describe('hard gate (block → surface → execute)', () => {
     // after 2 actions the cycle finalizes; the 3rd round is never requested
     expect(provider.requests.length).toBe(2);
   });
+});
+
+// v0.45.13: the default moved 6 → 8 for the quiet-wander chain (search + 2-3 fetches + 1-2
+// remembers + margin). Pin the new default so a silent regression can't shrink her reach.
+test('maxProactiveActions defaults to 8 (v0.45.13)', () => {
+  const prev = Bun.env['LUNA_PROACTIVE_MAX_ACTIONS'];
+  delete Bun.env['LUNA_PROACTIVE_MAX_ACTIONS'];
+  try {
+    expect(maxProactiveActions()).toBe(8);
+  } finally {
+    if (prev !== undefined) Bun.env['LUNA_PROACTIVE_MAX_ACTIONS'] = prev;
+  }
 });

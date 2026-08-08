@@ -28,11 +28,13 @@ export function setWebFetcher(fn: Fetcher | null): void {
 // web_fetch (Initiative 11, v0.18.1) — read one web page, safely. The half Python
 // never had. Resolves the URL through the SSRF guard (safeFetch), fetches under
 // hard size/time caps, extracts the article to markdown, and returns it wrapped
-// in <untrusted_content>. Read-only ⇒ proactiveRisk:'safe' (Open Q #2). OPT-IN
-// (default OFF, set LUNA_WEB_FETCH=1): held opt-in until safeFetch gains a
-// verified DNS pin — its rebinding defense narrows but does not fully close the
-// TOCTOU (Bun fetch has no IP-pin hook), so the read-a-URL surface waits for the
-// v0.18.3 pinned-lookup follow-up before going default-on.
+// in <untrusted_content>. Read-only ⇒ proactiveRisk:'safe' (Open Q #2).
+// DEFAULT ON since v0.18.3 (LUNA_WEB_FETCH=0 is the off switch): the original
+// opt-in waited for a verified DNS pin, v0.18.3's pinned-lookup landed it
+// (resolve → validate → connect to THAT ip), and the flip shipped in the same
+// commit — but THIS comment kept claiming "OPT-IN (default OFF)" for twenty
+// versions and misled a 2026-08-08 audit into planning to dismantle a gate that
+// was already open. Corrected v0.45.13; the polarity is test-pinned now.
 
 const Input = z.object({
   url: z.string().url().describe('the http(s) URL of the page to read'),

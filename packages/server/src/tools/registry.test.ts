@@ -236,3 +236,26 @@ describe('evaluator firewall refusal routed THROUGH the edit tool (registry → 
     }
   });
 });
+
+// v0.45.13: web_fetch polarity, PINNED. Default ON since v0.18.3's DNS pin — but the module
+// comments kept claiming opt-in for twenty versions and misled an audit. The comment is fixed;
+// this test is what keeps the truth from drifting again.
+describe('web_fetch default polarity (v0.45.13 pin)', () => {
+  test('no env → mounted; LUNA_WEB_FETCH=0 → not; =1 → mounted', async () => {
+    const { webFetchEnabled, withWebFetch } = await import('./registry');
+    const prev = Bun.env['LUNA_WEB_FETCH'];
+    try {
+      delete Bun.env['LUNA_WEB_FETCH'];
+      expect(webFetchEnabled()).toBe(true);
+      expect(withWebFetch({})['web_fetch']).toBeDefined();
+      Bun.env['LUNA_WEB_FETCH'] = '0';
+      expect(webFetchEnabled()).toBe(false);
+      expect(withWebFetch({})['web_fetch']).toBeUndefined();
+      Bun.env['LUNA_WEB_FETCH'] = '1';
+      expect(webFetchEnabled()).toBe(true);
+    } finally {
+      if (prev === undefined) delete Bun.env['LUNA_WEB_FETCH'];
+      else Bun.env['LUNA_WEB_FETCH'] = prev;
+    }
+  });
+});

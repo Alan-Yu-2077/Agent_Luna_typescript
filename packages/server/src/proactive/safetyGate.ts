@@ -3,8 +3,11 @@ import type { Tool } from '../tools/defineTool';
 // Per-cycle action budget — a runaway-loop backstop for an unsupervised
 // proactive turn (on top of MAX_TOOL_ITERATIONS, which bounds rounds). Read at
 // call time so it is configurable without a restart.
+// v0.45.13: 6 → 8, breathing room for a full quiet-wander chain (search 1 + fetch 2-3 +
+// remember 1-2 + margin). Still the runaway backstop, not a quota — the wander DAILY budget
+// (quietWork) is the product limit.
 export function maxProactiveActions(): number {
-  return Number(Bun.env['LUNA_PROACTIVE_MAX_ACTIONS'] ?? 6);
+  return Number(Bun.env['LUNA_PROACTIVE_MAX_ACTIONS'] ?? 8);
 }
 
 // The recoverable error a surface-risk action gets when it hasn't been

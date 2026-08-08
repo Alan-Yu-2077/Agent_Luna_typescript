@@ -27,8 +27,8 @@ export const ToolName = z.enum([
   // API key).
   'web_search',
   // Initiative 11 (v0.18.1) — read one URL safely (SSRF-guarded). Read-only;
-  // OPT-IN (default off): LUNA_WEB_FETCH=1 mounts it (held opt-in until the
-  // v0.18.3 pinned-lookup DNS fix — the rebinding defense narrows, not closes).
+  // default ON since v0.18.3's DNS pin (LUNA_WEB_FETCH=0 is the off switch;
+  // stale opt-in wording corrected v0.45.13).
   'web_fetch',
   // Initiative 14 (v0.21.0) — current weather for the configured location
   // (Open-Meteo, no key). Read-only; default ON since v0.21.2 but gated on a
