@@ -9,6 +9,8 @@ import { runProactiveTurn } from './proactiveTurn';
 import {
   commitLadderPhase,
   commitLadderSilent,
+  commitProactive,
+  commitProactiveSilent,
   commitScenario,
   loadCadence,
   passesAntiSpam,
@@ -16,6 +18,16 @@ import {
   saveCadence,
 } from './cadence';
 import { evaluateLadder, ladderEnabled } from './ladder';
+import {
+  commitMusicMoment,
+  freshTrackMoment,
+  loadMusicMoment,
+  musicProactiveEnabled,
+  musicSeedFor,
+  passesMusicGate,
+  saveMusicMoment,
+} from './musicMoment';
+import { getNowPlaying } from '../tools/media/nowPlaying';
 
 // v0.22.2 (Initiative 15): the universal proactive entry point + the REAL single-turn lock.
 // `withProactiveLock` flips a synchronous per-session in-flight flag BEFORE any await, so racing
@@ -93,6 +105,37 @@ export async function maybeFireProactive(opts: MaybeFireOpts): Promise<FireOutco
       // elapse. Only write when it actually changed, to avoid a per-tick DB churn.
       if (decision.phase !== cadence.phase || decision.nudgesSent !== cadence.nudgesSent) {
         saveCadence(session.id, commitLadderPhase(cadence, decision.phase, decision.nudgesSent));
+      }
+      // Initiative 32 (v0.45.2) — the track-change moment: a NEW wake reason inside this same
+      // decision point, never a new trigger path (M6). Order is the whole discipline: the global
+      // rail already said yes above; the ladder said "nothing of mine" this tick; the phase must
+      // be a present one (dormant/sleeping stay asleep, nudged keeps its backoff — a song change
+      // does not cut the escalation line); then the music sub-gate (own cooldown + own daily
+      // quota) stacks ON TOP. A fire consumes the GLOBAL account too — no exemptions.
+      const presentPhase = decision.phase === 'engaged' || decision.phase === 'idle_watch';
+      if (presentPhase && musicProactiveEnabled()) {
+        const moment = freshTrackMoment(getNowPlaying(), nowMs);
+        if (moment && passesMusicGate(loadMusicMoment(session.id), nowMs).ok) {
+          const { spoke } = await runProactiveTurn({
+            session,
+            cycleId: `${session.id}:music:${nowMs}`,
+            provider: opts.provider,
+            registry: opts.registry,
+            emit: opts.emit,
+            intent: 'spontaneous',
+            seed: musicSeedFor(moment),
+          });
+          const base = commitLadderPhase(cadence, decision.phase, decision.nudgesSent);
+          saveCadence(session.id, spoke ? commitProactive(base, nowMs) : commitProactiveSilent(base, nowMs));
+          saveMusicMoment(session.id, commitMusicMoment(loadMusicMoment(session.id), nowMs, spoke));
+          if (session.pendingDream !== null) {
+            session.pendingDream = null;
+            void runDreamCycle({ sessionId: session.id, llm: opts.dreamLlm, emit: opts.emit }).catch(
+              () => {},
+            );
+          }
+          return { fired: true, spoke };
+        }
       }
       return NO_FIRE;
     }
