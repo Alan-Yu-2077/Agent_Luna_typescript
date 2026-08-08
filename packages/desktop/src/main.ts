@@ -886,7 +886,10 @@ async function smokeProbe(win: BrowserWindow): Promise<void> {
         // pet go/no-go asserts the drag surface exists AND no drag region hijacks the DOM.
         bridgeDrag: typeof window.lunaPet?.dragStart,
         noAppRegion: getComputedStyle(document.querySelector('.model-stage')).getPropertyValue('-webkit-app-region') !== 'drag',
-        // v0.45.4 negative: the smoke env has no LUNA_MUSIC, so the player card must not exist.
+        // v0.45.7: the player negative is FACE-CONDITIONAL — the owner's real luna.env may carry
+        // LUNA_MUSIC=1 and music may genuinely be playing during a smoke, which makes the card
+        // legitimate. Only an ABSENT music face (404) forbids the card.
+        musicStatus: await fetch('/api/music/now').then((r) => r.status).catch(() => 0),
         playerDom: !!document.querySelector('.player-card'),
       });
     })()`,
@@ -904,6 +907,7 @@ async function smokeProbe(win: BrowserWindow): Promise<void> {
     serverRows: number;
     bridgeDrag: string;
     noAppRegion: boolean;
+    musicStatus: number;
     playerDom: boolean;
   };
   const shotPath = process.env['LUNA_SMOKE_OUT'];
@@ -926,7 +930,10 @@ async function smokeProbe(win: BrowserWindow): Promise<void> {
   // canvas. (The WS + pet + bridge checks always hold — they prove the packaged shell wired up.)
   const rendered = p.canvas && p.headX !== null;
   const stageOk = rendered || (!p.canvas && p.placeholder);
-  const ok = stageOk && p.wsStatus === 'open' && petOk && bridgeOk && p.dataStatus === 200 && !p.playerDom;
+  // No music face (404) must mean no card; a mounted face makes the card playback-dependent —
+  // no assertion either way (a positive would race the 4s poll).
+  const playerOk = p.musicStatus === 404 ? !p.playerDom : true;
+  const ok = stageOk && p.wsStatus === 'open' && petOk && bridgeOk && p.dataStatus === 200 && playerOk;
   console.log(JSON.stringify({ ok, rendered, menu: true, ...p }));
   supervisor?.stop();
   app.exit(ok ? 0 : 1);
