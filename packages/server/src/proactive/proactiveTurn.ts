@@ -8,6 +8,14 @@ import { weatherNoteFor, weatherProactiveEnabled } from '../turn/weatherContext'
 import { getSnapshot } from '../tools/web/weather/snapshot';
 import { getMemoryDb, listRecentL2 } from '../memory/sessionStore';
 import type { ProactiveScenario } from './ladder';
+import {
+  classifyOutcome,
+  closingRule,
+  compressNote,
+  isWander,
+  quietWorkEnabled,
+  recordOutcome,
+} from './quietWork';
 
 // The proactive framing — a USER-role stage direction (never system: the
 // v0.27.1 hoisting lesson). She woke on her own; acting via tools is the point,
@@ -107,14 +115,15 @@ export function resetProactiveOpenersForTests(): void {
 // The ladder-path framing: the scenario body + the companion constraint + anti-repeat.
 // Silence is native (calling no message tool = staying quiet), so there is no Python SILENT sentinel.
 function scenarioFraming(scenario: ProactiveScenario, session: Session): string {
+  // v0.45.10 (Initiative 35): the closing ground rule was the M2 culprit — "do nothing at all
+  // (call no tool...)" revoked the body's own invitation to act. closingRule() is the three-way
+  // rewrite (speak / quiet work / rest); LUNA_QUIET_WORK=0 restores the original bytes.
   return (
     '[System proactive trigger · this is NOT a user message · you are opening on your own]\n' +
     'This one is initiated by you, not a reply.\n\n' +
     `${SCENARIO_BODIES[scenario]}\n\n` +
     `${COMPANION_OPENER_CONSTRAINT}${antiRepeatClause(session.id)}\n\n` +
-    'Ground rule: only open if you have a real reason — never talk just to talk. If nothing feels ' +
-    'genuinely worth saying right now, do nothing at all (call no tool, send no message); a silent ' +
-    'tick is completely fine.'
+    closingRule()
   );
 }
 
@@ -156,6 +165,12 @@ export function proactiveWeatherNote(session: Session, nowMs = Date.now()): stri
 
 function framing(intent: ProactiveIntent, session: Session, seed?: string): string {
   let out = DIRECTIVES[intent];
+  // v0.45.10: the spontaneous directive's own closer ("If nothing is worth doing or saying, do
+  // nothing.") stays — it never banned tools — but quiet-work mode appends the same three-way
+  // rule so a seeded moment (music) and a bare spontaneous waking share one contract.
+  if (intent === 'spontaneous' && quietWorkEnabled()) {
+    out += `\n\n${closingRule()}`;
+  }
   if (subjectiveTimeEnabled()) {
     const felt = feltAbsenceFor(session.lastUserMs, Date.now());
     if (felt === 'notable' || felt === 'long') {
@@ -188,6 +203,19 @@ export async function runProactiveTurn(opts: RunProactiveOptions): Promise<{ spo
   const spoke = state.messageTexts.length > 0;
   // Feed the anti-repeat memory only on a spoken ladder opener (proactive.py recent_texts).
   if (opts.scenario && spoke) recordOpener(opts.session.id, state.messageTexts.join(' '));
+  // v0.45.10: the outcome ledger — every waking records what it became (spoke/quiet/nothing),
+  // with quiet turns carrying a one-line note (the leaf's copy) and a wander mark for the daily
+  // budget. Gated with the feature: flag off = the exact pre-.10 behavior, no rows.
+  if (quietWorkEnabled()) {
+    const kind = classifyOutcome(spoke, state.toolNamesThisTurn);
+    const note = kind === 'quiet' ? compressNote(state.toolNamesThisTurn) : '';
+    try {
+      recordOutcome(opts.session.id, kind, note, kind === 'quiet' && isWander(state.toolNamesThisTurn));
+      console.log(`[proactive] outcome=${kind}${note ? ` — ${note}` : ''}`);
+    } catch {
+      /* the ledger must never break the turn */
+    }
+  }
   opts.emit({ type: 'proactive.finished', cycle_id: opts.cycleId, spoke });
   return { spoke };
 }
