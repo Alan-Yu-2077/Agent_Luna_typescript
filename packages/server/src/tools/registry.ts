@@ -24,6 +24,7 @@ import { writeFileTool } from './builtin/write_file';
 import { webSearchTool } from './web/web_search';
 import { webFetchTool } from './web/web_fetch';
 import { weatherTool } from './builtin/weather';
+import { musicControlTool, musicNowTool } from './builtin/music';
 import { resolveLocation } from '../turn/temporalContext';
 
 // Partial: `message` is mounted conditionally (LUNA_MESSAGE_TOOL), so a
@@ -245,6 +246,24 @@ export function weatherEnabled(): boolean {
 
 export function withWeather(base: ToolRegistry): ToolRegistry {
   return weatherEnabled() ? { ...base, ...weatherTools } : { ...base };
+}
+
+// Music (Initiative 32, v0.45.0) — the read/control pair over the resident now-playing
+// provider (tools/media/nowPlaying.ts). OPT-IN and darwin-only: the mount gate is the flag +
+// platform (sync, boot-frozen like every registry gate — M4); the async doctor() check gates
+// the provider's subscription, not the mount, so a mounted tool with a dormant provider
+// answers with a recoverable err instead of vanishing mid-session.
+export const musicTools: ToolRegistry = {
+  music_now: musicNowTool,
+  music_control: musicControlTool,
+};
+
+export function musicEnabled(platform: string = process.platform): boolean {
+  return Bun.env['LUNA_MUSIC'] === '1' && platform === 'darwin';
+}
+
+export function withMusic(base: ToolRegistry, platform: string = process.platform): ToolRegistry {
+  return musicEnabled(platform) ? { ...base, ...musicTools } : { ...base };
 }
 
 // Registry-derived mount checks (mirror isWebSearchMode): the L1 code-agent

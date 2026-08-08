@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.104.1",
+    "@luna/music-cli": "workspace:*",
     "@luna/protocol": "workspace:*",
     "@mozilla/readability": "^0.6.0",
     "linkedom": "^0.18.12",

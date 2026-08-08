@@ -45,6 +45,10 @@ LUNA_WEATHER_API_HOST=
 LUNA_LAT_LON=
 LUNA_WEB_SEARCH_PROVIDER=
 LUNA_WEB_SEARCH_API_KEY=
+# v0.45.0: 1 = Luna observes what you're playing (macOS Now Playing — needs
+# "brew install media-control", macOS only) and can control playback when asked.
+# Unset = the whole music layer stays dormant.
+LUNA_MUSIC=
 
 # v0.39.2: which front end to build — 'full' (Live2D avatar + voice) or 'agent' (chat box only, no
 # model stage, no voice). Written by the setup wizard's first step; unset behaves as 'full'.

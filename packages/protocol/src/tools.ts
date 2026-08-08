@@ -34,6 +34,14 @@ export const ToolName = z.enum([
   // (Open-Meteo, no key). Read-only; default ON since v0.21.2 but gated on a
   // configured LUNA_LAT_LON (dormant until set).
   'weather',
+  // Initiative 32 (v0.45.0) — what he is playing (macOS Now Playing via the resident
+  // provider). Read-only ⇒ the tool opts into proactiveRisk:'safe'. OPT-IN: LUNA_MUSIC=1
+  // on darwin, dormant otherwise.
+  'music_now',
+  // Initiative 32 (v0.45.0) — control his playback (play/pause/toggle/next/prev).
+  // Deliberately NOT risk-marked ⇒ fail-closed 'surface' in proactive turns: she must
+  // speak before touching his music.
+  'music_control',
 ]);
 export type ToolName = z.infer<typeof ToolName>;
 

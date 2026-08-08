@@ -21,6 +21,7 @@ import {
   withSelfEdit,
   withShell,
   withSkills,
+  withMusic,
   withWeather,
   withWebFetch,
   withWebSearch,
@@ -38,6 +39,7 @@ import { initCustomSqlite } from './memory/recall/vecRuntime';
 import { bootReconcile, dreamStatus, isDreaming, shutdownDreamDue } from './dream/dreamState';
 import { runDreamCycle } from './dream/cycle';
 import { setOnWeatherRefresh, startWeatherRefresh } from './tools/web/weather/snapshot';
+import { startNowPlaying, stopNowPlaying } from './tools/media/nowPlaying';
 import { activeSessionIds, preloadSessions } from './turn/session';
 import { initSettings } from './settings/store';
 import { setSkillsRecallMounted } from './skills/skillStore';
@@ -122,12 +124,14 @@ if (Bun.env['ANTHROPIC_API_KEY']) {
   // Weather (Initiative 14, v0.21.0) layers on iff LUNA_WEATHER=1 (opt-in until
   // the v0.21.2 close flips it on). No key — the flag alone is the gate.
   const weatherMode = weatherEnabled();
-  const registry = withWeather(
-    withWebFetch(
-      withWebSearch(
-        withSelfEdit(
-          withSkills(
-            withRepoMap(withShell(withCodeWrite(messageMode ? messageRegistry : builtinRegistry))),
+  const registry = withMusic(
+    withWeather(
+      withWebFetch(
+        withWebSearch(
+          withSelfEdit(
+            withSkills(
+              withRepoMap(withShell(withCodeWrite(messageMode ? messageRegistry : builtinRegistry))),
+            ),
           ),
         ),
       ),
@@ -164,6 +168,10 @@ if (Bun.env['ANTHROPIC_API_KEY']) {
     }
   });
   startWeatherRefresh();
+  // Music observation (Initiative 32, v0.45.0): resident now-playing provider — dormant unless
+  // LUNA_MUSIC=1 on darwin with media-control installed. Fire-and-forget: the wake-or-sleep
+  // decision must never block boot.
+  void startNowPlaying();
 
   // Shutdown dream (v0.21.7): on a graceful exit (Ctrl-C / SIGTERM) run one last
   // dream so the day's diary + memory consolidate before the process dies — the
@@ -196,6 +204,7 @@ if (Bun.env['ANTHROPIC_API_KEY']) {
     } catch (e) {
       console.error('[luna-server] shutdown dream failed:', e);
     } finally {
+      stopNowPlaying(); // kills the media-control child — it must not orphan
       closeDb(db);
       process.exit(0);
     }
@@ -206,6 +215,7 @@ if (Bun.env['ANTHROPIC_API_KEY']) {
 } else {
   console.warn('[luna-server] ANTHROPIC_API_KEY not set — chat.send disabled');
   const bye = (): void => {
+    stopNowPlaying();
     closeDb(db);
     process.exit(0);
   };

@@ -1,0 +1,24 @@
+{
+  "name": "@luna/music-cli",
+  "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/Alan-Yu-2077/Luna-ts.git", "directory": "packages/music-cli" },
+  "version": "0.1.0",
+  "description": "Now-playing observation and playback control for Luna, on top of macOS MediaRemote",
+  "private": true,
+  "type": "module",
+  "module": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "bin": {
+    "luna-music": "src/cli.ts"
+  },
+  "scripts": {
+    "start": "bun src/cli.ts",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.6.0"
+  }
+}

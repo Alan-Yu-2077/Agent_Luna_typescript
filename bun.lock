@@ -18,6 +18,17 @@
         "electron-builder": "^25.1.8",
       },
     },
+    "packages/music-cli": {
+      "name": "@luna/music-cli",
+      "version": "0.1.0",
+      "bin": {
+        "luna-music": "src/cli.ts",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
+        "typescript": "^5.6.0",
+      },
+    },
     "packages/protocol": {
       "name": "@luna/protocol",
       "version": "0.1.0",
@@ -30,6 +41,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@anthropic-ai/sdk": "0.104.1",
+        "@luna/music-cli": "workspace:*",
         "@luna/protocol": "workspace:*",
         "@mozilla/readability": "^0.6.0",
         "linkedom": "^0.18.12",
@@ -84,6 +96,8 @@
     "@isaacs/cliui": ["@isaacs/cliui@8.0.2", "", { "dependencies": { "string-width": "^5.1.2", "string-width-cjs": "npm:string-width@^4.2.0", "strip-ansi": "^7.0.1", "strip-ansi-cjs": "npm:strip-ansi@^6.0.1", "wrap-ansi": "^8.1.0", "wrap-ansi-cjs": "npm:wrap-ansi@^7.0.0" } }, "sha512-O8jcjabXaleOG9DQ0+ARXWZBTfnP4WNAqzuiJK7ll44AmxGKv/J2M4TPjxjY3znBCfvBXFzucm1twdyFybFqEA=="],
 
     "@luna/desktop": ["@luna/desktop@workspace:packages/desktop"],
+
+    "@luna/music-cli": ["@luna/music-cli@workspace:packages/music-cli"],
 
     "@luna/protocol": ["@luna/protocol@workspace:packages/protocol"],
 
