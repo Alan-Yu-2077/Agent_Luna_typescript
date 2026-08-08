@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { positionAt, send } from '@luna/music-cli';
 import { MusicControlRequest, MusicNow } from '@luna/protocol';
-import { artworkDir, getNowPlaying } from '../tools/media/nowPlaying';
+import { artworkDir, getMusicEnrichment, getNowPlaying } from '../tools/media/nowPlaying';
 import { musicEnabled } from '../tools/registry';
 
 // Initiative 32 (v0.45.4) — the player card's three endpoints. Same posture as dataApi (v0.44.2):
@@ -19,6 +19,17 @@ function json(data: unknown, status = 200): Response {
 
 const DORMANT = json({ error: 'music provider dormant' }, 503);
 
+// v0.45.8: the affinity slice of the enrich state, when it belongs to this track.
+function affinityOf(trackId: string): { sessions: number; listenedSeconds: number; rank: number | null } | null {
+  const e = getMusicEnrichment();
+  if (!e || e.trackId !== trackId || e.affinity === null) return null;
+  return {
+    sessions: e.affinity.sessions,
+    listenedSeconds: e.affinity.listenedSeconds,
+    rank: e.affinity.rank,
+  };
+}
+
 function nowPayload(): Response | null {
   const s = getNowPlaying();
   if (s === null) return null;
@@ -31,6 +42,7 @@ function nowPayload(): Response | null {
           playing: s.playing,
           position: Math.round(positionAt(t) * 10) / 10,
           duration: t.duration,
+          affinity: affinityOf(t.id),
         };
   return json(MusicNow.parse(body));
 }

@@ -1,7 +1,18 @@
 import { readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
-import { doctor, watch, type MusicEvent, type NowPlaying } from '@luna/music-cli';
+import {
+  Library,
+  doctor,
+  fetchLyrics,
+  libraryExists,
+  watch,
+  type Lyrics,
+  type MusicEvent,
+  type NowPlaying,
+  type TrackAffinity,
+} from '@luna/music-cli';
+import { musicEnrichEnabled } from './enrichment';
 
 // Music observation (Initiative 32, v0.45.0) — the resident now-playing provider, the music
 // counterpart of the weather snapshot (tools/web/weather/snapshot.ts): one long-lived
@@ -54,6 +65,7 @@ type Deps = {
   doctorFn?: () => Promise<{ binaryFound: boolean; problems: string[] }>;
   watchFn?: (opts: { signal: AbortSignal }) => AsyncIterable<MusicEvent>;
   sleepFn?: (ms: number) => Promise<void>;
+  libraryFactory?: () => Library | null;
   log?: (msg: string) => void;
   warn?: (msg: string) => void;
 };
@@ -61,6 +73,72 @@ type Deps = {
 let state: MusicState = { track: null, playing: false, changedAtMs: 0 };
 let active = false;
 let controller: AbortController | null = null;
+
+// v0.45.8 (Initiative 34) — the companionship payload, held per current track: the local
+// library's affinity (how well he knows this song) and the FULL lyrics, fetched once per track
+// change (D4). `delivered` is the read-once-burn mark (D5): the first turn after a track change
+// carries the whole lyric exactly once; after that the words live in conversation history, not
+// in the prompt. The library is ONE read-only connection for the provider's lifetime (D3 —
+// the client owns writes; the CLI constructor enforces readonly and we never bypass it).
+export type MusicEnrichment = {
+  trackId: string;
+  neteaseId: string | null;
+  affinity: TrackAffinity | null;
+  lyrics: Lyrics | null;
+  delivered: boolean;
+};
+
+let library: Library | null = null;
+let enrichment: MusicEnrichment | null = null;
+
+export function getMusicEnrichment(): MusicEnrichment | null {
+  return active ? enrichment : null;
+}
+
+// The burn: called by the ambient builder the moment a lyrics block is composed into a turn.
+export function markLyricsDelivered(trackId: string): void {
+  if (enrichment?.trackId === trackId) enrichment = { ...enrichment, delivered: true };
+}
+
+// Exposed for tests (and a future settings probe): whether the affinity face found the library.
+export function musicLibrary(): Library | null {
+  return library;
+}
+
+type EnrichDeps = {
+  resolveId?: (title: string, artist: string) => string | null;
+  affinityFn?: (id: string) => TrackAffinity | null;
+  fetchLyricsFn?: (id: string) => Promise<Lyrics | null>;
+};
+let enrichDeps: EnrichDeps = {};
+export function setEnrichDepsForTests(d: EnrichDeps | null): void {
+  enrichDeps = d ?? {};
+}
+
+// One enrich per track change (D4): local id resolution + affinity are synchronous reads on the
+// read-only library; the lyric fetch is ONE network call, gated by LUNA_MUSIC_ENRICH, and a late
+// result for a superseded track is dropped (identity check on both async edges).
+function enrichCurrent(track: NowPlaying): void {
+  const resolve =
+    enrichDeps.resolveId ?? ((t: string, a: string) => (library ? library.resolveId(t, a) : null));
+  const aff = enrichDeps.affinityFn ?? ((id: string) => (library ? library.affinity(id) : null));
+  const neteaseId = resolve(track.title, track.artist);
+  enrichment = {
+    trackId: track.id,
+    neteaseId,
+    affinity: neteaseId ? aff(neteaseId) : null,
+    lyrics: null,
+    delivered: false,
+  };
+  if (neteaseId !== null && musicEnrichEnabled()) {
+    const fetchFn = enrichDeps.fetchLyricsFn ?? fetchLyrics;
+    void fetchFn(neteaseId)
+      .then((ly) => {
+        if (enrichment?.trackId === track.id) enrichment = { ...enrichment, lyrics: ly };
+      })
+      .catch(() => {});
+  }
+}
 // v0.45.3: fired on every 'track' event (a NEW song settled). Enrichment subscribes here when
 // LUNA_MUSIC_ENRICH=1; a hook failure must never touch the stream loop.
 let onTrackChange: ((t: NowPlaying) => void) | null = null;
@@ -85,6 +163,11 @@ export function applyMusicEvent(ev: MusicEvent, nowMs: number): void {
     state = { track: ev.track, playing: ev.track.playing, changedAtMs: nowMs };
     if (ev.track.artworkPath !== null) sweepArtwork(artworkDir(), ev.track.artworkPath);
     try {
+      enrichCurrent(ev.track);
+    } catch {
+      /* enrich must never break the stream loop */
+    }
+    try {
       onTrackChange?.(ev.track);
     } catch {
       /* a subscriber must never break the stream loop */
@@ -93,6 +176,7 @@ export function applyMusicEvent(ev: MusicEvent, nowMs: number): void {
     state = { ...state, track: ev.track, playing: ev.playing };
   } else {
     state = { track: null, playing: false, changedAtMs: state.changedAtMs };
+    enrichment = null;
   }
 }
 
@@ -124,6 +208,21 @@ export async function startNowPlaying(deps: Deps = {}): Promise<void> {
   active = true;
   controller = new AbortController();
   const signal = controller.signal;
+  // v0.45.8: the affinity face — one read-only connection for the provider's lifetime. Absent
+  // library (client never ran on this machine) = the face sleeps with one log; titles still flow.
+  if (deps.libraryFactory) {
+    library = deps.libraryFactory();
+  } else if (libraryExists()) {
+    try {
+      library = new Library();
+    } catch (e) {
+      log(`[music] library open failed — affinity face dormant: ${e instanceof Error ? e.message : e}`);
+      library = null;
+    }
+  } else {
+    log('[music] no local NetEase library — affinity face dormant, titles still flow');
+    library = null;
+  }
   const watchFn = deps.watchFn ?? ((opts: { signal: AbortSignal }) => watch({ ...opts, artworkDir: artworkDir() }));
   const sleep = deps.sleepFn ?? Bun.sleep;
   log('[music] now-playing observation started');
@@ -166,4 +265,7 @@ export function stopNowPlaying(): void {
   controller = null;
   active = false;
   state = { track: null, playing: false, changedAtMs: 0 };
+  enrichment = null;
+  library?.close();
+  library = null;
 }

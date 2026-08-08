@@ -4,9 +4,9 @@
 // he's listening to without asking — and must not burn a tool call per turn to learn it (the
 // stream pushes; the answer is already here). No track → no block, zero prompt residue.
 
-import { positionAt, type NowPlaying } from '@luna/music-cli';
-import { getNowPlaying } from '../tools/media/nowPlaying';
-import { lyricLinesFor } from '../tools/media/enrichment';
+import { positionAt, type NowPlaying, type TrackAffinity } from '@luna/music-cli';
+import { getMusicEnrichment, getNowPlaying, markLyricsDelivered } from '../tools/media/nowPlaying';
+import { fullLyricsFor } from '../tools/media/enrichment';
 
 // Default ON riding LUNA_MUSIC (the provider's own gate); LUNA_MUSIC_AMBIENT=0 is the off
 // switch — the tools stay mounted, only the ambient block disappears.
@@ -75,19 +75,69 @@ export function buildMusicBlock(f: MusicFacts): string {
   return `Music, currently paused: ${trackPhrase(f)}${album} — ${stopped}.`;
 }
 
+// v0.45.8 (D5): the resident block NEVER carries lyric lines — sliced "current line" over a
+// turn loop with tens of seconds of latency was fake precision, retired by the owner. What it
+// gains instead is the affinity sentence: how well he knows this song, worded as an opening,
+// not a report. Null affinity (off-library track, no local client library) = silent omission.
+export function affinityPhrase(a: TrackAffinity): string | null {
+  if (a.sessions === 0) return null;
+  const hours = a.listenedSeconds / 3600;
+  const time =
+    hours >= 1 ? `about ${hours >= 10 ? Math.round(hours) : Math.round(hours * 10) / 10} hours` : `${Math.max(1, Math.round(a.listenedSeconds / 60))} minutes`;
+  const rank = a.rank !== null && a.rank <= 10 ? ` — his #${a.rank} most-played overall` : '';
+  return `He knows this one well: ${a.sessions} plays, ${time} of listening${rank}.`;
+}
+
 // The per-turn read: null when dormant, idle, or between tracks — the prompt shows no trace.
-// v0.45.3: when enrichment knows this song, append the line(s) around the extrapolated position
-// (≤2 — a passing fragment, never the sheet; the full lyric in the prompt would be token waste
-// and a recitation trap). Unenriched/untimestamped songs render exactly the v0.45.1 block.
 export function musicBlockFor(now = new Date()): string | null {
   const s = getNowPlaying();
   if (s === null || s.track === null) return null;
   let block = buildMusicBlock(musicFactsOf(s.track, s.playing, now));
-  if (s.playing) {
-    const lines = lyricLinesFor(s.track, now);
-    if (lines.length > 0) {
-      block += ` The lyric just now: ${lines.map((l) => `「${l}」`).join(' ')}`;
-    }
+  const enrich = getMusicEnrichment();
+  if (enrich && enrich.trackId === s.track.id && enrich.affinity) {
+    const phrase = affinityPhrase(enrich.affinity);
+    if (phrase) block += ` ${phrase}`;
   }
   return block;
+}
+
+// v0.45.8 (D5) — the read-once-burn lyrics delivery: the FIRST turn after a track change carries
+// the whole lyric, once. After that the words live in conversation history; she read the song,
+// and which line to quote (if any) is her judgment — no pretended second-level sync. Local-id
+// lyrics (provider enrich) are the main path; the shipped search-fallback cache serves
+// off-library tracks through this SAME delivery. A turn-less track costs nothing.
+export const LYRICS_MAX_LINES = 60;
+export const LYRICS_MAX_CHARS = 2000;
+
+export function formatLyricsBlock(title: string, artist: string, lines: string[]): string {
+  let out = lines;
+  let truncated = false;
+  if (out.length > LYRICS_MAX_LINES) {
+    out = out.slice(0, LYRICS_MAX_LINES);
+    truncated = true;
+  }
+  let body = out.join('\n');
+  if (body.length > LYRICS_MAX_CHARS) {
+    body = body.slice(0, LYRICS_MAX_CHARS);
+    truncated = true;
+  }
+  const head = `Full lyrics of ${trackPhrase({ title, artist })} — provided once for this play; refer back from memory as you like:`;
+  const tail = truncated ? '\n…(truncated)' : '';
+  return `${head}\n${body}${tail}`;
+}
+
+export function lyricsBurstFor(): string | null {
+  const s = getNowPlaying();
+  if (s === null || s.track === null) return null;
+  const enrich = getMusicEnrichment();
+  if (!enrich || enrich.trackId !== s.track.id || enrich.delivered) return null;
+  let lines: string[] | null = null;
+  if (enrich.lyrics && enrich.lyrics.lines.length > 0) {
+    lines = enrich.lyrics.lines.map((l) => (l.translation ? `${l.text} / ${l.translation}` : l.text));
+  } else {
+    lines = fullLyricsFor(s.track.id);
+  }
+  if (lines === null) return null;
+  markLyricsDelivered(s.track.id);
+  return formatLyricsBlock(s.track.title, s.track.artist, lines);
 }

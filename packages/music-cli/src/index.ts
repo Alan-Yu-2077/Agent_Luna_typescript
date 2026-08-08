@@ -1,4 +1,4 @@
-// Vendored from ~/Desktop/luna-music-cli (built + live-verified 2026-08-07: macOS 26.5.2, NeteaseMusic 3.1.8.3368, media-control 0.7.6).
+// Vendored from ~/Desktop/luna-music-cli (upstream re-vendor 2026-08-08: 37 tests green, +enrich/library/lyrics; prior live-verify 2026-08-07).
 /**
  * Module surface for Luna.
  *
@@ -13,5 +13,24 @@ export { watch } from "./watch";
 export type { WatchOptions } from "./watch";
 export { normalise, positionAt, isSameTrack, isEmpty, trackIdentity } from "./adapter";
 export type { RawPayload, NormaliseOptions } from "./adapter";
-export type { NowPlaying, MusicEvent, Command, SourceName } from "./types";
+
+// Perception layer
+export { Library, libraryPath, libraryExists } from "./library";
+export { fetchLyrics, parseLrc, lineAt } from "./lyrics";
+export { enrich } from "./enrich";
+export type { EnrichOptions } from "./enrich";
+
+export type {
+  NowPlaying,
+  MusicEvent,
+  Command,
+  SourceName,
+  LibraryTrack,
+  TrackAffinity,
+  Playlist,
+  LyricLine,
+  Lyrics,
+  LyricPosition,
+  EnrichedNowPlaying,
+} from "./types";
 export { NETEASE_BUNDLE_ID, sourceNameOf } from "./types";

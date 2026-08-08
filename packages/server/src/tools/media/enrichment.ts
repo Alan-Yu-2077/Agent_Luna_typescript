@@ -1,4 +1,4 @@
-import { positionAt, type NowPlaying } from '@luna/music-cli';
+import type { NowPlaying } from '@luna/music-cli';
 import { getMemoryDb } from '../../memory/sessionStore';
 
 // Initiative 32 (v0.45.3) — lyric + hot-comment enrichment, the deliberately isolated second
@@ -217,12 +217,16 @@ export async function enrichTrack(
 
 // ---- the two consumer reads (synchronous, turn-path safe) ----
 
-// ≤2 lyric lines around the extrapolated position, or [] when unenriched/untimestamped.
-export function lyricLinesFor(track: NowPlaying, now = new Date()): string[] {
-  if (!musicEnrichEnabled()) return [];
-  const row = readRow(track.id);
-  if (!row || row.song_id === null || !row.lyric_lrc) return [];
-  return lyricLinesAt(parseLrc(row.lyric_lrc), positionAt(track, now));
+// v0.45.8 (D5): the per-turn ≤2-line injection is RETIRED — sliced lines were fake precision
+// over a laggy turn loop. The search-fallback path now serves the WHOLE cached lyric once, into
+// the same read-once-burn delivery the local-id path uses. Gate, negative cache and hot
+// comments are untouched (hard-part-3 red line).
+export function fullLyricsFor(identity: string): string[] | null {
+  if (!musicEnrichEnabled()) return null;
+  const row = readRow(identity);
+  if (!row || row.song_id === null || !row.lyric_lrc) return null;
+  const lines = parseLrc(row.lyric_lrc).map((l) => l.text);
+  return lines.length > 0 ? lines : null;
 }
 
 export const COMMENT_MAX_CHARS = 80;

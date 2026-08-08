@@ -9,7 +9,7 @@ import {
   enrichTrack,
   hotCommentFor,
   lyricLinesAt,
-  lyricLinesFor,
+  fullLyricsFor,
   musicEnrichEnabled,
   normName,
   parseLrc,
@@ -184,9 +184,8 @@ describe('the once-ever cache', () => {
     await enrichTrack(fakeTrack(), f);
     expect(count.n).toBe(3); // cache hit — zero network
     expect(hotCommentFor('id-guyongzhe')).toBe('这是热评');
-    expect(lyricLinesFor(fakeTrack({ position: 29, sampledAt: new Date().toISOString(), playing: false }))).toEqual([
-      '都是勇敢的',
-    ]);
+    // v0.45.8 (D5): the delivery end changed — the whole cached lyric, once, not per-turn slices.
+    expect(fullLyricsFor('id-guyongzhe')).toEqual(['都是勇敢的', '你额头的伤口 你的不同 你犯的错', '都不必隐藏']);
   });
 
   test('a confident no-match is cached as a negative — one search, never again', async () => {
@@ -198,7 +197,7 @@ describe('the once-ever cache', () => {
     await enrichTrack(t, f);
     expect(count.n).toBe(1);
     expect(hotCommentFor('id-qingtian')).toBeNull();
-    expect(lyricLinesFor(t)).toEqual([]);
+    expect(fullLyricsFor('id-qingtian')).toBeNull();
   });
 
   test('a search FAILURE leaves no row, so a later change retries', async () => {
@@ -229,7 +228,7 @@ describe('failure isolation — the version can die without a trace', () => {
     };
     await enrichTrack(fakeTrack(), dead);
     expect(hotCommentFor('id-guyongzhe')).toBeNull();
-    expect(lyricLinesFor(fakeTrack())).toEqual([]);
+    expect(fullLyricsFor('id-guyongzhe')).toBeNull();
   });
 
   test('a matched song whose lyric/comment legs both fail still caches the id', async () => {
@@ -244,7 +243,7 @@ describe('failure isolation — the version can die without a trace', () => {
     await enrichTrack(fakeTrack(), f);
     await enrichTrack(fakeTrack(), f);
     expect(searches).toBe(1); // cached despite the dead legs
-    expect(lyricLinesFor(fakeTrack())).toEqual([]);
+    expect(fullLyricsFor('id-guyongzhe')).toBeNull();
   });
 });
 
@@ -256,7 +255,7 @@ describe('flag off = zero everything', () => {
     await enrichTrack(fakeTrack(), fetchStub({}, count));
     expect(count.n).toBe(0);
     expect(hotCommentFor('id-guyongzhe')).toBeNull();
-    expect(lyricLinesFor(fakeTrack())).toEqual([]);
+    expect(fullLyricsFor('id-guyongzhe')).toBeNull();
   });
 });
 

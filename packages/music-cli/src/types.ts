@@ -1,4 +1,4 @@
-// Vendored from ~/Desktop/luna-music-cli (built + live-verified 2026-08-07: macOS 26.5.2, NeteaseMusic 3.1.8.3368, media-control 0.7.6).
+// Vendored from ~/Desktop/luna-music-cli (upstream re-vendor 2026-08-08: 37 tests green, +enrich/library/lyrics; prior live-verify 2026-08-07).
 /**
  * Stable contract consumed by Luna.
  *
@@ -68,6 +68,84 @@ export type MusicEvent =
   | { event: "state"; playing: boolean; position: number; track: NowPlaying }
   /** No player is reporting anything. */
   | { event: "stopped"; at: string };
+
+// ── Perception layer ──────────────────────────────────────────────────────
+// Everything below is observation, never control: what Luna can *know* about
+// your listening, so she can listen along rather than drive.
+
+/** A track as it exists in the local NetEase library cache. */
+export interface LibraryTrack {
+  /** NetEase's own numeric song id — the join key for lyrics and playlists. */
+  neteaseId: string;
+  title: string;
+  artist: string;
+  album: string;
+  durationMs: number | null;
+  coverUrl: string | null;
+  /** 0 free · 1 VIP-only · 8 low-bitrate-free. Lets Luna know if it's a VIP pick. */
+  fee: number | null;
+}
+
+/**
+ * Your relationship with one track, from the client's own play accounting.
+ * This is the material for "you've had this on a lot lately".
+ */
+export interface TrackAffinity {
+  neteaseId: string;
+  /** Number of recorded play sessions. */
+  sessions: number;
+  /** Accumulated listening time in seconds across all sessions. */
+  listenedSeconds: number;
+  /** Where this track sits in your all-time most-listened ranking (1 = top). */
+  rank: number | null;
+}
+
+/** A saved playlist, from the local cache. */
+export interface Playlist {
+  id: string;
+  name: string;
+  /** Track count when known; null when the cache only stored the header. */
+  trackCount: number | null;
+}
+
+/** One timestamped lyric line, optionally with a translation. */
+export interface LyricLine {
+  /** Milliseconds from the start of the track. */
+  timeMs: number;
+  text: string;
+  /** Translated line, when the track has one. */
+  translation: string | null;
+}
+
+/** A track's full lyrics, parsed and time-indexed. */
+export interface Lyrics {
+  neteaseId: string;
+  lines: LyricLine[];
+  hasTranslation: boolean;
+  /** Not every track has synced (timestamped) lyrics; some are plain text. */
+  synced: boolean;
+}
+
+/** Where the lyric playhead is right now — the heart of listening along. */
+export interface LyricPosition {
+  /** The line playing now, or null before the first line. */
+  current: LyricLine | null;
+  /** The line coming up, or null at the end. */
+  next: LyricLine | null;
+  /** Index of `current` within `lines`, or -1. */
+  index: number;
+}
+
+/**
+ * The full picture Luna sees at a glance: what's playing, your history with it,
+ * and the words on screen right now. This is the perception payload.
+ */
+export interface EnrichedNowPlaying extends NowPlaying {
+  /** Resolved NetEase id, when the current title matched the local library. */
+  neteaseId: string | null;
+  affinity: TrackAffinity | null;
+  lyric: LyricPosition | null;
+}
 
 /** Playback commands, mapped to MediaRemote integer codes in `control.ts`. */
 export type Command =

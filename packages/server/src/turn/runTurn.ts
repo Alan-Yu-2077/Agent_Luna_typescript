@@ -35,7 +35,7 @@ import { renderHumanityBlock } from '../persona/humanity';
 import { renderL1Contract } from '../persona/l1Contract';
 import { buildTimeBlock, resolveTz, timeAwareEnabled } from './temporalContext';
 import { buildWeatherBlock, weatherAmbientEnabled } from './weatherContext';
-import { musicAmbientEnabled, musicBlockFor } from './nowPlayingContext';
+import { lyricsBurstFor, musicAmbientEnabled, musicBlockFor } from './nowPlayingContext';
 import { getSnapshot } from '../tools/web/weather/snapshot';
 import { memoryEpoch } from '../memory/epoch';
 import { cleanHistoryEnabled, stripThinking, stripCorrectiveDirectives } from '../memory/cleanHistory';
@@ -345,6 +345,14 @@ const graph: Graph<TurnState, TurnNode> = {
         if (block) blocks.push({ type: 'text', text: block });
       } catch (e) {
         console.warn('[music] musicBlockFor failed — omitting the music block:', e);
+      }
+      // v0.45.8 (D5): the whole lyric, once, on the first turn after a track change — read,
+      // then burned; later turns carry no lyric block and she quotes from having read it.
+      try {
+        const burst = lyricsBurstFor();
+        if (burst) blocks.push({ type: 'text', text: burst });
+      } catch (e) {
+        console.warn('[music] lyricsBurstFor failed — omitting the lyrics block:', e);
       }
     }
     blocks.push({ type: 'text', text: s.userText });

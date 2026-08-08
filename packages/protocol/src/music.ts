@@ -14,11 +14,21 @@ export const MusicTrackInfo = z.object({
 });
 export type MusicTrackInfo = z.infer<typeof MusicTrackInfo>;
 
+// v0.45.8 (Initiative 34): the companionship payload — optional so every pre-.8 consumer keeps
+// parsing untouched. Affinity comes from the client's own local play accounting (read-only).
+export const MusicAffinity = z.object({
+  sessions: z.number(),
+  listenedSeconds: z.number(),
+  rank: z.number().nullable(),
+});
+export type MusicAffinity = z.infer<typeof MusicAffinity>;
+
 export const MusicNow = z.object({
   track: MusicTrackInfo.nullable(), // null = nothing playing (the card's exit condition)
   playing: z.boolean(),
   position: z.number(), // seconds, server-extrapolated at response time
   duration: z.number().nullable(),
+  affinity: MusicAffinity.nullable().optional(),
 });
 export type MusicNow = z.infer<typeof MusicNow>;
 
