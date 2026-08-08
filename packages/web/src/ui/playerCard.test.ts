@@ -64,3 +64,39 @@ describe('formatting and artwork', () => {
     expect(artworkUrl('a/b')).toBe('/api/music/artwork?h=a%2Fb');
   });
 });
+
+// v0.45.5 — the tonearm geometry, solved instead of eyeballed. These numbers MIRROR
+// theme.css (.pc-deck / .pc-arm): pivot = (left 45 + origin-x 2, top −7 + origin-y 3),
+// needle tip ≈ arm height 26 + head overhang ≈ 24.5px down the arm. If you retune the
+// arm's CSS, retune these in the same commit — this test is what keeps the needle ON
+// the record while playing and OFF the platter at rest (the owner-reported mismatch).
+describe('tonearm geometry (mirrors theme.css .pc-arm)', () => {
+  const DISC_R = 28;
+  const CENTER = { x: 28, y: 28 };
+  const PIVOT = { x: 45 + 2, y: -7 + 3 };
+  const TIP_LEN = 24.5;
+  const SPINDLE_R = 5;
+
+  // CSS rotate(θ) in screen coords: a straight-down vector (0,L) maps to (−L·sinθ, L·cosθ).
+  const tipRadius = (deg: number): number => {
+    const th = (deg * Math.PI) / 180;
+    const tip = { x: PIVOT.x - TIP_LEN * Math.sin(th), y: PIVOT.y + TIP_LEN * Math.cos(th) };
+    return Math.hypot(tip.x - CENTER.x, tip.y - CENTER.y);
+  };
+
+  test('playing (−5°): needle sits on the groove band — on the record, clear of rim and label', () => {
+    const r = tipRadius(-5);
+    expect(r).toBeLessThan(DISC_R - 3);
+    expect(r).toBeGreaterThan(SPINDLE_R + 6);
+  });
+
+  test('rest (−38°): needle hangs clear off the platter', () => {
+    expect(tipRadius(-38)).toBeGreaterThan(DISC_R + 5);
+  });
+
+  test('the pivot mount itself sits off the platter, top-right', () => {
+    expect(Math.hypot(PIVOT.x - CENTER.x, PIVOT.y - CENTER.y)).toBeGreaterThan(DISC_R + 5);
+    expect(PIVOT.x).toBeGreaterThan(CENTER.x);
+    expect(PIVOT.y).toBeLessThan(CENTER.y);
+  });
+});
