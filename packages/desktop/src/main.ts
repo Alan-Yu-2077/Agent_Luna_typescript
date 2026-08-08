@@ -1099,6 +1099,13 @@ void app.whenReady().then(async () => {
         // v0.33.0: pass the Mac-resolved location through so the dev-all server also boots with it
         // (dev-all reads the repo .env, which usually has no LUNA_LAT_LON).
         ...(userEnv['LUNA_LAT_LON'] ? { LUNA_LAT_LON: userEnv['LUNA_LAT_LON'] } : {}),
+        // v0.45.6: the same lesson for music — the owner configures luna.env, but this branch's
+        // server reads the repo .env, so the flag never arrived (found live: 18:02 restart, flag
+        // on disk, sidecar env without it). Forward the music keys; artwork lands in app-data
+        // exactly like the packaged branch so both modes share one artwork home.
+        ...(userEnv['LUNA_MUSIC'] ? { LUNA_MUSIC: userEnv['LUNA_MUSIC'] } : {}),
+        ...(userEnv['LUNA_MUSIC_BIN'] ? { LUNA_MUSIC_BIN: userEnv['LUNA_MUSIC_BIN'] } : {}),
+        LUNA_MUSIC_ARTWORK_DIR: userEnv['LUNA_MUSIC_ARTWORK_DIR'] ?? join(dirname(p.db), 'music-artwork'),
       },
       onEvent: (e) => console.log(`[luna-desktop] dev-all: ${e}`),
     });

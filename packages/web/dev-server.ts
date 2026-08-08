@@ -24,7 +24,10 @@ Bun.serve({
     // Translate /api/tts/{speak,health} directly into a GPT-SoVITS api_v2 call — no owner glue.
     // v0.44.2: proxy the data surface to the dev sidecar so a plain-browser session reads her real
     // diaries/skills/dreams same-origin (the packaged app's serve.ts does the same).
-    if (pathname.startsWith('/api/data/')) {
+    // v0.45.6: /api/music/* rides the same proxy — the player card lives in dev mode too (this
+    // server IS what the packaged app serves in dev-all mode; without the route the card's first
+    // poll 404s and permanently unmounts). Content-type passes through, so artwork JPEGs survive.
+    if (pathname.startsWith('/api/data/') || pathname.startsWith('/api/music/')) {
       const target = `http://127.0.0.1:${Bun.env['LUNA_PORT'] ?? 8787}${pathname}${new URL(req.url).search}`;
       try {
         const body = req.method === 'GET' || req.method === 'HEAD' ? undefined : await req.text();
