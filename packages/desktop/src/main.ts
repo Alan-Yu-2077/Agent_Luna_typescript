@@ -24,7 +24,7 @@ import {
 } from './location';
 import { createPetDrag, type PetDrag } from './petDrag';
 import { petWindowOptions } from './petWindow';
-import { createSupervisor, waitForPort, type Supervisor } from './supervisor';
+import { createSupervisor, probeBackend, waitForPort, waitForPortFree, type Supervisor } from './supervisor';
 import { childPathValue, pathKeyFor, serverBinName } from './childEnv';
 import { resolveBootMode, resolveDevLauncher, resolveSidecarDb, shouldAttach } from './backend';
 import { probeEmbedding, probeSearch, probeWeather } from './probes';
@@ -286,13 +286,31 @@ async function maybeStartManagedTts(p: Paths): Promise<void> {
 // v0.37.3: hot-swap the managed voice onto a freshly installed pack. The supervisor's argv is fixed
 // at creation (the yaml path changed), so swap = stop the old child + create a new supervisor.
 // Returns whether the new voice came up within the wait (the wizard badge keeps polling either way).
-async function swapManagedTts(rt: ManagedRuntime): Promise<boolean> {
+//
+// v0.45.16 (A5's sibling): this used to `stop()` the old child and immediately probe the port —
+// but our own dying api_v2 answers that probe for a moment, so we mistook it for "an external
+// instance owns this port", left `ttsSupervisor` null, and her voice went silent until the next
+// launch. Wait for OUR child to actually exit before asking who owns the port. The swap is also
+// serialized: pack adoption runs fire-and-forget at boot and can interleave with a user's
+// pack-drop, and two swaps at once orphan a supervisor that then survives quit holding 9880.
+let ttsSwapChain: Promise<boolean> = Promise.resolve(false);
+function swapManagedTts(rt: ManagedRuntime): Promise<boolean> {
+  const next = ttsSwapChain.catch(() => false).then(() => swapManagedTtsExclusive(rt));
+  ttsSwapChain = next;
+  return next;
+}
+
+async function swapManagedTtsExclusive(rt: ManagedRuntime): Promise<boolean> {
   if (SMOKE) return false;
-  ttsSupervisor?.stop();
+  const old = ttsSupervisor;
   ttsSupervisor = null;
   ttsProcState = 'idle';
-  // Still listening after our stop = an EXTERNAL api_v2 owns the port (the owner's own instance) —
-  // adopt it; its weights are its owner's business, never ours to restart.
+  if (old) {
+    const gone = await old.stopAndWait(4000);
+    if (!gone) console.warn('[luna-desktop] managed tts: the old voice child did not exit in time');
+  }
+  // Only now does "still listening" mean an EXTERNAL api_v2 owns the port (the owner's own
+  // instance) — adopt it; its weights are its owner's business, never ours to restart.
   if (await waitForPort(rt.port, 800)) {
     console.log(`[luna-desktop] managed tts: external api_v2 on 127.0.0.1:${rt.port} — pack installed, not restarting it`);
     return true;
@@ -1054,7 +1072,22 @@ void app.whenReady().then(async () => {
   // running server already holds the keys); the static host above still serves our own frontend and
   // forwards /api/tts to the configured api_v2 backend. The renderer connects to `?ws=${SERVER_PORT}`
   // either way, so both paths land on the same backend + DB.
-  const attached = shouldAttach({ portListening: await waitForPort(SERVER_PORT, 800), smoke: SMOKE });
+  // v0.45.16 (A5): ownership, not "something answers". A dying sidecar (shutdown dream) and a
+  // stranger's process both look identical to a TCP connect; /health tells them apart.
+  const probe = await probeBackend(SERVER_PORT, 1200);
+  const attached = shouldAttach({ probe, smoke: SMOKE });
+  if (!attached && probe.kind !== 'absent' && !SMOKE) {
+    // The port is occupied by something we will not adopt. A backend that is leaving releases it
+    // within a moment (v0.45.16 server side); wait a bounded while so our own spawn can bind.
+    const waitMs = Number(process.env['LUNA_BACKEND_TAKEOVER_WAIT_MS'] ?? 20_000);
+    console.log(`[luna-desktop] port ${SERVER_PORT} held by a ${probe.kind} backend — waiting for it to let go`);
+    const freed = await waitForPortFree(SERVER_PORT, waitMs);
+    console.log(
+      freed
+        ? `[luna-desktop] port ${SERVER_PORT} released — starting our own backend`
+        : `[luna-desktop] port ${SERVER_PORT} still held after ${waitMs}ms — starting anyway, the supervisor will retry`,
+    );
+  }
   const dev = SMOKE ? null : resolveDevLauncher({ repoRoot: REPO_ROOT, env: process.env });
   // v0.35.5: ONE boot-mode decision, with SETUP ahead of the dev launcher. Before this, any machine
   // where the app was built from a still-present checkout (i.e. every `bun run app` user) took the

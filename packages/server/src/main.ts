@@ -94,6 +94,18 @@ process.on('unhandledRejection', (reason) => {
 // POST /shutdown route (loopback-only) can reach it. Defaults to a hard exit until wired.
 let triggerShutdown: (reason: string) => void = () => process.exit(0);
 
+// v0.45.16 (Initiative 37, A5): who is on this port, and are they still alive? The desktop shell
+// used to treat "the port answers a TCP connect" as "a healthy backend I should attach to" — but
+// a sidecar running its shutdown dream keeps listening for up to two minutes while already doomed.
+// The new app adopted the corpse, spawned nothing, and lost the backend the moment the dream
+// finished (reproduced with the real waitForPort + shouldAttach before this fix). These two facts
+// are what a shell needs to tell a live backend from a dying one.
+const STARTED_MS = Date.now();
+let backendShuttingDown = false;
+export function markBackendShuttingDown(): void {
+  backendShuttingDown = true;
+}
+
 if (Bun.env['ANTHROPIC_API_KEY']) {
   const provider = providerFor();
   const summarizerKey = Bun.env['LUNA_SUMMARIZER_API_KEY'];
@@ -194,6 +206,11 @@ if (Bun.env['ANTHROPIC_API_KEY']) {
   const shutdown = async (signal: string): Promise<void> => {
     if (shuttingDown) process.exit(1); // a second signal → force exit now
     shuttingDown = true;
+    // v0.45.16 (A5): stop OWNING the port before the long part. The dream can run for two
+    // minutes; holding the listener that whole time is what let a relaunched app adopt a corpse.
+    // Releasing here means the next app finds a free port and starts its own backend cleanly,
+    // while this process quietly finishes writing the day down.
+    releasePort(`${signal} — releasing the port before the shutdown dream`);
     try {
       const rawGap = Number(Bun.env['LUNA_SHUTDOWN_DREAM_MIN_GAP_MS']);
       const minGapMs = Number.isFinite(rawGap) && rawGap >= 0 ? rawGap : 21_600_000;
@@ -238,6 +255,7 @@ if (Bun.env['ANTHROPIC_API_KEY']) {
 } else {
   console.warn('[luna-server] ANTHROPIC_API_KEY not set — chat.send disabled');
   const bye = (): void => {
+    releasePort('shutdown');
     stopNowPlaying();
     closeDb(db);
     process.exit(0);
@@ -266,6 +284,21 @@ const server = Bun.serve<WSData>({
     // Loopback bind above is the security boundary, same as the WS (S1).
     const dataResponse = await dataApiHandler(req);
     if (dataResponse) return dataResponse;
+    // v0.45.16 (A5): who is on this port. Loopback-bound like everything else and deliberately
+    // dull — pid, uptime, and the one fact a relaunching shell actually needs: whether this
+    // backend is on its way out. 503 while shutting down, so even a caller that ignores the body
+    // reads the right answer.
+    if (pathname === '/health' && req.method === 'GET') {
+      return Response.json(
+        {
+          service: 'luna-server',
+          pid: process.pid,
+          started_ms: STARTED_MS,
+          shutting_down: backendShuttingDown,
+        },
+        { status: backendShuttingDown ? 503 : 200 },
+      );
+    }
     // v0.45.4: the player card's face — same posture, rides LUNA_MUSIC (off = never consulted).
     const musicResponse = await musicApiHandler(req);
     if (musicResponse) return musicResponse;
@@ -301,3 +334,16 @@ const server = Bun.serve<WSData>({
 });
 
 console.log(`[luna-server] listening on ws://${server.hostname}:${server.port}`);
+
+// v0.45.16 (A5): hand the port back the moment we start dying. Hoisted (function declaration) so
+// the exit handlers above — written before `server` exists — can call it. Idempotent and
+// best-effort: a failure here must never stop the exit path.
+function releasePort(reason: string): void {
+  markBackendShuttingDown();
+  try {
+    server.stop(true);
+    console.log(`[luna-server] ${reason}`);
+  } catch (e) {
+    console.warn('[luna-server] could not release the port:', e);
+  }
+}

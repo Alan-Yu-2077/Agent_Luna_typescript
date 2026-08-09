@@ -22,17 +22,29 @@ describe('resolveSidecarDb (v0.28.8)', () => {
   });
 });
 
-describe('shouldAttach (v0.28.8)', () => {
-  test('attaches when a backend is already listening', () => {
-    expect(shouldAttach({ portListening: true, smoke: false })).toBe(true);
+describe('shouldAttach (v0.28.8, ownership-aware since v0.45.16)', () => {
+  const healthy = { kind: 'healthy', pid: 123, startedMs: 1 } as const;
+
+  test('attaches to a HEALTHY backend (bun run dev)', () => {
+    expect(shouldAttach({ probe: healthy, smoke: false })).toBe(true);
   });
 
   test('spawns its own when nothing is listening', () => {
-    expect(shouldAttach({ portListening: false, smoke: false })).toBe(false);
+    expect(shouldAttach({ probe: { kind: 'absent' }, smoke: false })).toBe(false);
   });
 
-  test('SMOKE never attaches (deterministic + isolated), even if a port is up', () => {
-    expect(shouldAttach({ portListening: true, smoke: true })).toBe(false);
+  // A5, the whole point: a sidecar running its shutdown dream still answers a TCP connect for up
+  // to two minutes. Adopting it means losing the backend the moment the dream ends.
+  test('NEVER attaches to a backend that is shutting down', () => {
+    expect(shouldAttach({ probe: { kind: 'shutting-down' }, smoke: false })).toBe(false);
+  });
+
+  test('never attaches to a stranger holding the port', () => {
+    expect(shouldAttach({ probe: { kind: 'foreign' }, smoke: false })).toBe(false);
+  });
+
+  test('SMOKE never attaches (deterministic + isolated), even to a healthy backend', () => {
+    expect(shouldAttach({ probe: healthy, smoke: true })).toBe(false);
   });
 });
 

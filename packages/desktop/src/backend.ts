@@ -19,12 +19,23 @@ export function resolveSidecarDb(opts: {
   return !opts.smoke && exists(opts.sharedDb) ? opts.sharedDb : opts.userDb;
 }
 
-// Whether to ATTACH to an already-running backend instead of spawning our own. When a server is
-// already listening on the canonical port (typically `bun run dev`), the app becomes just another
-// client of that one Luna — no second sidecar, no second DB, no onboarding. SMOKE always spawns
+// v0.45.16 (Initiative 37, A5): what is actually on the canonical port. "The port answers a TCP
+// connect" was the old ownership test, and it was wrong in the one case that mattered: a sidecar
+// running its shutdown dream still listens for up to two minutes while already doomed, so a
+// relaunched app adopted the corpse, spawned nothing, and lost the backend the instant the dream
+// finished. Only the backend can say which it is — /health does.
+export type BackendProbe =
+  | { kind: 'absent' } // nothing listening
+  | { kind: 'healthy'; pid: number; startedMs: number } // a live luna-server
+  | { kind: 'shutting-down' } // ours, but on its way out — do NOT adopt it
+  | { kind: 'foreign' }; // something answers this port, but it is not luna-server
+
+// Whether to ATTACH to an already-running backend instead of spawning our own. A HEALTHY backend
+// (typically `bun run dev`) makes this window just another client of that one Luna — no second
+// sidecar, no second DB, no onboarding. Anything else means we own the port. SMOKE always spawns
 // (a verification run must be deterministic + isolated).
-export function shouldAttach(opts: { portListening: boolean; smoke: boolean }): boolean {
-  return opts.portListening && !opts.smoke;
+export function shouldAttach(opts: { probe: BackendProbe; smoke: boolean }): boolean {
+  return opts.probe.kind === 'healthy' && !opts.smoke;
 }
 
 // v0.35.5: the boot-mode decision, pure. Precedence: attach (a running backend owns the keys) →
