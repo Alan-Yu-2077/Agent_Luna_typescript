@@ -161,6 +161,28 @@ describe('artwork filename derivation (traversal-proof)', () => {
     }
   });
 
+  // v0.45.17 (P2#5): the response used to be a LAZY Bun.file handle, so a track change that
+  // swept the old cover between existsSync and the body's fd open tore the image once per skip.
+  test('a cover deleted right after the check still serves — no ENOENT window', async () => {
+    Bun.env['LUNA_MUSIC'] = '1';
+    const dir = mkdtempSync(join(tmpdir(), 'luna-art-race-'));
+    const prev = Bun.env['LUNA_MUSIC_ARTWORK_DIR'];
+    Bun.env['LUNA_MUSIC_ARTWORK_DIR'] = dir;
+    try {
+      writeFileSync(join(dir, 'aabbccdd.jpg'), 'JPEGBYTES');
+      await activateProvider();
+      const res = await musicApiHandler(req('/api/music/artwork?h=aabbccdd'), 'darwin');
+      // the sweep lands here — after the handler returned, before the caller reads the body
+      rmSync(join(dir, 'aabbccdd.jpg'), { force: true });
+      expect(res?.status).toBe(200);
+      expect(await res!.text()).toBe('JPEGBYTES');
+    } finally {
+      if (prev === undefined) delete Bun.env['LUNA_MUSIC_ARTWORK_DIR'];
+      else Bun.env['LUNA_MUSIC_ARTWORK_DIR'] = prev;
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test('unknown artwork hash → 404 from the endpoint', async () => {
     Bun.env['LUNA_MUSIC'] = '1';
     await activateProvider();

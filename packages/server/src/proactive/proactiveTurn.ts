@@ -140,6 +140,14 @@ export type RunProactiveOptions = {
   // v0.24.0 (Initiative 17): the silence-ladder scenario. When set, the framing is the
   // restraint-graded scenario body + the companion constraint (supersedes intent/seed).
   scenario?: ProactiveScenario;
+  // v0.45.17: a developer force-fire (`proactive.fire` over the ws). Like a continuation it is
+  // outside the cadence budget, so its wanders must not spend the daily allowance either.
+  devFire?: boolean;
+  // v0.45.17: how THIS path starts a dream she asked for during the turn. Paths that can (the
+  // scheduler funnel, which holds a dreamLlm) pass a starter; paths that cannot (continuation,
+  // the dev force-fire) pass nothing and the intent is dropped with a log — never left to
+  // ambush an unrelated turn hours later.
+  onPendingDream?: (reason: string) => void;
 };
 
 // C (v0.19.2): on a long-away wake, color the framing so it reads as "she noticed
@@ -209,14 +217,33 @@ export async function runProactiveTurn(opts: RunProactiveOptions): Promise<{ spo
   if (quietWorkEnabled()) {
     const kind = classifyOutcome(spoke, state.toolNamesThisTurn);
     if (kind === 'quiet') quietNote = compressNote(state.toolNamesThisTurn);
+    // v0.45.17: the wander mark drove a budget that was wrong in both directions. It was set
+    // only on QUIET turns, so a wander she then spoke about did not count (under-count); and it
+    // was set on continuation / dev-fire turns, which cadence deliberately exempts from every
+    // quota, so those stole budget from the wakings the budget is actually about (over-count).
+    // Count a wander when the turn WANDERED and the path is one the budget governs.
+    const countsTowardBudget = opts.intent !== 'continuation' && !opts.devFire;
+    const wandered = countsTowardBudget && isWander(state.toolNamesThisTurn);
     try {
-      recordOutcome(opts.session.id, kind, quietNote, kind === 'quiet' && isWander(state.toolNamesThisTurn));
+      recordOutcome(opts.session.id, kind, quietNote, wandered);
       console.log(`[proactive] outcome=${kind}${quietNote ? ` — ${quietNote}` : ''}`);
     } catch {
       /* the ledger must never break the turn */
     }
   }
   // v0.45.11: the leaf's payload — only a QUIET waking carries the note (additive field).
+  // v0.45.17: an intent to dream must not outlive the turn that formed it. `enter_dream` sets
+  // `session.pendingDream`, but only the chat.send path and the scheduler funnel ever consumed
+  // it — a continuation or dev-fire left the flag standing until the NEXT reactive turn, which
+  // could be the following afternoon: she would answer an unrelated question and abruptly fall
+  // asleep, walking the v0.45.7 night window around by pure time travel. (`enter_dream.ts`'s
+  // comment claiming "runTurn checks pendingDream" was never true; it is corrected there too.)
+  if (opts.session.pendingDream !== null) {
+    const reason = opts.session.pendingDream;
+    opts.session.pendingDream = null;
+    if (opts.onPendingDream) opts.onPendingDream(reason);
+    else console.log(`[proactive] dropping an enter_dream intent this path cannot start (${reason})`);
+  }
   opts.emit({
     type: 'proactive.finished',
     cycle_id: opts.cycleId,

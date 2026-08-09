@@ -202,8 +202,10 @@ export function isWebSearchMode(registry: ToolRegistry): boolean {
   return registry.web_search !== undefined;
 }
 
-// web_fetch (Initiative 11, v0.18.1) — read one URL through the SSRF guard. Same
-// default-OFF cost/risk polarity as web_search; LUNA_WEB_FETCH=1 mounts it.
+// web_fetch (Initiative 11, v0.18.1) — read one URL through the SSRF guard. v0.45.17: this
+// comment claimed "default-OFF … LUNA_WEB_FETCH=1 mounts it" while the gate twelve lines below
+// has read `!== '0'` (default ON) since v0.18.3 — the same lie v0.45.13 corrected in
+// web_fetch.ts and in the protocol enum, missed here. See webFetchEnabled for the truth.
 export const webFetchTools: ToolRegistry = {
   web_fetch: webFetchTool,
 };

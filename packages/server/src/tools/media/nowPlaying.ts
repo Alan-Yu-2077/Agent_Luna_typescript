@@ -100,6 +100,13 @@ export function markLyricsDelivered(trackId: string): void {
   if (enrichment?.trackId === trackId) enrichment = { ...enrichment, delivered: true };
 }
 
+// v0.45.17: …and the un-burn. A turn that dies before its first token rolls its history back,
+// which erases the lyrics block — but the mark stayed set, so the words were in neither the
+// prompt nor the past and "she read this song" was simply false. The rollback is symmetric now.
+export function unmarkLyricsDelivered(trackId: string): void {
+  if (enrichment?.trackId === trackId) enrichment = { ...enrichment, delivered: false };
+}
+
 // Exposed for tests (and a future settings probe): whether the affinity face found the library.
 export function musicLibrary(): Library | null {
   return library;

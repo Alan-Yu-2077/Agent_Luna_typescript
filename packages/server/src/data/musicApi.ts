@@ -118,9 +118,21 @@ export async function musicApiHandler(
     const p = artworkPathFor(artworkDir(), h);
     if (p === null) return new Response('not found', { status: 404 });
     const ext = p.slice(p.lastIndexOf('.') + 1);
-    return new Response(Bun.file(p), {
-      headers: { 'content-type': MIME[ext] ?? 'application/octet-stream', 'cache-control': 'max-age=86400' },
-    });
+    // v0.45.17: read the bytes NOW rather than handing back a lazy file handle. On a track
+    // change the provider sweeps the old cover, and the window between "existsSync said yes"
+    // and "the response body opens the fd" was real — the card's image tore once per skip.
+    // Covers are tens of KB; one read closes the window entirely.
+    try {
+      const bytes = await Bun.file(p).arrayBuffer();
+      return new Response(bytes, {
+        headers: {
+          'content-type': MIME[ext] ?? 'application/octet-stream',
+          'cache-control': 'max-age=86400',
+        },
+      });
+    } catch {
+      return new Response('not found', { status: 404 }); // swept between the check and the read
+    }
   }
 
   return new Response('not found', { status: 404 });

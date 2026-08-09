@@ -36,6 +36,7 @@ import { renderL1Contract } from '../persona/l1Contract';
 import { buildTimeBlock, resolveTz, timeAwareEnabled } from './temporalContext';
 import { buildWeatherBlock, weatherAmbientEnabled } from './weatherContext';
 import { lyricsBurstFor, musicAmbientEnabled, musicBlockFor } from './nowPlayingContext';
+import { getNowPlaying, unmarkLyricsDelivered } from '../tools/media/nowPlaying';
 import { getSnapshot } from '../tools/web/weather/snapshot';
 import { memoryEpoch } from '../memory/epoch';
 import { cleanHistoryEnabled, stripThinking, stripCorrectiveDirectives } from '../memory/cleanHistory';
@@ -268,6 +269,9 @@ export type TurnState = {
   // reactive-turn abort (v0.20.8): forwarded to the provider stream so a client
   // disconnect aborts the upstream call; undefined for proactive/continuation.
   signal?: AbortSignal;
+  // v0.45.17: the track whose one-shot lyrics delivery this turn consumed (null = none), so a
+  // rolled-back turn can return it.
+  lyricsBurnedFor: string | null;
 };
 
 export function toolsToAnthropicFormat(registry: ToolRegistry): Anthropic.Tool[] {
@@ -358,7 +362,12 @@ const graph: Graph<TurnState, TurnNode> = {
       // then burned; later turns carry no lyric block and she quotes from having read it.
       try {
         const burst = lyricsBurstFor();
-        if (burst) blocks.push({ type: 'text', text: burst });
+        if (burst) {
+          blocks.push({ type: 'text', text: burst });
+          // v0.45.17: remember WHICH track's burn this turn spent, so a rolled-back turn can
+          // give it back (the block goes with the history; the mark must too).
+          s.lyricsBurnedFor = getNowPlaying()?.track?.id ?? null;
+        }
       } catch (e) {
         console.warn('[music] lyricsBurstFor failed — omitting the lyrics block:', e);
       }
@@ -577,7 +586,12 @@ const graph: Graph<TurnState, TurnNode> = {
               // stutters — calls `message` twice with identical text), so it's not
               // double-stored in assistant_text / recall. The frontend discards the
               // already-rendered live bubble symmetrically (v0.21.10).
-              if (typeof delivery.text === 'string') {
+              // v0.45.17: `.trim() !== ''`, not just "is a string". `spoke` (and with it the
+              // global + music proactive quotas) is derived from messageTexts, while
+              // PERSISTENCE keys off the trimmed reply — so a whitespace-only delivery used to
+              // spend a day's proactive budget on a "message" that never reached L2 and never
+              // marked activity. One definition of having spoken, in both places.
+              if (typeof delivery.text === 'string' && delivery.text.trim() !== '') {
                 const prev = s.messageTexts[s.messageTexts.length - 1];
                 if (prev === undefined || prev.trim() !== delivery.text.trim()) {
                   s.messageTexts.push(delivery.text);
@@ -962,6 +976,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<TurnState> {
     directiveMessages: new Set(),
     proactiveTurn: opts.proactiveTurn ?? false,
     citations: [],
+    lyricsBurnedFor: null,
     signal: opts.signal,
   };
 
@@ -1054,6 +1069,9 @@ export async function runTurn(opts: RunTurnOptions): Promise<TurnState> {
         });
       } else {
         opts.session.history.length = historyStart;
+        // v0.45.17: the lyrics block just went with it — hand the delivery back so the next
+        // turn can carry the words she never actually received.
+        if (state.lyricsBurnedFor !== null) unmarkLyricsDelivered(state.lyricsBurnedFor);
       }
       persistSession(opts.session.id, opts.session.history, opts.session.turnSeq);
     } catch (e) {

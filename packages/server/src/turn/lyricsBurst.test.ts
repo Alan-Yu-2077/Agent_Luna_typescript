@@ -268,3 +268,41 @@ describe('off-library / mis-titled tracks never borrow a stranger\'s history (A4
     expect(seen[0]?.[2]).toBe(326_000);
   });
 });
+
+// v0.45.17 (P2#4) — the burn must roll back with the history it rode in on. A turn that dies
+// before its first token has its history rolled back, taking the lyrics block with it; if the
+// delivered mark survived, the words were in neither the prompt nor the past and "she has read
+// this song" was a lie no later turn could repair.
+describe('the read-once-burn rolls back with a failed turn (P2#4)', () => {
+  test('a turn that delivers nothing gives the lyrics delivery back', async () => {
+    const { runTurn } = await import('./runTurn');
+    const { getSession, resetSessions } = await import('./session');
+    const { MockProvider } = await import('../provider/mock');
+    const { messageRegistry } = await import('../tools/registry');
+
+    await activate({
+      resolveId: () => '347230',
+      affinityFn: () => AFFINITY,
+      fetchLyricsFn: async () => fakeLyrics(),
+    });
+    await playTrack(fakeTrack());
+    expect(getMusicEnrichment()?.delivered).toBe(false);
+
+    resetSessions();
+    const session = getSession('burn');
+    // A provider that throws before the first token: the classic 401/network death.
+    const provider = new MockProvider([]);
+    await runTurn({
+      session,
+      turnId: 'burn-1',
+      userText: 'hi',
+      provider,
+      registry: messageRegistry,
+      emit: () => {},
+    });
+    // The turn delivered nothing → history rolled back → the delivery is available again.
+    expect(session.history.length).toBe(0);
+    expect(getMusicEnrichment()?.delivered).toBe(false);
+    expect(lyricsBurstFor()).not.toBeNull(); // she can still receive the words
+  });
+});

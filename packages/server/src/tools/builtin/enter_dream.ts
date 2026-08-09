@@ -13,8 +13,10 @@ const Output = z.object({
 
 // Pending-intent only: the cycle must NEVER start during the live turn (the
 // absolute isolation contract — closes Python's tail-race where the daemon
-// thread started inside tool execution). runTurn checks pendingDream after
-// finalize and starts the cycle then.
+// thread started inside tool execution). v0.45.17: the consumer is the CALLER,
+// not runTurn — chat.send's `.then` for reactive turns, `runProactiveTurn`'s tail
+// for proactive ones (which starts the cycle where it can and drops the intent
+// where it cannot). Either way the intent never outlives its own turn.
 export const enterDreamTool = defineTool({
   name: 'enter_dream',
   description:

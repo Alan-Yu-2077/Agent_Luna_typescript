@@ -81,6 +81,18 @@ export type FireOutcome = { fired: boolean; spoke: boolean };
 
 const NO_FIRE: FireOutcome = { fired: false, spoke: false };
 
+// Dream auto-trigger (LD #11): she chose to dream during a proactive turn, and THIS path holds
+// the dreamLlm that can start one. Fire-and-forget — isDreaming() (set synchronously inside
+// runDreamCycle) gates every subsequent proactive path, so no overlap.
+function startDreamFrom(opts: MaybeFireOpts): void {
+  void runDreamCycle({
+    sessionId: opts.session.id,
+    llm: opts.dreamLlm,
+    emit: opts.emit,
+    trigger: 'self',
+  }).catch(logSwallowed('dream-handoff'));
+}
+
 // The proactive funnel — the one entry point the scheduler tick AND the event hooks call.
 // Everything (the anti-spam rail, the ladder decision, the turn, the cadence commit, the dream
 // handoff) runs INSIDE the single-turn lock, so a hook and a tick — or two hooks — can't both pass
@@ -122,19 +134,11 @@ export async function maybeFireProactive(opts: MaybeFireOpts): Promise<FireOutco
             emit: opts.emit,
             intent: 'spontaneous',
             seed: musicSeedFor(moment, hotCommentFor(moment.id)),
+            onPendingDream: () => startDreamFrom(opts),
           });
           const base = commitLadderPhase(cadence, decision.phase, decision.nudgesSent);
           saveCadence(session.id, spoke ? commitProactive(base, nowMs) : commitProactiveSilent(base, nowMs));
           saveMusicMoment(session.id, commitMusicMoment(loadMusicMoment(session.id), nowMs, spoke));
-          if (session.pendingDream !== null) {
-            session.pendingDream = null;
-            void runDreamCycle({
-              sessionId: session.id,
-              llm: opts.dreamLlm,
-              emit: opts.emit,
-              trigger: 'self',
-            }).catch(logSwallowed('dream-handoff'));
-          }
           return { fired: true, spoke };
         }
       }
@@ -148,6 +152,7 @@ export async function maybeFireProactive(opts: MaybeFireOpts): Promise<FireOutco
       registry: opts.registry,
       emit: opts.emit,
       scenario: decision.scenario,
+      onPendingDream: () => startDreamFrom(opts),
     });
     // Spoke → advance the phase from the effective base + consume the daily quota; silent → stamp
     // the cooldown anchor + persist the transition (no quota, no nudge burned — Python note_attempt).
@@ -158,19 +163,6 @@ export async function maybeFireProactive(opts: MaybeFireOpts): Promise<FireOutco
         })
       : commitLadderSilent(cadence, decision.phase, decision.nudgesSent, nowMs);
     saveCadence(session.id, next);
-
-    // Dream auto-trigger (LD #11): if she chose to dream during the turn, start the cycle.
-    // Fire-and-forget — isDreaming() (set synchronously inside runDreamCycle) gates every subsequent
-    // proactive path, so no overlap.
-    if (session.pendingDream !== null) {
-      session.pendingDream = null;
-      void runDreamCycle({
-        sessionId: session.id,
-        llm: opts.dreamLlm,
-        emit: opts.emit,
-        trigger: 'self',
-      }).catch(logSwallowed('dream-handoff'));
-    }
 
     return { fired: true, spoke };
   });

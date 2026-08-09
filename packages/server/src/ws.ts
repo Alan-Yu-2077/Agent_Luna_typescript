@@ -352,6 +352,7 @@ export function handleMessage(
           provider: rt.provider,
           registry: rt.registry,
           emit: safeEmit(ws),
+          devFire: true, // v0.45.17: outside the cadence budget, so outside the wander budget too
         }),
       ).catch((e) => {
         console.error('[ws] proactive.fire failed:', e);
