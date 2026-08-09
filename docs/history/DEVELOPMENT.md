@@ -800,6 +800,14 @@ Fact:
 - Live on a throwaway sidecar (port 8904, scratch DB): no-Origin → 101, `http://127.0.0.1:5177`
   → 101, `http://localhost:5173` → 101, `http://evil.example` → 403, `http://192.168.1.50:5173`
   → 403; a text/plain soul POST with a foreign Origin → 403 while a local tool's write → 200.
+- **Found by the push, not by the plan**: CI went red on `recall > respects limit` with `UNIQUE
+  constraint failed: l3_facts.id`. Not this version's doing — `addFact` minted ids as
+  `<ms base36><Math.random()*1296>`, so two facts saved inside the same millisecond collided 1 in
+  1296, and a collision is not a retry: the INSERT throws and the memory is LOST. Measured ~1.1%
+  of runs for six facts in a tight loop, which is why it read as a flake for months while
+  silently dropping the occasional `remember` in production. The suffix is now four crypto bytes
+  (~4.3e9 per millisecond), with a 200-fact tight-loop regression test; the recall suite ran five
+  clean passes locally afterwards.
 
 Inference:
 

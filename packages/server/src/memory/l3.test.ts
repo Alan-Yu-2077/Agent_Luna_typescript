@@ -123,3 +123,21 @@ describe('renderCoreBlock (L3-only since v0.30.3) + cache stability', () => {
     expect(sys3).not.toBe(sys2);
   });
 });
+
+// v0.45.15 — the id-collision regression. The suffix was `Math.random() * 1296`, so two facts
+// saved in the same millisecond collided 1 in 1296 — and a collision meant the INSERT threw on
+// the primary key and the fact was LOST, not retried. It surfaced as a ~1%-per-run CI flake
+// (`recall > respects limit`), which is a mercy: in production it silently dropped memories.
+describe('addFact ids survive a tight loop (v0.45.15)', () => {
+  test('200 facts saved as fast as possible all land, with 200 distinct ids', () => {
+    const ids = new Set<string>();
+    for (let i = 0; i < 200; i++) {
+      const r = addFact('core_facts', `事实 ${i}`);
+      expect(r).not.toBeNull();
+      expect(r?.status).toBe('added');
+      ids.add(r!.id);
+    }
+    expect(ids.size).toBe(200);
+    expect(listFacts({ category: 'core_facts' }).length).toBe(200);
+  });
+});

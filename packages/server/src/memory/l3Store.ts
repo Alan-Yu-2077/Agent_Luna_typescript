@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import type { L3Category, L3Confidence, L3Fact } from '@luna/protocol';
 import { getMemoryDb } from './sessionStore';
 import { bumpMemoryEpoch } from './epoch';
@@ -38,7 +39,12 @@ export function addFact(
   if (existing) return { status: 'deduped', id: existing.id };
 
   const now = Date.now();
-  const id = `${ID_PREFIX[category]}_${now.toString(36)}${Math.floor(Math.random() * 1296).toString(36)}`;
+  // v0.45.15: the suffix used to be `Math.random() * 1296` — two facts saved inside the same
+  // millisecond collided 1 in 1296, and a collision is not a retry: the INSERT throws on the
+  // primary key and the fact is LOST (`remember` fails, the memory never lands). Measured at
+  // ~1.1% of runs for six facts in a tight loop, which is exactly how it finally turned CI red.
+  // Four crypto bytes make the same-millisecond space ~4.3e9 instead of 1296.
+  const id = `${ID_PREFIX[category]}_${now.toString(36)}${randomBytes(4).readUInt32BE(0).toString(36)}`;
   const expires = category === 'active_threads' ? now + ACTIVE_THREAD_TTL_MS : null;
   db.prepare(
     `INSERT INTO l3_facts (id, category, text, dedup_key, confidence, created_ms, expires_ms, deleted_ms, content_hash)
