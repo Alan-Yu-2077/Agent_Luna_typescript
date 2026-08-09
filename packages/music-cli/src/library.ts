@@ -61,6 +61,26 @@ function toLibraryTrack(id: string, json: string): LibraryTrack | null {
   };
 }
 
+/** Lowercase + collapse whitespace. Nothing more: an artist suffix is a real difference. */
+function normaliseName(s: string): string {
+  return s.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+/** Either-way containment, so "Beyond" matches "Beyond, 黄家驹" and vice versa. */
+function artistMatches(candidate: string, want: string): boolean {
+  if (!want) return true; // caller cannot judge — fall to the duration check
+  const have = normaliseName(candidate);
+  if (!have) return false;
+  return have === want || have.includes(want) || want.includes(have);
+}
+
+/** ±3s, the same tolerance the network-side confidence gate uses. Unknown on either side = skip. */
+const DURATION_TOLERANCE_MS = 3000;
+function durationMatches(candidateMs: number | null, wantMs: number | null | undefined): boolean {
+  if (candidateMs === null || wantMs === null || wantMs === undefined) return true;
+  return Math.abs(candidateMs - wantMs) <= DURATION_TOLERANCE_MS;
+}
+
 /**
  * Read-only view over the client's local cache.
  *
@@ -88,11 +108,20 @@ export class Library {
   }
 
   /**
-   * Map a now-playing title (+ optional artist) to its NetEase id. media-control
-   * never reports the id, so title is the only bridge from "what's playing" to
-   * lyrics and affinity. Artist disambiguates covers and same-named tracks.
+   * Map a now-playing title (+ artist, + duration) to its NetEase id. media-control never
+   * reports the id, so title is the only bridge from "what's playing" to lyrics and affinity —
+   * but title ALONE is a liar.
+   *
+   * v0.45.15 (Luna Initiative 37, A4): this used to `return rows[0]` whenever exactly one row
+   * matched the title, and to fall back to `rows[0]` when no artist matched. Playing a cover, a
+   * live version, or a different artist's same-titled song therefore borrowed the library
+   * track's identity: Luna told him "you've played this 200 times" about a song he had never
+   * heard, and read him the wrong lyrics. The gate is now the same 宁缺勿错 rule the network
+   * enrichment path uses: artist must match (normalised, either-way containment) and duration
+   * must be within ±3s when both sides know it — otherwise NO id, and the whole affinity/lyric
+   * layer degrades to "she just knows the title", which is honest.
    */
-  resolveId(title: string, artist?: string): string | null {
+  resolveId(title: string, artist?: string, durationMs?: number | null): string | null {
     if (!this.db || !title) return null;
     const rows = this.db
       .query<{ id: string; json: string }, [string]>(
@@ -101,14 +130,19 @@ export class Library {
       )
       .all(title);
     if (rows.length === 0) return null;
-    if (rows.length === 1 || !artist) return rows[0]!.id;
 
-    const want = artist.toLowerCase();
-    for (const r of rows) {
-      const t = toLibraryTrack(r.id, r.json);
-      if (t && t.artist.toLowerCase().includes(want)) return r.id;
-    }
-    return rows[0]!.id;
+    const wantArtist = normaliseName(artist ?? "");
+    const candidates = rows
+      .map((r) => toLibraryTrack(r.id, r.json))
+      .filter((t): t is LibraryTrack => t !== null)
+      .filter((t) => artistMatches(t.artist, wantArtist))
+      .filter((t) => durationMatches(t.durationMs, durationMs));
+
+    if (candidates.length === 0) return null;
+    if (candidates.length === 1) return candidates[0]!.neteaseId;
+    // Several survivors: only a KNOWN artist makes that safe (same song, duplicate rows or
+    // editions). With nothing to tell them apart, no id at all.
+    return wantArtist ? candidates[0]!.neteaseId : null;
   }
 
   /** Full metadata for one track. */

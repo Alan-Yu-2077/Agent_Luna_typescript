@@ -466,6 +466,7 @@ const graph: Graph<TurnState, TurnNode> = {
     if (s.stopReason === 'tool_use' && s.pendingToolUses.length > 0) {
       return 'dispatch_tools';
     }
+    dropUndispatchedToolUse(s);
     if (s.stopReason === 'max_tokens') {
       s.finishReason = 'max_tokens';
     } else if (s.stopReason === 'refusal') {
@@ -803,6 +804,56 @@ function dedupeCitations(citations: Citation[]): Citation[] {
     out.push(c);
   }
   return out;
+}
+
+// v0.45.15 (Initiative 37, A1) — the P0 that bricked whole sessions. The dispatch gate above
+// only fires on stopReason 'tool_use', but a model can emit COMPLETE tool_use blocks and then
+// stop for another reason (max_tokens mid-stream, refusal). Those blocks rode into history with
+// no matching tool_result, and Anthropic 400s on that forever after: the poison sits BEFORE the
+// turn's rollback boundary, so the per-turn rollback, the L1 fold, the window trim and a full
+// restart all leave it in place — only editing the DB by hand recovered the session.
+//
+// A tool call that never ran is not history. Drop the blocks (keeping her streamed text), and
+// close each dropped call on the wire: the client discards a message preview that ends in an
+// err (controller.ts), which is exactly what a truncated, never-delivered bubble should do.
+export function partitionToolUse(content: Anthropic.ContentBlockParam[]): {
+  kept: Anthropic.ContentBlockParam[];
+  dropped: Anthropic.ToolUseBlockParam[];
+} {
+  const kept: Anthropic.ContentBlockParam[] = [];
+  const dropped: Anthropic.ToolUseBlockParam[] = [];
+  for (const block of content) {
+    if (block.type === 'tool_use') dropped.push(block);
+    else kept.push(block);
+  }
+  return { kept, dropped };
+}
+
+function dropUndispatchedToolUse(s: TurnState): void {
+  const last = s.session.history[s.session.history.length - 1];
+  if (last === undefined || last.role !== 'assistant' || typeof last.content === 'string') return;
+  const { kept, dropped } = partitionToolUse(last.content);
+  if (dropped.length === 0) return;
+  // An assistant message that was ONLY the undispatched call has nothing left to say.
+  if (kept.length === 0) s.session.history.pop();
+  else last.content = kept;
+  for (const use of dropped) {
+    s.emit({
+      type: 'tool.finished',
+      call_id: use.id,
+      result: {
+        kind: 'err',
+        code: 'execution_exception',
+        message: `not dispatched: the model stopped (${s.stopReason}) before this call could run`,
+        recoverable: true,
+      },
+    });
+  }
+  s.pendingToolUses = [];
+  console.warn(
+    `[turn] dropped ${dropped.length} undispatched tool_use block(s) (stop=${s.stopReason}) — ` +
+      'they would have poisoned history with an unpaired tool_use',
+  );
 }
 
 function pushDirective(s: TurnState, text: string): void {

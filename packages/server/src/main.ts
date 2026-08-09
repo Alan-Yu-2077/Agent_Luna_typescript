@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import { shouldHonorShutdown } from './shutdownRoute';
+import { extraAllowedOrigins, wsOriginAllowed } from './wsOrigin';
 import { broadcast, handleClose, handleMessage, handleOpen, setRuntime, type WSData } from './ws';
 import { fireProactiveForActiveSessions, startScheduler } from './proactive/scheduler';
 import { providerFor } from './provider/factory';
@@ -275,6 +276,15 @@ const server = Bun.serve<WSData>({
       if (workspaceResponse) return workspaceResponse;
       const chatResponse = devChatHandler(req);
       if (chatResponse) return chatResponse;
+    }
+    // v0.45.15 (A2): the CSWSH gate. Any page the owner visits could otherwise open this socket
+    // and BE him (the upgrade hands out sessionId 'default' with no check at all). A browser
+    // cannot forge Origin, so: loopback origins in, foreign origins out, no-Origin (native
+    // clients, the smoke harness, curl) unchanged. LUNA_WS_ALLOWED_ORIGINS adds exact extras.
+    const origin = req.headers.get('origin');
+    if (!wsOriginAllowed(origin, extraAllowedOrigins(Bun.env['LUNA_WS_ALLOWED_ORIGINS']))) {
+      console.warn(`[luna-server] refused WebSocket upgrade from origin ${origin}`);
+      return new Response('forbidden origin', { status: 403 });
     }
     if (srv.upgrade(req, { data: { sessionId: 'default' } })) return;
     return new Response('luna-server: WebSocket only', { status: 426 });

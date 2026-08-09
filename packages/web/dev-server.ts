@@ -16,6 +16,21 @@ const TTS_ENV = readTtsEnv(Bun.env as unknown as Record<string, string | undefin
 // with serve.ts (the packaged host) — the parity test in packages/desktop compares the two
 // lists, so forgetting one side goes red in CI instead of red on the owner's machine (the
 // v0.45.6 "flag that never arrived" class of bug).
+// v0.45.15 (A3): the dev twin of serve.ts's `localOrigin` — same rule, same reason (this file is
+// the packaged host's counterpart in dev-all mode, and the two must never disagree about who may
+// write). Absent Origin = native client / our own forward; loopback Origin = our own web surface.
+export function localOrigin(origin: string | null): boolean {
+  if (origin === null || origin === '') return true;
+  if (origin === 'null') return false;
+  try {
+    const url = new URL(origin);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
+    return ['127.0.0.1', 'localhost', '::1', '[::1]'].includes(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
 export const FORWARDED_API_PREFIXES = ['/api/tts/', '/api/data/', '/api/music/'] as const;
 
 Bun.serve({
@@ -34,6 +49,12 @@ Bun.serve({
     // server IS what the packaged app serves in dev-all mode; without the route the card's first
     // poll 404s and permanently unmounts). Content-type passes through, so artwork JPEGs survive.
     if (pathname.startsWith('/api/data/') || pathname.startsWith('/api/music/')) {
+      // v0.45.15 (A3): the same mutating-route Origin gate the packaged host carries — our
+      // forward strips Origin, so the sidecar cannot see who asked; a foreign page POSTing
+      // text/plain here would otherwise reach `soul/fixed` with no preflight.
+      if (req.method !== 'GET' && req.method !== 'HEAD' && !localOrigin(req.headers.get('origin'))) {
+        return new Response('forbidden origin', { status: 403 });
+      }
       const target = `http://127.0.0.1:${Bun.env['LUNA_PORT'] ?? 8787}${pathname}${new URL(req.url).search}`;
       try {
         const body = req.method === 'GET' || req.method === 'HEAD' ? undefined : await req.text();

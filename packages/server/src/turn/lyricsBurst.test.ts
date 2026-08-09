@@ -67,7 +67,7 @@ function fakeLyrics(n = 4): Lyrics {
 const AFFINITY: TrackAffinity = { neteaseId: '347230', sessions: 213, listenedSeconds: 165_600, rank: 3 };
 
 async function activate(deps: {
-  resolveId?: (t: string, a: string) => string | null;
+  resolveId?: (t: string, a: string, d: number | null) => string | null;
   affinityFn?: (id: string) => TrackAffinity | null;
   fetchLyricsFn?: (id: string) => Promise<Lyrics | null>;
 }): Promise<void> {
@@ -226,5 +226,45 @@ describe('the cap guardrail', () => {
     const block = formatLyricsBlock('x', 'y', ['好'.repeat(LYRICS_MAX_CHARS * 2)]);
     expect(block.length).toBeLessThanOrEqual(LYRICS_MAX_CHARS + 200);
     expect(block).toContain('…(truncated)');
+  });
+});
+
+// v0.45.15 (A4) — the integration half of the confidence gate: when resolveId refuses (a cover,
+// a same-titled stranger), nothing downstream may invent a relationship with the song.
+describe('off-library / mis-titled tracks never borrow a stranger\'s history (A4)', () => {
+  test('resolveId null → no affinity, no lyric fetch, and the block is title-only', async () => {
+    let lyricFetches = 0;
+    await activate({
+      resolveId: () => null,
+      affinityFn: () => {
+        throw new Error('affinity must not be consulted without a confident id');
+      },
+      fetchLyricsFn: async () => {
+        lyricFetches += 1;
+        return fakeLyrics();
+      },
+    });
+    await playTrack(fakeTrack({ id: 'cover-1', title: '海阔天空', artist: '某翻唱歌手' }));
+    expect(lyricFetches).toBe(0);
+    const enrich = getMusicEnrichment();
+    expect(enrich?.neteaseId).toBeNull();
+    expect(enrich?.affinity).toBeNull();
+    const block = musicBlockFor();
+    expect(block).toContain('海阔天空');
+    expect(block).not.toContain('He knows this one well');
+    expect(lyricsBurstFor()).toBeNull();
+  });
+
+  test('the resolver receives the duration it needs to judge (ms)', async () => {
+    const seen: Array<[string, string, number | null]> = [];
+    await activate({
+      resolveId: (t, a, d) => {
+        seen.push([t, a, d]);
+        return null;
+      },
+      fetchLyricsFn: async () => null,
+    });
+    await playTrack(fakeTrack({ id: 'dur-1', duration: 326 }));
+    expect(seen[0]?.[2]).toBe(326_000);
   });
 });

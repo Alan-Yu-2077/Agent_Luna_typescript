@@ -61,6 +61,14 @@ export function startWebHost(
       return;
     }
     if (pathname.startsWith('/api/data/')) {
+      // v0.45.15 (A3): the sidecar's Origin check can't see through this proxy — our forward
+      // sends no Origin of its own. So the gate has to stand HERE too for mutating routes:
+      // a page on any site can POST text/plain to this loopback host with no preflight, and
+      // without this it would reach `soul/fixed` and overwrite her core.
+      if (req.method !== 'GET' && req.method !== 'HEAD' && !localOrigin(req.headers.origin)) {
+        res.writeHead(403).end('forbidden origin');
+        return;
+      }
       // Same shape as the tts forward: the target is CONSTRUCTED from an allowlist, never from the
       // request path — `/api/data/..%2fsecret` matches nothing and 404s without touching upstream.
       void forwardData(req, res, pathname.slice('/api/data/'.length), dataPort());
@@ -99,6 +107,24 @@ export function startWebHost(
 // loopback: the web page fetches same-origin relative paths, zero CORS.
 // v0.45.12 (C7): the /api faces this packaged host forwards — the parity twin of
 // dev-server.ts's FORWARDED_API_PREFIXES (see the parity test). Add a new face to BOTH.
+// v0.45.15 (A3): the desktop twin of the server's wsOrigin rule. Duplicated deliberately — this
+// package compiles standalone (no workspace imports), and the rule is four lines: absent Origin
+// (our own forwards, native clients) or a loopback Origin (our own web surface) passes; a page
+// served from anywhere else does not.
+export function localOrigin(origin: string | string[] | undefined): boolean {
+  if (origin === undefined) return true;
+  const value = Array.isArray(origin) ? origin[0] : origin;
+  if (value === undefined || value === '') return true;
+  if (value === 'null') return false;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
+    return ['127.0.0.1', 'localhost', '::1', '[::1]'].includes(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
 export const FORWARDED_API_PREFIXES = ['/api/tts/', '/api/data/', '/api/music/'] as const;
 
 export const DATA_ROUTES: ReadonlyArray<{ sub: string; methods: readonly string[] }> = [

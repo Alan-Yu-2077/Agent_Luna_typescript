@@ -7,6 +7,8 @@ import {
   type DreamStep,
 } from '@luna/protocol';
 import { getMemoryDb } from '../memory/sessionStore';
+import { isLoopbackHost } from '../shutdownRoute';
+import { wsOriginAllowed } from '../wsOrigin';
 import { listSkills } from '../skills/skillStore';
 import { getSoul, updateFixedCore } from '../memory/soulStore';
 
@@ -61,7 +63,18 @@ function flattenReport(raw: string): { steps: DreamStep[]; aborted: boolean } {
   }
 }
 
-export async function dataApiHandler(req: Request): Promise<Response | null> {
+// v0.45.15 (A3): the two conditions a soul write must satisfy — the server is loopback-bound
+// (parity with /shutdown) AND the caller is not a foreign web page (absent Origin = a native
+// client or our own desktop forward; loopback Origin = our own web surface).
+export function soulWriteAllowed(origin: string | null, bindHost: string): boolean {
+  if (!isLoopbackHost(bindHost)) return false;
+  return wsOriginAllowed(origin);
+}
+
+export async function dataApiHandler(
+  req: Request,
+  bindHost: string = Bun.env['LUNA_BIND_HOST'] ?? '127.0.0.1',
+): Promise<Response | null> {
   const url = new URL(req.url);
   const path = url.pathname;
   if (!path.startsWith('/api/data/')) return null;
@@ -130,9 +143,18 @@ export async function dataApiHandler(req: Request): Promise<Response | null> {
   }
 
   // The one write: the fixed core, an owner capability since v0.31.0 (the workspace editor), now
-  // addressable without the dev-tools env. Loopback is the gate; Luna's self-edit tool still cannot
-  // reach the fixed core — that firewall is in the tool layer and this route does not change it.
+  // addressable without the dev-tools env. Luna's self-edit tool still cannot reach the fixed core
+  // — that firewall is in the tool layer and this route does not change it.
+  //
+  // v0.45.15 (A3): "loopback is the gate" was a comment, not code. /shutdown really checks
+  // isLoopbackHost(bindHost); this route — which OVERWRITES her soul — checked nothing, so a
+  // LAN-exposed instance accepted it from anywhere. And loopback alone never covered the browser
+  // case: a page on any site can POST text/plain to 127.0.0.1 with no preflight, so the Origin
+  // check (same rule as the WS gate) is what actually closes the CSRF.
   if (path === '/api/data/soul/fixed' && req.method === 'POST') {
+    if (!soulWriteAllowed(req.headers.get('origin'), bindHost)) {
+      return json({ error: 'forbidden' }, 403);
+    }
     if (!db) return json({ error: 'no db' }, 400);
     const body = (await req.json().catch(() => ({}))) as { fixed?: unknown };
     if (typeof body.fixed !== 'string' || body.fixed.trim().length === 0) {

@@ -139,3 +139,45 @@ describe("Library", () => {
     lib.close();
   });
 });
+
+// v0.45.15 (Luna Initiative 37, A4) — the confidence gate. Before it, one library row titled
+// "晴天" answered for EVERY song called 晴天: a cover playing on the speakers inherited 周杰伦's
+// play count and lyrics ("you've heard this 200 times" about a song he had never played).
+describe("resolveId confidence gate", () => {
+  test("the 晴天 scenario: same title, different artist → null, not the library's row", () => {
+    const lib = new Library(DB_PATH);
+    expect(lib.resolveId("Supernatural", "noli")).toBe("100");
+    expect(lib.resolveId("Supernatural", "somebody else")).toBeNull();
+    lib.close();
+  });
+
+  test("artist containment matches either way (feat. lists, joint credits)", () => {
+    const lib = new Library(DB_PATH);
+    expect(lib.resolveId("Supernatural", "noli, guest")).toBe("100");
+    expect(lib.resolveId("Supernatural", "NOLI")).toBe("100");
+    lib.close();
+  });
+
+  test("duration disagreeing by more than 3s → null (a different edition is a different song)", () => {
+    const lib = new Library(DB_PATH);
+    expect(lib.resolveId("Supernatural", "noli", 200_000)).toBe("100");
+    expect(lib.resolveId("Supernatural", "noli", 202_500)).toBe("100"); // inside ±3s
+    expect(lib.resolveId("Supernatural", "noli", 240_000)).toBeNull();
+    lib.close();
+  });
+
+  test("ambiguous title with no artist to judge by → null instead of rows[0]", () => {
+    const lib = new Library(DB_PATH);
+    expect(lib.resolveId("Rover")).toBeNull(); // two Rovers in the library
+    expect(lib.resolveId("Rover", "S1mba")).toBe("400");
+    expect(lib.resolveId("Rover", "Lil Tecca")).toBe("401");
+    expect(lib.resolveId("Rover", "Nobody At All")).toBeNull();
+    lib.close();
+  });
+
+  test("a track that is not in the library at all stays null", () => {
+    const lib = new Library(DB_PATH);
+    expect(lib.resolveId("Not In Library", "anyone")).toBeNull();
+    lib.close();
+  });
+});

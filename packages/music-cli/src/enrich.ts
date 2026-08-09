@@ -38,7 +38,11 @@ export async function enrich(
   const ownLib = !opts.library;
 
   try {
-    const neteaseId = lib.resolveId(track.title, track.artist);
+    const neteaseId = lib.resolveId(
+      track.title,
+      track.artist,
+      track.duration === null ? null : track.duration * 1000,
+    );
     const affinity = neteaseId ? lib.affinity(neteaseId) : null;
 
     let lyric: EnrichedNowPlaying["lyric"] = null;

@@ -124,4 +124,49 @@ describe('/api/data — the read-only data surface (v0.44.2)', () => {
     );
     expect(res?.status).toBe(400);
   });
+
+  // v0.45.15 (A3): the write is the one mutating route on this face, and it used to trust the
+  // comment "loopback is the gate" — which no code enforced.
+  test('a foreign page cannot overwrite her core (403, and the core is untouched)', async () => {
+    const before = getSoul().fixed_text;
+    const res = await dataApiHandler(
+      new Request('http://127.0.0.1:8787/api/data/soul/fixed', {
+        method: 'POST',
+        headers: { origin: 'http://evil.example' },
+        body: JSON.stringify({ fixed: 'i am the owner now' }),
+      }),
+    );
+    expect(res?.status).toBe(403);
+    expect(getSoul().fixed_text).toBe(before);
+  });
+
+  test('a LAN-exposed instance refuses the write; reads still work (the /shutdown asymmetry, closed)', async () => {
+    const before = getSoul().fixed_text;
+    const res = await dataApiHandler(
+      new Request('http://127.0.0.1:8787/api/data/soul/fixed', {
+        method: 'POST',
+        body: JSON.stringify({ fixed: 'from the network' }),
+      }),
+      '0.0.0.0',
+    );
+    expect(res?.status).toBe(403);
+    expect(getSoul().fixed_text).toBe(before);
+    const read = await dataApiHandler(
+      new Request('http://127.0.0.1:8787/api/data/soul'),
+      '0.0.0.0',
+    );
+    expect(read?.status).toBe(200);
+  });
+
+  test('our own web surface still writes (loopback Origin passes)', async () => {
+    const res = await dataApiHandler(
+      new Request('http://127.0.0.1:8787/api/data/soul/fixed', {
+        method: 'POST',
+        headers: { origin: 'http://127.0.0.1:5177' },
+        body: JSON.stringify({ fixed: '来自面板的核心' }),
+      }),
+    );
+    expect(res?.status).toBe(200);
+    expect(getSoul().fixed_text).toBe('来自面板的核心');
+  });
 });

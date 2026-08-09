@@ -147,7 +147,12 @@ async function main() {
         return 0;
       }
       const lib = new Library();
-      id = lib.resolveId(track.title, track.artist) ?? undefined;
+      id =
+        lib.resolveId(
+          track.title,
+          track.artist,
+          track.duration === null ? null : track.duration * 1000,
+        ) ?? undefined;
       lib.close();
       if (!id) {
         console.error(`current track "${track.title}" not found in local library`);

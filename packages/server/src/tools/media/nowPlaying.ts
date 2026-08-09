@@ -106,7 +106,7 @@ export function musicLibrary(): Library | null {
 }
 
 type EnrichDeps = {
-  resolveId?: (title: string, artist: string) => string | null;
+  resolveId?: (title: string, artist: string, durationMs: number | null) => string | null;
   affinityFn?: (id: string) => TrackAffinity | null;
   fetchLyricsFn?: (id: string) => Promise<Lyrics | null>;
 };
@@ -120,9 +120,16 @@ export function setEnrichDepsForTests(d: EnrichDeps | null): void {
 // result for a superseded track is dropped (identity check on both async edges).
 function enrichCurrent(track: NowPlaying): void {
   const resolve =
-    enrichDeps.resolveId ?? ((t: string, a: string) => (library ? library.resolveId(t, a) : null));
+    enrichDeps.resolveId ??
+    ((t: string, a: string, d: number | null) => (library ? library.resolveId(t, a, d) : null));
   const aff = enrichDeps.affinityFn ?? ((id: string) => (library ? library.affinity(id) : null));
-  const neteaseId = resolve(track.title, track.artist);
+  // v0.45.15 (A4): duration joins the confidence gate — title+artist alone let a cover borrow
+  // the library track's play history.
+  const neteaseId = resolve(
+    track.title,
+    track.artist,
+    track.duration === null ? null : track.duration * 1000,
+  );
   enrichment = {
     trackId: track.id,
     neteaseId,
