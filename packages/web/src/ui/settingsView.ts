@@ -100,8 +100,8 @@ export function renderServerSettings(
       if (s.restart_required) {
         const badge = doc.createElement('span');
         badge.className = 'setting-badge';
-        badge.textContent = 'restart';
-        badge.title = 'Takes effect after Luna restarts';
+        badge.textContent = '需重启';
+        badge.title = '重启 Luna 后生效';
         name.appendChild(badge);
       }
       const right = doc.createElement('span');
@@ -111,7 +111,7 @@ export function renderServerSettings(
         reset.type = 'button';
         reset.className = 'setting-reset';
         reset.textContent = '↺';
-        reset.title = 'Reset to default';
+        reset.title = '恢复默认值';
         reset.addEventListener('click', (e) => {
           e.preventDefault(); // inside a <label>: don't also toggle the checkbox
           send(s.key, null);

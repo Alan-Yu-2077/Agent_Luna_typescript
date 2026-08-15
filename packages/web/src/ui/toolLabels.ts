@@ -5,33 +5,36 @@ import { ToolName } from '@luna/protocol';
 // view concern, so it lives here rather than in the controller — keeping the
 // shared controller untouched. Unknown text falls through stripped.
 const CUTE: Partial<Record<ToolName, string>> = {
-  recall: 'flipped through memories 🔖',
-  remember: 'kept it in mind 💭',
-  read_file: 'read something 📖',
-  time_now: 'checked the time 🕐',
-  enter_dream: 'getting ready to dream 🌙',
-  message: 'said something 💬',
-  repo_map: 'mapped the codebase 🗺️',
-  find_symbol: 'located a symbol 🔎',
-  plan: 'updated the plan 📋',
-  save_skill: 'saved a skill 🧠',
-  recall_skill: 'recalled a skill 💡',
-  propose_self_edit: 'proposed a self-edit ✍️',
-  web_search: 'searched the web 🔍',
-  web_fetch: 'read a web page 🌐',
-  list_files: 'looked through files 📂',
-  grep: 'searched the code 🔍',
-  edit: 'edited a file ✏️',
-  multi_edit: 'edited a file ✏️',
-  write_file: 'wrote a file 📝',
-  shell: 'ran a command 💻',
-  typecheck: 'type-checked ✅',
-  run_tests: 'ran the tests 🧪',
-  lint: 'checked formatting 🎨',
+  recall: '翻了翻记忆 🔖',
+  remember: '记在心里了 💭',
+  read_file: '读了点东西 📖',
+  time_now: '看了看时间 🕐',
+  enter_dream: '准备进入梦境 🌙',
+  message: '说了句话 💬',
+  repo_map: '看了看代码地图 🗺️',
+  find_symbol: '找到了代码位置 🔎',
+  plan: '更新了计划 📋',
+  save_skill: '保存了一项技能 🧠',
+  recall_skill: '回忆起一项技能 💡',
+  propose_self_edit: '提出了一次自我修改 ✍️',
+  web_search: '搜了搜网页 🔍',
+  web_fetch: '读了一个网页 🌐',
+  list_files: '翻了翻文件 📂',
+  grep: '搜了搜代码 🔍',
+  edit: '改了一个文件 ✏️',
+  multi_edit: '改了一个文件 ✏️',
+  write_file: '写入了一个文件 📝',
+  shell: '运行了一条命令 💻',
+  typecheck: '做了类型检查 ✅',
+  run_tests: '跑了一遍测试 🧪',
+  lint: '检查了代码格式 🎨',
 };
 
 function strip(s: string): string {
-  return s.replace(/^🔧\s*/, '').replace(/…+$/, '').trim();
+  return s
+    .replace(/^🔧\s*/, '')
+    .replace(/…+$/, '')
+    .trim();
 }
 
 export function toolCardLabel(chipText: string): string {

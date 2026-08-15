@@ -8,11 +8,13 @@ export type SetupLang = 'zh' | 'en';
 const LANG_STORE = 'luna:setup-lang';
 
 export function detectSetupLang(
-  navLang: string | undefined = typeof navigator !== 'undefined' ? navigator.language : undefined,
+  _navLang: string | undefined = typeof navigator !== 'undefined' ? navigator.language : undefined,
   stored: string | null = safeGet(LANG_STORE),
 ): SetupLang {
   if (stored === 'zh' || stored === 'en') return stored;
-  return (navLang ?? '').toLowerCase().startsWith('zh') ? 'zh' : 'en';
+  // Neal's daily Luna is Chinese-first. An explicit user choice still wins, but a
+  // machine/browser locale must not leave the first-run wizard half English.
+  return 'zh';
 }
 
 export function persistSetupLang(lang: SetupLang): void {
@@ -48,11 +50,17 @@ export const SETUP_COPY: CopyTable = {
   'wizard.test.ok': { zh: '连接正常 ✓', en: 'Connection works ✓' },
   'wizard.finishing': { zh: '正在保存并启动 Luna…', en: 'Saving and starting Luna…' },
   'wizard.finish.failed': { zh: '设置失败。', en: 'Setup failed.' },
-  'wizard.lang': { zh: 'English', en: '中文' },
-  'wizard.chat.required': { zh: '请填写 base URL 和 API key。', en: 'Enter a base URL and an API key.' },
+  'wizard.lang': { zh: '切换到英文', en: '切换到中文' },
+  'wizard.chat.required': {
+    zh: '请填写 base URL 和 API key。',
+    en: 'Enter a base URL and an API key.',
+  },
   'wizard.optional': { zh: '(可跳过)', en: '(optional)' },
   'wizard.continueAnyway': { zh: '仍然继续', en: 'Continue anyway' },
-  'wizard.nothingToTest': { zh: '还没填写要测试的 key。', en: 'Nothing to test yet — fill in a key first.' },
+  'wizard.nothingToTest': {
+    zh: '还没填写要测试的 key。',
+    en: 'Nothing to test yet — fill in a key first.',
+  },
   // v0.39.0: the walkthrough card collapses once the step has content of its own — this is its handle.
   'wizard.guide.summary': { zh: '这一步怎么弄?', en: 'How does this step work?' },
 
@@ -86,7 +94,10 @@ export const SETUP_COPY: CopyTable = {
   'step.weather.apiKey': { zh: '和风天气 key', en: 'QWeather key' },
   'step.weather.apiHost': { zh: '和风 API Host', en: 'QWeather API host' },
   'step.weather.latlon': { zh: '位置(纬度,经度)', en: 'Location (lat,lon)' },
-  'step.weather.provider.qweather': { zh: '天气源:和风天气(QWeather)', en: 'Weather source: QWeather' },
+  'step.weather.provider.qweather': {
+    zh: '天气源:和风天气(QWeather)',
+    en: 'Weather source: QWeather',
+  },
   'step.weather.provider.openmeteo': {
     zh: '天气源:Open-Meteo(不填 key 的免费兜底)',
     en: 'Weather source: Open-Meteo (keyless fallback)',
@@ -94,7 +105,10 @@ export const SETUP_COPY: CopyTable = {
 
   'step.avatar.title': { zh: 'Live2D 立绘', en: 'Live2D avatar' },
   'step.avatar.choose': { zh: '选择模型文件夹…', en: 'Choose model folder…' },
-  'step.avatar.drop': { zh: '把解压后的模型文件夹拖到这里', en: 'Drag the unzipped model folder here' },
+  'step.avatar.drop': {
+    zh: '把解压后的模型文件夹拖到这里',
+    en: 'Drag the unzipped model folder here',
+  },
   'step.avatar.installed': { zh: '模型已安装 ✓', en: 'Model installed ✓' },
   'wizard.installing': { zh: '安装中…', en: 'Installing…' },
   'step.avatar.browserOnly': {
@@ -106,7 +120,10 @@ export const SETUP_COPY: CopyTable = {
   'step.voice.none': { zh: '暂不配置(她保持安静)', en: 'Not yet (she stays quiet)' },
   'step.voice.http': { zh: 'GPT-SoVITS(自定义音色)', en: 'GPT-SoVITS (custom voice)' },
   'step.voice.url': { zh: 'api_v2 地址', en: 'api_v2 URL' },
-  'step.voice.drop': { zh: '把下载好的音色包文件夹拖到这里', en: 'Drag the downloaded voice pack folder here' },
+  'step.voice.drop': {
+    zh: '把下载好的音色包文件夹拖到这里',
+    en: 'Drag the downloaded voice pack folder here',
+  },
   'step.voice.scanning': { zh: '扫描音色包…', en: 'Scanning the pack…' },
   'step.voice.pack.title': { zh: '音色包内容', en: 'What the pack contains' },
   'step.voice.gpt': { zh: 'GPT 权重(.ckpt)', en: 'GPT weight (.ckpt)' },
@@ -114,21 +131,36 @@ export const SETUP_COPY: CopyTable = {
   'step.voice.ref': { zh: '参考音频(.wav)', en: 'Reference audio (.wav)' },
   'step.voice.transcript': { zh: '参考音频的文字内容', en: 'Transcript of the reference audio' },
   'step.voice.promptLang': { zh: '参考音频语言', en: 'Reference language' },
-  'step.voice.runtime.choose': { zh: '高级:选择已有的 GPT-SoVITS 目录…', en: 'Advanced: choose an existing GPT-SoVITS folder…' },
-  'step.voice.runtime.none': { zh: '(可选——用「一键部署」就不用选;自备运行时才需要)', en: '(optional — skip if you used one-click deploy; only for a bring-your-own runtime)' },
+  'step.voice.runtime.choose': {
+    zh: '高级:选择已有的 GPT-SoVITS 目录…',
+    en: 'Advanced: choose an existing GPT-SoVITS folder…',
+  },
+  'step.voice.runtime.none': {
+    zh: '(可选——用「一键部署」就不用选;自备运行时才需要)',
+    en: '(optional — skip if you used one-click deploy; only for a bring-your-own runtime)',
+  },
   'step.voice.install': { zh: '安装音色', en: 'Install voice' },
   'step.voice.installed': { zh: '音色已安装 ✓', en: 'Voice installed ✓' },
-  'step.voice.command.title': { zh: '用这条命令启动语音服务(复制到终端运行):', en: 'Start the voice server with this command:' },
+  'step.voice.command.title': {
+    zh: '用这条命令启动语音服务(复制到终端运行):',
+    en: 'Start the voice server with this command:',
+  },
   'step.voice.copy': { zh: '复制命令', en: 'Copy command' },
   'step.voice.copied': { zh: '已复制 ✓', en: 'Copied ✓' },
   'step.voice.badge.down': { zh: '语音服务未运行', en: 'Voice server not running' },
   'step.voice.badge.up': { zh: '语音服务已就绪 ✓', en: 'Voice server ready ✓' },
   'step.voice.badge.warming': { zh: '语音引擎加载中…', en: 'Voice engine warming up…' },
   'step.voice.test': { zh: '试听一句', en: 'Test voice' },
-  'step.voice.test.failed': { zh: '试听失败——确认语音服务已启动。', en: 'Test failed — is the voice server running?' },
+  'step.voice.test.failed': {
+    zh: '试听失败——确认语音服务已启动。',
+    en: 'Test failed — is the voice server running?',
+  },
 
   // v0.37.2 (标准 1): the one-click GPT-SoVITS installer
-  'step.voice.provision.button': { zh: '一键下载并部署 GPT-SoVITS', en: 'Download & deploy GPT-SoVITS' },
+  'step.voice.provision.button': {
+    zh: '一键下载并部署 GPT-SoVITS',
+    en: 'Download & deploy GPT-SoVITS',
+  },
   // v0.40.0: one recipe on every platform (~1.7 GB of downloads, then a Python env built locally).
   // Windows used to pull an 8.19 GB 整合包 and需要 7-Zip; the old copy said 5.7 GB, which was never
   // right — and watching a bar sail past a stated size is itself read as "stuck".
@@ -137,14 +169,29 @@ export const SETUP_COPY: CopyTable = {
     en: 'Downloads the voice runtime (~1.7 GB, then builds a local Python environment — a few minutes to a quarter hour depending on your connection). Resumable and retryable. Drop a voice pack afterwards to enable the GPT voice.',
   },
   'step.voice.provision.preflight': { zh: '检查磁盘空间…', en: 'Checking disk space…' },
-  'step.voice.provision.downloading': { zh: '正在下载语音组件…', en: 'Downloading voice components…' },
+  'step.voice.provision.downloading': {
+    zh: '正在下载语音组件…',
+    en: 'Downloading voice components…',
+  },
   'step.voice.provision.extracting': { zh: '正在解压…', en: 'Extracting…' },
   'step.voice.provision.materializing': { zh: '正在安放模型文件…', en: 'Placing model files…' },
-  'step.voice.provision.venv': { zh: '正在安装 Python 依赖(几分钟)…', en: 'Installing Python deps (a few minutes)…' },
+  'step.voice.provision.venv': {
+    zh: '正在安装 Python 依赖(几分钟)…',
+    en: 'Installing Python deps (a few minutes)…',
+  },
   'step.voice.provision.validating': { zh: '正在校验运行时…', en: 'Validating the runtime…' },
-  'step.voice.provision.ready': { zh: '运行时已就绪 ✓ — 拖入音色包即可用 GPT 音色', en: 'Runtime ready ✓ — drop a voice pack to enable the GPT voice' },
-  'step.voice.provision.failed': { zh: '安装失败——点按钮重试(会从断点继续)', en: 'Install failed — click to retry (resumes where it left off)' },
-  'step.voice.provision.paused': { zh: '安装已暂停——点按钮继续', en: 'Install paused — click to continue' },
+  'step.voice.provision.ready': {
+    zh: '运行时已就绪 ✓ — 拖入音色包即可用 GPT 音色',
+    en: 'Runtime ready ✓ — drop a voice pack to enable the GPT voice',
+  },
+  'step.voice.provision.failed': {
+    zh: '安装失败——点按钮重试(会从断点继续)',
+    en: 'Install failed — click to retry (resumes where it left off)',
+  },
+  'step.voice.provision.paused': {
+    zh: '安装已暂停——点按钮继续',
+    en: 'Install paused — click to continue',
+  },
 
   // v0.37.8: a stored secret is shown as "already set" — leaving it blank keeps it.
   'wizard.configured': { zh: '已配置 · 留空即保持不变', en: 'Already set · leave blank to keep' },
@@ -168,7 +215,7 @@ Object.assign(SETUP_COPY, {
   'guide.chat.link': { zh: 'Anthropic 控制台', en: 'Anthropic Console' },
   'guide.embedding': {
     zh: '记忆的"语义联想"用 OpenAI 兼容的 embedding 接口。在 OpenAI 平台创建 key(或用网关,改 base URL)。跳过也能用:她仍会记住,但回忆退化为关键词匹配。',
-    en: "Semantic memory recall uses an OpenAI-compatible embeddings endpoint. Create a key on the OpenAI platform (or point the base URL at a gateway). Skipping is fine: she still remembers, but recall degrades to keyword matching.",
+    en: 'Semantic memory recall uses an OpenAI-compatible embeddings endpoint. Create a key on the OpenAI platform (or point the base URL at a gateway). Skipping is fine: she still remembers, but recall degrades to keyword matching.',
   },
   'guide.embedding.link': { zh: 'OpenAI API keys', en: 'OpenAI API keys' },
   'guide.search': {
@@ -183,7 +230,7 @@ Object.assign(SETUP_COPY, {
   'guide.weather.link': { zh: '和风天气控制台', en: 'QWeather console' },
   'guide.avatar': {
     zh: '还没有立绘?视频里有一只免费的 Live2D 小狗模型(7Apoi 等作者发布,可直播使用、须署名、禁转卖)——照视频从网盘下载、解压,然后把整个文件夹拖进下面的虚线框。任何标准 Live2D 模型文件夹(含 .model3.json)都可以。',
-    en: 'No avatar yet? The linked video shares a free Live2D puppy model (by 7Apoi & co — streaming OK, credit required, no resale). Download from the video\'s netdisk link, unzip, then drag the whole folder into the dashed box below. Any standard Live2D folder (with a .model3.json) works.',
+    en: "No avatar yet? The linked video shares a free Live2D puppy model (by 7Apoi & co — streaming OK, credit required, no resale). Download from the video's netdisk link, unzip, then drag the whole folder into the dashed box below. Any standard Live2D folder (with a .model3.json) works.",
   },
   'guide.avatar.link.pack': { zh: '免费小狗模型(B站视频)', en: 'Free puppy model (bilibili)' },
   'guide.avatar.link.samples': { zh: 'Live2D 官方示例模型', en: 'Live2D official samples' },
@@ -191,6 +238,9 @@ Object.assign(SETUP_COPY, {
     zh: '自定义音色两步走,全程不用开终端:① 点「一键下载并部署 GPT-SoVITS」等它就绪(可断点续传;也可以高级自选已有的 GPT-SoVITS 目录)。② 从视频网盘下载音色权重包,解压后拖进虚线框——徽章变绿就能试听。之后想换音色,把新音色包直接拖到主界面上即可。',
     en: 'A custom voice takes two steps, no terminal anywhere: ① click "Download & deploy GPT-SoVITS" and wait for ready (resumable; advanced users can point at an existing GPT-SoVITS folder instead). ② drag the voice weights pack from the video\'s netdisk link into the dashed box — the badge turns green and you can test it. Later, drop a new pack anywhere on the running app to swap voices.',
   },
-  'guide.voice.link.pack': { zh: 'Neuro/Evil 音色包(B站视频)', en: 'Neuro/Evil voice pack (bilibili)' },
+  'guide.voice.link.pack': {
+    zh: 'Neuro/Evil 音色包(B站视频)',
+    en: 'Neuro/Evil voice pack (bilibili)',
+  },
   'guide.voice.link.runtime': { zh: 'GPT-SoVITS 官方仓库', en: 'GPT-SoVITS (official repo)' },
 } satisfies CopyTable);

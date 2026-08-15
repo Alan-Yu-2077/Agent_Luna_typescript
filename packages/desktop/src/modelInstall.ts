@@ -29,13 +29,16 @@ export function installModelFolder(
   opts: { modelsDir: string; envFile: string },
 ): ModelInstallResult {
   if (!existsSync(src) || !statSync(src).isDirectory()) {
-    return { ok: false, error: 'That is not a folder.' };
+    return { ok: false, error: '这不是一个文件夹。' };
   }
   const resolved = resolveModelDir(src);
-  if (!resolved) return { ok: false, error: 'No .model3.json found in that folder.' };
+  if (!resolved) return { ok: false, error: '这个文件夹里没有找到 .model3.json。' };
   const name = basename(resolved.dir);
   cpSync(resolved.dir, join(opts.modelsDir, name), { recursive: true });
   const modelUrl = `/models/${name}/${resolved.manifest}`;
-  writeFileSync(opts.envFile, mergeEnvFile(readFileSync(opts.envFile, 'utf8'), { LUNA_MODEL_URL: modelUrl }));
+  writeFileSync(
+    opts.envFile,
+    mergeEnvFile(readFileSync(opts.envFile, 'utf8'), { LUNA_MODEL_URL: modelUrl }),
+  );
   return { ok: true, modelUrl };
 }

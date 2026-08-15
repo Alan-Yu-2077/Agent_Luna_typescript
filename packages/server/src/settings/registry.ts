@@ -30,7 +30,7 @@ function validQuietHours(value: string): string | null {
   const parts = value.split(',').map((s) => s.trim());
   for (const p of parts) {
     if (!/^\d{1,2}$/.test(p) || Number(p) > 23) {
-      return 'quiet hours must be comma-separated hours 0-23 (e.g. "0,1,2,3,4,5")';
+      return '安静时段必须是用逗号分隔的 0–23 点（例如“0,1,2,3,4,5”）';
     }
   }
   return null;
@@ -40,17 +40,18 @@ function validActiveness(value: string): string | null {
   if (value.trim() === '') return null;
   return ['aloof', 'balanced', 'clingy'].includes(value.trim())
     ? null
-    : 'activeness must be one of: aloof, balanced, clingy';
+    : '主动程度只能是 aloof、balanced 或 clingy';
 }
 
 function validLatLon(value: string): string | null {
   if (value.trim() === '') return null;
   const m = value.split(',').map((s) => Number(s.trim()));
   if (m.length !== 2 || m.some((n) => !Number.isFinite(n))) {
-    return 'location must be "lat,lon" (e.g. "40.71,-74.01")';
+    return '位置必须是“纬度,经度”（例如“40.71,-74.01”）';
   }
   const [lat, lon] = m as [number, number];
-  if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return 'lat must be -90..90, lon -180..180';
+  if (lat < -90 || lat > 90 || lon < -180 || lon > 180)
+    return '纬度范围是 -90..90，经度范围是 -180..180';
   return null;
 }
 
@@ -59,18 +60,18 @@ export const SETTING_SPECS: readonly SettingSpec[] = [
   {
     key: 'proactive.enabled',
     env: 'LUNA_PROACTIVE',
-    label: 'Proactive messages',
-    hint: 'She may reach out on her own when you go quiet',
-    category: 'Companion',
+    label: '主动消息',
+    hint: '你安静下来时，她可能会主动来找你',
+    category: '陪伴',
     kind: 'boolean',
     defaultValue: '1',
   },
   {
     key: 'proactive.quiet_hours',
     env: 'LUNA_PROACTIVE_QUIET_HOURS',
-    label: 'Quiet hours',
-    hint: 'Local hours she stays silent, comma-separated',
-    category: 'Companion',
+    label: '安静时段',
+    hint: '她保持安静的本地时间，用逗号分隔小时',
+    category: '陪伴',
     kind: 'text',
     defaultValue: '0,1,2,3,4,5',
     validate: validQuietHours,
@@ -78,9 +79,9 @@ export const SETTING_SPECS: readonly SettingSpec[] = [
   {
     key: 'proactive.activeness',
     env: 'LUNA_PROACTIVE_ACTIVENESS',
-    label: 'Outreach intensity',
-    hint: 'How eagerly she opens first: aloof, balanced, or clingy (still capped by the safety rails)',
-    category: 'Companion',
+    label: '主动程度',
+    hint: '她主动开口的积极程度：aloof、balanced 或 clingy（仍受安全限制）',
+    category: '陪伴',
     kind: 'text',
     defaultValue: 'balanced',
     validate: validActiveness,
@@ -88,18 +89,18 @@ export const SETTING_SPECS: readonly SettingSpec[] = [
   {
     key: 'selfcont.enabled',
     env: 'LUNA_SELFCONT',
-    label: 'Follow-up thoughts',
-    hint: 'She may add a second thought shortly after replying',
-    category: 'Companion',
+    label: '追问式补充',
+    hint: '她回复后可能很快再补充一句',
+    category: '陪伴',
     kind: 'boolean',
     defaultValue: '1',
   },
   {
     key: 'selfcont.probability',
     env: 'LUNA_SELFCONT_PROBABILITY',
-    label: 'Follow-up chance',
-    hint: '0 = never, 1 = always',
-    category: 'Companion',
+    label: '补充概率',
+    hint: '0 = 从不，1 = 总是',
+    category: '陪伴',
     kind: 'number',
     defaultValue: '0.35',
     min: 0,
@@ -109,27 +110,27 @@ export const SETTING_SPECS: readonly SettingSpec[] = [
   {
     key: 'time.aware',
     env: 'LUNA_TIME_AWARE',
-    label: 'Time awareness',
-    hint: 'She knows the clock, the date, and how long you were away',
-    category: 'Perception',
+    label: '时间感知',
+    hint: '她知道现在几点、哪一天，以及你离开了多久',
+    category: '感知',
     kind: 'boolean',
     defaultValue: '1',
   },
   {
     key: 'weather.ambient',
     env: 'LUNA_WEATHER_AMBIENT',
-    label: 'Weather awareness',
-    hint: 'Real weather colors her mood and small talk',
-    category: 'Perception',
+    label: '天气感知',
+    hint: '真实天气会影响她的心情和闲聊',
+    category: '感知',
     kind: 'boolean',
     defaultValue: '1',
   },
   {
     key: 'weather.lat_lon',
     env: 'LUNA_LAT_LON',
-    label: 'Location (lat,lon)',
-    hint: 'Where she checks the weather, e.g. "40.71,-74.01"',
-    category: 'Perception',
+    label: '位置（纬度,经度）',
+    hint: '她查询天气的位置，例如“40.71,-74.01”',
+    category: '感知',
     kind: 'text',
     defaultValue: '',
     validate: validLatLon,
@@ -137,9 +138,9 @@ export const SETTING_SPECS: readonly SettingSpec[] = [
   {
     key: 'time.zone',
     env: 'LUNA_TZ',
-    label: 'Timezone',
-    hint: 'IANA zone like America/New_York; empty = system',
-    category: 'Perception',
+    label: '时区',
+    hint: 'IANA 时区，例如 America/New_York；留空则使用系统设置',
+    category: '感知',
     kind: 'text',
     defaultValue: '',
   },
@@ -147,9 +148,9 @@ export const SETTING_SPECS: readonly SettingSpec[] = [
   {
     key: 'web.search',
     env: 'LUNA_WEB_SEARCH',
-    label: 'Web search',
-    hint: 'She can search the web (needs a search API key)',
-    category: 'Abilities',
+    label: '联网搜索',
+    hint: '她可以搜索网页（需要搜索服务 API 密钥）',
+    category: '能力',
     kind: 'boolean',
     defaultValue: '1',
     restartRequired: true,
@@ -157,9 +158,9 @@ export const SETTING_SPECS: readonly SettingSpec[] = [
   {
     key: 'web.fetch',
     env: 'LUNA_WEB_FETCH',
-    label: 'Read web pages',
-    hint: 'She can open and read URLs',
-    category: 'Abilities',
+    label: '读取网页',
+    hint: '她可以打开并阅读 URL',
+    category: '能力',
     kind: 'boolean',
     defaultValue: '1',
     restartRequired: true,
@@ -167,9 +168,9 @@ export const SETTING_SPECS: readonly SettingSpec[] = [
   {
     key: 'skills.enabled',
     env: 'LUNA_SKILLS',
-    label: 'Skill library',
-    hint: 'She keeps + reuses saved procedures (save_skill / recall_skill + the skill shelf)',
-    category: 'Abilities',
+    label: '技能库',
+    hint: '她会保存并复用已学会的流程（save_skill / recall_skill 和技能页）',
+    category: '能力',
     kind: 'boolean',
     defaultValue: '1',
     restartRequired: true,
@@ -177,18 +178,18 @@ export const SETTING_SPECS: readonly SettingSpec[] = [
   {
     key: 'skills.dream_distill',
     env: 'LUNA_DREAM_SKILLS',
-    label: 'Dream skill distillation',
-    hint: 'Her dream turns the day’s significant moments into reusable skills (audited, undoable)',
-    category: 'Memory',
+    label: '梦境技能沉淀',
+    hint: '她会在梦里把当天的重要经历沉淀成可复用技能（有记录、可撤销）',
+    category: '记忆',
     kind: 'boolean',
     defaultValue: '1',
   },
   {
     key: 'weather.tool',
     env: 'LUNA_WEATHER',
-    label: 'Weather lookups',
-    hint: 'She can check the forecast on demand',
-    category: 'Abilities',
+    label: '查询天气',
+    hint: '她可以按需查询天气预报',
+    category: '能力',
     kind: 'boolean',
     defaultValue: '1',
     restartRequired: true,
@@ -196,9 +197,9 @@ export const SETTING_SPECS: readonly SettingSpec[] = [
   {
     key: 'code.write',
     env: 'LUNA_CODE_WRITE',
-    label: 'Code editing',
-    hint: 'She can edit files in her workspace',
-    category: 'Abilities',
+    label: '编辑代码',
+    hint: '她可以编辑工作区里的文件',
+    category: '能力',
     kind: 'boolean',
     defaultValue: '1',
     restartRequired: true,
@@ -206,9 +207,9 @@ export const SETTING_SPECS: readonly SettingSpec[] = [
   {
     key: 'shell.enabled',
     env: 'LUNA_SHELL',
-    label: 'Shell commands',
-    hint: 'She can run commands in her workspace',
-    category: 'Abilities',
+    label: '终端命令',
+    hint: '她可以在工作区里运行命令',
+    category: '能力',
     kind: 'boolean',
     defaultValue: '1',
     restartRequired: true,
@@ -217,18 +218,18 @@ export const SETTING_SPECS: readonly SettingSpec[] = [
   {
     key: 'memory.inject',
     env: 'LUNA_MEMORY_INJECT',
-    label: 'Memory in context',
-    hint: 'Core memory and recalled moments shape her replies',
-    category: 'Memory',
+    label: '将记忆注入上下文',
+    hint: '核心记忆和召回的经历会影响她的回复',
+    category: '记忆',
     kind: 'boolean',
     defaultValue: '1',
   },
   {
     key: 'dream.shutdown',
     env: 'LUNA_SHUTDOWN_DREAM',
-    label: 'Dream on quit',
-    hint: 'She consolidates memories before shutting down (at most once every few hours, not every close)',
-    category: 'Memory',
+    label: '退出时进入梦境',
+    hint: '退出前整理记忆（每几小时最多一次，不是每次关闭都触发）',
+    category: '记忆',
     kind: 'boolean',
     defaultValue: '1',
   },
@@ -236,9 +237,9 @@ export const SETTING_SPECS: readonly SettingSpec[] = [
   {
     key: 'model.id',
     env: 'LUNA_MODEL',
-    label: 'Model',
-    hint: 'The LLM she thinks with; empty = built-in default',
-    category: 'Model',
+    label: '模型',
+    hint: '她用来思考的大语言模型；留空则使用内置默认值',
+    category: '模型',
     kind: 'text',
     defaultValue: '',
     restartRequired: true,
@@ -252,13 +253,13 @@ export function specFor(key: string): SettingSpec | undefined {
 // Returns an error message, or null when the value is acceptable for the spec.
 export function validateValue(spec: SettingSpec, value: string): string | null {
   if (spec.kind === 'boolean') {
-    return value === '0' || value === '1' ? null : `${spec.label} must be '1' or '0'`;
+    return value === '0' || value === '1' ? null : `${spec.label} 必须是“1”或“0”`;
   }
   if (spec.kind === 'number') {
     const n = Number(value);
-    if (value.trim() === '' || !Number.isFinite(n)) return `${spec.label} must be a number`;
-    if (spec.min !== undefined && n < spec.min) return `${spec.label} must be ≥ ${spec.min}`;
-    if (spec.max !== undefined && n > spec.max) return `${spec.label} must be ≤ ${spec.max}`;
+    if (value.trim() === '' || !Number.isFinite(n)) return `${spec.label} 必须是数字`;
+    if (spec.min !== undefined && n < spec.min) return `${spec.label} 必须大于等于 ${spec.min}`;
+    if (spec.max !== undefined && n > spec.max) return `${spec.label} 必须小于等于 ${spec.max}`;
     return null;
   }
   return spec.validate ? spec.validate(value) : null;

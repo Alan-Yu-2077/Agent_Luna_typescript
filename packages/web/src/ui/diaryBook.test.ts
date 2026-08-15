@@ -12,7 +12,12 @@ import {
   translateStep,
 } from './diaryBook';
 
-const diary = (period_key: string): DiaryEntry => ({ kind: 'day', period_key, text: 't', generated_ms: 1 });
+const diary = (period_key: string): DiaryEntry => ({
+  kind: 'day',
+  period_key,
+  text: 't',
+  generated_ms: 1,
+});
 const dream = (started_ms: number, over: Partial<DreamRecord> = {}): DreamRecord => ({
   cycle_id: `c${started_ms}`,
   started_ms,
@@ -94,36 +99,63 @@ describe('nextLitDay — arrows travel lit days only', () => {
 // counts extracted, actions stated, no feelings ascribed, unknown steps degrade to themselves.
 describe('the dream translation layer (M10)', () => {
   test('the real pipeline steps read as what she did that night', () => {
-    expect(translateStep({ step: 'rate_salience', status: 'ok', detail: 'rated 9 turns', ms: 1 })).toBe('回看了 9 个瞬间。');
-    expect(translateStep({ step: 'refine_semantic', status: 'ok', detail: 'removed 2, added 2', ms: 1 })).toBe('放下了 2 件事，记住了 2 件。');
-    expect(translateStep({ step: 'memory_audit', status: 'ok', detail: 'removed 0, added 3', ms: 1 })).toBe('整理了记忆的抽屉（−0 / +3）。');
-    expect(translateStep({ step: 'persona_update', status: 'ok', detail: 'self+bond', ms: 1 })).toBe('对自己的认识动了动（self+bond）。');
-    expect(translateStep({ step: 'run_diaries', status: 'ok', detail: '2 diaries written', ms: 1 })).toBe('写下了 2 篇日记。');
-    expect(translateStep({ step: 'distill_skills', status: 'ok', detail: 'new:live2d-gesture-control', ms: 1 })).toBe(
-      '学会了一件新事：live2d-gesture-control。',
-    );
+    expect(
+      translateStep({ step: 'rate_salience', status: 'ok', detail: 'rated 9 turns', ms: 1 }),
+    ).toBe('回看了 9 个瞬间。');
+    expect(
+      translateStep({ step: 'refine_semantic', status: 'ok', detail: 'removed 2, added 2', ms: 1 }),
+    ).toBe('放下了 2 件事，记住了 2 件。');
+    expect(
+      translateStep({ step: 'memory_audit', status: 'ok', detail: 'removed 0, added 3', ms: 1 }),
+    ).toBe('整理了记忆的抽屉（−0 / +3）。');
+    expect(
+      translateStep({ step: 'persona_update', status: 'ok', detail: 'self+bond', ms: 1 }),
+    ).toBe('对自己的认识动了动（self+bond）。');
+    expect(
+      translateStep({ step: 'run_diaries', status: 'ok', detail: '2 diaries written', ms: 1 }),
+    ).toBe('写下了 2 篇日记。');
+    expect(
+      translateStep({
+        step: 'distill_skills',
+        status: 'ok',
+        detail: 'new:live2d-gesture-control',
+        ms: 1,
+      }),
+    ).toBe('学会了一件新事：live2d-gesture-control。');
   });
 
   test('a skipped fold reads as the plan wrote it', () => {
-    expect(translateStep({ step: 'refine_layer1', status: 'skipped', detail: 'nothing to fold', ms: 1 })).toBe(
-      '略过——没什么要折叠的。',
-    );
+    expect(
+      translateStep({ step: 'refine_layer1', status: 'skipped', detail: 'nothing to fold', ms: 1 }),
+    ).toBe('略过——没什么要折叠的。');
   });
 
   test('an unknown step renders raw — a future dream stage must not crash the book', () => {
-    expect(translateStep({ step: 'new_stage', status: 'ok', detail: 'did a thing', ms: 1 })).toBe('new_stage: did a thing');
+    expect(translateStep({ step: 'new_stage', status: 'ok', detail: 'did a thing', ms: 1 })).toBe(
+      'new_stage: did a thing',
+    );
   });
 
   test('the timings never surface — the pipeline cost is not part of her night', () => {
-    const line = translateStep({ step: 'rate_salience', status: 'ok', detail: 'rated 9 turns', ms: 99999 });
+    const line = translateStep({
+      step: 'rate_salience',
+      status: 'ok',
+      detail: 'rated 9 turns',
+      ms: 99999,
+    });
     expect(line).not.toContain('99999');
   });
 
   test('aborted and empty dreams both read as a broken dream', () => {
-    expect(dreamNarrative(dream(1, { aborted: true }))).toEqual({ broken: true, lines: [DREAM_BROKE] });
+    expect(dreamNarrative(dream(1, { aborted: true }))).toEqual({
+      broken: true,
+      lines: [DREAM_BROKE],
+    });
     expect(dreamNarrative(dream(1, { steps: [] }))).toEqual({ broken: true, lines: [DREAM_BROKE] });
     const full = dreamNarrative(
-      dream(1, { steps: [{ step: 'rate_salience', status: 'ok', detail: 'rated 3 turns', ms: 1 }] }),
+      dream(1, {
+        steps: [{ step: 'rate_salience', status: 'ok', detail: 'rated 3 turns', ms: 1 }],
+      }),
     );
     expect(full.broken).toBe(false);
     expect(full.lines).toEqual(['回看了 3 个瞬间。']);
@@ -153,7 +185,7 @@ describe('the page-turn queue — one turn at a time, latest click wins', () => 
 
 describe('pageHeading', () => {
   test('reads like a diary date', () => {
-    expect(pageHeading('2026-07-31')).toBe('JULY 31, 2026');
-    expect(pageHeading('2026-01-05')).toBe('JANUARY 5, 2026');
+    expect(pageHeading('2026-07-31')).toBe('2026年7月31日');
+    expect(pageHeading('2026-01-05')).toBe('2026年1月5日');
   });
 });

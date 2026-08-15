@@ -57,26 +57,26 @@ export type WorkbenchSection = {
 export type ModelAsset = { pid: string; label: string; group: 'emotion' | 'costume' };
 
 export const MODEL_ASSETS: readonly ModelAsset[] = [
-  { pid: 'Paramheart', label: '爱心眼 heart eyes', group: 'emotion' },
-  { pid: 'Paramxingxing', label: '星星眼 star eyes', group: 'emotion' },
-  { pid: 'Paramleiwangwang', label: '泪汪汪 welling', group: 'emotion' },
-  { pid: 'Paramtear', label: '眼泪 tears', group: 'emotion' },
-  { pid: 'Paramheilian', label: '黑脸 black face', group: 'emotion' },
-  { pid: 'Paramwenxiang', label: '蚊香眼 swirl eyes', group: 'emotion' },
-  { pid: 'ParamMouthShrug', label: '猫猫嘴 cat mouth', group: 'emotion' },
-  { pid: 'ParamMouthX', label: '歪嘴 crooked mouth', group: 'emotion' },
-  { pid: 'Paramshita', label: '舌头伸出 tongue', group: 'emotion' },
-  { pid: 'Paramyanzhao', label: '眼罩 eyepatch', group: 'costume' },
-  { pid: 'Paramhuatong', label: '拿话筒 microphone', group: 'costume' },
-  { pid: 'Paramxiaogou', label: '漂浮小狗 floating dog', group: 'costume' },
-  { pid: 'Paramlonghair', label: '短发1 short hair 1', group: 'costume' },
-  { pid: 'Paramlonghair2', label: '短发2 short hair 2', group: 'costume' },
-  { pid: 'ParamarmupL', label: '抬手左 arm up L', group: 'costume' },
-  { pid: 'ParamarmupR', label: '抬手右 arm up R', group: 'costume' },
-  { pid: 'Paramdown1', label: '俯身按键 bow press', group: 'costume' },
+  { pid: 'Paramheart', label: '爱心眼', group: 'emotion' },
+  { pid: 'Paramxingxing', label: '星星眼', group: 'emotion' },
+  { pid: 'Paramleiwangwang', label: '泪汪汪', group: 'emotion' },
+  { pid: 'Paramtear', label: '眼泪', group: 'emotion' },
+  { pid: 'Paramheilian', label: '黑脸', group: 'emotion' },
+  { pid: 'Paramwenxiang', label: '蚊香眼', group: 'emotion' },
+  { pid: 'ParamMouthShrug', label: '猫猫嘴', group: 'emotion' },
+  { pid: 'ParamMouthX', label: '歪嘴', group: 'emotion' },
+  { pid: 'Paramshita', label: '伸舌头', group: 'emotion' },
+  { pid: 'Paramyanzhao', label: '眼罩', group: 'costume' },
+  { pid: 'Paramhuatong', label: '拿话筒', group: 'costume' },
+  { pid: 'Paramxiaogou', label: '漂浮小狗', group: 'costume' },
+  { pid: 'Paramlonghair', label: '短发 1', group: 'costume' },
+  { pid: 'Paramlonghair2', label: '短发 2', group: 'costume' },
+  { pid: 'ParamarmupL', label: '左手抬起', group: 'costume' },
+  { pid: 'ParamarmupR', label: '右手抬起', group: 'costume' },
+  { pid: 'Paramdown1', label: '俯身按键', group: 'costume' },
 ];
 
-export const COSTUME_NOTE = 'The emotion system never touches these on its own — this is your hand.';
+export const COSTUME_NOTE = '情绪系统不会自动碰这些装扮 — 由你亲手决定。';
 
 // v0.43.10: which of the try-on assets are PERSISTENT costume (the settings card owns them) versus
 // session-only experiments. Returns undefined for the latter.
@@ -84,45 +84,101 @@ export function costumeIdForParam(pid: string): string | undefined {
   return Object.entries(COSTUME).find(([, def]) => def.pid === pid)?.[0];
 }
 
-export const WORKBENCH_STATES: readonly Live2DState[] = ['neutral', 'thinking', 'speaking', 'sleeping'];
+export const WORKBENCH_STATES: readonly Live2DState[] = [
+  'neutral',
+  'thinking',
+  'speaking',
+  'sleeping',
+];
 
 // The intensity slider's tick mark. Imported, never re-typed: a mark at 0.7 next to a branch at 0.75
 // would be a bench that teaches the wrong number.
 export const INTENSITY_MARK = HIGH_INTENSITY;
 
+const CONTROL_LABELS: Record<string, string> = {
+  focused: '专注',
+  fakeFierce: '假装凶',
+  adorable: '可爱',
+  playful: '调皮',
+  shy: '害羞',
+  embarrassed: '不好意思',
+  awkwardV2: '尴尬',
+  annoyed: '不耐烦',
+  poutyAnnoyed: '气鼓鼓',
+  curious: '好奇',
+  tender: '温柔',
+  skeptical: '怀疑',
+  smug: '得意',
+  disappointed: '失望',
+  curious_attention: '好奇注视',
+  gentle_concern: '轻柔担心',
+  open_reengagement: '重新接纳',
+  playful_brightness: '调皮明亮',
+  focused_engagement: '专注投入',
+  steady_presence: '稳定陪伴',
+  soft_warmth: '柔和温暖',
+  listening_attention: '专注倾听',
+  alert_surprise: '警觉惊讶',
+  bright_delight: '明亮喜悦',
+  amused_smirk: '趣味坏笑',
+  shy_softness: '害羞柔软',
+  awkward_lightness: '轻微尴尬',
+  guarded_distance: '保持距离',
+  annoyed_resistance: '不耐烦抵抗',
+  headLiftAlert: '警觉抬头',
+  bodyLeanInSoft: '温柔靠近',
+  slowBlinkAffection: '慢慢眨眼',
+  bodySwayTenderSlow: '温柔轻晃',
+  bodyLeanBackGuarded: '戒备后仰',
+  lookAwayThenBack: '移开视线再看回',
+  bodyPresentRight: '身体右倾',
+  sighRelease: '叹气放松',
+  headLowerShy: '害羞低头',
+  gazeUpRecall: '抬眼回忆',
+  browKnit: '皱眉',
+  neutral: '自然',
+  thinking: '思考',
+  speaking: '说话',
+  sleeping: '睡眠',
+};
+
 const titleCase = (id: string): string =>
-  id.replace(/[_-]/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, (c) => c.toUpperCase());
+  CONTROL_LABELS[id] ??
+  id
+    .replace(/[_-]/g, ' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/^./, (c) => c.toUpperCase());
 
 export function workbenchSections(): WorkbenchSection[] {
   return [
     {
       id: 'affect',
-      title: 'Affect',
-      hint: `the 15 wire keys — the slider picks which variant, at the ${INTENSITY_MARK} branch`,
+      title: '情绪',
+      hint: `15 个情绪参数 — 滑块选择变体，达到 ${INTENSITY_MARK} 分支时会升级`,
       controls: ExpressionKey.options.map((id) => ({ kind: 'affect', id, label: titleCase(id) })),
     },
     {
       id: 'clip',
-      title: 'Clip',
-      hint: 'every authored performance, played directly — always at full amplitude',
+      title: '动作片段',
+      hint: '每个编排好的表演都会直接播放 — 始终使用完整幅度',
       controls: Object.keys(EMOTIONS).map((id) => ({ kind: 'clip', id, label: titleCase(id) })),
     },
     {
       id: 'state',
-      title: 'State',
-      hint: 'the coarse posture the turn loop drives',
+      title: '状态',
+      hint: '对话循环驱动的整体姿态',
       controls: WORKBENCH_STATES.map((id) => ({ kind: 'state', id, label: titleCase(id) })),
     },
     {
       id: 'idle',
-      title: 'Idle',
-      hint: 'the resting animation underneath everything',
+      title: '待机',
+      hint: '所有表演底下持续运行的休息动画',
       controls: IDLE_PROFILES.map((p) => ({ kind: 'idle', id: p.id, label: p.label })),
     },
     {
       id: 'action',
-      title: 'Action',
-      hint: 'the nine authored gestures, fired one at a time',
+      title: '动作',
+      hint: '九个编排好的小动作，一次播放一个',
       controls: Object.keys(ACTIONS).map((id) => ({ kind: 'action', id, label: titleCase(id) })),
     },
   ];
@@ -173,7 +229,13 @@ export function parseIntensity(raw: string): number {
 // The pipeline behind "let me look at it before it goes in the code": 35 channels on sliders, she
 // holds the pose live, and what comes out is an `EmotionDef` that pastes straight into `faceData.ts`.
 
-export type ComposeChannel = { key: FaceStateKey; group: string; min: number; max: number; step: number };
+export type ComposeChannel = {
+  key: FaceStateKey;
+  group: string;
+  min: number;
+  max: number;
+  step: number;
+};
 
 // Slider bounds derived from `clampStateValue`, not re-typed — a slider that can travel somewhere the
 // engine clamps away is a slider that lies about what she can do.
@@ -319,7 +381,10 @@ export type WorkbenchDeps = {
 // The DOM half. Left: the live model stage the caller fills with the real sink. Right: the drawer,
 // one `<section>` per group so v0.43.8's asset rows and v0.43.9's composer append instead of
 // rearranging.
-export function mountWorkbench(root: HTMLElement, deps: WorkbenchDeps): { stage: HTMLElement; dispose: () => void } {
+export function mountWorkbench(
+  root: HTMLElement,
+  deps: WorkbenchDeps,
+): { stage: HTMLElement; dispose: () => void } {
   const doc = root.ownerDocument;
   root.classList.add('workbench');
   root.replaceChildren();
@@ -332,7 +397,7 @@ export function mountWorkbench(root: HTMLElement, deps: WorkbenchDeps): { stage:
   ph.className = 'model-placeholder';
   const phParts: ReadonlyArray<readonly [string, string]> = [
     ['ph-circle', '🌙'],
-    ['label', 'No avatar installed'],
+    ['label', '还没有安装模型'],
     ['sub', ''],
   ];
   for (const [cls, text] of phParts) {
@@ -353,12 +418,12 @@ export function mountWorkbench(root: HTMLElement, deps: WorkbenchDeps): { stage:
   const back = doc.createElement('button');
   back.type = 'button';
   back.className = 'wb-back';
-  back.textContent = '← Back';
+  back.textContent = '← 返回';
   back.addEventListener('click', () => deps.onBack?.());
   head.appendChild(back);
   const title = doc.createElement('span');
   title.className = 'wb-title';
-  title.textContent = 'Live2D workbench';
+  title.textContent = 'Live2D 工作台';
   head.appendChild(title);
   drawer.appendChild(head);
 
@@ -376,7 +441,7 @@ export function mountWorkbench(root: HTMLElement, deps: WorkbenchDeps): { stage:
   const paintIntensity = (): void => {
     // v0.43.15: it selects a variant, it does not scale one. Saying "intensity" alone would keep
     // teaching the volume-knob reading the engine just stopped honouring.
-    intensityLabel.textContent = `Affect intensity ${intensity.toFixed(2)} · ${intensity >= INTENSITY_MARK ? 'escalated variant' : 'mild variant'}`;
+    intensityLabel.textContent = `情绪强度 ${intensity.toFixed(2)} · ${intensity >= INTENSITY_MARK ? '升级变体' : '温和变体'}`;
     intensityRow.classList.toggle('high', intensity >= INTENSITY_MARK);
   };
   slider.addEventListener('input', () => {
@@ -388,7 +453,7 @@ export function mountWorkbench(root: HTMLElement, deps: WorkbenchDeps): { stage:
   const mark = doc.createElement('span');
   mark.className = 'wb-mark';
   mark.style.left = `${INTENSITY_MARK * 100}%`;
-  mark.title = `${INTENSITY_MARK} — above this, four affects escalate`;
+  mark.title = `${INTENSITY_MARK} — 超过此值后，四种情绪会升级`;
   intensityRow.appendChild(mark);
   drawer.appendChild(intensityRow);
 
@@ -429,11 +494,13 @@ export function mountWorkbench(root: HTMLElement, deps: WorkbenchDeps): { stage:
     sec.className = 'wb-section';
     sec.dataset['section'] = `asset-${group}`;
     const h = doc.createElement('h3');
-    h.textContent = group === 'emotion' ? 'Assets · emotional' : 'Assets · costume & props';
+    h.textContent = group === 'emotion' ? '素材 · 情绪' : '素材 · 装扮与道具';
     const hint = doc.createElement('p');
     hint.className = 'wb-hint';
     hint.textContent =
-      group === 'emotion' ? 'lit = the playing clip is driving it right now' : COSTUME_NOTE;
+      group === 'emotion'
+        ? '点亮 = 当前动作片段正在驱动它'
+        : '由你决定 — 她的表情不会自动穿戴或摘下这些装扮';
     sec.append(h, hint);
     for (const asset of MODEL_ASSETS.filter((a) => a.group === group)) {
       const row = doc.createElement('label');
@@ -473,10 +540,10 @@ export function mountWorkbench(root: HTMLElement, deps: WorkbenchDeps): { stage:
   flags.className = 'wb-section';
   flags.dataset['section'] = 'flags';
   const fh = doc.createElement('h3');
-  fh.textContent = 'Flags';
+  fh.textContent = '开关';
   const fhint = doc.createElement('p');
   fhint.className = 'wb-hint';
-  fhint.textContent = 'the same localStorage keys the settings card writes — read every tick';
+  fhint.textContent = '与设置页写入同一组 localStorage 开关 — 每帧读取';
   flags.append(fh, fhint);
   for (const f of PERF_FLAGS) {
     const row = doc.createElement('label');
@@ -503,10 +570,10 @@ export function mountWorkbench(root: HTMLElement, deps: WorkbenchDeps): { stage:
   composeSec.className = 'wb-section wb-compose';
   composeSec.dataset['section'] = 'compose';
   const ch = doc.createElement('h3');
-  ch.textContent = 'Compose';
+  ch.textContent = '编排姿态';
   const chint = doc.createElement('p');
   chint.className = 'wb-hint';
-  chint.textContent = 'freezes every living layer so one pose can be edited channel by channel';
+  chint.textContent = '冻结所有动态层，让你逐个通道编辑一个姿态';
   composeSec.append(ch, chint);
 
   const pose: Pose = {};
@@ -530,14 +597,14 @@ export function mountWorkbench(root: HTMLElement, deps: WorkbenchDeps): { stage:
   const composeToggle = doc.createElement('button');
   composeToggle.type = 'button';
   composeToggle.className = 'wb-btn wb-compose-toggle';
-  composeToggle.textContent = 'Enter compose';
+  composeToggle.textContent = '进入编排';
   const badge = doc.createElement('span');
   badge.className = 'wb-badge';
-  badge.textContent = 'COMPOSING';
+  badge.textContent = '编排中';
   badge.hidden = true;
   composeToggle.addEventListener('click', () => {
     composing = !composing;
-    composeToggle.textContent = composing ? 'Exit compose' : 'Enter compose';
+    composeToggle.textContent = composing ? '退出编排' : '进入编排';
     composeToggle.classList.toggle('on', composing);
     badge.hidden = !composing;
     deps.compose?.()?.setComposeMode(composing ? pose : null);
@@ -545,7 +612,7 @@ export function mountWorkbench(root: HTMLElement, deps: WorkbenchDeps): { stage:
   const loadSel = doc.createElement('select');
   const blank = doc.createElement('option');
   blank.value = '';
-  blank.textContent = 'Load a clip…';
+  blank.textContent = '加载一个动作片段…';
   loadSel.appendChild(blank);
   for (const id of Object.keys(EMOTIONS)) {
     const o = doc.createElement('option');
@@ -565,7 +632,7 @@ export function mountWorkbench(root: HTMLElement, deps: WorkbenchDeps): { stage:
   const exportBtn = doc.createElement('button');
   exportBtn.type = 'button';
   exportBtn.className = 'wb-btn';
-  exportBtn.textContent = 'Copy EmotionDef';
+  exportBtn.textContent = '复制情绪定义';
   const exportOut = doc.createElement('textarea');
   exportOut.className = 'wb-export';
   exportOut.readOnly = true;
@@ -581,7 +648,7 @@ export function mountWorkbench(root: HTMLElement, deps: WorkbenchDeps): { stage:
   const playBtn = doc.createElement('button');
   playBtn.type = 'button';
   playBtn.className = 'wb-btn';
-  playBtn.textContent = 'A/B play';
+  playBtn.textContent = 'A/B 播放';
   // Static beauty is not the same as a pose that reads in motion, so the composed face can be run
   // through a real intro→perform→outro before it is trusted.
   playBtn.addEventListener('click', () => {
@@ -589,7 +656,7 @@ export function mountWorkbench(root: HTMLElement, deps: WorkbenchDeps): { stage:
     if (!c) return;
     c.setComposeMode(null);
     composing = false;
-    composeToggle.textContent = 'Enter compose';
+    composeToggle.textContent = '进入编排';
     composeToggle.classList.remove('on');
     badge.hidden = true;
     deps.onPreviewPose?.(composeEmotionDef(pose, timelineFor(composeEmotionDef(pose), true)));
@@ -602,7 +669,17 @@ export function mountWorkbench(root: HTMLElement, deps: WorkbenchDeps): { stage:
     details.className = 'wb-group';
     if (COMPOSE_OPEN_GROUPS.includes(group)) details.open = true;
     const summary = doc.createElement('summary');
-    summary.textContent = group;
+    summary.textContent =
+      (
+        {
+          brows: '眉毛',
+          mouth: '嘴巴',
+          eyes: '眼睛',
+          pose: '姿态',
+          gaze: '视线',
+          pupil: '瞳孔',
+        } as Record<string, string>
+      )[group] ?? group;
     details.appendChild(summary);
     for (const chan of composeChannels().filter((c) => keys.includes(c.key))) {
       const row = doc.createElement('label');
@@ -613,7 +690,7 @@ export function mountWorkbench(root: HTMLElement, deps: WorkbenchDeps): { stage:
       // v0.43.0's invariant in the UI: these two are borrowed for as long as compose is on.
       name.textContent =
         chan.key === 'eyeOpenL' || chan.key === 'eyeOpenR' ? `${chan.key} ⟲` : chan.key;
-      if (chan.key.startsWith('eyeOpen')) name.title = 'released back to the blink when you exit compose';
+      if (chan.key.startsWith('eyeOpen')) name.title = '退出编排后交还给眨眼控制';
       const input = doc.createElement('input');
       input.type = 'range';
       input.min = String(chan.min);
@@ -641,7 +718,7 @@ export function mountWorkbench(root: HTMLElement, deps: WorkbenchDeps): { stage:
   readoutEl.className = 'wb-section wb-readout';
   readoutEl.dataset['section'] = 'readout';
   const rh = doc.createElement('h3');
-  rh.textContent = 'Live';
+  rh.textContent = '实时状态';
   const moodEl = doc.createElement('p');
   const clipEl = doc.createElement('p');
   const actEl = doc.createElement('p');
@@ -653,10 +730,10 @@ export function mountWorkbench(root: HTMLElement, deps: WorkbenchDeps): { stage:
   const paint = (): void => {
     const bridge = deps.bridge?.();
     const r = readout(bridge);
-    moodEl.textContent = `mood — ${r.mood}`;
-    clipEl.textContent = `clip — ${r.playback}`;
-    actEl.textContent = `actions — ${r.actions}`;
-    accentEl.textContent = `accent — ${r.accent ? '● stress' : '○'}`;
+    moodEl.textContent = `情绪 — ${r.mood}`;
+    clipEl.textContent = `片段 — ${r.playback}`;
+    actEl.textContent = `动作 — ${r.actions}`;
+    accentEl.textContent = `重音 — ${r.accent ? '● 检测到重音' : '○'}`;
     accentEl.classList.toggle('on', r.accent);
     const driven = bridge?.faceVm?.activeOverlayParams?.() ?? {};
     for (const [pid, box] of assetToggles) {

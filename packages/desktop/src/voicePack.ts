@@ -10,7 +10,12 @@ import { basename, join } from 'node:path';
 import { mergeEnvFile } from './onboarding';
 import { parseEnvFile } from './envfile';
 
-export type VoiceScan = { gpt: string[]; sovits: string[]; refWavs: string[]; transcripts: string[] };
+export type VoiceScan = {
+  gpt: string[];
+  sovits: string[];
+  refWavs: string[];
+  transcripts: string[];
+};
 
 // Runtime-bundle directories weights never live in. GPT_SoVITS holds the PRETRAINED s1/s2 models —
 // skipping it is what keeps a 整合包 scan from offering the base models as "your voice".
@@ -34,7 +39,8 @@ export function scanVoicePack(root: string, maxDepth = 6): VoiceScan {
     for (const e of readdirSync(dir, { withFileTypes: true })) {
       const p = join(dir, e.name);
       if (e.isDirectory()) {
-        if (SKIP_DIRS.has(e.name) || e.name.startsWith('python') || e.name.startsWith('.')) continue;
+        if (SKIP_DIRS.has(e.name) || e.name.startsWith('python') || e.name.startsWith('.'))
+          continue;
         walk(p, depth + 1);
       } else if (e.isFile()) {
         const lower = e.name.toLowerCase();
@@ -50,9 +56,12 @@ export function scanVoicePack(root: string, maxDepth = 6): VoiceScan {
 }
 
 export function validateVoicePack(scan: VoiceScan): { ok: boolean; error?: string } {
-  if (scan.gpt.length === 0) return { ok: false, error: 'No GPT weight (.ckpt) found in the folder.' };
-  if (scan.sovits.length === 0) return { ok: false, error: 'No SoVITS weight (.pth) found in the folder.' };
-  if (scan.refWavs.length === 0) return { ok: false, error: 'No reference audio (.wav) found in the folder.' };
+  if (scan.gpt.length === 0)
+    return { ok: false, error: '这个文件夹里没有找到 GPT 权重（.ckpt）。' };
+  if (scan.sovits.length === 0)
+    return { ok: false, error: '这个文件夹里没有找到 SoVITS 权重（.pth）。' };
+  if (scan.refWavs.length === 0)
+    return { ok: false, error: '这个文件夹里没有找到参考音频（.wav）。' };
   return { ok: true };
 }
 
@@ -78,10 +87,16 @@ export type VoiceInstall = {
 export function installVoicePack(
   root: string,
   picks: VoicePicks,
-  opts: { ttsDir: string; envFile: string; promptText?: string; promptLang?: string; textLang?: string },
+  opts: {
+    ttsDir: string;
+    envFile: string;
+    promptText?: string;
+    promptLang?: string;
+    textLang?: string;
+  },
 ): VoiceInstall {
   for (const p of [picks.gptCkpt, picks.sovitsPth, picks.referenceWav]) {
-    if (!p || !existsSync(p)) return { ok: false, error: 'A picked file no longer exists — re-scan the folder.' };
+    if (!p || !existsSync(p)) return { ok: false, error: '所选文件已经不存在——请重新扫描文件夹。' };
   }
   const packDir = join(opts.ttsDir, basename(root));
   const gptDir = join(packDir, 'GPT');
@@ -107,7 +122,8 @@ export function installVoicePack(
     LUNA_TTS_PROMPT_LANG: opts.promptLang?.trim() || 'en',
     LUNA_TTS_TEXT_LANG: opts.textLang?.trim() || 'auto',
   };
-  if ((parseEnvFile(existing)['LUNA_TTS_URL'] ?? '') === '') fields['LUNA_TTS_URL'] = 'http://127.0.0.1:9880';
+  if ((parseEnvFile(existing)['LUNA_TTS_URL'] ?? '') === '')
+    fields['LUNA_TTS_URL'] = 'http://127.0.0.1:9880';
   if (promptText !== '') fields['LUNA_TTS_PROMPT_TEXT'] = promptText;
   writeFileSync(opts.envFile, mergeEnvFile(existing, fields));
   return { ok: true, packDir, gptCkpt, sovitsPth, refAudio, promptText };
@@ -118,19 +134,37 @@ export type RuntimeCheck = { ok: boolean; venvPython?: string; error?: string };
 // A GPT-SoVITS checkout per the reference instance: api_v2.py at the root, the two pretrained
 // model dirs under GPT_SoVITS/pretrained_models, optionally a .venv. v0.38.0: the venv layout is
 // `.venv\Scripts\python.exe` on win32, `.venv/bin/python` elsewhere.
-export function validateRuntimeDir(dir: string, platform: NodeJS.Platform = process.platform): RuntimeCheck {
+export function validateRuntimeDir(
+  dir: string,
+  platform: NodeJS.Platform = process.platform,
+): RuntimeCheck {
   if (!existsSync(join(dir, 'api_v2.py')))
-    return { ok: false, error: 'api_v2.py not found — point at a GPT-SoVITS checkout (github.com/RVC-Boss/GPT-SoVITS).' };
+    return {
+      ok: false,
+      error: '没有找到 api_v2.py——请选择 GPT-SoVITS 项目目录（github.com/RVC-Boss/GPT-SoVITS）。',
+    };
   const pre = join(dir, 'GPT_SoVITS', 'pretrained_models');
-  if (!existsSync(join(pre, 'chinese-roberta-wwm-ext-large')) || !existsSync(join(pre, 'chinese-hubert-base')))
-    return { ok: false, error: 'Pretrained models missing under GPT_SoVITS/pretrained_models — finish the GPT-SoVITS setup first.' };
+  if (
+    !existsSync(join(pre, 'chinese-roberta-wwm-ext-large')) ||
+    !existsSync(join(pre, 'chinese-hubert-base'))
+  )
+    return {
+      ok: false,
+      error: 'GPT_SoVITS/pretrained_models 下缺少预训练模型——请先完成 GPT-SoVITS 配置。',
+    };
   const venv =
-    platform === 'win32' ? join(dir, '.venv', 'Scripts', 'python.exe') : join(dir, '.venv', 'bin', 'python');
+    platform === 'win32'
+      ? join(dir, '.venv', 'Scripts', 'python.exe')
+      : join(dir, '.venv', 'bin', 'python');
   return existsSync(venv) ? { ok: true, venvPython: venv } : { ok: true };
 }
 
 // The reference instance's tts_infer.runtime.yaml `custom:` section, field for field.
-export function generateTtsYaml(o: { checkout: string; gptCkpt: string; sovitsPth: string }): string {
+export function generateTtsYaml(o: {
+  checkout: string;
+  gptCkpt: string;
+  sovitsPth: string;
+}): string {
   return [
     'custom:',
     `  bert_base_path: ${join(o.checkout, 'GPT_SoVITS', 'pretrained_models', 'chinese-roberta-wwm-ext-large')}`,

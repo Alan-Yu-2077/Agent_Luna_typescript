@@ -27,46 +27,46 @@ export type ModuleCard = {
 export const MODULE_CARDS: readonly ModuleCard[] = [
   {
     id: 'chat',
-    title: 'Chat LLM',
+    title: '聊天模型',
     blurb: '她说话用的脑子',
     probe: 'chat',
     fields: [
-      { key: 'ANTHROPIC_BASE_URL', label: 'Base URL', placeholder: 'https://…' },
-      { key: 'ANTHROPIC_API_KEY', label: 'API key', secret: true, placeholder: 'sk-…' },
-      { key: 'LUNA_MODEL', label: 'Model' },
-      { key: 'LUNA_MAX_TOKENS', label: 'Max tokens' },
+      { key: 'ANTHROPIC_BASE_URL', label: '接口地址', placeholder: 'https://…' },
+      { key: 'ANTHROPIC_API_KEY', label: 'API 密钥', secret: true, placeholder: 'sk-…' },
+      { key: 'LUNA_MODEL', label: '模型' },
+      { key: 'LUNA_MAX_TOKENS', label: '最大令牌数' },
     ],
   },
   {
     id: 'embedding',
-    title: 'Embedding',
+    title: '记忆向量',
     blurb: '她回忆的检索向量',
     probe: 'embedding',
     fields: [
-      { key: 'LUNA_EMBEDDING_BASE_URL', label: 'Base URL', placeholder: 'https://…' },
-      { key: 'LUNA_EMBEDDING_API_KEY', label: 'API key', secret: true, placeholder: 'sk-…' },
-      { key: 'LUNA_EMBEDDING_MODEL', label: 'Model' },
+      { key: 'LUNA_EMBEDDING_BASE_URL', label: '接口地址', placeholder: 'https://…' },
+      { key: 'LUNA_EMBEDDING_API_KEY', label: 'API 密钥', secret: true, placeholder: 'sk-…' },
+      { key: 'LUNA_EMBEDDING_MODEL', label: '模型' },
     ],
   },
   {
     id: 'search',
-    title: 'Web search',
+    title: '联网搜索',
     blurb: '她查外面世界的手',
     probe: 'search',
     fields: [
-      { key: 'LUNA_WEB_SEARCH_PROVIDER', label: 'Provider', placeholder: 'tavily' },
-      { key: 'LUNA_WEB_SEARCH_API_KEY', label: 'API key', secret: true, placeholder: 'tvly-…' },
+      { key: 'LUNA_WEB_SEARCH_PROVIDER', label: '服务商', placeholder: 'tavily' },
+      { key: 'LUNA_WEB_SEARCH_API_KEY', label: 'API 密钥', secret: true, placeholder: 'tvly-…' },
     ],
   },
   {
     id: 'weather',
-    title: 'Weather',
+    title: '天气',
     blurb: '她看窗外的眼睛',
     probe: 'weather',
     fields: [
-      { key: 'LUNA_WEATHER_PROVIDER', label: 'Provider', placeholder: 'qweather' },
-      { key: 'LUNA_WEATHER_API_KEY', label: 'API key', secret: true },
-      { key: 'LUNA_WEATHER_API_HOST', label: 'API host', placeholder: 'xxxx.qweatherapi.com' },
+      { key: 'LUNA_WEATHER_PROVIDER', label: '服务商', placeholder: 'qweather' },
+      { key: 'LUNA_WEATHER_API_KEY', label: 'API 密钥', secret: true },
+      { key: 'LUNA_WEATHER_API_HOST', label: 'API 主机', placeholder: 'xxxx.qweatherapi.com' },
     ],
   },
 ];
@@ -126,7 +126,11 @@ export function probeFieldsFor(
 
 export type ModulesBridges = {
   prefill?: () => Promise<{ values?: Record<string, string>; configured?: string[] }>;
-  probeChat?: (fields: { baseUrl: string; apiKey: string; model: string }) => Promise<{ ok: boolean; error?: string }>;
+  probeChat?: (fields: {
+    baseUrl: string;
+    apiKey: string;
+    model: string;
+  }) => Promise<{ ok: boolean; error?: string }>;
   probeProvider?: (
     kind: 'embedding' | 'search' | 'weather',
     fields: Record<string, string>,
@@ -207,7 +211,7 @@ export function mountModulesSection(doc: Document, bridges: ModulesBridges): HTM
       const probeBtn = doc.createElement('button');
       probeBtn.type = 'button';
       probeBtn.className = 'module-btn';
-      probeBtn.textContent = 'Probe';
+      probeBtn.textContent = '测试';
       probeBtn.addEventListener('click', () => {
         verdict.textContent = '探测中…';
         verdict.dataset['state'] = 'busy';
@@ -216,7 +220,7 @@ export function mountModulesSection(doc: Document, bridges: ModulesBridges): HTM
           card.probe === 'chat'
             ? bridges.probeChat?.(fields as { baseUrl: string; apiKey: string; model: string })
             : bridges.probeProvider?.(card.probe, fields);
-        void (run ?? Promise.resolve({ ok: false, error: 'no bridge' })).then((v) => {
+        void (run ?? Promise.resolve({ ok: false, error: '桌面桥接不可用' })).then((v) => {
           verdict.textContent = v.ok ? '通 ✓' : (v.error ?? '失败');
           verdict.dataset['state'] = v.ok ? 'ok' : 'bad';
         });
@@ -224,7 +228,7 @@ export function mountModulesSection(doc: Document, bridges: ModulesBridges): HTM
       const saveBtn = doc.createElement('button');
       saveBtn.type = 'button';
       saveBtn.className = 'module-btn primary';
-      saveBtn.textContent = 'Save';
+      saveBtn.textContent = '保存';
       saveBtn.addEventListener('click', () => {
         const cardEdits = new Map([...edits].filter(([k]) => card.fields.some((f) => f.key === k)));
         const fields = changedFields([card], cardEdits);
@@ -256,7 +260,7 @@ export function mountModulesSection(doc: Document, bridges: ModulesBridges): HTM
       const btn = doc.createElement('button');
       btn.type = 'button';
       btn.className = 'module-btn primary';
-      btn.textContent = 'Restart Luna';
+      btn.textContent = '重启 Luna';
       btn.addEventListener('click', () => bridges.relaunch?.());
       restartRow.appendChild(btn);
     } else {

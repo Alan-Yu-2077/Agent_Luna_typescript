@@ -37,7 +37,14 @@ export function wizardSteps(mode: UiMode = 'full'): WizardStepSpec[] {
       id: 'voice',
       titleKey: 'step.voice.title',
       optional: true,
-      fields: [{ key: 'LUNA_TTS_URL', labelKey: 'step.voice.url', type: 'text', placeholder: 'http://127.0.0.1:9880' }],
+      fields: [
+        {
+          key: 'LUNA_TTS_URL',
+          labelKey: 'step.voice.url',
+          type: 'text',
+          placeholder: 'http://127.0.0.1:9880',
+        },
+      ],
     },
   ];
   return [
@@ -54,7 +61,12 @@ export function wizardSteps(mode: UiMode = 'full'): WizardStepSpec[] {
           placeholder: 'https://api.anthropic.com',
           initial: 'https://api.anthropic.com',
         },
-        { key: 'ANTHROPIC_API_KEY', labelKey: 'step.chat.apiKey', type: 'password', placeholder: 'sk-…' },
+        {
+          key: 'ANTHROPIC_API_KEY',
+          labelKey: 'step.chat.apiKey',
+          type: 'password',
+          placeholder: 'sk-…',
+        },
         {
           key: 'LUNA_MODEL',
           labelKey: 'step.chat.model',
@@ -76,7 +88,12 @@ export function wizardSteps(mode: UiMode = 'full'): WizardStepSpec[] {
           placeholder: 'text-embedding-3-large',
           initial: 'text-embedding-3-large',
         },
-        { key: 'LUNA_EMBEDDING_API_KEY', labelKey: 'step.embedding.apiKey', type: 'password', placeholder: 'sk-…' },
+        {
+          key: 'LUNA_EMBEDDING_API_KEY',
+          labelKey: 'step.embedding.apiKey',
+          type: 'password',
+          placeholder: 'sk-…',
+        },
         {
           key: 'LUNA_EMBEDDING_BASE_URL',
           labelKey: 'step.embedding.baseUrl',
@@ -91,7 +108,12 @@ export function wizardSteps(mode: UiMode = 'full'): WizardStepSpec[] {
       titleKey: 'step.search.title',
       optional: true,
       fields: [
-        { key: 'LUNA_WEB_SEARCH_API_KEY', labelKey: 'step.search.apiKey', type: 'password', placeholder: 'tvly-…' },
+        {
+          key: 'LUNA_WEB_SEARCH_API_KEY',
+          labelKey: 'step.search.apiKey',
+          type: 'password',
+          placeholder: 'tvly-…',
+        },
       ],
     },
     {
@@ -99,14 +121,24 @@ export function wizardSteps(mode: UiMode = 'full'): WizardStepSpec[] {
       titleKey: 'step.weather.title',
       optional: true,
       fields: [
-        { key: 'LUNA_WEATHER_API_KEY', labelKey: 'step.weather.apiKey', type: 'password', placeholder: '…' },
+        {
+          key: 'LUNA_WEATHER_API_KEY',
+          labelKey: 'step.weather.apiKey',
+          type: 'password',
+          placeholder: '…',
+        },
         {
           key: 'LUNA_WEATHER_API_HOST',
           labelKey: 'step.weather.apiHost',
           type: 'text',
           placeholder: 'xxxx.qweatherapi.com',
         },
-        { key: 'LUNA_LAT_LON', labelKey: 'step.weather.latlon', type: 'text', placeholder: '31.23,121.47' },
+        {
+          key: 'LUNA_LAT_LON',
+          labelKey: 'step.weather.latlon',
+          type: 'text',
+          placeholder: '31.23,121.47',
+        },
       ],
     },
     ...(mode === 'agent' ? [] : resourceSteps),
@@ -230,7 +262,9 @@ export function provisionProgress(s: ProvisionSnapshot): ProgressView {
   // Bytes are only meaningful WHILE downloading — a parked venv stage still carries the finished
   // download's totals, and a frozen "5.7 GB / 5.7 GB" there reads as progress that stopped moving.
   const downloading = s.stage === 'downloading' && s.bytesTotal > 0;
-  const detail = downloading ? `${formatBytes(s.bytesDone)} / ${formatBytes(s.bytesTotal)} · ${pct}%` : '';
+  const detail = downloading
+    ? `${formatBytes(s.bytesDone)} / ${formatBytes(s.bytesTotal)} · ${pct}%`
+    : '';
   // A parked install (quit mid-run) shows where it stopped; sweeping would claim it is still working.
   if (!s.inFlight || downloading) return { mode: 'determinate', pct, detail, tone: 'active' };
   return { mode: 'indeterminate', pct, detail: '', tone: 'active' };
@@ -248,7 +282,10 @@ export function nextLabelKey(probed: ProbeState, atLast: boolean): string {
 }
 
 // Which values feed each optional step's probe; null = nothing filled → no probe, plain advance.
-export function probeFieldsFor(kind: ProbeKind, values: Map<string, string>): Record<string, string> | null {
+export function probeFieldsFor(
+  kind: ProbeKind,
+  values: Map<string, string>,
+): Record<string, string> | null {
   const v = (k: string): string => (values.get(k) ?? '').trim();
   if (kind === 'embedding') {
     if (v('LUNA_EMBEDDING_API_KEY') === '') return null;
@@ -442,8 +479,10 @@ export function mountSetupWizard(root: HTMLElement, opts: { preview?: boolean } 
 
   const render = (): void => {
     const t = makeT(lang);
-    const secretHint = (f: WizardFieldSpec, tt: (k: string) => string): { configuredHint?: string } =>
-      secretHintFor(f, configuredSecrets, tt);
+    const secretHint = (
+      f: WizardFieldSpec,
+      tt: (k: string) => string,
+    ): { configuredHint?: string } => secretHintFor(f, configuredSecrets, tt);
     const s = nav.state();
     const step = steps[s.index]!;
     if (healthTimer !== null) {
@@ -488,7 +527,8 @@ export function mountSetupWizard(root: HTMLElement, opts: { preview?: boolean } 
     const stepTitle = doc.createElement('div');
     stepTitle.className = 'wizard-step-title';
     stepTitle.textContent =
-      `${s.index + 1}/${s.count} · ${t(step.titleKey)}` + (step.optional ? ` ${t('wizard.optional')}` : '');
+      `${s.index + 1}/${s.count} · ${t(step.titleKey)}` +
+      (step.optional ? ` ${t('wizard.optional')}` : '');
     card.appendChild(stepTitle);
 
     const body = doc.createElement('div');
@@ -504,7 +544,10 @@ export function mountSetupWizard(root: HTMLElement, opts: { preview?: boolean } 
     const guide = STEP_GUIDES[step.id];
     const guideBox = doc.createElement('details');
     guideBox.className = 'wizard-guide';
-    guideBox.open = guideOpen(step.id, step.id === 'voice' ? voice.scan !== undefined : avatarInstalled);
+    guideBox.open = guideOpen(
+      step.id,
+      step.id === 'voice' ? voice.scan !== undefined : avatarInstalled,
+    );
     const summary = doc.createElement('summary');
     summary.className = 'wizard-guide-summary';
     summary.textContent = t('wizard.guide.summary');
@@ -574,8 +617,7 @@ export function mountSetupWizard(root: HTMLElement, opts: { preview?: boolean } 
       }
       body.appendChild(radio);
       if (voiceBackend === 'http') {
-        for (const f of step.fields)
-          fieldRow(body, t(f.labelKey), f, values, secretHint(f, t));
+        for (const f of step.fields) fieldRow(body, t(f.labelKey), f, values, secretHint(f, t));
 
         // v0.37.2 (标准 1): the one-click installer — download + deploy the GPT-SoVITS runtime and
         // mark it ready, resumable across quits. Renders only in the desktop shell (bridge present).
@@ -645,7 +687,8 @@ export function mountSetupWizard(root: HTMLElement, opts: { preview?: boolean } 
           btn.addEventListener('click', () => {
             void provisionStart().then((r) => {
               if (r['ok'] !== true) {
-                line.textContent = typeof r['error'] === 'string' ? r['error'] : t('step.voice.provision.failed');
+                line.textContent =
+                  typeof r['error'] === 'string' ? r['error'] : t('step.voice.provision.failed');
                 return;
               }
               if (provisionTimer === null) provisionTimer = setInterval(poll, 800);
@@ -677,7 +720,9 @@ export function mountSetupWizard(root: HTMLElement, opts: { preview?: boolean } 
                   ...(res.scan.gpt.length === 1 ? { gptCkpt: res.scan.gpt[0] } : {}),
                   ...(res.scan.sovits.length === 1 ? { sovitsPth: res.scan.sovits[0] } : {}),
                   ...(res.scan.refWavs.length === 1 ? { referenceWav: res.scan.refWavs[0] } : {}),
-                  ...(res.scan.transcripts.length > 0 ? { transcriptTxt: res.scan.transcripts[0] } : {}),
+                  ...(res.scan.transcripts.length > 0
+                    ? { transcriptTxt: res.scan.transcripts[0] }
+                    : {}),
                 };
                 if (voice.transcript === '' && typeof res.transcriptPreview === 'string')
                   voice.transcript = res.transcriptPreview;
@@ -761,10 +806,16 @@ export function mountSetupWizard(root: HTMLElement, opts: { preview?: boolean } 
             lSpan.textContent = t('step.voice.promptLang');
             const lSel = doc.createElement('select');
             lSel.className = 'wizard-select';
+            const languageLabels: Record<string, string> = {
+              en: '英语',
+              zh: '中文',
+              ja: '日语',
+              auto: '自动识别',
+            };
             for (const l of ['en', 'zh', 'ja', 'auto']) {
               const o = doc.createElement('option');
               o.value = l;
-              o.textContent = l;
+              o.textContent = languageLabels[l] ?? l;
               o.selected = voice.promptLang === l;
               lSel.appendChild(o);
             }
@@ -874,7 +925,7 @@ export function mountSetupWizard(root: HTMLElement, opts: { preview?: boolean } 
           void fetch('/api/tts/speak', {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ text: 'Voice check — can you hear me?' }),
+            body: JSON.stringify({ text: '语音测试——你能听见我吗？' }),
           })
             .then(async (res) => {
               if (!res.ok) throw new Error(String(res.status));
@@ -897,14 +948,22 @@ export function mountSetupWizard(root: HTMLElement, opts: { preview?: boolean } 
           // "warming" state while it loads, down on gave-up/unreachable.
           void fetch('/api/tts/health', { signal: AbortSignal.timeout(2500) })
             .then(async (res) => {
-              const body = (await res.json().catch(() => null)) as { backend?: { ready?: boolean; state?: string } } | null;
+              const body = (await res.json().catch(() => null)) as {
+                backend?: { ready?: boolean; state?: string };
+              } | null;
               const state = body?.backend?.state;
               const ready = res.ok && (body?.backend?.ready === true || state === 'ready');
               const warming = res.ok && (state === 'starting' || state === 'restarting');
               badge.classList.toggle('up', ready);
               badge.classList.toggle('warming', warming);
               badge.classList.toggle('down', !ready && !warming);
-              badge.textContent = t(ready ? 'step.voice.badge.up' : warming ? 'step.voice.badge.warming' : 'step.voice.badge.down');
+              badge.textContent = t(
+                ready
+                  ? 'step.voice.badge.up'
+                  : warming
+                    ? 'step.voice.badge.warming'
+                    : 'step.voice.badge.down',
+              );
               testBtn.disabled = !ready;
             })
             .catch(() => {
@@ -922,7 +981,7 @@ export function mountSetupWizard(root: HTMLElement, opts: { preview?: boolean } 
       const installFile = pet?.installModelFile;
       const onResult = (r: InstallResult): void => {
         // 'cancelled' is the picker dialog being dismissed — not an error worth alarming over.
-        if (!r.ok && r.error === 'cancelled') return;
+        if (!r.ok && r.error === '已取消') return;
         if (!r.ok) return setStatus(r.error ?? '', 'error');
         avatarInstalled = true;
         render(); // collapses the walkthrough now that the step is done; status is re-set after
@@ -963,7 +1022,9 @@ export function mountSetupWizard(root: HTMLElement, opts: { preview?: boolean } 
       }
     } else {
       const probeKind = PROBE_STEP[step.id];
-      const inputs = step.fields.map((f) => fieldRow(body, t(f.labelKey), f, values, secretHint(f, t)));
+      const inputs = step.fields.map((f) =>
+        fieldRow(body, t(f.labelKey), f, values, secretHint(f, t)),
+      );
       if (probeKind) {
         for (const input of inputs)
           input.addEventListener('input', () => probeStates.set(step.id, 'none'));
@@ -973,7 +1034,9 @@ export function mountSetupWizard(root: HTMLElement, opts: { preview?: boolean } 
         note.className = 'setup-sub wizard-provider-note';
         const updateNote = (): void => {
           const hasKey = (values.get('LUNA_WEATHER_API_KEY') ?? '').trim() !== '';
-          note.textContent = t(hasKey ? 'step.weather.provider.qweather' : 'step.weather.provider.openmeteo');
+          note.textContent = t(
+            hasKey ? 'step.weather.provider.qweather' : 'step.weather.provider.openmeteo',
+          );
         };
         updateNote();
         for (const input of inputs) input.addEventListener('input', updateNote);
@@ -1044,7 +1107,9 @@ export function mountSetupWizard(root: HTMLElement, opts: { preview?: boolean } 
       const testBtn = mkBtn(t('wizard.test'), 'setup-btn ghost wizard-test');
       testBtn.disabled = busy || !live;
       testBtn.addEventListener('click', () => {
-        runProbe(probeKind, (v) => setStatus(v.ok ? t('wizard.test.ok') : (v.error ?? ''), v.ok ? 'ok' : 'error'));
+        runProbe(probeKind, (v) =>
+          setStatus(v.ok ? t('wizard.test.ok') : (v.error ?? ''), v.ok ? 'ok' : 'error'),
+        );
       });
     }
 
@@ -1059,7 +1124,13 @@ export function mountSetupWizard(root: HTMLElement, opts: { preview?: boolean } 
     }
 
     const nextBtn = mkBtn(
-      t(probeKind ? nextLabelKey(probeStates.get(step.id) ?? 'none', s.atLast) : s.atLast ? 'wizard.finish' : 'wizard.next'),
+      t(
+        probeKind
+          ? nextLabelKey(probeStates.get(step.id) ?? 'none', s.atLast)
+          : s.atLast
+            ? 'wizard.finish'
+            : 'wizard.next',
+      ),
       'setup-btn wizard-next',
     );
     nextBtn.disabled = busy || (s.atLast && !live);
@@ -1097,18 +1168,20 @@ export function mountSetupWizard(root: HTMLElement, opts: { preview?: boolean } 
       }
       // v0.39.2: the mode's own keys are merged LAST so they win over anything a step left behind
       // (a stale LUNA_TTS_BACKEND from the voice radio in particular).
-      void setup.wizardSubmit({ ...collectValues(values), ...modeValues(uiMode, voiceBackend) }).then((v) => {
-        // On success the shell swaps this window for the app; still here = failure.
-        if (!v.ok) {
-          busy = false;
-          render();
-          const st = card.querySelector('.setup-status');
-          if (st instanceof HTMLElement) {
-            st.textContent = v.error ?? makeT(lang)('wizard.finish.failed');
-            st.dataset['kind'] = 'error';
+      void setup
+        .wizardSubmit({ ...collectValues(values), ...modeValues(uiMode, voiceBackend) })
+        .then((v) => {
+          // On success the shell swaps this window for the app; still here = failure.
+          if (!v.ok) {
+            busy = false;
+            render();
+            const st = card.querySelector('.setup-status');
+            if (st instanceof HTMLElement) {
+              st.textContent = v.error ?? makeT(lang)('wizard.finish.failed');
+              st.dataset['kind'] = 'error';
+            }
           }
-        }
-      });
+        });
     });
   };
 

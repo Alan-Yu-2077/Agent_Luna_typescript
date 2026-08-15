@@ -22,7 +22,14 @@ import {
   type ControlTarget,
   type WorkbenchControl,
 } from './workbench';
-import { ACTIONS, ALL_OVERLAY_PARAMS, COSTUME, EMOTIONS, IDLE_PROFILES, type EmotionDef } from '../live2d/faceData';
+import {
+  ACTIONS,
+  ALL_OVERLAY_PARAMS,
+  COSTUME,
+  EMOTIONS,
+  IDLE_PROFILES,
+  type EmotionDef,
+} from '../live2d/faceData';
 import { FACE_STATE_KEYS } from '../live2d/paramMap';
 import { affectToEmotion, HIGH_INTENSITY } from '../live2d/expressionMap';
 import { PERF_FLAGS } from '../live2d/perfFlags';
@@ -125,7 +132,11 @@ describe('applyControl — each kind reaches the sink method that performs it', 
 describe('the intensity slider drives the escalation branch end to end', () => {
   const forward = (raw: string): number | undefined => {
     const { target, calls } = recorder();
-    applyControl(target, { kind: 'affect', id: 'annoyed_resistance', label: '' }, parseIntensity(raw));
+    applyControl(
+      target,
+      { kind: 'affect', id: 'annoyed_resistance', label: '' },
+      parseIntensity(raw),
+    );
     return calls[0]?.[2] as number | undefined;
   };
 
@@ -146,7 +157,12 @@ describe('the intensity slider drives the escalation branch end to end', () => {
 
 describe('readout — the live panel degrades instead of lying', () => {
   test('no bridge yet reads as blank, not as a state that is not happening', () => {
-    expect(readout(undefined)).toEqual({ mood: '—', playback: 'idle', actions: '—', accent: false });
+    expect(readout(undefined)).toEqual({
+      mood: '—',
+      playback: 'idle',
+      actions: '—',
+      accent: false,
+    });
   });
 
   test('a live bridge names the clip, its phase and the running gestures', () => {
@@ -168,14 +184,22 @@ describe('readout — the live panel degrades instead of lying', () => {
   // not, say, "she is speaking".
   test('the accent lamp follows the live pulse count', () => {
     const base = { mood: () => 'x', playback: () => null };
-    expect(readout({ ...base, faceVm: { activeActionIds: () => [], activePulseCount: () => 1 } }).accent).toBe(true);
-    expect(readout({ ...base, faceVm: { activeActionIds: () => [], activePulseCount: () => 0 } }).accent).toBe(false);
+    expect(
+      readout({ ...base, faceVm: { activeActionIds: () => [], activePulseCount: () => 1 } }).accent,
+    ).toBe(true);
+    expect(
+      readout({ ...base, faceVm: { activeActionIds: () => [], activePulseCount: () => 0 } }).accent,
+    ).toBe(false);
     // A bridge from a build without the pulse layer must read dark, not throw.
     expect(readout({ ...base, faceVm: { activeActionIds: () => [] } }).accent).toBe(false);
   });
 
   test('an idle model reports idle rather than the last clip it played', () => {
-    const r = readout({ mood: () => 'x', playback: () => null, faceVm: { activeActionIds: () => [] } });
+    const r = readout({
+      mood: () => 'x',
+      playback: () => null,
+      faceVm: { activeActionIds: () => [] },
+    });
     expect(r.playback).toBe('idle');
     expect(r.actions).toBe('—');
   });
@@ -185,7 +209,9 @@ describe('readout — the live panel degrades instead of lying', () => {
 // cannot enumerate it), so the guard is the same one v0.43.1 used: check it against the file the
 // artist shipped. A typo'd id is otherwise a checkbox that silently does nothing.
 describe('MODEL_ASSETS — the hardcoded catalog matches the real model', () => {
-  const MODEL_INSTALLED = existsSync(join(import.meta.dir, '../../public/models/yumi/yumi.cdi3.json'));
+  const MODEL_INSTALLED = existsSync(
+    join(import.meta.dir, '../../public/models/yumi/yumi.cdi3.json'),
+  );
   const modelParamIds = (): Set<string> => {
     const cdi: { Parameters: { Id: string }[] } = JSON.parse(
       readFileSync(join(import.meta.dir, '../../public/models/yumi/yumi.cdi3.json'), 'utf8'),
@@ -204,7 +230,9 @@ describe('MODEL_ASSETS — the hardcoded catalog matches the real model', () => 
   });
 
   test('the costume group is exactly what the emotion system is walled off from', () => {
-    const costume = MODEL_ASSETS.filter((a) => a.group === 'costume').map((a) => a.pid).sort();
+    const costume = MODEL_ASSETS.filter((a) => a.group === 'costume')
+      .map((a) => a.pid)
+      .sort();
     expect(costume).toEqual(
       [
         'Paramyanzhao',
@@ -229,7 +257,7 @@ describe('MODEL_ASSETS — the hardcoded catalog matches the real model', () => 
   });
 
   test('the costume group carries the note saying the emotion system will not touch them', () => {
-    expect(COSTUME_NOTE).toContain('never touches these');
+    expect(COSTUME_NOTE).toContain('不会自动碰这些装扮');
   });
 });
 

@@ -20,13 +20,13 @@ export const IDLE_PROFILE_KEY = 'luna:idle-profile';
 // Labels match the Avatar settings card word for word — the workbench and the shipped panel must
 // not name the same switch two different things.
 export const PERF_FLAGS: readonly PerfFlag[] = [
-  { key: GAZE_KEY, label: 'Gaze follow', hint: 'eyes track the pointer' },
-  { key: AFFECT_KEY, label: 'Mood memory', hint: 'the continuous VAD undertone' },
-  { key: LIVE_PEAK_KEY, label: 'Living expressions', hint: 'idle leaks through a playing clip' },
-  { key: SHORT_CLIPS_KEY, label: 'Brief performances', hint: '~2.5 s clips instead of ~6 s' },
-  { key: IDLE_ACTIONS_KEY, label: 'Idle gestures', hint: 'a gesture every 8–20 s when idle' },
-  { key: LISTENING_KEY, label: 'Attentive listening', hint: 'turns toward you while you type; thinks visibly' },
-  { key: SPEECH_PERF_KEY, label: 'Speaking performance', hint: 'nods on the stresses of what she says' },
+  { key: GAZE_KEY, label: '视线跟随', hint: '眼睛跟着指针移动' },
+  { key: AFFECT_KEY, label: '情绪记忆', hint: '持续保留一层情绪底色' },
+  { key: LIVE_PEAK_KEY, label: '灵动表情', hint: '表演动作中仍保留待机细节' },
+  { key: SHORT_CLIPS_KEY, label: '短时表现', hint: '约 2.5 秒，而不是约 6 秒的动作片段' },
+  { key: IDLE_ACTIONS_KEY, label: '待机动作', hint: '待机时每 8–20 秒做一次小动作' },
+  { key: LISTENING_KEY, label: '专注倾听', hint: '你输入时她会转向你，并表现出思考' },
+  { key: SPEECH_PERF_KEY, label: '说话表现', hint: '会在说话重音处点头' },
 ];
 
 export function flagOn(key: string, storage?: Pick<Storage, 'getItem'> | null): boolean {

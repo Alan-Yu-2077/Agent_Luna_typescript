@@ -17,7 +17,7 @@ export async function probeEmbedding(
   doFetch: ProbeFetch = realFetch,
 ): Promise<ProbeVerdict> {
   const base = fields.baseUrl.trim().replace(/\/+$/, '');
-  if (!base || !fields.apiKey) return { ok: false, error: 'Enter an embedding base URL and API key.' };
+  if (!base || !fields.apiKey) return { ok: false, error: '请填写记忆向量接口地址和 API 密钥。' };
   try {
     const res = await doFetch(`${base}/v1/embeddings`, {
       method: 'POST',
@@ -26,12 +26,12 @@ export async function probeEmbedding(
     });
     if (res.status < 300) return { ok: true };
     if (res.status === 401 || res.status === 403)
-      return { ok: false, error: 'The embedding API key was rejected — check it on your provider console.' };
+      return { ok: false, error: '记忆向量 API 密钥被拒绝了——请到服务商控制台检查。' };
     if (res.status === 404)
-      return { ok: false, error: 'Embeddings endpoint or model not found — check the base URL and model name.' };
-    return { ok: false, error: `The embedding server returned ${res.status}.` };
+      return { ok: false, error: '找不到记忆向量接口或模型——请检查接口地址和模型名称。' };
+    return { ok: false, error: `记忆向量服务返回了 ${res.status}。` };
   } catch {
-    return { ok: false, error: "Couldn't reach the embedding base URL — check it." };
+    return { ok: false, error: '无法访问记忆向量接口地址——请检查地址。' };
   }
 }
 
@@ -41,7 +41,7 @@ export async function probeSearch(
   fields: { apiKey: string },
   doFetch: ProbeFetch = realFetch,
 ): Promise<ProbeVerdict> {
-  if (!fields.apiKey) return { ok: false, error: 'Enter a Tavily API key.' };
+  if (!fields.apiKey) return { ok: false, error: '请填写 Tavily API 密钥。' };
   try {
     const res = await doFetch('https://api.tavily.com/search', {
       method: 'POST',
@@ -50,10 +50,13 @@ export async function probeSearch(
     });
     if (res.status < 300) return { ok: true };
     if (res.status === 401 || res.status === 403 || res.status === 432)
-      return { ok: false, error: 'Tavily rejected this key — check it at app.tavily.com.' };
-    return { ok: false, error: `Tavily returned ${res.status} — check your key/plan at app.tavily.com.` };
+      return { ok: false, error: 'Tavily 拒绝了这个密钥——请到 app.tavily.com 检查。' };
+    return {
+      ok: false,
+      error: `Tavily 返回了 ${res.status}——请到 app.tavily.com 检查密钥和套餐。`,
+    };
   } catch {
-    return { ok: false, error: "Couldn't reach api.tavily.com — check your network." };
+    return { ok: false, error: '无法访问 api.tavily.com——请检查网络。' };
   }
 }
 
@@ -66,12 +69,16 @@ export async function probeWeather(
   fields: { apiKey: string; apiHost: string },
   doFetch: ProbeFetch = realFetch,
 ): Promise<ProbeVerdict> {
-  const host = fields.apiHost.trim().replace(/^https?:\/\//, '').replace(/\/+$/, '');
-  if (!fields.apiKey || !host) return { ok: false, error: 'Enter a QWeather key and your account API host.' };
+  const host = fields.apiHost
+    .trim()
+    .replace(/^https?:\/\//, '')
+    .replace(/\/+$/, '');
+  if (!fields.apiKey || !host) return { ok: false, error: '请填写和风天气密钥和账户 API 主机。' };
   if (!/^[a-z0-9-]+(\.[a-z0-9-]+)*\.(qweatherapi\.com|qweather\.com)$/i.test(host)) {
     return {
       ok: false,
-      error: 'That does not look like a QWeather API host (expected xxxx.qweatherapi.com — see console.qweather.com → Settings).',
+      error:
+        '这不像是和风天气 API 主机（应为 xxxx.qweatherapi.com，请到 console.qweather.com → 设置查看）。',
     };
   }
   try {
@@ -88,14 +95,14 @@ export async function probeWeather(
     }
     if (res.status < 300 && code === '200') return { ok: true };
     if (res.status === 401 || res.status === 403 || code === '401' || code === '403')
-      return { ok: false, error: 'QWeather rejected this key — check it in the console (dev.qweather.com).' };
+      return { ok: false, error: '和风天气拒绝了这个密钥——请到控制台（dev.qweather.com）检查。' };
     if (res.status === 404 || body.includes('Invalid Host'))
       return {
         ok: false,
-        error: 'Wrong API host — use your account\'s dedicated host (xxxx.qweatherapi.com), not the legacy devapi.',
+        error: 'API 主机不正确——请使用账户专属主机（xxxx.qweatherapi.com），不要使用旧版 devapi。',
       };
-    return { ok: false, error: `QWeather returned ${code || res.status}.` };
+    return { ok: false, error: `和风天气返回了 ${code || res.status}。` };
   } catch {
-    return { ok: false, error: "Couldn't reach that API host — check it for typos." };
+    return { ok: false, error: '无法访问这个 API 主机——请检查是否有拼写错误。' };
   }
 }

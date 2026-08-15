@@ -122,7 +122,7 @@ export class DomBubbleView implements BubbleView {
     const leaf = doc.createElement('button');
     leaf.type = 'button';
     leaf.className = 'luna-leaf';
-    leaf.setAttribute('aria-label', 'something she quietly did');
+    leaf.setAttribute('aria-label', '她悄悄做过的一件事');
     const glyph = doc.createElement('span');
     glyph.className = 'leaf-glyph';
     glyph.textContent = '🍃';

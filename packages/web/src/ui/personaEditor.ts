@@ -32,7 +32,8 @@ export function mountPersonaSection(doc: Document, fetchFn: typeof fetch = fetch
 
   const intro = doc.createElement('p');
   intro.className = 'settings-page-note';
-  intro.textContent = 'Fixed 是你定的底色,她改不了;Evolving 是她自己长出来的,你看,但在这里不改。';
+  intro.textContent =
+    '固定核心是你定的底色，她改不了；成长部分是她自己长出来的，你可以看，但不在这里修改。';
   host.appendChild(intro);
 
   let savedFixed = '';
@@ -53,15 +54,15 @@ export function mountPersonaSection(doc: Document, fetchFn: typeof fetch = fetch
   const previewBtn = doc.createElement('button');
   previewBtn.type = 'button';
   previewBtn.className = 'module-btn';
-  previewBtn.textContent = 'Preview diff';
+  previewBtn.textContent = '预览改动';
   const saveBtn = doc.createElement('button');
   saveBtn.type = 'button';
   saveBtn.className = 'module-btn primary';
-  saveBtn.textContent = 'Save fixed core';
+  saveBtn.textContent = '保存固定核心';
   foot.append(previewBtn, saveBtn, verdict);
 
   const evolvingHead = doc.createElement('h4');
-  evolvingHead.textContent = 'Evolving — 她自己长的';
+  evolvingHead.textContent = '成长部分 — 她自己长出来的';
   const evolving = doc.createElement('pre');
   evolving.className = 'persona-evolving';
   evolving.textContent = '…';
@@ -72,7 +73,8 @@ export function mountPersonaSection(doc: Document, fetchFn: typeof fetch = fetch
     for (const line of diff) {
       const p = doc.createElement('p');
       p.className = `diff-${line.kind}`;
-      p.textContent = (line.kind === 'added' ? '+ ' : line.kind === 'removed' ? '− ' : '  ') + line.text;
+      p.textContent =
+        (line.kind === 'added' ? '+ ' : line.kind === 'removed' ? '− ' : '  ') + line.text;
       diffView.appendChild(p);
     }
     diffView.hidden = false;

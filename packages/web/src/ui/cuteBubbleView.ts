@@ -164,7 +164,7 @@ export class CuteBubbleView implements BubbleView {
     if (turns.length) {
       const div = this.host.ownerDocument.createElement('div');
       div.className = 'history-divider';
-      div.textContent = '— earlier conversation —';
+      div.textContent = '— 更早的对话 —';
       div.style.cssText =
         'text-align:center;font-size:11px;opacity:0.5;margin:10px 0 4px;letter-spacing:1px;';
       this.host.appendChild(div);

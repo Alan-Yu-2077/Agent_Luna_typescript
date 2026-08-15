@@ -19,8 +19,8 @@ export function mountReconfigureButton(
   const btn = doc.createElement('button');
   btn.type = 'button';
   btn.className = 'reconfigure-btn';
-  btn.textContent = '⚙ 重新配置 / Setup';
-  btn.title = 'Open the setup wizard (fix keys, model, voice)';
+  btn.textContent = '⚙ 重新配置';
+  btn.title = '打开配置向导，修改密钥、模型或声音';
   btn.style.display = 'none';
   btn.addEventListener('click', () => openSetup());
   badge.after(btn);

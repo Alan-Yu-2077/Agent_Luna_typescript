@@ -1,4 +1,10 @@
-import { DataDiaries, DataDreams, type DiaryEntry, type DreamRecord, type DreamStep } from '@luna/protocol';
+import {
+  DataDiaries,
+  DataDreams,
+  type DiaryEntry,
+  type DreamRecord,
+  type DreamStep,
+} from '@luna/protocol';
 
 // v0.44.3 — the diary book. What she writes by day and what she digests by night are the same
 // evening's two faces, so they share one book (D7): a two-page spread, calendar left, content
@@ -64,7 +70,8 @@ export function monthGrid(year: number, month0: number, index: BookIndex): Calen
   const first = new Date(year, month0, 1);
   const daysInMonth = new Date(year, month0 + 1, 0).getDate();
   const cells: CalendarCell[] = [];
-  for (let i = 0; i < first.getDay(); i++) cells.push({ day: null, key: null, hasDiary: false, hasDream: false });
+  for (let i = 0; i < first.getDay(); i++)
+    cells.push({ day: null, key: null, hasDiary: false, hasDream: false });
   for (let day = 1; day <= daysInMonth; day++) {
     const key = `${year}-${`${month0 + 1}`.padStart(2, '0')}-${`${day}`.padStart(2, '0')}`;
     const entry = index.days.get(key);
@@ -79,7 +86,11 @@ export function monthGrid(year: number, month0: number, index: BookIndex): Calen
 }
 
 // Arrow keys travel between LIT days only (the grey ones are not places).
-export function nextLitDay(litDays: readonly string[], current: string, delta: 1 | -1): string | null {
+export function nextLitDay(
+  litDays: readonly string[],
+  current: string,
+  delta: 1 | -1,
+): string | null {
   if (litDays.length === 0) return null;
   const i = litDays.indexOf(current);
   if (i < 0) return litDays[0] ?? null;
@@ -114,7 +125,8 @@ export function translateStep(s: DreamStep): string {
     case 'memory_audit': {
       const removed = num(s.detail, /removed (\d+)/);
       const added = num(s.detail, /added (\d+)/);
-      if (removed !== null && added !== null) return `整理了记忆的抽屉（−${removed} / +${added}）。`;
+      if (removed !== null && added !== null)
+        return `整理了记忆的抽屉（−${removed} / +${added}）。`;
       return '整理了记忆的抽屉。';
     }
     case 'refine_layer1':
@@ -190,12 +202,25 @@ export function createTurnQueue(runTurn: (to: string, done: () => void) => void)
 
 // ── formatting ───────────────────────────────────────────────────────────────────────────────
 
-const MONTHS = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
+const MONTHS = [
+  '一月',
+  '二月',
+  '三月',
+  '四月',
+  '五月',
+  '六月',
+  '七月',
+  '八月',
+  '九月',
+  '十月',
+  '十一月',
+  '十二月',
+];
 
 export function pageHeading(dayKey: string): string {
   const [y, m, d] = dayKey.split('-').map((v) => Number.parseInt(v, 10));
   if (!y || !m || !d) return dayKey;
-  return `${MONTHS[m - 1]} ${d}, ${y}`;
+  return `${y}年${m}月${d}日`;
 }
 
 // ── fetch + mount ────────────────────────────────────────────────────────────────────────────
@@ -284,7 +309,7 @@ function assemble(doc: Document, book: HTMLElement, index: BookIndex): void {
       for (const f of ['diary', 'dream'] as const) {
         const b = doc.createElement('button');
         b.type = 'button';
-        b.textContent = f === 'diary' ? 'Diary' : 'Dream';
+        b.textContent = f === 'diary' ? '日记' : '梦境';
         b.classList.toggle('on', face === f);
         b.addEventListener('click', () => {
           if (face === f || halfTurning) return;
