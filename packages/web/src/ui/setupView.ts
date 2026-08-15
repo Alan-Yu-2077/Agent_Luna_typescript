@@ -46,15 +46,21 @@ export function mountSetupView(root: HTMLElement): void {
   card.className = 'setup-card';
   const title = doc.createElement('div');
   title.className = 'setup-title';
-  title.textContent = 'Welcome to Luna';
+  title.textContent = '欢迎使用 Luna';
   const sub = doc.createElement('div');
   sub.className = 'setup-sub';
-  sub.textContent = 'Connect your model to get started. You can change this later in Settings.';
+  sub.textContent = '连接模型后即可开始。之后可以在设置里修改。';
   card.append(title, sub);
 
-  const baseUrl = field(card, 'API base URL', 'text', 'https://api.anthropic.com', 'https://api.anthropic.com');
-  const apiKey = field(card, 'API key', 'password', '', 'sk-…');
-  const model = field(card, 'Model', 'text', 'claude-sonnet-4-6', 'claude-sonnet-4-6');
+  const baseUrl = field(
+    card,
+    'API 接口地址',
+    'text',
+    'https://api.anthropic.com',
+    'https://api.anthropic.com',
+  );
+  const apiKey = field(card, 'API 密钥', 'password', '', 'sk-…');
+  const model = field(card, '模型', 'text', 'claude-sonnet-4-6', 'claude-sonnet-4-6');
 
   const status = doc.createElement('div');
   status.className = 'setup-status';
@@ -63,11 +69,11 @@ export function mountSetupView(root: HTMLElement): void {
   const testBtn = doc.createElement('button');
   testBtn.type = 'button';
   testBtn.className = 'setup-btn ghost';
-  testBtn.textContent = 'Test connection';
+  testBtn.textContent = '测试连接';
   const saveBtn = doc.createElement('button');
   saveBtn.type = 'button';
   saveBtn.className = 'setup-btn';
-  saveBtn.textContent = 'Save & Start';
+  saveBtn.textContent = '保存并启动';
   actions.append(testBtn, saveBtn);
   card.append(status, actions);
   root.appendChild(card);
@@ -89,7 +95,7 @@ export function mountSetupView(root: HTMLElement): void {
   const b = bridge();
   if (!b) {
     // A plain browser reached ?setup=1 — nothing to write to. Explain rather than hang.
-    setStatus('Setup is only available in the Luna desktop app.', 'error');
+    setStatus('配置向导只能在 Luna 桌面 App 中使用。', 'error');
     setBusy(true);
     return;
   }
@@ -97,7 +103,7 @@ export function mountSetupView(root: HTMLElement): void {
   const guard = (): boolean => {
     const f = fields();
     if (!f.baseUrl || !f.apiKey) {
-      setStatus('Enter a base URL and an API key.', 'error');
+      setStatus('请填写接口地址和 API 密钥。', 'error');
       return false;
     }
     return true;
@@ -106,20 +112,20 @@ export function mountSetupView(root: HTMLElement): void {
   testBtn.addEventListener('click', async () => {
     if (!guard()) return;
     setBusy(true);
-    setStatus('Testing…', 'info');
+    setStatus('测试中…', 'info');
     const v = await b.probe(fields());
-    setStatus(v.ok ? 'Connection works ✓' : (v.error ?? 'Connection failed.'), v.ok ? 'ok' : 'error');
+    setStatus(v.ok ? '连接正常 ✓' : (v.error ?? '连接失败。'), v.ok ? 'ok' : 'error');
     setBusy(false);
   });
 
   saveBtn.addEventListener('click', async () => {
     if (!guard()) return;
     setBusy(true);
-    setStatus('Connecting and starting Luna…', 'info');
+    setStatus('正在连接并启动 Luna…', 'info');
     const v = await b.submit(fields());
     // On success the shell swaps this window for the app; if we're still here, it failed.
     if (!v.ok) {
-      setStatus(v.error ?? 'Setup failed.', 'error');
+      setStatus(v.error ?? '配置失败。', 'error');
       setBusy(false);
     }
   });

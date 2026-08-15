@@ -129,10 +129,10 @@ export type ProbeVerdict = { ok: boolean; error?: string };
 // OR a 400 both mean the request was authenticated and reached the model (a 400 is a request-shape
 // detail like max_tokens), so the key + URL are good. 401/403 = key rejected; 404 = wrong endpoint.
 export function classifyProbe(status: number | null): ProbeVerdict {
-  if (status === null) return { ok: false, error: "Couldn't reach that URL — check the base URL." };
-  if (status === 401 || status === 403) return { ok: false, error: 'The API key was rejected.' };
+  if (status === null) return { ok: false, error: '无法访问这个地址——请检查接口地址。' };
+  if (status === 401 || status === 403) return { ok: false, error: 'API 密钥被拒绝了。' };
   if (status === 404)
-    return { ok: false, error: 'Endpoint not found — check the base URL (e.g. https://api.anthropic.com).' };
+    return { ok: false, error: '找不到接口——请检查接口地址（例如 https://api.anthropic.com）。' };
   if (status < 400 || status === 400) return { ok: true };
-  return { ok: false, error: `The server returned ${status}. Check your settings and try again.` };
+  return { ok: false, error: `服务器返回了 ${status}。请检查设置后重试。` };
 }

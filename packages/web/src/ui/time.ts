@@ -23,10 +23,10 @@ export function absoluteStamp(ms: number): string {
 
 export function relativeTime(nowMs: number, thenMs: number): string {
   const min = Math.floor(Math.max(0, nowMs - thenMs) / 60_000);
-  if (min < 1) return 'just now';
-  if (min < 60) return `${min} min ago`;
+  if (min < 1) return '刚刚';
+  if (min < 60) return `${min} 分钟前`;
   const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr} hr ago`;
+  if (hr < 24) return `${hr} 小时前`;
   return dateLabel(thenMs);
 }
 

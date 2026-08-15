@@ -113,12 +113,12 @@ export const ALL_OVERLAY_PARAMS = Object.values(OVERLAYS).flatMap((o) => Object.
 // `ParamarmupL/R` is deliberately absent — a raised arm is gesture material, not something to wear —
 // and so is `Paramdown1`, which `adorable` already drives as an overlay.
 export const COSTUME: Record<string, { pid: string; label: string; group?: string }> = {
-  eyepatch: { pid: 'Paramyanzhao', label: 'Eyepatch' },
-  mic: { pid: 'Paramhuatong', label: 'Microphone' },
-  puppy: { pid: 'Paramxiaogou', label: 'Floating puppy' },
+  eyepatch: { pid: 'Paramyanzhao', label: '眼罩' },
+  mic: { pid: 'Paramhuatong', label: '麦克风' },
+  puppy: { pid: 'Paramxiaogou', label: '漂浮小狗' },
   // The two hairstyles are mutually exclusive at the UI layer; both off = the drawn default.
-  longHair: { pid: 'Paramlonghair', label: 'Short hair 1', group: 'hair' },
-  shortHair2: { pid: 'Paramlonghair2', label: 'Short hair 2', group: 'hair' },
+  longHair: { pid: 'Paramlonghair', label: '短发造型 1', group: 'hair' },
+  shortHair2: { pid: 'Paramlonghair2', label: '短发造型 2', group: 'hair' },
 };
 export const COSTUME_IDS: readonly string[] = Object.keys(COSTUME);
 
@@ -239,11 +239,11 @@ export type IdleProfileId =
   | 'sweetBounceV1';
 
 export const IDLE_PROFILES: ReadonlyArray<{ id: IdleProfileId; label: string }> = [
-  { id: 'defaultIdleV1', label: 'Default' },
-  { id: 'cuteSwayV1', label: 'Cute sway' },
-  { id: 'peekyIdleV1', label: 'Peek' },
-  { id: 'shyDriftV1', label: 'Shy drift' },
-  { id: 'sweetBounceV1', label: 'Sweet bounce' },
+  { id: 'defaultIdleV1', label: '默认待机' },
+  { id: 'cuteSwayV1', label: '可爱摇摆' },
+  { id: 'peekyIdleV1', label: '探头张望' },
+  { id: 'shyDriftV1', label: '害羞轻晃' },
+  { id: 'sweetBounceV1', label: '甜甜弹跳' },
 ];
 
 export const IDLE_PROFILE_IDS: readonly string[] = IDLE_PROFILES.map((p) => p.id);

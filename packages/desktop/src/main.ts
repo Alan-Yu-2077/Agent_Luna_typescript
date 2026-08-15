@@ -478,8 +478,8 @@ ipcMain.handle('luna:probe-weather', async (_event, raw: ProviderFields) =>
 );
 
 ipcMain.handle('luna:onboarding-submit', async (_event, raw: OnboardingFields): Promise<ProbeVerdict> => {
-  if (!paths) return { ok: false, error: 'Not ready — try again in a moment.' };
-  if (onboardingInFlight) return { ok: false, error: 'Setup already in progress…' };
+  if (!paths) return { ok: false, error: '还没准备好——请稍等片刻。' };
+  if (onboardingInFlight) return { ok: false, error: '配置已经在进行中…' };
   onboardingInFlight = true;
   try {
     const baseUrl = asStr(raw?.baseUrl);
@@ -497,7 +497,7 @@ ipcMain.handle('luna:onboarding-submit', async (_event, raw: OnboardingFields): 
     // Apply the keys live: re-spawn the sidecar against the new env (it may never have started).
     supervisor?.restart(sidecarEnv(paths, parseEnvFile(merged)));
     const up = await waitForPort(SERVER_PORT);
-    if (!up) return { ok: false, error: 'Saved, but the server did not start. Check the logs.' };
+    if (!up) return { ok: false, error: '已经保存，但服务没有启动。请检查日志。' };
     // Swap the setup window for the real app window (createWindow reads the resolved petMode).
     const fresh = createWindow('app');
     for (const w of BrowserWindow.getAllWindows()) if (w !== fresh) w.close();
@@ -537,7 +537,7 @@ ipcMain.on('luna:open-setup', () => {
 // if the renderer is a white screen. Standard roles keep copy/paste/devtools working.
 function installAppMenu(): void {
   const setupItem = {
-    label: 'Setup Wizard… / 重新配置',
+    label: '配置向导… / 重新配置',
     accelerator: 'CmdOrCtrl+,',
     click: (): void => openSetupWindow(),
   };
@@ -547,7 +547,7 @@ function installAppMenu(): void {
     { role: 'editMenu' },
     { role: 'viewMenu' },
     { role: 'windowMenu' },
-    { label: 'Setup', submenu: [setupItem] },
+    { label: '设置', submenu: [setupItem] },
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
@@ -557,15 +557,15 @@ function installAppMenu(): void {
 // are present (a bad key is never persisted, v0.28.0 rule), ONE luna.env merge + ONE sidecar
 // restart at the end. Values ride this one direction; the verdict never echoes them.
 ipcMain.handle('luna:wizard-submit', async (_event, raw: unknown): Promise<ProbeVerdict> => {
-  if (!paths) return { ok: false, error: 'Not ready — try again in a moment.' };
-  if (onboardingInFlight) return { ok: false, error: 'Setup already in progress…' };
+  if (!paths) return { ok: false, error: '还没准备好——请稍等片刻。' };
+  if (onboardingInFlight) return { ok: false, error: '配置已经在进行中…' };
   onboardingInFlight = true;
   try {
     const fields = filterWizardFields(raw);
     const baseUrl = fields['ANTHROPIC_BASE_URL'];
     const apiKey = fields['ANTHROPIC_API_KEY'];
     if (baseUrl !== undefined || apiKey !== undefined) {
-      if (!baseUrl || !apiKey) return { ok: false, error: 'Enter a base URL and an API key.' };
+      if (!baseUrl || !apiKey) return { ok: false, error: '请填写接口地址和 API 密钥。' };
       const verdict = await probeConnection(baseUrl, apiKey, fields['LUNA_MODEL'] ?? '');
       if (!verdict.ok) return verdict;
     }
@@ -577,7 +577,7 @@ ipcMain.handle('luna:wizard-submit', async (_event, raw: unknown): Promise<Probe
     if (!attachedToExternal) {
       supervisor?.restart(sidecarEnv(paths, parseEnvFile(merged)));
       const up = await waitForPort(SERVER_PORT);
-      if (!up) return { ok: false, error: 'Saved, but the server did not start. Check the logs.' };
+      if (!up) return { ok: false, error: '已经保存，但服务没有启动。请检查日志。' };
     }
     const fresh = createWindow('app');
     for (const w of BrowserWindow.getAllWindows()) if (w !== fresh) w.close();
@@ -600,7 +600,7 @@ function reloadAppWindows(): void {
 }
 
 function installModelAndReload(src: string): { ok: boolean; modelUrl?: string; error?: string } {
-  if (!paths) return { ok: false, error: 'Not ready — try again in a moment.' };
+  if (!paths) return { ok: false, error: '还没准备好——请稍等片刻。' };
   const result = installModelFolder(src, { modelsDir: paths.userModelsDir, envFile: paths.envFile });
   if (result.ok) {
     for (const w of BrowserWindow.getAllWindows()) {
@@ -613,11 +613,11 @@ function installModelAndReload(src: string): { ok: boolean; modelUrl?: string; e
 // "Choose model folder…": pick a Live2D model dir via the native dialog.
 ipcMain.handle('luna:choose-model', async (): Promise<{ ok: boolean; modelUrl?: string; error?: string }> => {
   const picked = dialog.showOpenDialogSync({
-    title: 'Choose a Live2D model folder',
+    title: '选择 Live2D 模型文件夹',
     properties: ['openDirectory'],
   });
   const src = picked?.[0];
-  if (!src) return { ok: false, error: 'cancelled' };
+  if (!src) return { ok: false, error: '已取消' };
   return installModelAndReload(src);
 });
 
@@ -625,7 +625,7 @@ ipcMain.handle('luna:choose-model', async (): Promise<{ ok: boolean; modelUrl?: 
 // (webUtils.getPathForFile) and only the path string crosses IPC.
 ipcMain.handle('luna:install-model-path', async (_event, raw: unknown) => {
   const src = asStr(raw);
-  if (!src) return { ok: false, error: 'No folder received.' };
+  if (!src) return { ok: false, error: '所选文件夹不存在。' };
   return installModelAndReload(src);
 });
 
@@ -634,7 +634,7 @@ ipcMain.handle('luna:install-model-path', async (_event, raw: unknown) => {
 ipcMain.handle('luna:scan-voice-pack', async (_event, raw: unknown) => {
   const root = asStr(raw);
   if (!root || !existsSync(root) || !statSync(root).isDirectory())
-    return { ok: false, error: 'That is not a folder.' };
+    return { ok: false, error: '这不是一个文件夹。' };
   const scan = scanVoicePack(root);
   const valid = validateVoicePack(scan);
   if (!valid.ok) return valid;
@@ -653,11 +653,11 @@ ipcMain.handle('luna:scan-voice-pack', async (_event, raw: unknown) => {
 
 ipcMain.handle('luna:choose-tts-runtime', async () => {
   const picked = dialog.showOpenDialogSync({
-    title: 'Choose your GPT-SoVITS folder',
+    title: '选择 GPT-SoVITS 文件夹',
     properties: ['openDirectory'],
   });
   const dir = picked?.[0];
-  if (!dir) return { ok: false, error: 'cancelled' };
+  if (!dir) return { ok: false, error: '已取消' };
   const check = validateRuntimeDir(dir);
   if (!check.ok) return check;
   return { ok: true, dir, venv: !!check.venvPython };
@@ -665,7 +665,7 @@ ipcMain.handle('luna:choose-tts-runtime', async () => {
 
 type VoiceInstallRaw = Record<string, unknown>;
 ipcMain.handle('luna:install-voice-pack', async (_event, raw: VoiceInstallRaw) => {
-  if (!paths) return { ok: false, error: 'Not ready — try again in a moment.' };
+  if (!paths) return { ok: false, error: '还没准备好——请稍等片刻。' };
   const root = asStr(raw?.['root']);
   const picks = {
     gptCkpt: asStr(raw?.['gptCkpt']),
@@ -676,7 +676,7 @@ ipcMain.handle('luna:install-voice-pack', async (_event, raw: VoiceInstallRaw) =
   // The picks must come from the scanned pack — a stray absolute path can't smuggle files in.
   const inRoot = (p: string): boolean => p === '' || p.startsWith(root.endsWith(sep) ? root : root + sep);
   if (!root || !inRoot(picks.gptCkpt) || !inRoot(picks.sovitsPth) || !inRoot(picks.referenceWav))
-    return { ok: false, error: 'Picked files must come from the dropped folder — re-scan it.' };
+    return { ok: false, error: '所选文件必须来自刚才拖入的文件夹——请重新扫描。' };
   const installed = installVoicePack(root, picks, {
     ttsDir: join(paths.userData, 'tts'),
     envFile: paths.envFile,
@@ -774,16 +774,16 @@ function firstFileByExt(dir: string, ext: string): string | undefined {
 // discipline as the wizard finish, minus its restart-and-swap. A .bak of the previous file lands
 // first, so a bad save is one copy away from undone.
 ipcMain.handle('luna:save-config', (_e, raw: unknown) => {
-  if (!paths) return { ok: false, error: 'Not ready — try again in a moment.' };
+  if (!paths) return { ok: false, error: '还没准备好——请稍等片刻。' };
   const fields = filterWizardFields(raw);
-  if (Object.keys(fields).length === 0) return { ok: false, error: 'Nothing to save.' };
+  if (Object.keys(fields).length === 0) return { ok: false, error: '没有需要保存的内容。' };
   try {
     const current = readFileSync(paths.envFile, 'utf8');
     writeFileSync(`${paths.envFile}.bak`, current);
     writeFileSync(paths.envFile, mergeEnvFile(current, fields));
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : 'write failed' };
+    return { ok: false, error: err instanceof Error ? err.message : '写入失败。' };
   }
 });
 
@@ -806,13 +806,13 @@ ipcMain.handle('luna:provision-status', () => {
   return { ...provisionStatus, inFlight: provisionInFlight };
 });
 ipcMain.handle('luna:provision-start', () => {
-  if (!paths) return { ok: false, error: 'Not ready — try again in a moment.' };
+  if (!paths) return { ok: false, error: '还没准备好——请稍等片刻。' };
   const p = paths;
   const env = freshUserEnv(p);
   // v0.37.9: ON by default. A one-click install that first needs you to hand-edit a config file is
   // not one-click — it is the terminal step this initiative exists to delete, wearing a disguise.
   // LUNA_TTS_PROVISION=0 is the opt-OUT.
-  if (env['LUNA_TTS_PROVISION'] === '0') return { ok: false, error: 'One-click deploy is disabled (LUNA_TTS_PROVISION=0).' };
+  if (env['LUNA_TTS_PROVISION'] === '0') return { ok: false, error: '一键部署已关闭（LUNA_TTS_PROVISION=0）。' };
   if (provisionInFlight) return { ok: true };
   provisionInFlight = true;
   const ttsDir = join(p.userData, 'tts');
@@ -887,7 +887,7 @@ async function smokeProbe(win: BrowserWindow): Promise<void> {
       // actually rendered inside the packaged shell (the desktop-specific wiring a page probe misses).
       document.querySelector('.settings-panel')?.classList.add('on');
       const petInput = [...document.querySelectorAll('.settings-panel label')]
-        .find((l) => l.textContent.includes('Desktop pet'))?.querySelector('input');
+        .find((l) => l.textContent.includes('Desktop pet') || l.textContent.includes('桌面宠物'))?.querySelector('input');
       // v0.44.2: the data surface, THROUGH the same-origin forward — proves serve.ts → sidecar.
       const dataStatus = await fetch('/api/data/diaries').then((r) => r.status).catch(() => 0);
       return JSON.stringify({
@@ -1052,9 +1052,9 @@ void app.whenReady().then(async () => {
       if (!SMOKE)
         dialog.showMessageBoxSync({
           type: 'error',
-          message: 'Luna is already running',
-          detail: `The local web host port (${DESKTOP_WEB_PORT}) is in use — another Luna window likely has it. Close it and try again.`,
-          buttons: ['Close'],
+          message: 'Luna 已经在运行',
+          detail: `本地网页服务端口（${DESKTOP_WEB_PORT}）已被占用——可能已经打开了另一个 Luna 窗口。请关闭它后重试。`,
+          buttons: ['关闭'],
         });
       app.quit();
     },
@@ -1156,9 +1156,9 @@ void app.whenReady().then(async () => {
     if (!up) {
       const choice = dialog.showMessageBoxSync({
         type: 'warning',
-        message: 'Luna\'s dev stack did not start',
-        detail: `No response on 127.0.0.1:${SERVER_PORT}. Check that bun + the repo are present (or set LUNA_BUN_PATH in ${p.envFile}).`,
-        buttons: ['Open Setup', 'Close'],
+        message: 'Luna 开发服务没有启动',
+        detail: `127.0.0.1:${SERVER_PORT} 没有响应。请确认 Bun 和项目目录存在（或在 ${p.envFile} 中设置 LUNA_BUN_PATH）。`,
+        buttons: ['打开设置', '关闭'],
         defaultId: 0,
       });
       if (choice === 0) {
@@ -1180,9 +1180,9 @@ void app.whenReady().then(async () => {
     // to the wizard right here instead of pointing at a file path.
     const choice = dialog.showMessageBoxSync({
       type: 'warning',
-      message: 'Luna\'s server did not start',
-      detail: `No response on 127.0.0.1:${SERVER_PORT}. Check ${p.envFile} and the logs — or re-run the setup wizard to fix the configuration.`,
-      buttons: ['Open Setup', 'Close'],
+      message: 'Luna 服务没有启动',
+      detail: `127.0.0.1:${SERVER_PORT} 没有响应。请检查 ${p.envFile} 和日志，或重新运行配置向导修复配置。`,
+      buttons: ['打开设置', '关闭'],
       defaultId: 0,
     });
     if (choice === 0) {

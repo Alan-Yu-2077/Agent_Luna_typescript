@@ -93,7 +93,13 @@ function tabPane(parent: Element, name: string, active: boolean): HTMLElement {
 }
 
 // v0.36.4: one icon button in the left rail. `data-tab` links it to its pane.
-function railBtn(rail: Element, icon: string, label: string, name: string, active: boolean): HTMLButtonElement {
+function railBtn(
+  rail: Element,
+  icon: string,
+  label: string,
+  name: string,
+  active: boolean,
+): HTMLButtonElement {
   const doc = rail.ownerDocument;
   const btn = doc.createElement('button');
   btn.type = 'button';
@@ -152,12 +158,12 @@ export function buildLayout(root: HTMLElement): LayoutRefs {
 
   const stage = add(root, 'div', 'stage');
 
-  const statusBadge = add(stage, 'div', 'status-badge', 'Connecting…');
+  const statusBadge = add(stage, 'div', 'status-badge', '连接中…');
 
   const settingsBtn = doc.createElement('button');
   settingsBtn.className = 'settings-btn';
   settingsBtn.type = 'button';
-  settingsBtn.setAttribute('aria-label', 'Settings');
+  settingsBtn.setAttribute('aria-label', '设置');
   settingsBtn.textContent = '⚙';
   stage.appendChild(settingsBtn);
 
@@ -173,32 +179,64 @@ export function buildLayout(root: HTMLElement): LayoutRefs {
   const generalTab = tabPane(settingsBody, 'general', true);
   const avatarTab = tabPane(settingsBody, 'avatar', false);
   const serverTab = tabPane(settingsBody, 'server', false);
-  railBtn(settingsRail, '🎚', 'General', 'general', true);
-  const avatarRailBtn = railBtn(settingsRail, '✨', 'Avatar', 'avatar', false);
-  railBtn(settingsRail, '☁️', 'Server', 'server', false);
+  railBtn(settingsRail, '🎚', '通用', 'general', true);
+  const avatarRailBtn = railBtn(settingsRail, '✨', '形象', 'avatar', false);
+  railBtn(settingsRail, '☁️', '服务', 'server', false);
   wireTabs(settingsRail, [generalTab, avatarTab, serverTab]);
 
   const generalCard = add(generalTab, 'div', 'settings-card');
-  const ttsToggle = toggleRow(generalCard, 'Voice', localStorage.getItem('luna:tts') !== '0');
+  const ttsToggle = toggleRow(generalCard, '声音', localStorage.getItem('luna:tts') !== '0');
   // Desktop-shell only: app.ts hides the row when no lunaPet bridge exists (plain browser) and
   // sets checked from the actual mode (?pet=1). The Setup wizard re-run row is inserted right after
   // it by app.ts (petRow.after), so it lands in this same card.
-  const petToggle = toggleRow(generalCard, 'Desktop pet', false);
+  const petToggle = toggleRow(generalCard, '桌面宠物', false);
   petToggle.closest('label')?.classList.add('pet-mode-row');
-  add(generalTab, 'div', 'hint', 'Voice / model changes need a refresh · scroll to zoom · double-click to reset');
+  add(generalTab, 'div', 'hint', '声音或模型变更需要刷新 · 滚轮缩放 · 双击还原');
 
   const avatarCard = add(avatarTab, 'div', 'settings-card');
-  const live2dToggle = toggleRow(avatarCard, 'Live2D model', localStorage.getItem('luna:live2d') !== '0');
-  const gazeToggle = toggleRow(avatarCard, 'Gaze follow', localStorage.getItem('luna:gaze-follow') !== '0');
-  const affectToggle = toggleRow(avatarCard, 'Mood memory', localStorage.getItem('luna:affect') !== '0');
-  const livePeakToggle = toggleRow(avatarCard, 'Living expressions', localStorage.getItem('luna:live-peak') !== '0');
-  const shortClipsToggle = toggleRow(avatarCard, 'Brief performances', localStorage.getItem('luna:short-clips') !== '0');
-  const idleActionsToggle = toggleRow(avatarCard, 'Idle gestures', localStorage.getItem('luna:idle-actions') !== '0');
-  const listeningToggle = toggleRow(avatarCard, 'Attentive listening', localStorage.getItem('luna:listening') !== '0');
-  const speechPerfToggle = toggleRow(avatarCard, 'Speaking performance', localStorage.getItem('luna:speech-performance') !== '0');
+  const live2dToggle = toggleRow(
+    avatarCard,
+    'Live2D 模型',
+    localStorage.getItem('luna:live2d') !== '0',
+  );
+  const gazeToggle = toggleRow(
+    avatarCard,
+    '视线跟随',
+    localStorage.getItem('luna:gaze-follow') !== '0',
+  );
+  const affectToggle = toggleRow(
+    avatarCard,
+    '情绪记忆',
+    localStorage.getItem('luna:affect') !== '0',
+  );
+  const livePeakToggle = toggleRow(
+    avatarCard,
+    '灵动表情',
+    localStorage.getItem('luna:live-peak') !== '0',
+  );
+  const shortClipsToggle = toggleRow(
+    avatarCard,
+    '短时表现',
+    localStorage.getItem('luna:short-clips') !== '0',
+  );
+  const idleActionsToggle = toggleRow(
+    avatarCard,
+    '待机动作',
+    localStorage.getItem('luna:idle-actions') !== '0',
+  );
+  const listeningToggle = toggleRow(
+    avatarCard,
+    '专注倾听',
+    localStorage.getItem('luna:listening') !== '0',
+  );
+  const speechPerfToggle = toggleRow(
+    avatarCard,
+    '说话表现',
+    localStorage.getItem('luna:speech-performance') !== '0',
+  );
   const idleSelect = selectRow(
     avatarCard,
-    'Idle animation',
+    '待机动画',
     IDLE_PROFILES,
     localStorage.getItem('luna:idle-profile') ?? DEFAULT_IDLE_PROFILE,
   );
@@ -206,26 +244,26 @@ export function buildLayout(root: HTMLElement): LayoutRefs {
   // those tune how the expression system behaves, these are things the owner puts on her and that
   // stay on until he takes them off. Checked state is filled in by app.ts from `luna:costume`.
   const costumeCard = add(avatarTab, 'div', 'settings-card costume-card');
-  add(costumeCard, 'div', 'card-title', 'Costume');
+  add(costumeCard, 'div', 'card-title', '装扮');
   const costumeToggles: Record<string, HTMLInputElement> = {};
   for (const [id, item] of Object.entries(COSTUME)) {
     const box = toggleRow(costumeCard, item.label, false);
     box.dataset['costume'] = id;
     costumeToggles[id] = box;
   }
-  add(costumeCard, 'div', 'hint', 'Yours to set — her expressions never put these on or take them off');
+  add(costumeCard, 'div', 'hint', '由你决定 — 她的表情不会自动穿戴或摘下这些装扮');
 
   // v0.43.7: the way into the Live2D workbench. A row rather than a rail tab — the bench replaces
   // the whole page (no WS, no chat), so it is a departure, not another settings pane.
   const workbenchBtn = doc.createElement('button');
   workbenchBtn.className = 'workbench-btn';
   workbenchBtn.type = 'button';
-  workbenchBtn.textContent = '🎛 Live2D workbench';
+  workbenchBtn.textContent = '🎛 Live2D 工作台';
   avatarCard.appendChild(workbenchBtn);
 
   // v0.27.1: the server-driven half — settingsView.ts fills this from settings.state.
   const serverSettings = add(serverTab, 'div', 'server-settings');
-  add(serverTab, 'div', 'hint server-empty', 'No server settings yet — Luna is still connecting.');
+  add(serverTab, 'div', 'hint server-empty', '还没有服务设置 — Luna 仍在连接中。');
 
   const motifLayer = add(stage, 'div', 'motif-layer');
   for (const m of MOTIFS) {
@@ -244,12 +282,12 @@ export function buildLayout(root: HTMLElement): LayoutRefs {
   const chatBody = add(panel, 'div', 'chat-body');
   const header = add(chatBody, 'div', 'chat-header');
   add(header, 'span', 'dot');
-  add(header, 'span', undefined, 'Luna · online');
+  add(header, 'span', undefined, 'Luna · 在线');
   const chatLog = add(chatBody, 'div', 'chat-log');
   const scrollPill = doc.createElement('button');
   scrollPill.className = 'scroll-pill';
   scrollPill.type = 'button';
-  scrollPill.textContent = '↓ New messages';
+  scrollPill.textContent = '↓ 新消息';
   chatBody.appendChild(scrollPill);
 
   const inputRow = add(panel, 'div', 'chat-input-row');
@@ -258,19 +296,19 @@ export function buildLayout(root: HTMLElement): LayoutRefs {
   const collapseBtn = doc.createElement('button');
   collapseBtn.className = 'collapse-btn';
   collapseBtn.type = 'button';
-  collapseBtn.setAttribute('aria-label', 'Collapse chat');
+  collapseBtn.setAttribute('aria-label', '收起对话');
   collapseBtn.textContent = '⌄';
   inputRow.appendChild(collapseBtn);
   const input = doc.createElement('input');
   input.className = 'chat-input';
   input.type = 'text';
-  input.placeholder = 'Say something to Luna…';
+  input.placeholder = '和 Luna 说点什么…';
   input.autocomplete = 'off';
   inputRow.appendChild(input);
   const sendBtn = doc.createElement('button');
   sendBtn.className = 'send-btn';
   sendBtn.type = 'button';
-  sendBtn.setAttribute('aria-label', 'Send');
+  sendBtn.setAttribute('aria-label', '发送');
   sendBtn.textContent = '➤';
   inputRow.appendChild(sendBtn);
 
@@ -280,12 +318,12 @@ export function buildLayout(root: HTMLElement): LayoutRefs {
   add(moodPip, 'span', 'mood-label', '');
   const ph = add(modelStage, 'div', 'model-placeholder');
   add(ph, 'div', 'ph-circle', '🌙');
-  add(ph, 'div', 'label', 'No avatar installed');
-  add(ph, 'div', 'sub', 'Add a Live2D model to see Luna');
+  add(ph, 'div', 'label', '还没有安装模型');
+  add(ph, 'div', 'sub', '添加 Live2D 模型后就能看到 Luna');
   const dreamBtn = doc.createElement('button');
   dreamBtn.className = 'dream-btn';
   dreamBtn.type = 'button';
-  dreamBtn.textContent = '🌙 Dream';
+  dreamBtn.textContent = '🌙 梦境';
   modelStage.appendChild(dreamBtn);
 
   const dreamOverlay = add(root, 'div', 'dream-overlay');
@@ -298,19 +336,47 @@ export function buildLayout(root: HTMLElement): LayoutRefs {
     s.style.animationDelay = st.delay;
   }
   add(dreamOverlay, 'div', 'moon', '🌙');
-  add(dreamOverlay, 'div', 'dream-title', 'Luna is dreaming…');
+  add(dreamOverlay, 'div', 'dream-title', 'Luna 正在做梦…');
   const dreamCaption = add(dreamOverlay, 'div', 'dream-caption', '');
   const dreamWakeBtn = doc.createElement('button');
   dreamWakeBtn.className = 'wake-btn';
   dreamWakeBtn.type = 'button';
-  dreamWakeBtn.textContent = '☀️ Wake';
+  dreamWakeBtn.textContent = '☀️ 醒来';
   dreamOverlay.appendChild(dreamWakeBtn);
 
   return {
-    statusBadge, chatLog, chatHeader: header, input, inputRow, sendBtn, collapseBtn, dreamBtn, modelStage,
-    moodPip, scrollPill, dreamOverlay, dreamWakeBtn, dreamCaption,
-    settingsBtn, settingsPanel, settingsBackdrop, ttsToggle, live2dToggle, gazeToggle, idleSelect,
-    petToggle, serverSettings, avatarTab, avatarRailBtn, affectToggle, livePeakToggle, shortClipsToggle, idleActionsToggle, listeningToggle, speechPerfToggle,
-    workbenchBtn, costumeToggles,
+    statusBadge,
+    chatLog,
+    chatHeader: header,
+    input,
+    inputRow,
+    sendBtn,
+    collapseBtn,
+    dreamBtn,
+    modelStage,
+    moodPip,
+    scrollPill,
+    dreamOverlay,
+    dreamWakeBtn,
+    dreamCaption,
+    settingsBtn,
+    settingsPanel,
+    settingsBackdrop,
+    ttsToggle,
+    live2dToggle,
+    gazeToggle,
+    idleSelect,
+    petToggle,
+    serverSettings,
+    avatarTab,
+    avatarRailBtn,
+    affectToggle,
+    livePeakToggle,
+    shortClipsToggle,
+    idleActionsToggle,
+    listeningToggle,
+    speechPerfToggle,
+    workbenchBtn,
+    costumeToggles,
   };
 }

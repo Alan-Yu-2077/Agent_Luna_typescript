@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync, mkdirSync, readdirSync, rmSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
+import {
+  mkdtempSync,
+  mkdirSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+  existsSync,
+  readFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { installModelFolder, resolveModelDir } from './modelInstall';
@@ -65,7 +73,7 @@ describe('installModelFolder (v0.35.2)', () => {
     writeFileSync(join(src, 'readme.txt'), 'hi');
     const opts = setup();
     const r = installModelFolder(src, opts);
-    expect(r).toEqual({ ok: false, error: 'No .model3.json found in that folder.' });
+    expect(r).toEqual({ ok: false, error: '这个文件夹里没有找到 .model3.json。' });
     expect(readdirSync(opts.modelsDir)).toEqual([]);
     expect(parseEnvFile(readFileSync(opts.envFile, 'utf8'))['LUNA_MODEL_URL']).toBe('');
   });
@@ -75,7 +83,7 @@ describe('installModelFolder (v0.35.2)', () => {
     const file = join(base, 'model.zip');
     writeFileSync(file, 'zip');
     const r = installModelFolder(file, setup());
-    expect(r).toEqual({ ok: false, error: 'That is not a folder.' });
+    expect(r).toEqual({ ok: false, error: '这不是一个文件夹。' });
   });
 
   test('copy-only contract: the source folder is untouched after install', () => {

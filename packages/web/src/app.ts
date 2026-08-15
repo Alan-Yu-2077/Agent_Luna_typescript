@@ -4,7 +4,13 @@ import { LunaWsClient, type WsStatus } from './wsClient';
 import { resolveWsUrl } from './wsUrl';
 import { isInteractivePoint, modelRectFromVars } from './ui/petHitTest';
 import { lastGeoFix, requestGeolocation, setGeoFix } from './geo';
-import { consoleLive2DSink, noopAudioSink, type AudioSink, type Live2DSink, type Live2DState } from './sinks';
+import {
+  consoleLive2DSink,
+  noopAudioSink,
+  type AudioSink,
+  type Live2DSink,
+  type Live2DState,
+} from './sinks';
 import { CuteBubbleView } from './ui/cuteBubbleView';
 import { SpeechStackView } from './ui/speechStackView';
 import { RouterBubbleView } from './ui/routerBubbleView';
@@ -43,7 +49,11 @@ import { mountSettingsPage } from './ui/settingsPage';
 // overlay, thinking indicator, mood pip, scroll pill, settings). Degrades to the
 // placeholder + silence if WebGL/audio are unavailable; chat works regardless.
 
-const STATUS_TEXT: Record<WsStatus, string> = { connecting: 'Connecting…', open: 'Online', closed: 'Reconnecting…' };
+const STATUS_TEXT: Record<WsStatus, string> = {
+  connecting: '连接中…',
+  open: '在线',
+  closed: '重新连接中…',
+};
 // Backend WS endpoint: fixed 127.0.0.1 + `?ws=<port>` override (isolated dev: `:5273/?ws=8888`).
 // v0.26.0: no longer derived from location.hostname — a desktop shell's origin must not decide
 // where the local server lives.
@@ -97,7 +107,11 @@ async function boot(): Promise<void> {
       benchSink = await createPixiLive2DSink(bench.stage, { modelUrl });
     }
     if (benchSink) bench.stage.querySelector('.model-placeholder')?.remove();
-    else applyEmptyState(bench.stage, !modelUrl ? 'none' : webglAvailable() ? 'load-failed' : 'webgl-off');
+    else
+      applyEmptyState(
+        bench.stage,
+        !modelUrl ? 'none' : webglAvailable() ? 'load-failed' : 'webgl-off',
+      );
     window.addEventListener('pagehide', () => bench.dispose());
     return;
   }
@@ -164,10 +178,10 @@ async function boot(): Promise<void> {
       if (skipped) return;
       gate.setStatus(
         res === 'unavailable'
-          ? 'No voice service detected, entering…'
+          ? '没有检测到语音服务，进入中…'
           : res === 'failed'
-            ? 'Voice failed to load, entering muted'
-            : 'Voice ready ✓',
+            ? '语音加载失败，将以静音模式进入'
+            : '语音已就绪 ✓',
       );
       globalThis.setTimeout(() => gate.done(), res === 'ready' ? 300 : 900);
     });
@@ -226,7 +240,7 @@ async function boot(): Promise<void> {
   function setDream(on: boolean): void {
     dreaming = on;
     refs.input.disabled = on;
-    refs.input.placeholder = on ? 'Luna is dreaming…' : 'Say something to Luna…';
+    refs.input.placeholder = on ? 'Luna 正在做梦…' : '和 Luna 说点什么…';
     if (on) {
       clearTimeout(dreamHideTimer);
       dreamShownAt = Date.now();
@@ -299,7 +313,9 @@ async function boot(): Promise<void> {
       audio = new WebAudioSink({
         onMouth: (frame) => live2d.setMouth(frame),
         onUnspoken: (text) => {
-          console.warn(`[voice] her voice is unavailable — skipping this line: ${text.slice(0, 40)}`);
+          console.warn(
+            `[voice] her voice is unavailable — skipping this line: ${text.slice(0, 40)}`,
+          );
         },
       });
     }
@@ -663,11 +679,11 @@ async function boot(): Promise<void> {
     const row = document.createElement('label');
     row.className = 'setting-row rerun-setup-row';
     const name = document.createElement('span');
-    name.textContent = 'Setup wizard';
+    name.textContent = '配置向导';
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'setting-reset';
-    btn.textContent = 'Re-run…';
+    btn.textContent = '重新运行…';
     btn.addEventListener('click', () => openSetup());
     row.append(name, btn);
     petRow.after(row);
@@ -773,9 +789,11 @@ async function boot(): Promise<void> {
         // her diary never wakes her); the settings page ADOPTS the old panel's live rows, so the
         // controls keep their exact wiring wherever they are displayed.
         pageBody: (id) =>
-          id === 'diary' ? mountDiaryBook(document)
-          : id === 'skills' ? mountSkillsPage(document)
-          : mountSettingsPage(document, refs),
+          id === 'diary'
+            ? mountDiaryBook(document)
+            : id === 'skills'
+              ? mountSkillsPage(document)
+              : mountSettingsPage(document, refs),
         ...(quitBridge ? { quit: () => quitBridge() } : {}),
       });
     };
@@ -786,7 +804,7 @@ async function boot(): Promise<void> {
     const returnBtn = document.createElement('button');
     returnBtn.type = 'button';
     returnBtn.className = 'menu-return-btn';
-    returnBtn.textContent = '← Menu';
+    returnBtn.textContent = '← 菜单';
     returnBtn.addEventListener('click', () => {
       returnGate.request(() => {
         clearTimeout(swapTimer);
@@ -804,7 +822,11 @@ async function boot(): Promise<void> {
     // stays as the donor the settings page adopts its rows from. Esc in chat = the quick way home.
     refs.settingsBtn.style.display = 'none';
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && menuHandle === null && !refs.settingsPanel.classList.contains('on')) {
+      if (
+        e.key === 'Escape' &&
+        menuHandle === null &&
+        !refs.settingsPanel.classList.contains('on')
+      ) {
         returnBtn.click();
       }
     });
@@ -819,9 +841,9 @@ function applyEmptyState(stage: HTMLElement, state: 'none' | 'webgl-off' | 'load
   const ph = stage.querySelector('.model-placeholder');
   if (!ph) return;
   const copy: Record<typeof state, [string, string]> = {
-    none: ['No avatar installed', 'Drop a Live2D model in public/models/ — see docs/SETUP.md'],
-    'webgl-off': ['WebGL unavailable', "This browser can't render the avatar"],
-    'load-failed': ['Model failed to load', 'Check the model files in public/models/'],
+    none: ['还没有安装模型', '把 Live2D 模型放进 public/models/，详见 docs/SETUP.md'],
+    'webgl-off': ['WebGL 不可用', '当前浏览器无法渲染模型'],
+    'load-failed': ['模型加载失败', '请检查 public/models/ 里的模型文件'],
   };
   const [labelText, subText] = copy[state];
   const label = ph.querySelector('.label');
@@ -837,7 +859,7 @@ function applyEmptyState(stage: HTMLElement, state: 'none' | 'webgl-off' | 'load
     const btn = ph.ownerDocument.createElement('button');
     btn.className = 'choose-model-btn';
     btn.type = 'button';
-    btn.textContent = 'Choose model folder…';
+    btn.textContent = '选择模型文件夹…';
     btn.addEventListener('click', () => void chooseModel());
     ph.appendChild(btn);
   }
@@ -847,14 +869,15 @@ function applyEmptyState(stage: HTMLElement, state: 'none' | 'webgl-off' | 'load
 // states, so performances are visibly testable without the backend. MVP for the
 // 表演编排 / 挂机 / 睡眠 inspection ask.
 function buildDevPanel(live2d: Live2DSink): void {
-  const btn = 'background:#20242f;color:#e7e9ef;border:1px solid #2c3140;border-radius:6px;padding:3px 8px;cursor:pointer;font:inherit;';
+  const btn =
+    'background:#20242f;color:#e7e9ef;border:1px solid #2c3140;border-radius:6px;padding:3px 8px;cursor:pointer;font:inherit;';
   const panel = document.createElement('div');
   panel.style.cssText =
     'position:fixed;left:10px;bottom:10px;z-index:9999;background:rgba(20,22,28,.92);color:#e7e9ef;' +
     'border:1px solid #2c3140;border-radius:10px;padding:10px;font:12px ui-monospace,monospace;' +
     'display:flex;flex-direction:column;gap:6px;max-width:250px;';
   const title = document.createElement('div');
-  title.textContent = '🎭 dev · trigger performance';
+  title.textContent = '🎭 开发面板 · 触发表演';
   title.style.cssText = 'color:#ffa7d1;font-weight:600;';
   panel.appendChild(title);
 
@@ -862,7 +885,8 @@ function buildDevPanel(live2d: Live2DSink): void {
   const row = document.createElement('div');
   row.style.cssText = 'display:flex;gap:6px;';
   const sel = document.createElement('select');
-  sel.style.cssText = 'flex:1;background:#20242f;color:inherit;border:1px solid #2c3140;border-radius:6px;padding:3px;';
+  sel.style.cssText =
+    'flex:1;background:#20242f;color:inherit;border:1px solid #2c3140;border-radius:6px;padding:3px;';
   for (const id of emotions) {
     const o = document.createElement('option');
     o.value = id;
@@ -870,7 +894,7 @@ function buildDevPanel(live2d: Live2DSink): void {
     sel.appendChild(o);
   }
   const play = document.createElement('button');
-  play.textContent = '▶ Play';
+  play.textContent = '▶ 播放';
   play.style.cssText = btn;
   play.addEventListener('click', () => live2d.triggerEmotion?.(sel.value));
   row.append(sel, play);
@@ -879,10 +903,10 @@ function buildDevPanel(live2d: Live2DSink): void {
   const srow = document.createElement('div');
   srow.style.cssText = 'display:flex;gap:4px;flex-wrap:wrap;';
   const states: Array<[string, Live2DState]> = [
-    ['Idle', 'neutral'],
-    ['Thinking', 'thinking'],
-    ['Speaking', 'speaking'],
-    ['Sleeping', 'sleeping'],
+    ['待机', 'neutral'],
+    ['思考', 'thinking'],
+    ['说话', 'speaking'],
+    ['睡眠', 'sleeping'],
   ];
   for (const [label, st] of states) {
     const b = document.createElement('button');
@@ -895,7 +919,7 @@ function buildDevPanel(live2d: Live2DSink): void {
 
   if (!emotions.length) {
     const note = document.createElement('div');
-    note.textContent = '(model not loaded — placeholder sink)';
+    note.textContent = '（模型尚未加载 — 当前为占位模式）';
     note.style.cssText = 'color:#8b93a7;';
     panel.appendChild(note);
   }

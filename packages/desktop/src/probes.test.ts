@@ -3,7 +3,10 @@ import { probeEmbedding, probeSearch, probeWeather, type ProbeFetch } from './pr
 
 const KEY = 'sk-secret-do-not-echo';
 
-function fetcher(status: number, body = '{}'): { fn: ProbeFetch; calls: Array<{ url: string; init?: RequestInit }> } {
+function fetcher(
+  status: number,
+  body = '{}',
+): { fn: ProbeFetch; calls: Array<{ url: string; init?: RequestInit }> } {
   const calls: Array<{ url: string; init?: RequestInit }> = [];
   const fn: ProbeFetch = (url, init) => {
     calls.push({ url, init });
@@ -15,7 +18,11 @@ function fetcher(status: number, body = '{}'): { fn: ProbeFetch; calls: Array<{ 
 const throwing: ProbeFetch = () => Promise.reject(new Error('ENOTFOUND'));
 
 describe('probeEmbedding (v0.35.1)', () => {
-  const fields = { baseUrl: 'https://api.openai.com/', apiKey: KEY, model: 'text-embedding-3-large' };
+  const fields = {
+    baseUrl: 'https://api.openai.com/',
+    apiKey: KEY,
+    model: 'text-embedding-3-large',
+  };
 
   test('2xx → ok, and the request hits {base}/v1/embeddings with the model', async () => {
     const { fn, calls } = fetcher(200);
@@ -26,14 +33,14 @@ describe('probeEmbedding (v0.35.1)', () => {
   test('401 → key-rejected message naming the provider console', async () => {
     const v = await probeEmbedding(fields, fetcher(401).fn);
     expect(v.ok).toBe(false);
-    expect(v.error).toContain('key');
+    expect(v.error).toContain('密钥');
   });
   test('404 → base URL / model hint', async () => {
     const v = await probeEmbedding(fields, fetcher(404).fn);
-    expect(v.error).toContain('base URL');
+    expect(v.error).toContain('接口地址');
   });
   test('thrown fetch → unreachable hint; empty fields → prompt without fetching', async () => {
-    expect((await probeEmbedding(fields, throwing)).error).toContain('reach');
+    expect((await probeEmbedding(fields, throwing)).error).toContain('访问');
     const { fn, calls } = fetcher(200);
     await probeEmbedding({ baseUrl: '', apiKey: '', model: '' }, fn);
     expect(calls.length).toBe(0);
@@ -80,13 +87,13 @@ describe('probeWeather', () => {
   test('body code 401 → key hint even under HTTP 200', async () => {
     const v = await probeWeather(fields, fetcher(200, '{"code":"401"}').fn);
     expect(v.ok).toBe(false);
-    expect(v.error).toContain('key');
+    expect(v.error).toContain('密钥');
   });
   test('Invalid Host body / 404 → the per-account API-host hint', async () => {
     const v404 = await probeWeather(fields, fetcher(404, 'nope').fn);
-    expect(v404.error).toContain('host');
+    expect(v404.error).toContain('主机');
     const vBody = await probeWeather(fields, fetcher(200, 'Invalid Host').fn);
-    expect(vBody.error).toContain('host');
+    expect(vBody.error).toContain('主机');
   });
   test('host guard: a non-QWeather host is rejected BEFORE any fetch', async () => {
     const { fn, calls } = fetcher(200, '{"code":"200"}');
@@ -96,7 +103,9 @@ describe('probeWeather', () => {
   });
   test('protocol prefix + trailing slash are normalized, legacy qweather.com allowed', async () => {
     const { fn, calls } = fetcher(200, '{"code":"200"}');
-    expect((await probeWeather({ apiKey: KEY, apiHost: 'https://devapi.qweather.com/' }, fn)).ok).toBe(true);
+    expect(
+      (await probeWeather({ apiKey: KEY, apiHost: 'https://devapi.qweather.com/' }, fn)).ok,
+    ).toBe(true);
     expect(calls[0]?.url.startsWith('https://devapi.qweather.com/v7/')).toBe(true);
   });
   test('custody: the key never appears in a verdict', async () => {

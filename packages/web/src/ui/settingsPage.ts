@@ -12,26 +12,20 @@ import { mountPersonaSection } from './personaEditor';
 // page never mounts and the old panel keeps its rows, untouched.
 
 export type SettingsCategoryId =
-  | 'voice'
-  | 'expression'
-  | 'appearance'
-  | 'behaviour'
-  | 'persona'
-  | 'modules'
-  | 'system';
+  'voice' | 'expression' | 'appearance' | 'behaviour' | 'persona' | 'modules' | 'system';
 
 export type SettingsCategory = { id: SettingsCategoryId; label: string; blurb: string };
 
 export const SETTINGS_CATEGORIES: readonly SettingsCategory[] = [
-  { id: 'voice', label: 'Voice', blurb: '她的声音' },
-  { id: 'expression', label: 'Expression & Motion', blurb: '她的表情与动作' },
-  { id: 'appearance', label: 'Appearance', blurb: '她的样子与这间屋子' },
-  { id: 'behaviour', label: 'Behaviour', blurb: '她自己的行为' },
+  { id: 'voice', label: '声音', blurb: '她的声音' },
+  { id: 'expression', label: '表情与动作', blurb: '她的表情与动作' },
+  { id: 'appearance', label: '外观', blurb: '她的样子与这间屋子' },
+  { id: 'behaviour', label: '行为', blurb: '她自己的行为' },
   // v0.44.6: persona is its own category (it is ABOUT her, not about widgets), and the four module
   // cards get their own too — four cards under System would have buried both.
-  { id: 'persona', label: 'Persona', blurb: '她是谁' },
-  { id: 'modules', label: 'Modules', blurb: '接进来的能力' },
-  { id: 'system', label: 'System', blurb: '底层与工具' },
+  { id: 'persona', label: '人格', blurb: '她是谁' },
+  { id: 'modules', label: '能力模块', blurb: '接进来的能力' },
+  { id: 'system', label: '系统', blurb: '底层与工具' },
 ];
 
 // The reconciliation artifact (the version's core risk is losing a switch in the move): every
@@ -118,7 +112,11 @@ export function mountSettingsPage(doc: Document, refs: LayoutRefs): HTMLElement 
       const body = (await r.json().catch(() => null)) as { backend?: { state?: string } } | null;
       const state = body?.backend?.state ?? (r.ok ? 'ready' : 'down');
       health.textContent =
-        state === 'ready' ? '声音服务:在跑 ✓' : state === 'starting' || state === 'restarting' ? '声音服务:正在启动…' : '声音服务:没有在跑';
+        state === 'ready'
+          ? '声音服务:在跑 ✓'
+          : state === 'starting' || state === 'restarting'
+            ? '声音服务:正在启动…'
+            : '声音服务:没有在跑';
     })
     .catch(() => {
       health.textContent = '声音服务:没有在跑';
@@ -147,7 +145,8 @@ export function mountSettingsPage(doc: Document, refs: LayoutRefs): HTMLElement 
   // surfacing them is its own decision, not a side effect of moving furniture. ──
   const note = doc.createElement('p');
   note.className = 'settings-page-note';
-  note.textContent = '她的主动行为(何时来找你、多久说一次)暂时还住在配置文件里——搬进这里是之后的一版。';
+  note.textContent =
+    '她的主动行为(何时来找你、多久说一次)暂时还住在配置文件里——搬进这里是之后的一版。';
   sections.get('behaviour')?.appendChild(note);
 
   // ── Persona (v0.44.6) — the soul endpoints; the self-edit firewall lives in the tool layer. ──

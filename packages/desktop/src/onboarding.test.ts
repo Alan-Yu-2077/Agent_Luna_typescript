@@ -1,5 +1,13 @@
 import { describe, expect, test } from 'bun:test';
-import { WIZARD_KEYS, classifyProbe, filterWizardFields, mergeEnvFile, needsOnboarding, wizardFlagEnabled, wizardPrefill } from './onboarding';
+import {
+  WIZARD_KEYS,
+  classifyProbe,
+  filterWizardFields,
+  mergeEnvFile,
+  needsOnboarding,
+  wizardFlagEnabled,
+  wizardPrefill,
+} from './onboarding';
 import { parseEnvFile } from './envfile';
 
 describe('wizardFlagEnabled (v0.35.4 default flip)', () => {
@@ -131,15 +139,15 @@ describe('classifyProbe', () => {
   test('401/403 → key rejected', () => {
     expect(classifyProbe(401)).toMatchObject({ ok: false });
     expect(classifyProbe(403).ok).toBe(false);
-    expect(classifyProbe(401).error).toContain('key');
+    expect(classifyProbe(401).error).toContain('密钥');
   });
   test('404 → base URL / endpoint', () => {
     expect(classifyProbe(404).ok).toBe(false);
-    expect(classifyProbe(404).error).toContain('base URL');
+    expect(classifyProbe(404).error).toContain('接口地址');
   });
   test('null (fetch threw) → unreachable URL', () => {
     expect(classifyProbe(null).ok).toBe(false);
-    expect(classifyProbe(null).error).toContain('URL');
+    expect(classifyProbe(null).error).toContain('地址');
   });
   test('other non-2xx (5xx/429) → surfaced, not ok', () => {
     expect(classifyProbe(500).ok).toBe(false);
@@ -147,14 +155,13 @@ describe('classifyProbe', () => {
   });
 });
 
-
 describe('bug scenario: baseUrl with = characters', () => {
   test('complete end-to-end: merge, write, read back URL with query params', () => {
     // Simulate the exact scenario from the bug claim
     const baseUrl = 'https://x.com?a=1&b=2';
     const apiKey = 'sk-valid';
     const model = 'claude-opus-4-8';
-    
+
     // Step 1: probeConnection succeeds (mocked as passed above)
     // Step 2: mergeEnvFile is called with unescaped URL
     const template = `# Luna desktop configuration
@@ -162,17 +169,17 @@ ANTHROPIC_API_KEY=
 ANTHROPIC_BASE_URL=
 LUNA_MODEL=claude-sonnet-4-6
 `;
-    
+
     const merged = mergeEnvFile(template, {
       ANTHROPIC_BASE_URL: baseUrl,
       ANTHROPIC_API_KEY: apiKey,
       LUNA_MODEL: model,
     });
-    
+
     // Step 3: file is written (simulated by the merged string)
     // Step 4: sidecarEnv calls parseEnvFile to read the merged content
     const parsed = parseEnvFile(merged);
-    
+
     // Verify the file is NOT corrupted — values must parse exactly
     expect(parsed['ANTHROPIC_BASE_URL']).toBe(baseUrl);
     expect(parsed['ANTHROPIC_API_KEY']).toBe(apiKey);

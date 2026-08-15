@@ -58,9 +58,10 @@ export function initSettings(database: Database | null): void {
     originalEnv.set(s.env, v);
   }
   if (!db) return;
-  const rows = db
-    .query('SELECT key, value FROM settings')
-    .all() as Array<{ key: string; value: string }>;
+  const rows = db.query('SELECT key, value FROM settings').all() as Array<{
+    key: string;
+    value: string;
+  }>;
   for (const row of rows) {
     const spec = specFor(row.key);
     // Rows for removed specs or values a newer validator rejects are ignored, not deleted —
@@ -96,9 +97,9 @@ export function settingsState(): Setting[] {
 export type SetResult = { ok: true } | { ok: false; error: string };
 
 export function setSetting(key: string, value: string | null): SetResult {
-  if (!initialized) return { ok: false, error: 'settings not initialized' };
+  if (!initialized) return { ok: false, error: '设置尚未初始化' };
   const spec = specFor(key);
-  if (!spec) return { ok: false, error: `unknown setting: ${key}` };
+  if (!spec) return { ok: false, error: `未知的设置项：${key}` };
   if (value === null) {
     pins.delete(key);
     db?.run('DELETE FROM settings WHERE key = ?', [key]);

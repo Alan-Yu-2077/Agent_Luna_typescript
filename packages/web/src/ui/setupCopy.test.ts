@@ -6,12 +6,12 @@ describe('detectSetupLang (v0.35.0)', () => {
     expect(detectSetupLang('zh-CN', 'en')).toBe('en');
     expect(detectSetupLang('en-US', 'zh')).toBe('zh');
   });
-  test('zh-* navigator languages default to zh, everything else to en', () => {
+  test('Chinese-first default keeps the wizard in zh unless the user chose en', () => {
     expect(detectSetupLang('zh-CN', null)).toBe('zh');
     expect(detectSetupLang('zh-TW', null)).toBe('zh');
-    expect(detectSetupLang('en-GB', null)).toBe('en');
-    expect(detectSetupLang('ja-JP', null)).toBe('en');
-    expect(detectSetupLang(undefined, null)).toBe('en');
+    expect(detectSetupLang('en-GB', null)).toBe('zh');
+    expect(detectSetupLang('ja-JP', null)).toBe('zh');
+    expect(detectSetupLang(undefined, null)).toBe('zh');
   });
   test('a corrupt stored value falls back to navigator detection', () => {
     expect(detectSetupLang('zh-CN', 'fr')).toBe('zh');

@@ -22,18 +22,22 @@ export type MenuItem = {
 // tab's close button is not ours to duplicate.
 export function menuItems(opts: { hasQuit: boolean; dreamEnabled: boolean }): MenuItem[] {
   const items: MenuItem[] = [
-    { id: 'talk', label: 'Talk', primary: true },
-    { id: 'diary', label: 'Diary', primary: true },
-    { id: 'skills', label: 'Skills', primary: true },
-    { id: 'dream', label: 'Dream', primary: true, disabled: !opts.dreamEnabled },
-    { id: 'settings', label: 'Settings', primary: false },
+    { id: 'talk', label: '对话', primary: true },
+    { id: 'diary', label: '日记', primary: true },
+    { id: 'skills', label: '技能', primary: true },
+    { id: 'dream', label: '梦境', primary: true, disabled: !opts.dreamEnabled },
+    { id: 'settings', label: '设置', primary: false },
   ];
-  if (opts.hasQuit) items.push({ id: 'quit', label: 'Quit', primary: false });
+  if (opts.hasQuit) items.push({ id: 'quit', label: '退出', primary: false });
   return items;
 }
 
 // Arrow-key cycling over the enabled items only — a disabled Dream is skipped, not a dead stop.
-export function nextFocusIndex(current: number, delta: 1 | -1, enabled: readonly boolean[]): number {
+export function nextFocusIndex(
+  current: number,
+  delta: 1 | -1,
+  enabled: readonly boolean[],
+): number {
   const n = enabled.length;
   if (n === 0 || !enabled.some(Boolean)) return -1;
   let i = current;
@@ -59,7 +63,9 @@ export function springLinear(k = 190, c = 11, m = 1, samples = 28): string {
     let x: number;
     if (zeta < 1) {
       const wd = omega * Math.sqrt(1 - zeta * zeta);
-      x = 1 - Math.exp(-zeta * omega * t) * (Math.cos(wd * t) + ((zeta * omega) / wd) * Math.sin(wd * t));
+      x =
+        1 -
+        Math.exp(-zeta * omega * t) * (Math.cos(wd * t) + ((zeta * omega) / wd) * Math.sin(wd * t));
     } else {
       // Overdamped/critical: no oscillation, plain exponential approach — never overshoots.
       x = 1 - Math.exp(-omega * t) * (1 + omega * t);
@@ -101,14 +107,17 @@ export function mountMainMenu(
   const menu = doc.createElement('nav');
   menu.className = 'main-menu';
   menu.style.setProperty('--spring-ease', springLinear());
-  menu.setAttribute('aria-label', 'Main menu');
+  menu.setAttribute('aria-label', '主菜单');
 
   const mark = doc.createElement('div');
   mark.className = 'menu-mark';
   mark.textContent = 'LUNA';
   menu.appendChild(mark);
 
-  const items = menuItems({ hasQuit: deps.quit !== undefined, dreamEnabled: deps.onDream !== undefined });
+  const items = menuItems({
+    hasQuit: deps.quit !== undefined,
+    dreamEnabled: deps.onDream !== undefined,
+  });
   const buttons: HTMLButtonElement[] = [];
   for (const item of items) {
     const b = doc.createElement('button');
@@ -172,10 +181,10 @@ export function mountMainMenu(
     const back = doc.createElement('button');
     back.type = 'button';
     back.className = 'menu-page-back';
-    back.textContent = '← Menu';
+    back.textContent = '← 返回';
     back.addEventListener('click', returnToMenu);
     const title = doc.createElement('h2');
-    title.textContent = id === 'diary' ? 'Diary' : id === 'skills' ? 'Skills' : 'Settings';
+    title.textContent = id === 'diary' ? '日记' : id === 'skills' ? '技能' : '设置';
     page.append(back, title);
     const body = deps.pageBody?.(id) ?? null;
     if (body) page.appendChild(body);
@@ -183,9 +192,11 @@ export function mountMainMenu(
       const ph = doc.createElement('p');
       ph.className = 'menu-page-placeholder';
       ph.textContent =
-        id === 'diary' ? 'Her diary opens here soon.'
-        : id === 'skills' ? 'Her skills gather here soon.'
-        : 'Settings assemble here soon.';
+        id === 'diary'
+          ? '她的日记会在这里展开。'
+          : id === 'skills'
+            ? '她学会的技能会在这里汇集。'
+            : '设置会在这里展开。';
       page.appendChild(ph);
     }
     root.appendChild(page);
