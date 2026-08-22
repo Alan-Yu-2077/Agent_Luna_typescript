@@ -102,10 +102,11 @@ graph LR
   S -- provider seam --> L[Anthropic / OpenAI-compatible]
 ```
 
-Four Bun workspace packages with a one-way dependency arrow: [`protocol`](packages/protocol) (the
+Five Bun workspace packages with a one-way dependency arrow: [`protocol`](packages/protocol) (the
 shared wire contract — a wire change that isn't reflected on both sides is a *compile error*),
 [`server`](packages/server) (the brain; owns all state and model calls),
-[`web`](packages/web) (a thin reactive view), and [`desktop`](packages/desktop) (an optional
+[`web`](packages/web) (a thin reactive view), [`music-cli`](packages/music-cli) (a vendored
+macOS Now-Playing observer), and [`desktop`](packages/desktop) (an optional
 Electron shell). The deep dive lives in [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ## 🎬 Moments

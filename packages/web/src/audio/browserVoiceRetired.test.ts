@@ -17,7 +17,10 @@ const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'release', 'bin', 'pu
 // Where the browser voice is still allowed to be NAMED: the history that explains why it is gone.
 // `docs/` is excluded wholesale — DEVELOPMENT.md and the roadmap are the record of the removal, and
 // a changelog that cannot mention what it removed is a changelog that lies.
-const ALLOWED = ['/docs/', '/CHANGELOG.md'];
+// `.claude/skills/` joins it for the same reason (v0.45.18): the orientation map carries a table of
+// DEAD concepts precisely so someone who still remembers one can search the term and find the
+// correction. A map forbidden from naming what it is correcting cannot correct anyone.
+const ALLOWED = ['/docs/', '/CHANGELOG.md', '/.claude/skills/'];
 
 function sourceFiles(dir: string, exts: readonly string[]): string[] {
   const out: string[] = [];

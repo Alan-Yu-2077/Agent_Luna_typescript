@@ -12,9 +12,9 @@ description: >
   implement, add, build, fix, refactor, rework, create a feature, make Luna.
 
   Do NOT invoke for: documentation-only questions, orientation questions, general discussion
-  about the rewrite without a concrete change request, tasks already mid-flight, or work
-  targeting the Python original at /Users/alanyu2077/Desktop/Agent_Luna (use luna-dev for
-  that).
+  about the rewrite without a concrete change request, or tasks already mid-flight. (The Python
+  original and its `luna-dev` skill were archived on 2026-08-01 — there is no parity repo to
+  redirect to any more.)
 ---
 
 # Luna (TypeScript) Development Lifecycle
@@ -75,8 +75,9 @@ After orienting, extract from `docs/history/DEVELOPMENT.md`:
 
 You will use this in Phase 1 to propose the next version number.
 
-If `docs/REWRITE_CONTEXT.md` has Open Questions relevant to the requested change, surface them
-in Phase 1 — they may be exactly what the user needs to settle now.
+`docs/REWRITE_CONTEXT.md` no longer exists (retired in the 2026-08-01 consolidation). Locked
+design decisions now live in `ARCHITECTURE.md`; open questions live in the relevant initiative
+README under `docs/roadmap/`. If one of those bears on the request, surface it in Phase 1.
 
 ---
 
@@ -90,7 +91,8 @@ generic boilerplate.
 
 Good clarifying angles for this rewrite:
 
-- **Package scope**: which of `packages/protocol`, `packages/server`, `packages/web` (and which
+- **Package scope**: which of the five — `packages/protocol`, `packages/server`, `packages/web`,
+  `packages/music-cli`, `packages/desktop` (and which
   module within) does this touch?
 - **Wire contract impact**: does this add/remove/change a `ClientEvent` or `ServerEvent`
   variant? If yes, both packages will need updates in lockstep — flag it.
@@ -99,7 +101,7 @@ Good clarifying angles for this rewrite:
 - **Memory impact**: does this touch the SQLite schema for L1 / L2 / L3? Migrations need a
   declared `migrations/` file, not silent in-place edits.
 - **Open question dependency**: does this require resolving an Open Question in
-  `REWRITE_CONTEXT.md`? If yes, that resolution lands in the same change.
+  an initiative README's Open Questions? If yes, that resolution lands in the same change.
 - **Python parity vs new direction**: is this porting a Python behavior, or deliberately
   diverging? Cite the Python file:line if porting, cite the rationale if diverging.
 - **Tests**: what test files need to grow, and which package's `bun test` runs them?
@@ -138,7 +140,7 @@ Your plan must cover:
 3. **Schema changes** — every change to a Zod schema in `packages/protocol/` is a wire
    contract change; list both producer and consumer call sites.
 4. **Architectural decision** — if multiple approaches exist, state the tradeoff and your
-   recommendation. Link to the relevant Open Question in `REWRITE_CONTEXT.md` if applicable.
+   recommendation. Link to the relevant initiative README's Open Question if applicable.
 5. **Test impact** — what to add or update; which package's test suite covers it.
 6. **DEVELOPMENT.md impact** — the version entry you will write after implementation.
 
@@ -233,8 +235,8 @@ Rules for Fact bullets:
 Rules for Inference bullets:
 - Do not restate Fact bullets
 - Explain architectural or product significance
-- If this resolves an Open Question in `REWRITE_CONTEXT.md`, say so and move the question to
-  Locked Decisions in the same commit
+- If this resolves an Open Question, say so and record the resolution where that question lives
+  (the initiative README, or `ARCHITECTURE.md` when it rises to a locked decision)
 
 After writing the entry, update `Last updated:` at the top to today.
 
@@ -260,7 +262,8 @@ Apply guards — do NOT blindly `git add -A`:
 4. **Commit** with a conventional-commit message:
    - Subject: `<type>(<scope>): <summary> (vX.Y.Z)` — `feat` / `fix` / `refactor` / `perf` / `docs`.
    - Body: 3–6 bullets of what changed + why; note the test count and that the suite is green.
-   - End with: `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`
+   - End with the `Co-Authored-By:` footer naming the model you are actually running as — the
+     harness states the exact line. **Do not copy a version out of this file**; it drifts.
 5. **Back it up** — every version, so nothing lives on one disk only:
 
    ```sh
@@ -307,7 +310,7 @@ At the end of every luna-ts-dev run, output:
 ✓ Requirements clarified (vX.Y.Z confirmed)
 ✓ Plan approved
 ✓ Implementation complete
-✓ Validation: <test count> pass / 0 fail, tsc clean   ← the ONLY gate; CI no longer runs
+✓ Validation: <test count> pass / 0 fail, five packages tsc clean, CI green after push
 ✓ DEVELOPMENT.md updated (vX.Y.Z)
 ✓ Committed (vX.Y.Z, <commit hash>) + pushed to origin/main
 ✓ Repackaged + smoked (ok:true) → new Luna.app on the Desktop   ← or: "not needed, <reason>"

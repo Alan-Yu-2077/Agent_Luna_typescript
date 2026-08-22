@@ -7,14 +7,16 @@ per-version history; see [`ROADMAP.md`](ROADMAP.md) for direction.
 
 ## Monorepo layout
 
-A Bun workspace with four packages. The dependency arrow points one way: `server` and `web` both depend
-on `protocol`; nothing depends on `server` or `web`; `desktop` wraps the built `web` + spawns `server`.
+A Bun workspace with five packages. The dependency arrow points one way: `server` and `web` both depend
+on `protocol`; `server` also depends on `music-cli`; nothing depends on `server` or `web`; `desktop`
+wraps the built `web` + spawns `server`.
 
 ```
 packages/
 ├── protocol/   ← the shared wire contract: Zod schemas + inferred TS types
 ├── server/     ← the agent brain: Bun + WebSocket runtime, memory, tools, proactive
 ├── web/        ← the browser front end: Live2D avatar, audio, lip-sync, chat UI
+├── music-cli/  ← vendored macOS Now-Playing observer (MediaRemote adapter + local library + lyrics)
 └── desktop/    ← an Electron shell that hosts the web build and supervises the server
 ```
 
@@ -95,22 +97,34 @@ doesn't fire on every close.
 
 ### Proactive agency (`proactive`)
 
-Luna can speak first. Two rails share one turn machinery:
+Luna can speak first. One heartbeat tick (~60s) drives a **single wake decision**; everything that
+wants her to wake competes inside it rather than owning a trigger of its own.
 
-- **The silence ladder** — as user silence grows, a laddered set of deterministic detectors (scheduled
-  openings, weather shifts, aged open threads, unkept promises) may fire a proactive turn, subject to
-  quiet hours, a daily quota, cooldowns, and per-trigger debounce.
+- **The cadence rail runs first** — quiet hours, an idle floor, a cooldown, and a daily quota. A tick
+  the rail vetoes cannot be resurrected by any reason below.
+- **The silence ladder is the wake decision.** As silence grows it selects one of four
+  restraint-graded scenarios (a weightless ambient musing → … → a release-and-go-quiet message).
+  It replaced the old detector registry outright; there is no detector table any more, and no path
+  fires a proactive turn without passing through the ladder.
+- **Extra wake reasons stack on top, never beside.** A track change (music) is evaluated inside the
+  same tick behind its own cooldown and daily quota; a weather-shift event hook exists but is
+  default-off. Neither can bypass the cadence rail.
+- **A waking has three legitimate outcomes** — speak, *work quietly* (top up a missed memory, wander
+  the web from her own curiosity and save what's worth a later conversation), or genuinely rest.
+  Every waking records which one happened, so silence is measurable rather than invisible.
 - **Self-continuation** — shortly after a reply, Luna may micro-wake to continue her own thought.
 
-Both are heavily rail-guarded (idle floors, intervals, budgets) so agency never becomes interruption.
+Everything is rail-guarded (idle floors, intervals, budgets) so agency never becomes interruption; a
+proactive turn is additionally fail-closed on tool risk (see the tool registry above).
 
 ### Perception (`turn` + `tools/web/weather`)
 
 - **Time** — passive injection of now / elapsed-gap / daypart into the uncached tail of the prompt, plus
   relative-time labels on recalled memories and a subjective daypart mood.
 - **Weather** — a pluggable provider (Open-Meteo keyless by default, or QWeather with a key) gated on a
-  resolved location (`LUNA_LAT_LON`). Surfaces as a tool, as ambient context, and as a proactive
-  weather-shift detector — all dormant until a location is configured.
+  resolved location (`LUNA_LAT_LON`). Surfaces as a tool, as ambient context, and as a small
+  weather-aware note on a morning / after-a-night proactive opening (plus a default-off shift event
+  hook) — all dormant until a location is configured.
 - **Music** — the same triple, the same dormancy (`LUNA_MUSIC=1`, darwin, `media-control` present).
   The official NeteaseMusic.app plays; Luna **observes** the system-wide Now Playing record from
   outside (macOS MediaRemote, vendored `packages/music-cli` — its adapter/library/lyrics modules are

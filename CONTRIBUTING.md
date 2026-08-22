@@ -16,13 +16,14 @@ bun run dev                       # server + web
 bun test                          # the whole suite, from the repo root
 ```
 
-Per-package typecheck (all four must stay clean):
+Per-package typecheck (all five must stay clean):
 
 ```sh
 bun run --cwd packages/protocol tsc --noEmit
 bun run --cwd packages/server   tsc --noEmit
 bun run --cwd packages/web      tsc --noEmit
 bun run --cwd packages/desktop  tsc --noEmit
+bun run --cwd packages/music-cli tsc --noEmit
 ```
 
 No avatar model or voice weights ship with the repo — see [`docs/SETUP.md`](docs/SETUP.md) to add your own.
