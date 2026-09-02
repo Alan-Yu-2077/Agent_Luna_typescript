@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Luna · 工程图谱</title>
+    <meta name="description" content="黑盒之外的一切：Luna 的 agent harness —— 上下文 / 循环 / 工具 / 控制 / 状态，以及她多出来的那一支。" />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌙</text></svg>" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Ma+Shan+Zheng&display=swap" />
+    <link rel="stylesheet" href="./css/style.css?v=7" />
+  </head>
+  <body>
+    <section class="prologue" id="prologue">
+      <div class="pro-inner">
+        <p class="pro-eyebrow" id="proEyebrow"></p>
+        <h1 class="pro-h" id="proH"></h1>
+        <p class="pro-sub" id="proSub"></p>
+        <div class="pro-body" id="proBody"></div>
+        <button class="flip" id="flip" type="button">翻开图谱 →</button>
+      </div>
+    </section>
+
+    <header class="topbar">
+      <p class="brand">Luna · 工程图谱<em>.</em></p>
+      <p class="subtitle">黑盒之外的一切 · agent harness</p>
+      <span class="topbar-spacer"></span>
+      <nav class="jump"><a href="#tree">结构</a><a href="#flow">时序</a></nav>
+      <a class="tool" href="./story/">开发故事 →</a>
+      <button class="tool" id="proBtn" type="button">重看扉页</button>
+    </header>
+
+    <main>
+      <section class="figure-sec" id="tree">
+        <div class="fig-head">
+          <p class="fig-no">图一</p>
+          <h2 class="fig-title">结构 · 黑盒之外有什么</h2>
+          <p class="fig-lede">〔占位：一句说清这张图的读法——根是一对：点不开的 LLM，和被分解的 Agent system；六支从后者向下扇开，全部展开，不用点。〕</p>
+        </div>
+        <div class="stage-wrap"><div class="stage" id="treeStage"></div></div>
+      </section>
+
+      <section class="figure-sec" id="flow">
+        <div class="fig-head">
+          <p class="fig-no">图二</p>
+          <h2 class="fig-title">时序 · 一条消息的一生</h2>
+          <p class="fig-lede">〔占位：结构图说"有哪些部件"，这张说"谁在什么时候跟谁讲话"——五条泳道，两条回边。〕</p>
+        </div>
+        <div class="stage-wrap"><div class="stage" id="flowStage"></div></div>
+      </section>
+    </main>
+
+    <footer class="footnote" id="footnote"></footer>
+
+    <div class="scrim" id="scrim" hidden></div>
+
+    <aside class="deck" id="deck" hidden aria-labelledby="deckTitle">
+      <button class="deck-close" id="deckClose" type="button" aria-label="关闭">✕</button>
+      <div class="deck-head">
+        <p class="deck-eyebrow" id="deckEyebrow"></p>
+        <h2 class="deck-title" id="deckTitle"></h2>
+        <p class="deck-meta" id="deckMeta"></p>
+      </div>
+      <div class="deck-body" id="deckBody"></div>
+      <div class="deck-foot">
+        <div class="pager" id="pager"></div>
+        <button class="nav" id="prev" type="button">←</button>
+        <button class="nav" id="next" type="button">→</button>
+      </div>
+    </aside>
+
+    <script src="./js/data.js?v=7"></script>
+    <script src="./js/sketch.js?v=7"></script>
+    <script src="./js/app.js?v=7"></script>
+  </body>
+</html>

@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Luna · 开发故事</title>
+    <meta name="description" content="十四次返工：先是感觉哪里不对，然后挖出根因，最后改了什么。" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌙</text></svg>"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Ma+Shan+Zheng&display=swap"
+    />
+    <link rel="stylesheet" href="../css/style.css" />
+    <style>
+      .story-head {
+        padding: 60px 30px 10px 88px;
+        max-width: 820px;
+      }
+      .story-list {
+        padding: 10px 30px 40px 88px;
+        max-width: 900px;
+      }
+      .case {
+        border-top: 1px solid var(--grid-strong);
+        padding: 20px 0 4px;
+      }
+      .case-btn {
+        width: 100%;
+        display: flex;
+        align-items: baseline;
+        gap: 16px;
+        background: none;
+        border: 0;
+        padding: 4px 0;
+        cursor: pointer;
+        text-align: left;
+        font: inherit;
+        color: inherit;
+      }
+      .case-no {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--red);
+        flex: 0 0 30px;
+        font-variant-numeric: tabular-nums;
+      }
+      .case-title {
+        font-family: var(--font-hand);
+        font-size: 27px;
+        line-height: 1.15;
+        color: var(--ink);
+      }
+      .case-btn:hover .case-title {
+        color: var(--red);
+      }
+      .case-tag {
+        margin-left: auto;
+        font-family: var(--font-mono);
+        font-size: 9.5px;
+        color: var(--pencil-2);
+        white-space: nowrap;
+      }
+      .case-body {
+        display: none;
+        padding: 10px 0 14px 46px;
+        max-width: 66ch;
+      }
+      .case.open .case-body {
+        display: block;
+      }
+      .case-q {
+        font-family: var(--font-hand);
+        font-size: 19px;
+        color: var(--pencil);
+        margin: 0 0 14px;
+        padding-left: 12px;
+        border-left: 2px solid var(--rule);
+      }
+      .beat {
+        display: flex;
+        gap: 14px;
+        margin-bottom: 11px;
+      }
+      .beat b {
+        flex: 0 0 46px;
+        font-family: var(--font-hand);
+        font-size: 19px;
+        font-weight: 500;
+        color: var(--red);
+        line-height: 1.5;
+      }
+      .beat p {
+        margin: 0;
+        font-size: 14px;
+        line-height: 1.75;
+        color: var(--ink-2);
+      }
+      .rule {
+        margin: 14px 0 0;
+        padding: 9px 14px;
+        background: var(--hi);
+        font-family: var(--font-hand);
+        font-size: 19px;
+        color: var(--ink);
+      }
+      @media (max-width: 900px) {
+        .story-head,
+        .story-list {
+          padding-left: 30px;
+        }
+        .case-body {
+          padding-left: 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="topbar">
+      <p class="brand">Luna · 开发故事<em>.</em></p>
+      <nav class="jump"><a href="../">← 回工程图谱</a></nav>
+      <span class="topbar-spacer"></span>
+      <button class="tool" id="expandAll" type="button">全部展开</button>
+    </header>
+
+    <div class="story-head">
+      <p class="ch-no">附</p>
+      <h1 class="ch-title" id="sTitle"></h1>
+      <p class="ch-lede" id="sLede"></p>
+    </div>
+
+    <div class="story-list" id="list"></div>
+
+    <footer class="footnote" id="foot"></footer>
+
+    <script>
+      /* ═══ 内容层：改这里 ═══════════════════════════════════
+         每条 = 一次返工。三拍固定：体验 → 挖掘 → 改进，
+         外加一句"留下的规则"（这条才是给读者带走的东西）。 */
+      const STORY = {
+        title: '十四次返工',
+        lede: '〔占位：一句引子——这一页不是架构，是过程；每条都是先感觉到哪里不对，才挖出根因的。〕',
+        foot: '〔占位：脚注。〕',
+        cases: [
+          {
+            tag: '序 · 跨两代',
+            title: '为什么把她整个重写了一遍',
+            q: '〔占位：一句话把这次返工的起点说清。〕',
+            feel: '〔占位：体验——她回得慢，而且前后端在悄悄不一致。〕',
+            dig: '〔占位：挖掘——15 维度审计；17 个延迟来源，4 个被判为结构性；三个"写了但从未生效"的处理器。〕',
+            fix: '〔占位：改进——换栈，以及减负清单删掉了什么。〕',
+            rule: '〔占位：留下的规则。〕',
+          },
+          {
+            tag: 'RAG · 召回',
+            title: '照搬论文公式，然后发现它会把最相关的记忆埋掉',
+            q: '〔占位：起点。〕',
+            feel: '〔占位：体验——"她好像不记得了"。〕',
+            dig: '〔占位：挖掘——按纯余弦排第 1，按混合分数排 #147/500；算术根因；调权重在真实库上被模拟否决。〕',
+            fix: '〔占位：改进——不是改参数，是改排序的结构。〕',
+            rule: '〔占位：留下的规则。〕',
+          },
+          {
+            tag: '工具挂载 · 七版',
+            title: '一次性能优化，七个版本才把后果挖干净',
+            q: '〔占位：起点。〕',
+            feel: '〔占位：体验——她说"给你存了"，但什么都没发生。〕',
+            dig: '〔占位：挖掘——按需加载把记忆工具摘掉了；词表方案失败；两个设计意图互斥。〕',
+            fix: '〔占位：改进——无条件挂载，以及下一代直接把这个机制删掉。〕',
+            rule: '〔占位：留下的规则——提示词修不了结构问题。〕',
+          },
+          {
+            tag: '表演层 · 三幕',
+            title: '四个版本测试全绿，而功能是坏的',
+            q: '〔占位：起点。〕',
+            feel: '〔占位：体验——"我怎么感觉没什么区别"。〕',
+            dig: '〔占位：挖掘——实测位移比呼吸振幅还小；断言全在方向/边界，没有一条在幅度。〕',
+            fix: '〔占位：改进——加一条可自动测的量化断言。〕',
+            rule: '〔占位：留下的规则。〕',
+          },
+          {
+            tag: '成本',
+            title: '只有账单会尖叫',
+            q: '〔占位：起点。〕',
+            feel: '〔占位：体验——聊天一切正常。〕',
+            dig: '〔占位：挖掘——折叠水位漂移，每回合重发 294K tokens。〕',
+            fix: '〔占位：改进——自愈簿记 + 与状态无关的硬上限 + 一条可观测的绊线。〕',
+            rule: '〔占位：留下的规则。〕',
+          },
+          {
+            tag: '提示词',
+            title: '提示词自己撤销了自己的邀请',
+            q: '〔占位：起点。〕',
+            feel: '〔占位：体验——主动醒来往往全是沉默。〕',
+            dig: '〔占位：挖掘——开头邀请，结尾禁止；末尾的命令式约束权重最高。〕',
+            fix: '〔占位：改进——先加留痕，再动措辞；验收走对账而不是感觉。〕',
+            rule: '〔占位：留下的规则。〕',
+          },
+          {
+            tag: '〔更多〕',
+            title: '〔占位：其余八条——助手腔 / 报告的对象是错的 / 同病二因 / 参考机是最差的证人 / 网关伪装 / 建好了≠在运行 / …〕',
+            q: '〔占位。〕',
+            feel: '〔占位。〕',
+            dig: '〔占位。〕',
+            fix: '〔占位。〕',
+            rule: '〔占位。〕',
+          },
+        ],
+      };
+
+      document.getElementById('sTitle').textContent = STORY.title;
+      document.getElementById('sLede').textContent = STORY.lede;
+      document.getElementById('foot').textContent = STORY.foot;
+
+      const list = document.getElementById('list');
+      list.innerHTML = STORY.cases
+        .map(
+          (c, i) => `
+        <article class="case">
+          <button class="case-btn" type="button" aria-expanded="false">
+            <span class="case-no">${String(i + 1).padStart(2, '0')}</span>
+            <span class="case-title">${c.title}</span>
+            <span class="case-tag">${c.tag}</span>
+          </button>
+          <div class="case-body">
+            <p class="case-q">${c.q}</p>
+            <div class="beat"><b>体验</b><p>${c.feel}</p></div>
+            <div class="beat"><b>挖掘</b><p>${c.dig}</p></div>
+            <div class="beat"><b>改进</b><p>${c.fix}</p></div>
+            <p class="rule">${c.rule}</p>
+          </div>
+        </article>`,
+        )
+        .join('');
+
+      list.querySelectorAll('.case-btn').forEach((b) => {
+        b.addEventListener('click', () => {
+          const c = b.closest('.case');
+          const open = c.classList.toggle('open');
+          b.setAttribute('aria-expanded', String(open));
+        });
+      });
+
+      document.getElementById('expandAll').addEventListener('click', (e) => {
+        const anyClosed = [...list.querySelectorAll('.case')].some((c) => !c.classList.contains('open'));
+        list.querySelectorAll('.case').forEach((c) => c.classList.toggle('open', anyClosed));
+        list.querySelectorAll('.case-btn').forEach((b) => b.setAttribute('aria-expanded', String(anyClosed)));
+        e.currentTarget.textContent = anyClosed ? '全部收起' : '全部展开';
+      });
+    </script>
+  </body>
+</html>
