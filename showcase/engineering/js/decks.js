@@ -5080,6 +5080,115 @@ window.LUNA_DECKS = {
 
   /* ── 五条泳道 ───────────────────────────── */
   "lane-user": {
+    "figure": {
+      "w": 620,
+      "h": 210,
+      "boxes": [
+        {
+          "x": 246,
+          "y": 20,
+          "w": 150,
+          "h": 44,
+          "title": "protocol/",
+          "sub": {
+            "zh": "一份 Zod schema",
+            "en": "one Zod schema"
+          }
+        },
+        {
+          "x": 26,
+          "y": 128,
+          "w": 190,
+          "h": 52,
+          "title": "server/",
+          "sub": {
+            "zh": "校验入站",
+            "en": "validates inbound"
+          }
+        },
+        {
+          "x": 424,
+          "y": 128,
+          "w": 190,
+          "h": 52,
+          "title": "web/",
+          "sub": {
+            "zh": "校验出站",
+            "en": "validates outbound"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              150,
+              124
+            ],
+            [
+              286,
+              68
+            ]
+          ],
+          "label": "import",
+          "at": [
+            156,
+            92
+          ]
+        },
+        {
+          "pts": [
+            [
+              492,
+              124
+            ],
+            [
+              356,
+              68
+            ]
+          ],
+          "label": "import",
+          "at": [
+            430,
+            92
+          ]
+        },
+        {
+          "pts": [
+            [
+              220,
+              154
+            ],
+            [
+              420,
+              154
+            ]
+          ],
+          "head": "both",
+          "style": "dashed",
+          "label": {
+            "zh": "一条 WebSocket",
+            "en": "one socket"
+          },
+          "at": [
+            258,
+            168
+          ]
+        }
+      ],
+      "labels": [
+        {
+          "x": 150,
+          "y": 188,
+          "w": 340,
+          "text": {
+            "zh": "只改一端 → 编译错误，不是线上才发现的漂移",
+            "en": "change one side only and it is a compile error, not a drift you find in production"
+          },
+          "tone": "red"
+        }
+      ]
+    },
     "claim": {
       "zh": "一条消息的一生只经过一个客户端接口：一条 WebSocket。用户这一侧能说的话是 8 种 ClientEvent，她能回的话是 14 种 ServerEvent —— 两个联合写在 packages/protocol 的同一份 Zod 文件里，被服务端和网页端 import 同一份源码。",
       "en": "A message's whole life passes through exactly one client-facing interface: one WebSocket. This side can say 8 kinds of ClientEvent; she can answer with 14 kinds of ServerEvent — both unions live in a single Zod file under packages/protocol, and the server and the web page import that same source."
@@ -5131,6 +5240,126 @@ window.LUNA_DECKS = {
     }
   },
   "lane-harness": {
+    "figure": {
+      "w": 620,
+      "h": 220,
+      "boxes": [
+        {
+          "x": 224,
+          "y": 84,
+          "w": 172,
+          "h": 60,
+          "title": "Harness",
+          "sub": {
+            "zh": "唯一持有状态的一方",
+            "en": "the only holder of state"
+          }
+        },
+        {
+          "x": 24,
+          "y": 24,
+          "w": 140,
+          "h": 44,
+          "title": {
+            "zh": "用户",
+            "en": "user"
+          }
+        },
+        {
+          "x": 456,
+          "y": 24,
+          "w": 140,
+          "h": 44,
+          "title": "LLM"
+        },
+        {
+          "x": 24,
+          "y": 160,
+          "w": 140,
+          "h": 44,
+          "title": {
+            "zh": "工具",
+            "en": "tools"
+          }
+        },
+        {
+          "x": 456,
+          "y": 160,
+          "w": 140,
+          "h": 44,
+          "title": {
+            "zh": "存储",
+            "en": "store"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              168,
+              58
+            ],
+            [
+              222,
+              92
+            ]
+          ],
+          "head": "both"
+        },
+        {
+          "pts": [
+            [
+              452,
+              58
+            ],
+            [
+              398,
+              92
+            ]
+          ],
+          "head": "both"
+        },
+        {
+          "pts": [
+            [
+              168,
+              172
+            ],
+            [
+              222,
+              138
+            ]
+          ],
+          "head": "both"
+        },
+        {
+          "pts": [
+            [
+              452,
+              172
+            ],
+            [
+              398,
+              138
+            ]
+          ],
+          "head": "both"
+        }
+      ],
+      "labels": [
+        {
+          "x": 200,
+          "y": 158,
+          "w": 220,
+          "text": {
+            "zh": "四方谁都不直接说话——都经过中间这一个",
+            "en": "none of the four talks to another; everything goes through the middle"
+          },
+          "tone": "edge"
+        }
+      ]
+    },
     "claim": {
       "zh": "五条泳道里只有这一条同时持有状态与模型调用权。其余四方都是无状态的被调用者：模型每一轮拿到的是全量重发的上下文，工具只拿到一次调用的入参和一个 abort 信号，存储只认写进去的行，用户那条线只认帧。所以「一条消息的一生」这句话有主语，主语是它。",
       "en": "Of the five lanes only this one both holds state and owns the call to the model. The other four are stateless callees: the model gets the whole context resent every round, a tool gets one call's input and an abort signal, the store knows only the rows written to it, and the user lane knows only frames. So \"the life of a message\" has a subject, and this is it."
@@ -5178,6 +5407,112 @@ window.LUNA_DECKS = {
     }
   },
   "lane-llm": {
+    "figure": {
+      "w": 620,
+      "h": 220,
+      "boxes": [
+        {
+          "x": 12,
+          "y": 84,
+          "w": 150,
+          "h": 52,
+          "title": {
+            "zh": "我们送什么",
+            "en": "what we send"
+          },
+          "sub": {
+            "zh": "system · 历史 · 工具",
+            "en": "system · history · tools"
+          }
+        },
+        {
+          "x": 232,
+          "y": 84,
+          "w": 156,
+          "h": 52,
+          "kind": "blackbox",
+          "title": "LLM"
+        },
+        {
+          "x": 458,
+          "y": 84,
+          "w": 150,
+          "h": 52,
+          "title": {
+            "zh": "我们收什么",
+            "en": "what comes back"
+          },
+          "sub": {
+            "zh": "文字 · 思考 · 调用",
+            "en": "text · thinking · calls"
+          }
+        },
+        {
+          "x": 232,
+          "y": 14,
+          "w": 156,
+          "h": 40,
+          "title": {
+            "zh": "能力描述符",
+            "en": "capabilities"
+          },
+          "sub": {
+            "zh": "显式声明，不假设",
+            "en": "declared, not assumed"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              166,
+              110
+            ],
+            [
+              228,
+              110
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              392,
+              110
+            ],
+            [
+              454,
+              110
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              310,
+              58
+            ],
+            [
+              310,
+              80
+            ]
+          ]
+        }
+      ],
+      "labels": [
+        {
+          "x": 96,
+          "y": 156,
+          "w": 430,
+          "text": {
+            "zh": "provider 缝把协议差异抹平：换一家，上面五支一行都不用改",
+            "en": "the provider seam absorbs the protocol difference — swap vendors and the five branches above do not change"
+          },
+          "tone": "edge"
+        }
+      ]
+    },
     "claim": {
       "zh": "这一刻是整条线上唯一一次跨出进程的调用，也是唯一一段我们不控制的时间。我们对这个黑盒的全部知识写在两个类型里：送进去的 ProviderRequest 四个字段，收回来的 ProviderEvent 五种。图上那个盒子点不开，是因为里面确实没有我们的代码。",
       "en": "This moment is the only call on the whole line that leaves the process, and the only stretch of time we do not control. Everything we know about the black box fits in two types: four fields going in as a ProviderRequest, five event kinds coming back as ProviderEvent. The box in the diagram does not open because there is genuinely none of our code inside it."
@@ -5229,6 +5564,136 @@ window.LUNA_DECKS = {
     }
   },
   "lane-tools": {
+    "figure": {
+      "w": 620,
+      "h": 220,
+      "boxes": [
+        {
+          "x": 20,
+          "y": 88,
+          "w": 140,
+          "h": 52,
+          "title": {
+            "zh": "这一轮的调用",
+            "en": "this round's calls"
+          }
+        },
+        {
+          "x": 244,
+          "y": 20,
+          "w": 150,
+          "h": 42,
+          "title": {
+            "zh": "并行跑",
+            "en": "run in parallel"
+          }
+        },
+        {
+          "x": 244,
+          "y": 88,
+          "w": 150,
+          "h": 42,
+          "title": {
+            "zh": "排队等锁",
+            "en": "queue on the mutex"
+          }
+        },
+        {
+          "x": 244,
+          "y": 156,
+          "w": 150,
+          "h": 42,
+          "title": {
+            "zh": "被门挡下",
+            "en": "stopped at the gate"
+          }
+        },
+        {
+          "x": 452,
+          "y": 54,
+          "w": 156,
+          "h": 42,
+          "title": {
+            "zh": "结果按原序回填",
+            "en": "results reordered"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              164,
+              100
+            ],
+            [
+              240,
+              42
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              164,
+              114
+            ],
+            [
+              240,
+              110
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              164,
+              128
+            ],
+            [
+              240,
+              176
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              398,
+              42
+            ],
+            [
+              448,
+              66
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              398,
+              104
+            ],
+            [
+              448,
+              84
+            ]
+          ]
+        }
+      ],
+      "labels": [
+        {
+          "x": 244,
+          "y": 200,
+          "w": 360,
+          "text": {
+            "zh": "谁走哪条，取决于工具自己声明的档位——不是调度器猜的",
+            "en": "which path a call takes is declared by the tool, not guessed by the scheduler"
+          },
+          "tone": "edge"
+        }
+      ]
+    },
     "claim": {
       "zh": "这一刻是整条线上唯一一次真正的并发。模型一轮可以发出多个 tool_use，分发器在这里把它们摊成三条流同时跑 —— 而这一方怎么被调度，完全由工具自己在定义处声明的三个属性决定：concurrency、timeoutMs、proactiveRisk。调度器不认识任何一个具体工具。",
       "en": "This moment is the only genuine concurrency on the line. The model can emit several tool_uses in one round, and the dispatcher fans them into three streams that run at once — and how this party gets scheduled is decided entirely by three properties each tool declares at its own definition site: concurrency, timeoutMs, proactiveRisk. The scheduler knows no individual tool."
@@ -5280,6 +5745,108 @@ window.LUNA_DECKS = {
     }
   },
   "lane-store": {
+    "figure": {
+      "w": 620,
+      "h": 210,
+      "boxes": [
+        {
+          "x": 20,
+          "y": 22,
+          "w": 168,
+          "h": 46,
+          "title": {
+            "zh": "回合结束时写",
+            "en": "written at turn end"
+          },
+          "sub": "appendL2"
+        },
+        {
+          "x": 20,
+          "y": 142,
+          "w": 168,
+          "h": 46,
+          "title": {
+            "zh": "夜里写",
+            "en": "written at night"
+          },
+          "sub": {
+            "zh": "梦 · 折叠",
+            "en": "dream · fold"
+          }
+        },
+        {
+          "x": 262,
+          "y": 82,
+          "w": 130,
+          "h": 48,
+          "title": "SQLite"
+        },
+        {
+          "x": 452,
+          "y": 82,
+          "w": 156,
+          "h": 48,
+          "title": {
+            "zh": "下一轮读",
+            "en": "read next turn"
+          },
+          "sub": {
+            "zh": "召回 · 窗口 · 灵魂",
+            "en": "recall · window · soul"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              192,
+              52
+            ],
+            [
+              258,
+              92
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              192,
+              158
+            ],
+            [
+              258,
+              120
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              396,
+              106
+            ],
+            [
+              448,
+              106
+            ]
+          ]
+        }
+      ],
+      "labels": [
+        {
+          "x": 262,
+          "y": 148,
+          "w": 340,
+          "text": {
+            "zh": "两条路径写它，一条路径读它——它是两者之间唯一的持久交接面",
+            "en": "two paths write it, one reads it — the only durable handover between them"
+          },
+          "tone": "red"
+        }
+      ]
+    },
     "claim": {
       "zh": "前面四方都是易失的：socket 会断，harness 的 session 活在进程里，模型不记得上一轮，工具跑完就忘。存储是唯一跨进程活着的一方，也是反应式路径与主动/梦路径之间唯一的持久交接面 —— 两条路径从不互相持有对象，它们只在这里碰面。",
       "en": "The other four parties are all volatile: the socket drops, the harness's session lives inside a process, the model does not remember last round, and a tool forgets the moment it finishes. The store is the only party that survives the process, and the only durable handoff surface between the reactive path and the proactive/dream path — the two never hold each other's objects; they meet only here."
@@ -5333,6 +5900,155 @@ window.LUNA_DECKS = {
 
   /* ── 时序 · 前五步 ───────────────────────────── */
   "msg": {
+    "figure": {
+      "w": 620,
+      "h": 210,
+      "boxes": [
+        {
+          "x": 12,
+          "y": 84,
+          "w": 108,
+          "h": 46,
+          "title": "chat.send"
+        },
+        {
+          "x": 148,
+          "y": 84,
+          "w": 96,
+          "h": 46,
+          "title": {
+            "zh": "在做梦？",
+            "en": "dreaming?"
+          }
+        },
+        {
+          "x": 272,
+          "y": 84,
+          "w": 96,
+          "h": 46,
+          "title": {
+            "zh": "已就绪？",
+            "en": "configured?"
+          }
+        },
+        {
+          "x": 396,
+          "y": 84,
+          "w": 96,
+          "h": 46,
+          "title": {
+            "zh": "正忙？",
+            "en": "busy?"
+          }
+        },
+        {
+          "x": 512,
+          "y": 84,
+          "w": 96,
+          "h": 46,
+          "title": {
+            "zh": "受理",
+            "en": "accepted"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              124,
+              107
+            ],
+            [
+              144,
+              107
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              248,
+              107
+            ],
+            [
+              268,
+              107
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              372,
+              107
+            ],
+            [
+              392,
+              107
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              496,
+              107
+            ],
+            [
+              508,
+              107
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              196,
+              80
+            ],
+            [
+              196,
+              44
+            ]
+          ],
+          "label": "code: 'dreaming'",
+          "at": [
+            130,
+            22
+          ]
+        },
+        {
+          "pts": [
+            [
+              444,
+              80
+            ],
+            [
+              444,
+              44
+            ]
+          ],
+          "label": "code: 'turn_in_progress'",
+          "at": [
+            378,
+            22
+          ]
+        }
+      ],
+      "labels": [
+        {
+          "x": 12,
+          "y": 156,
+          "w": 420,
+          "text": {
+            "zh": "两种拒绝不是同一件事：忙着等一等就好，做梦要你显式把她叫醒",
+            "en": "the two refusals differ — busy resolves itself; dreaming asks you to wake her"
+          },
+          "tone": "red"
+        }
+      ]
+    },
     "claim": {
       "zh": "「一条消息」不是从模型那里开始的，是从一个 WebSocket 帧开始的。这一帧要连过五道闸——JSON 能不能解析、schema 认不认（正文上限 8000 字符）、她是不是在做梦、provider 配没配、这个会话是不是已经有一轮在跑——五道全过，服务端才在这一刻打上两个时间戳、new 一个 AbortController，然后把回合甩出去（void runTurn），处理函数当场返回。",
       "en": "A message does not begin at the model; it begins as a WebSocket frame. That frame passes five gates in a row — does the JSON parse, does the schema accept it (the body caps at 8000 characters), is she dreaming, is a provider configured at all, is a turn already running in this session — and only when all five pass does the server stamp two timestamps, create an AbortController and fire the turn off with void runTurn, returning from the handler immediately."
@@ -5376,6 +6092,144 @@ window.LUNA_DECKS = {
     }
   },
   "assemble": {
+    "figure": {
+      "w": 620,
+      "h": 230,
+      "boxes": [
+        {
+          "x": 20,
+          "y": 18,
+          "w": 150,
+          "h": 38,
+          "title": {
+            "zh": "召回块",
+            "en": "recall"
+          }
+        },
+        {
+          "x": 20,
+          "y": 66,
+          "w": 150,
+          "h": 38,
+          "title": {
+            "zh": "时间",
+            "en": "time"
+          }
+        },
+        {
+          "x": 20,
+          "y": 114,
+          "w": 150,
+          "h": 38,
+          "title": {
+            "zh": "天气 · 歌",
+            "en": "weather · music"
+          }
+        },
+        {
+          "x": 20,
+          "y": 162,
+          "w": 150,
+          "h": 38,
+          "title": {
+            "zh": "他这一句",
+            "en": "his message"
+          }
+        },
+        {
+          "x": 300,
+          "y": 78,
+          "w": 160,
+          "h": 62,
+          "title": {
+            "zh": "一条 user 消息",
+            "en": "one user message"
+          }
+        },
+        {
+          "x": 508,
+          "y": 78,
+          "w": 100,
+          "h": 62,
+          "kind": "blackbox",
+          "title": "LLM"
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              174,
+              37
+            ],
+            [
+              296,
+              92
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              174,
+              85
+            ],
+            [
+              296,
+              102
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              174,
+              133
+            ],
+            [
+              296,
+              116
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              174,
+              181
+            ],
+            [
+              296,
+              130
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              464,
+              109
+            ],
+            [
+              504,
+              109
+            ]
+          ]
+        }
+      ],
+      "labels": [
+        {
+          "x": 190,
+          "y": 190,
+          "w": 400,
+          "text": {
+            "zh": "每一块都包在 try/catch 里：拿不到就少一块，不会让整轮失败",
+            "en": "each block sits in its own try — a missing one is an omission, never a failed turn"
+          },
+          "tone": "red"
+        }
+      ]
+    },
     "claim": {
       "zh": "整轮里只有这一刻会装感知。parse_input 是图的入口节点，后面每一次工具迭代都从 ②schema 重新进入——所以这条最多七块的 user 消息一整轮只装一次：她在第 8 轮读到的时间、天气、在放的歌，还是第 1 轮那一份。",
       "en": "Perception is assembled at this moment and at no other. parse_input is the graph's entry node, and every later tool round re-enters at ② schema — so this user message of at most seven blocks is built exactly once per turn: the time, weather and current track she reads in round 8 are still the ones from round 1."
@@ -5423,6 +6277,90 @@ window.LUNA_DECKS = {
     }
   },
   "schema": {
+    "figure": {
+      "w": 620,
+      "h": 190,
+      "boxes": [
+        {
+          "x": 26,
+          "y": 30,
+          "w": 168,
+          "h": 46,
+          "title": {
+            "zh": "第一轮",
+            "en": "first round"
+          },
+          "sub": {
+            "zh": "转一次",
+            "en": "convert once"
+          }
+        },
+        {
+          "x": 26,
+          "y": 116,
+          "w": 168,
+          "h": 46,
+          "title": {
+            "zh": "之后每一轮",
+            "en": "every later round"
+          },
+          "sub": {
+            "zh": "直接用",
+            "en": "reuse"
+          }
+        },
+        {
+          "x": 344,
+          "y": 72,
+          "w": 176,
+          "h": 48,
+          "title": {
+            "zh": "state 上的一份",
+            "en": "one copy on the state"
+          },
+          "sub": "anthropicTools"
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              198,
+              53
+            ],
+            [
+              340,
+              84
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              198,
+              139
+            ],
+            [
+              340,
+              108
+            ]
+          ],
+          "style": "dashed"
+        }
+      ],
+      "labels": [
+        {
+          "x": 26,
+          "y": 178,
+          "w": 460,
+          "text": {
+            "zh": "六行的一个节点——回边每次都经过它，所以它必须便宜",
+            "en": "a six-line node — both return edges pass through it, so it has to be cheap"
+          },
+          "tone": "edge"
+        }
+      ]
+    },
     "claim": {
       "zh": "六行，一个 if，一次赋值。这个节点只做一件事：把注册表里每个工具的 Zod schema 转成模型读得懂的 JSON Schema——而且一整轮只做一次。守卫是 length === 0，结果缓存在这一轮的 state 上。",
       "en": "Six lines, one if, one assignment. This node does exactly one thing: turn every tool's Zod schema in the registry into JSON Schema the model can read — once per turn. The guard is length === 0 and the result is cached on this turn's state."
@@ -5466,6 +6404,115 @@ window.LUNA_DECKS = {
     }
   },
   "request": {
+    "figure": {
+      "w": 620,
+      "h": 200,
+      "boxes": [
+        {
+          "x": 22,
+          "y": 76,
+          "w": 152,
+          "h": 50,
+          "title": {
+            "zh": "记忆变过吗",
+            "en": "did memory change"
+          },
+          "sub": "memoryEpoch"
+        },
+        {
+          "x": 274,
+          "y": 18,
+          "w": 160,
+          "h": 44,
+          "title": {
+            "zh": "没变 · 直接复用",
+            "en": "unchanged · reuse"
+          }
+        },
+        {
+          "x": 274,
+          "y": 132,
+          "w": 160,
+          "h": 44,
+          "title": {
+            "zh": "变了 · 重建",
+            "en": "changed · rebuild"
+          }
+        },
+        {
+          "x": 470,
+          "y": 76,
+          "w": 138,
+          "h": 48,
+          "title": {
+            "zh": "发出请求",
+            "en": "the request goes"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              178,
+              90
+            ],
+            [
+              270,
+              44
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              178,
+              112
+            ],
+            [
+              270,
+              150
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              438,
+              46
+            ],
+            [
+              466,
+              88
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              438,
+              152
+            ],
+            [
+              466,
+              114
+            ]
+          ]
+        }
+      ],
+      "labels": [
+        {
+          "x": 220,
+          "y": 88,
+          "w": 240,
+          "text": {
+            "zh": "缓存命中与否，在这一刻定下",
+            "en": "whether the cache hits is decided right here"
+          },
+          "tone": "red"
+        }
+      ]
+    },
     "claim": {
       "zh": "到这一刻才有字节离开进程。真正发出去的请求只有四个字段，而这四个字段来自四种不同的寿命：system 是跨轮记忆化的，messages 是每一轮现算的，tools 是上一步建好之后整轮不动的，signal 是 chat.send 那一刻就 new 出来的。",
       "en": "Only at this moment do bytes leave the process. The request that actually goes out has four fields, and those four come from four different lifetimes: system is memoized across rounds, messages is recomputed every round, tools was built one step ago and never moves again, and signal was created back at chat.send."
@@ -5509,6 +6556,124 @@ window.LUNA_DECKS = {
     }
   },
   "dispatch": {
+    "figure": {
+      "w": 620,
+      "h": 210,
+      "boxes": [
+        {
+          "x": 16,
+          "y": 82,
+          "w": 140,
+          "h": 48,
+          "title": {
+            "zh": "模型要的调用",
+            "en": "the calls it asked for"
+          }
+        },
+        {
+          "x": 250,
+          "y": 16,
+          "w": 160,
+          "h": 42,
+          "title": {
+            "zh": "认得这个名字吗",
+            "en": "is the name known"
+          }
+        },
+        {
+          "x": 250,
+          "y": 82,
+          "w": 160,
+          "h": 42,
+          "title": {
+            "zh": "主动回合的门",
+            "en": "the proactive gate"
+          }
+        },
+        {
+          "x": 250,
+          "y": 148,
+          "w": 160,
+          "h": 42,
+          "title": {
+            "zh": "真正跑起来",
+            "en": "actually runs"
+          }
+        },
+        {
+          "x": 468,
+          "y": 82,
+          "w": 140,
+          "h": 42,
+          "title": {
+            "zh": "并发在此发生",
+            "en": "concurrency happens here"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              160,
+              96
+            ],
+            [
+              246,
+              40
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              160,
+              106
+            ],
+            [
+              246,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              160,
+              118
+            ],
+            [
+              246,
+              166
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              414,
+              104
+            ],
+            [
+              464,
+              104
+            ]
+          ]
+        }
+      ],
+      "labels": [
+        {
+          "x": 250,
+          "y": 196,
+          "w": 360,
+          "text": {
+            "zh": "挡下的调用不计入预算——被拦不算她花过一次机会",
+            "en": "a blocked call is not counted; being stopped is not a spent chance"
+          },
+          "tone": "edge"
+        }
+      ]
+    },
     "claim": {
       "zh": "并发在这一刻才真的发生，而它前面还有一段完全串行的判定。dispatch_tools 先用一个纯判定的循环把这一批调用逐个过一遍——名字认不认、主动回合的安全门放不放——过关的攒成一个数组，然后整批一次性交给 dispatcher，锁在那里争。",
       "en": "Concurrency actually happens at this moment, and a fully serial pass comes first. dispatch_tools walks the batch with a pure decision loop — is the name known, does the proactive safety gate allow it — collects the survivors into one array, and only then hands the whole batch to the dispatcher, where the locks are contended."
@@ -5558,6 +6723,127 @@ window.LUNA_DECKS = {
 
   /* ── 时序 · 后六步 ───────────────────────────── */
   "exec": {
+    "figure": {
+      "w": 620,
+      "h": 210,
+      "boxes": [
+        {
+          "x": 16,
+          "y": 84,
+          "w": 116,
+          "h": 46,
+          "title": "started"
+        },
+        {
+          "x": 180,
+          "y": 84,
+          "w": 128,
+          "h": 46,
+          "title": "progress *",
+          "sub": {
+            "zh": "可以有很多次",
+            "en": "zero or many"
+          }
+        },
+        {
+          "x": 356,
+          "y": 84,
+          "w": 116,
+          "h": 46,
+          "title": "final"
+        },
+        {
+          "x": 500,
+          "y": 84,
+          "w": 108,
+          "h": 46,
+          "title": {
+            "zh": "回填",
+            "en": "appended"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              136,
+              107
+            ],
+            [
+              176,
+              107
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              312,
+              107
+            ],
+            [
+              352,
+              107
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              476,
+              107
+            ],
+            [
+              496,
+              107
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              244,
+              80
+            ],
+            [
+              244,
+              42
+            ]
+          ],
+          "label": {
+            "zh": "边跑边流出去",
+            "en": "streamed while running"
+          },
+          "at": [
+            180,
+            20
+          ]
+        },
+        {
+          "pts": [
+            [
+              414,
+              134
+            ],
+            [
+              414,
+              172
+            ]
+          ],
+          "style": "dashed",
+          "label": {
+            "zh": "超时 / 客户端断开 → abort",
+            "en": "timeout or disconnect → abort"
+          },
+          "at": [
+            300,
+            180
+          ]
+        }
+      ],
+      "labels": []
+    },
     "claim": {
       "zh": "这一刻，模型写下的一句 tool_use 才第一次变成真在跑的东西。四件事同时开始：一轮最多 8 个调用被切成三桶，后两桶各排在一把互斥锁后面；每个调用带上自己的 AbortController 和倒计时；工具自己 yield 的进度从这里流回前端。",
       "en": "This is the moment a tool_use the model merely wrote becomes something actually running. Four things start at once: at most 8 calls per round are sorted into three buckets, two of which queue behind a mutex; every call carries its own AbortController and countdown; and whatever progress a tool yields flows back to the frontend from here."
@@ -5595,6 +6881,158 @@ window.LUNA_DECKS = {
     }
   },
   "append": {
+    "figure": {
+      "w": 620,
+      "h": 220,
+      "boxes": [
+        {
+          "x": 16,
+          "y": 88,
+          "w": 144,
+          "h": 50,
+          "title": {
+            "zh": "结果按原序拼回",
+            "en": "results reordered"
+          }
+        },
+        {
+          "x": 274,
+          "y": 14,
+          "w": 170,
+          "h": 42,
+          "title": {
+            "zh": "预算用完了",
+            "en": "budget spent"
+          }
+        },
+        {
+          "x": 274,
+          "y": 88,
+          "w": 170,
+          "h": 42,
+          "title": {
+            "zh": "她说完了",
+            "en": "she said she is done"
+          }
+        },
+        {
+          "x": 274,
+          "y": 162,
+          "w": 170,
+          "h": 42,
+          "title": {
+            "zh": "都还没有",
+            "en": "neither yet"
+          }
+        },
+        {
+          "x": 484,
+          "y": 51,
+          "w": 124,
+          "h": 42,
+          "title": {
+            "zh": "去收束",
+            "en": "to finalize"
+          }
+        },
+        {
+          "x": 484,
+          "y": 162,
+          "w": 124,
+          "h": 42,
+          "title": {
+            "zh": "回到 ②",
+            "en": "back to ②"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              164,
+              100
+            ],
+            [
+              270,
+              38
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              164,
+              112
+            ],
+            [
+              270,
+              110
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              164,
+              124
+            ],
+            [
+              270,
+              180
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              448,
+              36
+            ],
+            [
+              480,
+              62
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              448,
+              106
+            ],
+            [
+              480,
+              82
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              448,
+              183
+            ],
+            [
+              480,
+              183
+            ]
+          ]
+        }
+      ],
+      "labels": [
+        {
+          "x": 16,
+          "y": 178,
+          "w": 240,
+          "text": {
+            "zh": "这一刻决定还转不转",
+            "en": "this is where it decides whether to go round again"
+          },
+          "tone": "red"
+        }
+      ]
+    },
     "claim": {
       "zh": "结果按模型发起的顺序拼回一条 user 消息——不是按完成顺序。拼完的这一刻决定还转不转：两个预算各自能把回合停下，再加一条 is_final 短路，能直接跳过一整次模型往返。",
       "en": "The results are stitched back into a single user message in the order the model issued them — not the order they finished. The instant that is done, this node decides whether to go round again: two budgets can each end the turn, and an is_final short-circuit can skip a whole model round-trip."
@@ -5646,6 +7084,134 @@ window.LUNA_DECKS = {
     }
   },
   "gate": {
+    "figure": {
+      "w": 620,
+      "h": 210,
+      "boxes": [
+        {
+          "x": 16,
+          "y": 84,
+          "w": 132,
+          "h": 48,
+          "title": {
+            "zh": "一个字都没说？",
+            "en": "said nothing?"
+          }
+        },
+        {
+          "x": 226,
+          "y": 84,
+          "w": 150,
+          "h": 48,
+          "title": {
+            "zh": "说了但食言？",
+            "en": "spoke but broke it?"
+          }
+        },
+        {
+          "x": 454,
+          "y": 84,
+          "w": 154,
+          "h": 48,
+          "title": {
+            "zh": "发出回复",
+            "en": "the reply goes out"
+          }
+        },
+        {
+          "x": 226,
+          "y": 12,
+          "w": 150,
+          "h": 40,
+          "title": {
+            "zh": "回到 ②",
+            "en": "back to ②"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              152,
+              107
+            ],
+            [
+              222,
+              107
+            ]
+          ],
+          "label": {
+            "zh": "没有",
+            "en": "no"
+          },
+          "at": [
+            160,
+            122
+          ]
+        },
+        {
+          "pts": [
+            [
+              380,
+              107
+            ],
+            [
+              450,
+              107
+            ]
+          ],
+          "label": {
+            "zh": "没有",
+            "en": "no"
+          },
+          "at": [
+            392,
+            122
+          ]
+        },
+        {
+          "pts": [
+            [
+              76,
+              80
+            ],
+            [
+              76,
+              32
+            ],
+            [
+              222,
+              32
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              300,
+              80
+            ],
+            [
+              300,
+              56
+            ]
+          ]
+        }
+      ],
+      "labels": [
+        {
+          "x": 400,
+          "y": 152,
+          "w": 210,
+          "text": {
+            "zh": "每种原因一生只纠一次",
+            "en": "each reason corrects once, ever"
+          },
+          "tone": "edge"
+        }
+      ]
+    },
     "claim": {
       "zh": "轮转全部结束，才轮到闸。两道闸依次问两个问题：她开口了吗；开了口的话，有没有食言。任何一道拦下，都不是抛错——是往 history 里塞一条 user 角色的舞台提示，然后 return build_request:回 ②,再走一遍。",
       "en": "Only when the rounds are over does it become the guards turn. Two of them ask two questions in order: did she speak at all; and if she did, did she break a promise. Neither stops the turn by throwing — each pushes a user-role stage direction into history and returns build_request: back to ②, one more pass."
@@ -5697,6 +7263,128 @@ window.LUNA_DECKS = {
     }
   },
   "reply": {
+    "figure": {
+      "w": 620,
+      "h": 210,
+      "boxes": [
+        {
+          "x": 16,
+          "y": 26,
+          "w": 160,
+          "h": 42,
+          "title": {
+            "zh": "气泡里的字",
+            "en": "the bubble text"
+          },
+          "sub": "messageTexts"
+        },
+        {
+          "x": 16,
+          "y": 100,
+          "w": 160,
+          "h": 42,
+          "title": {
+            "zh": "本轮的来源",
+            "en": "this turn's sources"
+          },
+          "sub": "citations"
+        },
+        {
+          "x": 288,
+          "y": 62,
+          "w": 150,
+          "h": 48,
+          "title": "turn.result"
+        },
+        {
+          "x": 486,
+          "y": 62,
+          "w": 122,
+          "h": 48,
+          "title": {
+            "zh": "前端",
+            "en": "the frontend"
+          }
+        },
+        {
+          "x": 16,
+          "y": 166,
+          "w": 160,
+          "h": 38,
+          "title": {
+            "zh": "顶层文字",
+            "en": "top-level text"
+          },
+          "sub": {
+            "zh": "丢弃",
+            "en": "discarded"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              180,
+              47
+            ],
+            [
+              284,
+              76
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              180,
+              121
+            ],
+            [
+              284,
+              96
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              442,
+              86
+            ],
+            [
+              482,
+              86
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              180,
+              185
+            ],
+            [
+              284,
+              120
+            ]
+          ],
+          "style": "dashed"
+        }
+      ],
+      "labels": [
+        {
+          "x": 288,
+          "y": 130,
+          "w": 320,
+          "text": {
+            "zh": "主动回合根本不发它——所以前端得在另一条分支上也收尾",
+            "en": "a proactive turn never emits it, so the frontend must clean up on the other branch too"
+          },
+          "tone": "edge"
+        }
+      ]
+    },
     "claim": {
       "zh": "turn.result 发出的这一刻，用户其实早就把这句话看完了——气泡在 ③ 的流里就一个字一个字出去了。这条事件不是交付，是收尾：文本的权威版本、这一轮用过的网页来源、以及「回合结束」这个信号本身。",
       "en": "By the time turn.result goes out, the user has long since finished reading the reply — the bubbles streamed out character by character back in ③. This event is not delivery; it is closure: the canonical text, the web sources used this turn, and the end-of-turn signal itself."
@@ -5734,6 +7422,143 @@ window.LUNA_DECKS = {
     }
   },
   "persist": {
+    "figure": {
+      "w": 620,
+      "h": 230,
+      "boxes": [
+        {
+          "x": 14,
+          "y": 90,
+          "w": 130,
+          "h": 48,
+          "title": {
+            "zh": "说出话了吗",
+            "en": "did she speak"
+          }
+        },
+        {
+          "x": 214,
+          "y": 20,
+          "w": 146,
+          "h": 40,
+          "title": {
+            "zh": "剥 thinking",
+            "en": "strip thinking"
+          }
+        },
+        {
+          "x": 380,
+          "y": 20,
+          "w": 156,
+          "h": 40,
+          "title": {
+            "zh": "去掉纠正指令",
+            "en": "strip directives"
+          }
+        },
+        {
+          "x": 214,
+          "y": 158,
+          "w": 146,
+          "h": 40,
+          "title": {
+            "zh": "整轮回滚",
+            "en": "roll it all back"
+          }
+        },
+        {
+          "x": 380,
+          "y": 158,
+          "w": 156,
+          "h": 40,
+          "title": {
+            "zh": "还回歌词额度",
+            "en": "return the lyric"
+          }
+        },
+        {
+          "x": 552,
+          "y": 20,
+          "w": 56,
+          "h": 40,
+          "title": "L2"
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              148,
+              102
+            ],
+            [
+              210,
+              46
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              148,
+              126
+            ],
+            [
+              210,
+              176
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              364,
+              40
+            ],
+            [
+              376,
+              40
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              540,
+              40
+            ],
+            [
+              548,
+              40
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              364,
+              178
+            ],
+            [
+              376,
+              178
+            ]
+          ]
+        }
+      ],
+      "labels": [
+        {
+          "x": 14,
+          "y": 196,
+          "w": 190,
+          "text": {
+            "zh": "空行不许进记忆",
+            "en": "an empty row never enters memory"
+          },
+          "tone": "red"
+        }
+      ]
+    },
     "claim": {
       "zh": "这一步不在状态图上——它在 finally 里。不管前面是干净收尾、抛了错、还是被客户端断线 abort 掉，它都会走一遍。而它做的第一件事是问一个问题：这一轮到底说出话了没有。答案是「没有」,这一轮就整个不存在。",
       "en": "This step is not in the graph — it lives in the finally. It runs whether the turn ended cleanly, threw, or was aborted by a client disconnect. And the first thing it does is ask one question: did this turn actually say anything. If the answer is no, the turn ceases to have happened at all."
@@ -5785,6 +7610,123 @@ window.LUNA_DECKS = {
     }
   },
   "after": {
+    "figure": {
+      "w": 620,
+      "h": 200,
+      "boxes": [
+        {
+          "x": 18,
+          "y": 78,
+          "w": 148,
+          "h": 48,
+          "title": {
+            "zh": "回复已经发走",
+            "en": "the reply is gone"
+          }
+        },
+        {
+          "x": 274,
+          "y": 18,
+          "w": 160,
+          "h": 44,
+          "title": {
+            "zh": "立刻 · 异步折叠",
+            "en": "now · async fold"
+          },
+          "sub": {
+            "zh": "不等它",
+            "en": "not awaited"
+          }
+        },
+        {
+          "x": 274,
+          "y": 134,
+          "w": 160,
+          "h": 44,
+          "title": {
+            "zh": "夜里 · 梦",
+            "en": "at night · the dream"
+          },
+          "sub": {
+            "zh": "另一把 key",
+            "en": "another key"
+          }
+        },
+        {
+          "x": 470,
+          "y": 78,
+          "w": 138,
+          "h": 48,
+          "title": {
+            "zh": "明天的上下文",
+            "en": "tomorrow's context"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              170,
+              92
+            ],
+            [
+              270,
+              44
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              170,
+              114
+            ],
+            [
+              270,
+              152
+            ]
+          ],
+          "style": "dashed"
+        },
+        {
+          "pts": [
+            [
+              438,
+              44
+            ],
+            [
+              466,
+              88
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              438,
+              156
+            ],
+            [
+              466,
+              116
+            ]
+          ]
+        }
+      ],
+      "labels": [
+        {
+          "x": 18,
+          "y": 148,
+          "w": 230,
+          "text": {
+            "zh": "这之后没人在等——所以慢是允许的",
+            "en": "nobody is waiting past this point, so slow is allowed"
+          },
+          "tone": "edge"
+        }
+      ]
+    },
     "claim": {
       "zh": "落库不是终点。同一个 finally 的最后一行把 L1 折叠踢出去就不再管它——那是一整次模型调用，不该挂在这条线上。梦更不是这条线的下一步：它是另一台状态机、另一把 key、另一个触发器。",
       "en": "Persisting is not the end. The last line of the same finally kicks the L1 fold out and stops caring — it is a whole model call, and it does not belong on this line. The dream is not the next step on this line at all: another state machine, another key, another trigger."
