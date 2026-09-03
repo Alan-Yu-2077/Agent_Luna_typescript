@@ -66,11 +66,15 @@
 
   /* ══ 机制小图：和主图共用原语，所以手感与落笔动画一致 ═══ */
   function drawFigure(host, fig) {
-    host.style.setProperty('--fw', fig.w);
-    const svg = mkSvg(host, fig.w, fig.h);
-    svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-    svg.style.cssText = 'position:static;width:100%;height:auto;display:block;overflow:visible';
-    host.style.aspectRatio = fig.w + ' / ' + fig.h;
+    /* 内层按图的原始尺寸摆放，外层整体 scale —— SVG 与 HTML 必须一起缩，
+       否则线在缩、字不缩，就会错位（第一版就是这么坏的）。 */
+    const inner = document.createElement('div');
+    inner.className = 'mf-inner';
+    inner.style.width = fig.w + 'px';
+    inner.style.height = fig.h + 'px';
+    host.appendChild(inner);
+
+    const svg = mkSvg(inner, fig.w, fig.h);
     const defs = document.createElementNS(NS, 'defs');
     svg.appendChild(defs);
     let seed = 91;
@@ -80,9 +84,10 @@
       const d0 = 0.05 + i * 0.06;
       wire(svg, S.box(b.x, b.y, b.w, b.h, s(), b.kind === 'blackbox' ? 1.8 : 1.4),
         'box ' + (b.kind ? 'box-' + b.kind : ''), d0);
-      if (b.kind === 'blackbox') hatch(svg, defs, 'mf' + i + '-' + Math.random().toString(36).slice(2, 6),
-        b.x, b.y, b.w, b.h, s(), d0 + 0.04);
-      el(host, 'div', 'mf-box', { left: b.x + 'px', top: b.y + 'px', width: b.w + 'px', height: b.h + 'px' },
+      if (b.kind === 'blackbox') {
+        hatch(svg, defs, 'mf' + i + '-' + Math.random().toString(36).slice(2, 6), b.x, b.y, b.w, b.h, s(), d0 + 0.04);
+      }
+      el(inner, 'div', 'mf-box', { left: b.x + 'px', top: b.y + 'px', width: b.w + 'px', height: b.h + 'px' },
         `<span class="mf-title">${t(b.title)}</span>` + (b.sub ? `<span class="mf-sub">${t(b.sub)}</span>` : ''), d0 + 0.1);
     });
 
@@ -95,15 +100,24 @@
         const n = p.length;
         wire(svg, S.arrowAt(p[n - 2][0], p[n - 2][1], p[n - 1][0], p[n - 1][1], 7), 'edge head ' + (e.style || ''), d0 + 0.16);
       }
-      if (e.label) el(host, 'div', 'mf-elabel', { left: e.at[0] + 'px', top: e.at[1] + 'px' }, t(e.label), d0 + 0.2);
+      if (e.label) el(inner, 'div', 'mf-elabel', { left: e.at[0] + 'px', top: e.at[1] + 'px' }, t(e.label), d0 + 0.2);
     });
 
     (fig.labels || []).forEach((l, i) => {
-      el(host, 'div', 'mf-label tone-' + (l.tone || 'edge'),
+      el(inner, 'div', 'mf-label tone-' + (l.tone || 'edge'),
         { left: l.x + 'px', top: l.y + 'px', maxWidth: (l.w || 200) + 'px' }, t(l.text), 0.5 + i * 0.05);
     });
 
-    void host.offsetWidth; // 强制回流，让 stroke-dasharray 的起始状态先落地
+    const fitFig = () => {
+      const sc = Math.min(1, (host.clientWidth || fig.w) / fig.w);
+      inner.style.transform = `scale(${sc})`;
+      host.style.height = fig.h * sc + 'px';
+    };
+    fitFig();
+    window.addEventListener('resize', fitFig);
+    host.__fit = fitFig;
+
+    void host.offsetWidth;
     host.classList.add('drawing');
   }
 

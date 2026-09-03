@@ -15,6 +15,126 @@ window.LUNA_DECKS = {
 
   /* ── 上下文 / context management ─────────────────────────── */
   "cached": {
+    "figure": {
+      "w": 620,
+      "h": 210,
+      "boxes": [
+        {
+          "x": 14,
+          "y": 26,
+          "w": 142,
+          "h": 40,
+          "title": {
+            "zh": "人格 · 灵魂",
+            "en": "persona · soul"
+          }
+        },
+        {
+          "x": 14,
+          "y": 82,
+          "w": 142,
+          "h": 40,
+          "title": {
+            "zh": "技能货架",
+            "en": "skill shelf"
+          }
+        },
+        {
+          "x": 14,
+          "y": 138,
+          "w": 142,
+          "h": 40,
+          "title": {
+            "zh": "L3 事实核心",
+            "en": "L3 core facts"
+          }
+        },
+        {
+          "x": 268,
+          "y": 82,
+          "w": 168,
+          "h": 44,
+          "title": {
+            "zh": "一个 block",
+            "en": "a single block"
+          },
+          "sub": "buildSystemPrompt"
+        },
+        {
+          "x": 486,
+          "y": 82,
+          "w": 120,
+          "h": 44,
+          "title": {
+            "zh": "被记忆化",
+            "en": "memoized"
+          },
+          "sub": "memoryEpoch"
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              160,
+              46
+            ],
+            [
+              264,
+              96
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              160,
+              102
+            ],
+            [
+              264,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              160,
+              158
+            ],
+            [
+              264,
+              114
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              440,
+              104
+            ],
+            [
+              482,
+              104
+            ]
+          ]
+        }
+      ],
+      "labels": [
+        {
+          "x": 268,
+          "y": 140,
+          "w": 340,
+          "text": {
+            "zh": "记忆没写过，就不重建——同一段字节直接再用一次",
+            "en": "no memory write, no rebuild — the same bytes are reused"
+          },
+          "tone": "edge"
+        }
+      ]
+    },
     "claim": {
       "zh": "没有它，人格、灵魂、长期事实、日记摘要、技能货架这一整套会在每一回合、每一次工具迭代里被重新计费——而这套东西一个字都不随回合变。它是系统提示里唯一那个带 cache_control 断点的文本块：所有跨回合稳定的自我描述先拼成一整块，再由 memoryEpoch 在回合内记忆化。",
       "en": "Without it, the persona, the soul, the long-term facts, the diary digest and the skill shelf would be re-billed on every turn and every tool iteration — none of which changes from turn to turn. It is the one text block in the system prompt that carries the cache_control breakpoint: everything stable about who she is is joined into a single block, then memoized within the turn against memoryEpoch."
@@ -62,6 +182,126 @@ window.LUNA_DECKS = {
     }
   },
   "tail": {
+    "figure": {
+      "w": 620,
+      "h": 200,
+      "boxes": [
+        {
+          "x": 12,
+          "y": 22,
+          "w": 128,
+          "h": 38,
+          "title": {
+            "zh": "时间",
+            "en": "time"
+          }
+        },
+        {
+          "x": 12,
+          "y": 70,
+          "w": 128,
+          "h": 38,
+          "title": {
+            "zh": "天气 · 歌",
+            "en": "weather · music"
+          }
+        },
+        {
+          "x": 12,
+          "y": 118,
+          "w": 128,
+          "h": 38,
+          "title": {
+            "zh": "召回块",
+            "en": "recall block"
+          }
+        },
+        {
+          "x": 288,
+          "y": 62,
+          "w": 150,
+          "h": 54,
+          "title": {
+            "zh": "user 消息",
+            "en": "the user message"
+          },
+          "sub": {
+            "zh": "断点右边",
+            "en": "right of the breakpoint"
+          }
+        },
+        {
+          "x": 486,
+          "y": 62,
+          "w": 120,
+          "h": 54,
+          "kind": "blackbox",
+          "title": "LLM"
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              144,
+              41
+            ],
+            [
+              284,
+              78
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              144,
+              89
+            ],
+            [
+              284,
+              89
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              144,
+              137
+            ],
+            [
+              284,
+              100
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              442,
+              89
+            ],
+            [
+              482,
+              89
+            ]
+          ]
+        }
+      ],
+      "labels": [
+        {
+          "x": 288,
+          "y": 132,
+          "w": 320,
+          "text": {
+            "zh": "易变的东西一律走消息层——它们进系统提示就会天天作废缓存",
+            "en": "volatile things ride the message layer; in the prompt they would void the cache daily"
+          },
+          "tone": "edge"
+        }
+      ]
+    },
     "claim": {
       "zh": "没有它，这一回合的时间、天气、在放的歌、刚召回到的记忆就无处安放——要么塞进缓存前缀把断点炸掉，要么干脆不给她。它是 parse_input 把本回合所有易变内容和用户原话拼成的那一条 user 消息：最多七个 text block,一次性 push 进 history。",
       "en": "Without it, this turn’s time, weather, current track and freshly recalled memories have nowhere to live — either they go into the cached prefix and blow the breakpoint, or she never gets them. It is the single user message parse_input assembles: up to seven text blocks, pushed into history in one go."
@@ -435,6 +675,105 @@ window.LUNA_DECKS = {
     }
   },
   "perceive": {
+    "figure": {
+      "w": 620,
+      "h": 210,
+      "boxes": [
+        {
+          "x": 12,
+          "y": 26,
+          "w": 158,
+          "h": 44,
+          "title": {
+            "zh": "后台刷新器",
+            "en": "background refresher"
+          },
+          "sub": ".unref() · TTL"
+        },
+        {
+          "x": 12,
+          "y": 118,
+          "w": 158,
+          "h": 44,
+          "title": {
+            "zh": "常驻订阅",
+            "en": "resident subscription"
+          },
+          "sub": "'track'"
+        },
+        {
+          "x": 246,
+          "y": 72,
+          "w": 150,
+          "h": 48,
+          "title": {
+            "zh": "内存快照",
+            "en": "in-memory snapshot"
+          }
+        },
+        {
+          "x": 448,
+          "y": 72,
+          "w": 158,
+          "h": 48,
+          "title": {
+            "zh": "同步读",
+            "en": "read synchronously"
+          },
+          "sub": "parse_input"
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              174,
+              52
+            ],
+            [
+              242,
+              84
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              174,
+              138
+            ],
+            [
+              242,
+              110
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              400,
+              96
+            ],
+            [
+              444,
+              96
+            ]
+          ]
+        }
+      ],
+      "labels": [
+        {
+          "x": 246,
+          "y": 138,
+          "w": 350,
+          "text": {
+            "zh": "热路径零网络：她只是读一眼别人早就放好的东西",
+            "en": "zero network on the hot path — she only reads what was already put there"
+          },
+          "tone": "red"
+        }
+      ]
+    },
     "claim": {
       "zh": "没有它，她要知道现在几点、外面下不下雨、他在听什么，只能烧一次工具调用去查，而实际上往往根本不查。它是每个用户回合开头同步读三份内存快照、在 TS 里格式化成一句人话、推进未缓存尾部的那三个块。",
       "en": "Without it, knowing the time, the weather or what he is listening to costs her a tool call — and in practice she mostly just does not ask. It is the three blocks that, at the top of every user turn, read three in-memory snapshots synchronously, format them into finished sentences in TypeScript, and ride the uncached tail."
@@ -809,6 +1148,82 @@ window.LUNA_DECKS = {
     }
   },
   "edge1": {
+    "figure": {
+      "w": 620,
+      "h": 190,
+      "boxes": [
+        {
+          "x": 40,
+          "y": 66,
+          "w": 156,
+          "h": 52,
+          "title": "append_results"
+        },
+        {
+          "x": 384,
+          "y": 20,
+          "w": 196,
+          "h": 46,
+          "title": {
+            "zh": "回到 ②",
+            "en": "back to ②"
+          },
+          "sub": {
+            "zh": "还有工具要跑",
+            "en": "more tools to run"
+          }
+        },
+        {
+          "x": 384,
+          "y": 116,
+          "w": 196,
+          "h": 46,
+          "title": "finalize",
+          "sub": {
+            "zh": "预算用完 / 短路",
+            "en": "budget spent, or short-circuit"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              200,
+              82
+            ],
+            [
+              380,
+              44
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              200,
+              102
+            ],
+            [
+              380,
+              138
+            ]
+          ]
+        }
+      ],
+      "labels": [
+        {
+          "x": 40,
+          "y": 130,
+          "w": 300,
+          "text": {
+            "zh": "这条边就是「循环」——没有它，agent 只是一次调用",
+            "en": "this edge is the loop; without it an agent is just one call"
+          },
+          "tone": "red"
+        }
+      ]
+    },
     "claim": {
       "zh": "没有这条回边，工具结果就永远送不回模型：她能调 web_search，却拿不到搜索结果再开口。它是 append_results 的默认出口——把这一轮的工具结果按原调用顺序拼成一条 user 消息压进 history，然后回到 build_request 开下一轮。",
       "en": "Without this back-edge, tool results never return to the model: she can call web_search but never gets to speak with what it found. It is append_results’ default exit — this round’s results, reordered to match the calls, pushed into history as one user message, then back to build_request for another round."
@@ -856,6 +1271,115 @@ window.LUNA_DECKS = {
     }
   },
   "edge2": {
+    "figure": {
+      "w": 620,
+      "h": 200,
+      "boxes": [
+        {
+          "x": 34,
+          "y": 74,
+          "w": 140,
+          "h": 52,
+          "title": "finalize"
+        },
+        {
+          "x": 262,
+          "y": 16,
+          "w": 168,
+          "h": 44,
+          "title": {
+            "zh": "空回复闸",
+            "en": "empty-reply guard"
+          }
+        },
+        {
+          "x": 262,
+          "y": 82,
+          "w": 168,
+          "h": 44,
+          "title": {
+            "zh": "完整性闸",
+            "en": "integrity guard"
+          }
+        },
+        {
+          "x": 464,
+          "y": 48,
+          "w": 142,
+          "h": 46,
+          "title": {
+            "zh": "回到 ②",
+            "en": "back to ②"
+          },
+          "sub": {
+            "zh": "每种原因一次",
+            "en": "once per reason"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              178,
+              88
+            ],
+            [
+              258,
+              42
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              178,
+              104
+            ],
+            [
+              258,
+              102
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              434,
+              40
+            ],
+            [
+              460,
+              60
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              434,
+              100
+            ],
+            [
+              460,
+              82
+            ]
+          ]
+        }
+      ],
+      "labels": [
+        {
+          "x": 262,
+          "y": 142,
+          "w": 340,
+          "text": {
+            "zh": "两道闸各有各的水位线，纠过一次就不再纠——不会打转",
+            "en": "each guard has its own watermark; corrected once, never again — no spinning"
+          },
+          "tone": "edge"
+        }
+      ]
+    },
     "claim": {
       "zh": "没有这两道闸，一个回合可以合法地一句话不说就结束，或者说了「我去查一下」然后什么也没查——她在对话上已经赖了账，系统却认为回合正常收尾。它们是 finalize 里的两个纠正出口：各自把一条 user 角色的舞台指示压进 history，然后回到 build_request，再给她一次机会。",
       "en": "Without these two gates a turn may legally end without saying anything, or say I will go look that up and never look anything up — she has broken her word in the conversation while the system considers the turn cleanly finished. They are finalize’s two corrective exits: each pushes a user-role stage direction into history and returns to build_request, giving her one more chance."
@@ -907,6 +1431,86 @@ window.LUNA_DECKS = {
     }
   },
   "budget": {
+    "figure": {
+      "w": 620,
+      "h": 190,
+      "boxes": [
+        {
+          "x": 30,
+          "y": 40,
+          "w": 240,
+          "h": 50,
+          "title": "MAX_TOOL_ITERATIONS",
+          "sub": {
+            "zh": "管轮数 · 8",
+            "en": "counts rounds · 8"
+          }
+        },
+        {
+          "x": 30,
+          "y": 116,
+          "w": 240,
+          "h": 50,
+          "title": "PROACTIVE_MAX_ACTIONS",
+          "sub": {
+            "zh": "管调用数 · 8",
+            "en": "counts calls · 8"
+          }
+        },
+        {
+          "x": 372,
+          "y": 78,
+          "w": 210,
+          "h": 50,
+          "title": {
+            "zh": "两把不同的尺",
+            "en": "two different rulers"
+          },
+          "sub": {
+            "zh": "同一个数字，不同单位",
+            "en": "same number, different unit"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              274,
+              62
+            ],
+            [
+              368,
+              92
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              274,
+              138
+            ],
+            [
+              368,
+              114
+            ]
+          ]
+        }
+      ],
+      "labels": [
+        {
+          "x": 30,
+          "y": 4,
+          "w": 400,
+          "text": {
+            "zh": "一轮里可以有很多次调用——所以两个预算不是一回事",
+            "en": "one round may hold many calls — so the two budgets are not the same thing"
+          },
+          "tone": "edge"
+        }
+      ]
+    },
     "claim": {
       "zh": "没有它们，一次工具循环可以一直转到把上下文烧穿为止，而账单是唯一的警报——39 万 token 那次事故就是这么来的。两个上限默认都是 8，但管的不是同一件事：一个数轮，一个数调用次数。",
       "en": "Without them a tool loop can spin until it burns through the context window, with the bill as the only alarm — that is exactly how the 390K-token incident happened. Both default to 8, but they do not govern the same thing: one counts rounds, the other counts calls."
@@ -954,6 +1558,90 @@ window.LUNA_DECKS = {
     }
   },
   "shortcut": {
+    "figure": {
+      "w": 620,
+      "h": 200,
+      "boxes": [
+        {
+          "x": 14,
+          "y": 74,
+          "w": 168,
+          "h": 52,
+          "title": "is_final: true",
+          "sub": {
+            "zh": "这一轮全是 message",
+            "en": "message-only round"
+          }
+        },
+        {
+          "x": 274,
+          "y": 16,
+          "w": 172,
+          "h": 46,
+          "title": {
+            "zh": "直接收束",
+            "en": "straight to finalize"
+          },
+          "sub": {
+            "zh": "省一个往返",
+            "en": "one round-trip saved"
+          }
+        },
+        {
+          "x": 274,
+          "y": 122,
+          "w": 172,
+          "h": 46,
+          "title": {
+            "zh": "照常再跑一轮",
+            "en": "take the extra round"
+          },
+          "sub": {
+            "zh": "意图还没兑现",
+            "en": "an intent still unmet"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              186,
+              90
+            ],
+            [
+              270,
+              44
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              186,
+              110
+            ],
+            [
+              270,
+              142
+            ]
+          ],
+          "style": "dashed"
+        }
+      ],
+      "labels": [
+        {
+          "x": 274,
+          "y": 74,
+          "w": 330,
+          "text": {
+            "zh": "例外：她刚说了「我去查一下」——那一轮正是要去查的那轮，不能省",
+            "en": "the exception: she just promised to look something up, and that round is the looking"
+          },
+          "tone": "red"
+        }
+      ]
+    },
     "claim": {
       "zh": "没有它，她说完最后一句之后还要再花一次完整的模型往返去确认「我说完了」；这段时间 activeTurn 还锁着，用户此刻发的消息会被 turn_in_progress 弹回来，而屏幕上她的回复看起来早就说完了。它把这次纯确认的往返省掉：这一轮只调了 message、且最后一条标了 is_final:true，就直接去 finalize。",
       "en": "Without it, after her last sentence she still spends a full model round-trip confirming that she is done; during that window activeTurn stays locked, so a message the user sends right then bounces with turn_in_progress while her reply already looks finished on screen. It removes that purely confirmatory round-trip: if this round called only message and the last one was marked is_final:true, go straight to finalize."
@@ -1007,6 +1695,123 @@ window.LUNA_DECKS = {
 
   /* ── 工具 / tool interface ─────────────────────────── */
   "count": {
+    "figure": {
+      "w": 620,
+      "h": 190,
+      "boxes": [
+        {
+          "x": 16,
+          "y": 66,
+          "w": 150,
+          "h": 52,
+          "title": {
+            "zh": "Zod schema",
+            "en": "Zod schema"
+          },
+          "sub": {
+            "zh": "唯一的真相",
+            "en": "the single truth"
+          }
+        },
+        {
+          "x": 244,
+          "y": 14,
+          "w": 156,
+          "h": 46,
+          "title": "TS 类型",
+          "sub": {
+            "zh": "编译期",
+            "en": "compile time"
+          }
+        },
+        {
+          "x": 244,
+          "y": 78,
+          "w": 156,
+          "h": 46,
+          "title": "JSON Schema",
+          "sub": {
+            "zh": "给模型看",
+            "en": "for the model"
+          }
+        },
+        {
+          "x": 244,
+          "y": 128,
+          "w": 156,
+          "h": 44,
+          "title": {
+            "zh": "运行时校验",
+            "en": "runtime check"
+          },
+          "sub": {
+            "zh": "入口拦截",
+            "en": "at the boundary"
+          }
+        },
+        {
+          "x": 452,
+          "y": 78,
+          "w": 154,
+          "h": 46,
+          "title": {
+            "zh": "28 个工具",
+            "en": "28 tools"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              170,
+              82
+            ],
+            [
+              240,
+              38
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              170,
+              92
+            ],
+            [
+              240,
+              100
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              170,
+              104
+            ],
+            [
+              240,
+              148
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              404,
+              101
+            ],
+            [
+              448,
+              101
+            ]
+          ]
+        }
+      ],
+      "labels": []
+    },
     "claim": {
       "zh": "没有一份收敛的工具清单，模型对世界的意图就只能停留在自然语言里 —— 没有可校验的动作面，也没有地方声明一次调用要花多久、能不能并发、主动轮里能不能静悄悄地跑。Luna 的动作面是 protocol 包里一个 28 条的 ToolName 枚举，每个工具用 Zod 定义入参，发给模型前逐个转成 JSON Schema。",
       "en": "Without a closed list of tools, the model can only phrase its intent toward the world in prose — no verifiable action surface, and nowhere to declare how long a call may take, whether it can run concurrently, or whether it may run silently in a proactive turn. Luna's action surface is a 28-entry ToolName enum in the protocol package; each tool declares its input in Zod, and every input is converted to JSON Schema before it reaches the model."
@@ -1565,6 +2370,125 @@ window.LUNA_DECKS = {
     }
   },
   "result": {
+    "figure": {
+      "w": 620,
+      "h": 200,
+      "boxes": [
+        {
+          "x": 12,
+          "y": 26,
+          "w": 130,
+          "h": 40,
+          "title": {
+            "zh": "结果 B",
+            "en": "result B"
+          }
+        },
+        {
+          "x": 12,
+          "y": 78,
+          "w": 130,
+          "h": 40,
+          "title": {
+            "zh": "结果 A",
+            "en": "result A"
+          }
+        },
+        {
+          "x": 12,
+          "y": 130,
+          "w": 130,
+          "h": 40,
+          "title": {
+            "zh": "结果 C",
+            "en": "result C"
+          }
+        },
+        {
+          "x": 282,
+          "y": 62,
+          "w": 172,
+          "h": 72,
+          "title": {
+            "zh": "按请求顺序重排",
+            "en": "reordered to the request"
+          },
+          "sub": "A → B → C"
+        },
+        {
+          "x": 500,
+          "y": 62,
+          "w": 106,
+          "h": 72,
+          "title": {
+            "zh": "回填历史",
+            "en": "into history"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              146,
+              46
+            ],
+            [
+              278,
+              84
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              146,
+              98
+            ],
+            [
+              278,
+              98
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              146,
+              150
+            ],
+            [
+              278,
+              112
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              458,
+              98
+            ],
+            [
+              496,
+              98
+            ]
+          ]
+        }
+      ],
+      "labels": [
+        {
+          "x": 282,
+          "y": 146,
+          "w": 330,
+          "text": {
+            "zh": "并发跑完的顺序不算数——tool_result 必须按 tool_use 的原序回去",
+            "en": "the order they finished does not count; results go back in the order they were asked"
+          },
+          "tone": "edge"
+        }
+      ]
+    },
     "claim": {
       "zh": "没有结果回填，工具轮就是单向的：模型发出调用，永远看不到自己做了什么。而且回填必须成对且同序 —— 一个 tool_use 块对一个 tool_result 块，顺序跟着 assistant 消息里的顺序走，否则这段历史会永久坏掉。",
       "en": "Without result append-back a tool round is one-way: the model issues calls and never sees what it did. And the append-back must be paired and in order — one tool_result block per tool_use block, following the order in the assistant message — or that stretch of history is permanently broken."
@@ -1614,6 +2538,107 @@ window.LUNA_DECKS = {
 
   /* ── 控制 / control mechanisms ─────────────────────────── */
   "capgate": {
+    "figure": {
+      "w": 620,
+      "h": 200,
+      "boxes": [
+        {
+          "x": 20,
+          "y": 76,
+          "w": 132,
+          "h": 48,
+          "title": {
+            "zh": "一个开关",
+            "en": "one flag"
+          },
+          "sub": "LUNA_*"
+        },
+        {
+          "x": 248,
+          "y": 20,
+          "w": 168,
+          "h": 44,
+          "title": {
+            "zh": "整组挂上",
+            "en": "group mounted"
+          }
+        },
+        {
+          "x": 248,
+          "y": 122,
+          "w": 168,
+          "h": 44,
+          "title": {
+            "zh": "整组卸掉",
+            "en": "group unmounted"
+          }
+        },
+        {
+          "x": 456,
+          "y": 122,
+          "w": 150,
+          "h": 44,
+          "title": {
+            "zh": "提示词里没有",
+            "en": "not in the prompt"
+          },
+          "sub": {
+            "zh": "连 schema 都不进",
+            "en": "not even the schema"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              156,
+              92
+            ],
+            [
+              244,
+              46
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              156,
+              108
+            ],
+            [
+              244,
+              140
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              420,
+              144
+            ],
+            [
+              452,
+              144
+            ]
+          ]
+        }
+      ],
+      "labels": [
+        {
+          "x": 248,
+          "y": 76,
+          "w": 340,
+          "text": {
+            "zh": "关掉不是「调用会被拒」，是「她根本不知道有这个工具」",
+            "en": "off does not mean the call is refused — she never learns the tool exists"
+          },
+          "tone": "red"
+        }
+      ]
+    },
     "claim": {
       "zh": "没有它，「关掉 shell」只能是提示词里的一句请求 —— 工具 schema 照样发出去，模型照样会调，只能靠事后拒绝兜底。能力门把开关做在注册表上：关掉的一组根本不进注册表，于是既不进提示词，也不进分发器。",
       "en": "Without it, \"turn shell off\" is only a sentence in the prompt — the schema still ships, the model still calls it, and refusal is the only backstop. The capability gate moves the switch into the registry: a disabled group is never in the registry, so it reaches neither the prompt nor the dispatcher."
@@ -2325,6 +3350,129 @@ window.LUNA_DECKS = {
     }
   },
   "trace": {
+    "figure": {
+      "w": 620,
+      "h": 200,
+      "boxes": [
+        {
+          "x": 12,
+          "y": 24,
+          "w": 128,
+          "h": 40,
+          "title": {
+            "zh": "节点跃迁",
+            "en": "node transition"
+          }
+        },
+        {
+          "x": 12,
+          "y": 78,
+          "w": 128,
+          "h": 40,
+          "title": {
+            "zh": "工具事件",
+            "en": "tool event"
+          }
+        },
+        {
+          "x": 12,
+          "y": 132,
+          "w": 128,
+          "h": 40,
+          "title": {
+            "zh": "出站事件",
+            "en": "outbound"
+          }
+        },
+        {
+          "x": 268,
+          "y": 72,
+          "w": 150,
+          "h": 52,
+          "title": {
+            "zh": "一次性落库",
+            "en": "one flush"
+          },
+          "sub": {
+            "zh": "回合结束时",
+            "en": "at turn end"
+          }
+        },
+        {
+          "x": 466,
+          "y": 72,
+          "w": 140,
+          "h": 52,
+          "title": "/_trace",
+          "sub": {
+            "zh": "回放这一轮",
+            "en": "replay the turn"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              144,
+              44
+            ],
+            [
+              264,
+              84
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              144,
+              98
+            ],
+            [
+              264,
+              98
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              144,
+              152
+            ],
+            [
+              264,
+              112
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              422,
+              98
+            ],
+            [
+              462,
+              98
+            ]
+          ]
+        }
+      ],
+      "labels": [
+        {
+          "x": 268,
+          "y": 140,
+          "w": 340,
+          "text": {
+            "zh": "挂在状态图的跃迁上——所以对话和梦共用同一个接缝",
+            "en": "hooked to graph transitions, so the turn and the dream share one seam"
+          },
+          "tone": "edge"
+        }
+      ]
+    },
     "claim": {
       "zh": "没有它，前面五道闸每一次开合都是不可见的 —— 被挡下的主动动作、被纠正的失约、被丢掉的悬空调用，全部只留在 stdout 里，重启就没了。trace 把它们变成一本账：每次状态跃迁一行、每个工具事件一行、每条出站事件一行，再加上闸自己写的 decision 行，按 turn 落进 SQLite。",
       "en": "Without it, every opening and closing of the five gates above is invisible — a blocked proactive action, a corrected broken promise, a dropped dangling call, all of it living in stdout and gone on restart. The trace turns them into a ledger: one row per graph transition, one per tool event, one per outbound event, plus the decision rows the gates write themselves, landed in SQLite per turn."
@@ -2697,6 +3845,147 @@ window.LUNA_DECKS = {
     }
   },
   "layers": {
+    "figure": {
+      "w": 620,
+      "h": 220,
+      "boxes": [
+        {
+          "x": 20,
+          "y": 26,
+          "w": 172,
+          "h": 46,
+          "title": "L1",
+          "sub": {
+            "zh": "活跃窗口",
+            "en": "the live window"
+          }
+        },
+        {
+          "x": 20,
+          "y": 92,
+          "w": 172,
+          "h": 46,
+          "title": "L2",
+          "sub": {
+            "zh": "耐久回合",
+            "en": "durable turns"
+          }
+        },
+        {
+          "x": 20,
+          "y": 158,
+          "w": 172,
+          "h": 46,
+          "title": "L3",
+          "sub": {
+            "zh": "长期事实",
+            "en": "long-lived facts"
+          }
+        },
+        {
+          "x": 306,
+          "y": 60,
+          "w": 168,
+          "h": 46,
+          "title": {
+            "zh": "灵魂 · 固定核心",
+            "en": "soul · fixed core"
+          },
+          "sub": {
+            "zh": "主人写的",
+            "en": "his to edit"
+          }
+        },
+        {
+          "x": 306,
+          "y": 128,
+          "w": 168,
+          "h": 46,
+          "title": {
+            "zh": "灵魂 · 演化段",
+            "en": "soul · evolving"
+          },
+          "sub": {
+            "zh": "她自己写的",
+            "en": "hers to write"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              196,
+              49
+            ],
+            [
+              196,
+              92
+            ]
+          ],
+          "head": false
+        },
+        {
+          "pts": [
+            [
+              196,
+              115
+            ],
+            [
+              196,
+              158
+            ]
+          ],
+          "head": false
+        },
+        {
+          "pts": [
+            [
+              478,
+              83
+            ],
+            [
+              560,
+              83
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              478,
+              151
+            ],
+            [
+              560,
+              151
+            ]
+          ]
+        }
+      ],
+      "labels": [
+        {
+          "x": 20,
+          "y": 4,
+          "w": 260,
+          "text": {
+            "zh": "越往下越久，也越少",
+            "en": "the further down, the longer-lived and the fewer"
+          },
+          "tone": "edge"
+        },
+        {
+          "x": 540,
+          "y": 96,
+          "w": 76,
+          "text": {
+            "zh": "每回合注入",
+            "en": "injected every turn"
+          },
+          "tone": "edge"
+        }
+      ]
+    },
     "claim": {
       "zh": "不分层的话，记忆就只有一条逐字长河：要么全带上（贵，而且迟早超窗），要么截断（她就是忘了）。分成 L1 有界窗口 / L2 追加式回合时间线 / L3 结构化事实 / 灵魂四层之后，每层有自己的有界方式和自己的写者。",
       "en": "Unlayered, memory is one verbatim river: carry all of it (expensive, and eventually over the window) or truncate it (she simply forgot). Split into L1 bounded window, L2 append-only turn timeline, L3 structured facts, and the soul, each layer gets its own bound and its own writer."
@@ -2973,6 +4262,125 @@ window.LUNA_DECKS = {
     }
   },
   "sqlite": {
+    "figure": {
+      "w": 620,
+      "h": 200,
+      "boxes": [
+        {
+          "x": 34,
+          "y": 66,
+          "w": 168,
+          "h": 60,
+          "title": "luna.sqlite",
+          "sub": {
+            "zh": "一个文件",
+            "en": "one file"
+          }
+        },
+        {
+          "x": 288,
+          "y": 18,
+          "w": 148,
+          "h": 42,
+          "title": {
+            "zh": "回合与事实",
+            "en": "turns and facts"
+          }
+        },
+        {
+          "x": 288,
+          "y": 76,
+          "w": 148,
+          "h": 42,
+          "title": {
+            "zh": "日记 · 技能 · 灵魂",
+            "en": "diaries · skills · soul"
+          }
+        },
+        {
+          "x": 288,
+          "y": 134,
+          "w": 148,
+          "h": 42,
+          "title": {
+            "zh": "追踪 · 设置",
+            "en": "traces · settings"
+          }
+        },
+        {
+          "x": 470,
+          "y": 76,
+          "w": 136,
+          "h": 42,
+          "title": {
+            "zh": "可备份 · 可回看",
+            "en": "copyable · replayable"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              206,
+              84
+            ],
+            [
+              284,
+              40
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              206,
+              96
+            ],
+            [
+              284,
+              96
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              206,
+              110
+            ],
+            [
+              284,
+              154
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              440,
+              97
+            ],
+            [
+              466,
+              97
+            ]
+          ]
+        }
+      ],
+      "labels": [
+        {
+          "x": 34,
+          "y": 140,
+          "w": 240,
+          "text": {
+            "zh": "她的全部，可以拷进 U 盘",
+            "en": "all of her fits on a thumb drive"
+          },
+          "tone": "red"
+        }
+      ]
+    },
     "claim": {
       "zh": "没有它，上面每一层都得自己挑存储、自己处理并发和崩溃恢复。Luna 的全部状态就是仓库根上的一个文件 luna.sqlite：22 个迁移、18 张活着的表，WAL 模式。删掉这个文件等于让她彻底重生。",
       "en": "Without it every layer above would pick its own storage and handle concurrency and crash recovery alone. All of Luna's state is one file at the repo root, luna.sqlite: 22 migrations, 18 live tables, in WAL mode. Deleting that file is a full rebirth."
@@ -3026,6 +4434,83 @@ window.LUNA_DECKS = {
 
   /* ── 时钟 / Luna’s own ─────────────────────────── */
   "beat": {
+    "figure": {
+      "w": 620,
+      "h": 190,
+      "boxes": [
+        {
+          "x": 26,
+          "y": 70,
+          "w": 148,
+          "h": 52,
+          "title": {
+            "zh": "每 60 秒",
+            "en": "every 60s"
+          },
+          "sub": "setInterval"
+        },
+        {
+          "x": 262,
+          "y": 70,
+          "w": 156,
+          "h": 52,
+          "title": {
+            "zh": "一次判断",
+            "en": "one decision"
+          },
+          "sub": "tickOnce"
+        },
+        {
+          "x": 470,
+          "y": 70,
+          "w": 136,
+          "h": 52,
+          "title": {
+            "zh": "随进程死",
+            "en": "dies with the process"
+          },
+          "sub": ".unref()"
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              178,
+              96
+            ],
+            [
+              258,
+              96
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              422,
+              96
+            ],
+            [
+              466,
+              96
+            ]
+          ]
+        }
+      ],
+      "labels": [
+        {
+          "x": 26,
+          "y": 136,
+          "w": 400,
+          "text": {
+            "zh": "没有任何代码停它——要停心跳，只能停进程",
+            "en": "nothing ever stops it; to stop the heartbeat you stop the process"
+          },
+          "tone": "red"
+        }
+      ]
+    },
     "claim": {
       "zh": "没有它，Luna 只在被叫醒时存在——所有自主行为都塌回成对请求的回应，第二个入口根本不存在。它是一个服务端的 60 秒 setInterval：每跳一次，就替每个活跃会话问一遍「现在要不要醒」。",
       "en": "Without it Luna only exists when spoken to — every autonomous behavior collapses back into a response to a request, and the second entrance simply is not there. It is one server-side 60-second setInterval: on each beat it asks, once per active session, whether she should wake."
@@ -3259,6 +4744,125 @@ window.LUNA_DECKS = {
     }
   },
   "outcomes": {
+    "figure": {
+      "w": 620,
+      "h": 210,
+      "boxes": [
+        {
+          "x": 22,
+          "y": 78,
+          "w": 140,
+          "h": 52,
+          "title": {
+            "zh": "一次醒来",
+            "en": "one waking"
+          }
+        },
+        {
+          "x": 268,
+          "y": 14,
+          "w": 156,
+          "h": 44,
+          "title": {
+            "zh": "说话",
+            "en": "she speaks"
+          }
+        },
+        {
+          "x": 268,
+          "y": 80,
+          "w": 156,
+          "h": 44,
+          "title": {
+            "zh": "安静地干活",
+            "en": "quiet work"
+          }
+        },
+        {
+          "x": 268,
+          "y": 146,
+          "w": 156,
+          "h": 44,
+          "title": {
+            "zh": "真的休息",
+            "en": "genuine rest"
+          }
+        },
+        {
+          "x": 460,
+          "y": 80,
+          "w": 146,
+          "h": 44,
+          "title": {
+            "zh": "都留痕",
+            "en": "all recorded"
+          },
+          "sub": "proactive_outcomes"
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              166,
+              92
+            ],
+            [
+              264,
+              40
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              166,
+              104
+            ],
+            [
+              264,
+              102
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              166,
+              116
+            ],
+            [
+              264,
+              166
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              428,
+              102
+            ],
+            [
+              456,
+              102
+            ]
+          ]
+        }
+      ],
+      "labels": [
+        {
+          "x": 22,
+          "y": 150,
+          "w": 220,
+          "text": {
+            "zh": "三种都合法——所以「沉默」是可以量的，不是看不见的",
+            "en": "all three are legal, so silence becomes measurable rather than invisible"
+          },
+          "tone": "edge"
+        }
+      ]
+    },
     "claim": {
       "zh": "没有它，「她今天醒了 21 次、开口 5 次」这句话没有任何东西能验证——沉默率是不可见的，于是一次行为上的修复就只是氛围。它把每一次主动醒来落成一行账：说话 / 安静地干活 / 什么也没做。",
       "en": "Without it, a sentence like \"she woke 21 times today and spoke 5 of them\" has nothing behind it — the silent rate is invisible, and a behavioral fix is a vibe rather than a result. It writes every proactive waking down as one row: spoke / quiet work / nothing."
