@@ -443,6 +443,55 @@
     fitAll();
   });
 
+  /* ── 顶栏跳转：自己驱动的平滑滚动 ─────────────────────
+     停在顶栏下方而不是被它盖住；距离越远走得越久（有上限）；
+     系统开了「减少动态效果」就直接落位。 */
+  (function smoothJump() {
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)');
+    const ease = (p) => (p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2);
+    document.querySelectorAll('.jump a[href^="#"]').forEach((a) => {
+      a.addEventListener('click', (e) => {
+        const target = document.querySelector(a.getAttribute('href'));
+        if (!target) return;
+        e.preventDefault();
+        const bar = document.querySelector('.topbar');
+        const pad = (bar ? bar.getBoundingClientRect().height : 0) + 14;
+        const se = document.scrollingElement || document.documentElement;
+        const from = se.scrollTop;
+        const to = Math.max(0, Math.min(
+          se.scrollHeight - se.clientHeight,
+          from + target.getBoundingClientRect().top - pad,
+        ));
+        const done = () => history.replaceState(null, '', a.getAttribute('href'));
+        if (reduce.matches || Math.abs(to - from) < 2) {
+          window.scrollTo({ top: to, behavior: 'instant' });
+          done();
+          return;
+        }
+        const dur = Math.min(900, Math.max(380, Math.abs(to - from) * 0.6));
+        const t0 = performance.now();
+        let finished = false;
+        const land = () => {
+          if (finished) return;
+          finished = true;
+          window.scrollTo({ top: to, behavior: 'instant' });
+          done();
+        };
+        const step = (now) => {
+          if (finished) return;
+          const p = Math.min(1, (now - t0) / dur);
+          window.scrollTo({ top: from + (to - from) * ease(p), behavior: 'instant' });
+          if (p < 1) requestAnimationFrame(step);
+          else land();
+        };
+        requestAnimationFrame(step);
+        /* 兜底：有些环境（后台标签、被节流的嵌入窗格）根本不跑动画帧，
+           那样 step 一次都不会被调用，点了等于没反应。到点还没走完就直接落位。 */
+        setTimeout(land, dur + 220);
+      });
+    });
+  })();
+
   const pro = document.getElementById('prologue');
   document.getElementById('flip').addEventListener('click', () => {
     pro.hidden = true;

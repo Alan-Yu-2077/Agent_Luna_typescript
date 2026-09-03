@@ -64,6 +64,9 @@
 * {
   box-sizing: border-box;
 }
+/* 平滑滚动由 app.js 自己用 rAF 驱动，不用 scroll-behavior：
+   实测某些嵌入式窗格会把 CSS 平滑滚动整个取消掉，结果锚点一动不动——
+   那比机械跳转更糟。自己驱动的版本行为到处一致，也能读 prefers-reduced-motion。 */
 body {
   margin: 0;
   min-height: 100vh;
