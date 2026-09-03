@@ -144,10 +144,6 @@ body {
   padding: 54px 30px 20px 88px;
   scroll-margin-top: 80px;
 }
-.chapter-head {
-  max-width: 760px;
-  margin-bottom: 22px;
-}
 .ch-no {
   margin: 0;
   font-family: var(--font-hand);
@@ -168,13 +164,6 @@ body {
   line-height: 1.75;
   color: var(--ink-2);
   max-width: 62ch;
-}
-.stage-note {
-  margin: 14px 0 0;
-  font-family: var(--font-hand);
-  font-size: 18px;
-  color: var(--pencil);
-  max-width: 70ch;
 }
 
 .stage-wrap {
@@ -211,16 +200,6 @@ body {
   stroke: var(--ink);
   stroke-width: 3;
 }
-.wires .box-zone {
-  stroke: var(--pencil-2);
-  stroke-width: 1.4;
-  stroke-dasharray: 8 6;
-}
-.wires .box-ghost {
-  stroke: var(--pencil-2);
-  stroke-width: 1.2;
-  stroke-dasharray: 4 5;
-}
 .wires .hatch {
   stroke: var(--ink);
   stroke-width: 1.1;
@@ -236,11 +215,6 @@ body {
 }
 .wires .edge.dashed {
   stroke-dasharray: 8 6;
-}
-.wires .edge.faint {
-  stroke: var(--pencil-2);
-  stroke-width: 1.2;
-  stroke-dasharray: 3 6;
 }
 .wires .loop-inner,
 .wires .loop-outer {
@@ -273,12 +247,6 @@ body {
   animation: fade-in 0.7s ease-out backwards;
   animation-delay: var(--d, 0s);
 }
-.drawing .bx,
-.drawing .row,
-.drawing .dlabel {
-  animation: fade-in 0.5s ease-out backwards;
-  animation-delay: calc(var(--d, 0.4s) + 0.25s);
-}
 @keyframes draw {
   to {
     stroke-dashoffset: 0;
@@ -305,49 +273,6 @@ body {
   font: inherit;
   color: inherit;
 }
-.bx-title {
-  font-family: var(--font-hand);
-  font-size: 24px;
-  line-height: 1.05;
-  color: var(--ink);
-}
-.bx-sub {
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  color: var(--pencil);
-  letter-spacing: 0.02em;
-}
-.bx-item {
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  color: var(--pencil-2);
-  line-height: 1.5;
-}
-.bx-blackbox .bx-title {
-  font-size: 40px;
-  background: var(--paper);
-  padding: 0 14px;
-  border-radius: 2px;
-}
-.bx-blackbox .bx-sub {
-  background: var(--paper);
-  padding: 1px 8px;
-}
-.bx-zone {
-  justify-content: flex-start;
-  padding-top: 12px;
-}
-.bx-zone .bx-title {
-  font-size: 21px;
-  color: var(--pencil);
-}
-.bx-ghost .bx-title {
-  color: var(--pencil);
-  font-size: 21px;
-}
-.bx-ghost .bx-sub {
-  color: var(--pencil-2);
-}
 
 /* ── 笔记行 ────────────────────────────────────────────── */
 .row {
@@ -364,43 +289,16 @@ body {
   font: inherit;
   border-radius: 3px;
 }
-.rw-name {
-  font-family: var(--font-hand);
-  font-size: 21px;
-  line-height: 1;
-  color: var(--ink-2);
-}
-.rw-meta {
-  font-family: var(--font-mono);
-  font-size: 9px;
-  color: var(--pencil-2);
-  letter-spacing: 0.02em;
-}
 
 /* 可点开的东西：虚下划线 */
 .openable {
   cursor: pointer;
 }
-.openable .rw-name,
-.openable .bx-title {
-  border-bottom: 1.5px dashed var(--pencil-2);
-  padding-bottom: 1px;
-}
 .openable:hover {
   background: var(--hi);
 }
-.openable:hover .rw-name,
-.openable:hover .bx-title {
-  color: var(--red);
-  border-bottom-color: var(--red);
-}
 .openable[aria-current='true'] {
   background: var(--red-soft);
-}
-.openable[aria-current='true'] .rw-name,
-.openable[aria-current='true'] .bx-title {
-  color: var(--red);
-  border-bottom-color: var(--red);
 }
 .openable:focus-visible {
   outline: 2px dashed var(--red);
@@ -413,18 +311,9 @@ body {
   font-family: var(--font-hand);
   line-height: 1.3;
 }
-.tone-head {
-  font-size: 22px;
-  color: var(--ink);
-}
 .tone-edge {
   font-size: 16px;
   color: var(--pencil);
-}
-.tone-note {
-  font-size: 16px;
-  color: var(--pencil);
-  transform: rotate(-1.6deg);
 }
 
 /* ── 文字面板（第五章 / 状态） ─────────────────────────── */
@@ -434,20 +323,6 @@ body {
   gap: 26px;
   max-width: 1100px;
   margin-top: 8px;
-}
-.sp-col h4 {
-  font-family: var(--font-hand);
-  font-size: 24px;
-  margin: 0 0 6px;
-  color: var(--ink);
-  border-bottom: 1.5px solid var(--rule);
-  padding-bottom: 4px;
-}
-.sp-col p {
-  margin: 0;
-  font-size: 13.5px;
-  line-height: 1.7;
-  color: var(--ink-2);
 }
 
 /* ── 扉页 ──────────────────────────────────────────────── */
@@ -614,34 +489,6 @@ body {
   overflow-y: auto;
   padding: 22px 30px 26px;
 }
-.page {
-  display: none;
-}
-.page.on {
-  display: block;
-}
-.page h3 {
-  font-family: var(--font-hand);
-  font-size: 27px;
-  margin: 0 0 12px;
-}
-.page p {
-  font-size: 14px;
-  line-height: 1.75;
-  color: var(--ink-2);
-  margin: 0 0 13px;
-  max-width: 58ch;
-}
-.page ul {
-  margin: 0 0 13px;
-  padding-left: 19px;
-}
-.page li {
-  font-size: 14px;
-  line-height: 1.7;
-  color: var(--ink-2);
-  margin-bottom: 6px;
-}
 .kv {
   display: flex;
   gap: 12px;
@@ -663,19 +510,6 @@ body {
   overflow-x: auto;
   color: var(--ink-2);
   margin: 0 0 13px;
-}
-.code .cm {
-  color: var(--pencil-2);
-}
-.figure {
-  border: 1.6px dashed var(--pencil-2);
-  height: 186px;
-  display: grid;
-  place-items: center;
-  font-family: var(--font-hand);
-  font-size: 20px;
-  color: var(--pencil);
-  margin-bottom: 14px;
 }
 .deck-foot {
   display: flex;
@@ -801,45 +635,12 @@ body {
   stroke-width: 1.3;
   stroke-dasharray: 10 7;
 }
-.wires .divider {
-  stroke: var(--pencil-2);
-  stroke-width: 1;
-  stroke-dasharray: 2 9;
-  opacity: 0.55;
-}
-.drawing .wires .box-band,
-.drawing .wires .divider {
-  animation: fade-in 0.7s ease-out backwards;
-  animation-delay: var(--d, 0s);
-}
-.tone-sub {
-  font-size: 19px;
-  color: var(--ink);
-  border-bottom: 1.5px solid var(--rule);
-  padding-bottom: 2px;
-}
-.tone-band {
-  font-size: 20px;
-  color: var(--ink);
-}
-.tone-band i {
-  font-style: normal;
-  font-size: 16px;
-  color: var(--pencil);
-}
 
 /* 尺度分区：标题贴左上，不居中 */
 .bx-zone {
   align-items: flex-start;
   padding: 10px 0 0 16px;
   text-align: left;
-}
-.bx-zone .bx-title {
-  font-size: 22px;
-  color: var(--pencil);
-}
-.bx-zone .bx-sub {
-  color: var(--pencil-2);
 }
 
 /* ── 「坑」图层 ───────────────────────────────────────── */
@@ -851,56 +652,11 @@ body {
   line-height: 1;
   margin-left: 4px;
 }
-.scars-on .scar-mark {
-  display: inline;
-}
-.scars-on .row:not(:has(.scar-mark)),
-.scars-on .bx:not(:has(.scar-mark)) {
-  opacity: 0.34;
-}
-.scars-on .row:has(.scar-mark) .rw-name,
-.scars-on .bx:has(.scar-mark) .bx-title {
-  color: var(--red);
-  border-bottom-color: var(--red);
-}
-.scar-block {
-  border-left: 3px solid var(--red);
-  padding: 2px 0 2px 14px;
-  margin-top: 16px;
-}
-.scar-block h4 {
-  font-family: var(--font-hand);
-  font-size: 22px;
-  margin: 0 0 6px;
-  color: var(--red);
-}
 
 /* ── mindmap：枝条 / 次级主干 / 分叉点 ─────────────────── */
 .wires .stem {
   stroke: var(--pencil-2);
   stroke-width: 1.4;
-}
-.wires .crosscut {
-  stroke: var(--pencil);
-  stroke-width: 1.6;
-  stroke-dasharray: 14 5 3 5;
-}
-.drawing .wires .crosscut {
-  animation: fade-in 0.7s ease-out backwards;
-  animation-delay: var(--d, 0s);
-}
-.tone-node {
-  font-size: 34px;
-  color: var(--ink);
-  text-align: center;
-  line-height: 1;
-}
-.tone-nodesub {
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  color: var(--pencil);
-  text-align: center;
-  letter-spacing: 0.04em;
 }
 
 /* ── 维度标注 / 内联节点说明 ───────────────────────────── */
@@ -911,28 +667,6 @@ body {
   color: var(--red);
   line-height: 1.5;
 }
-.tone-dimbig {
-  font-family: var(--font-hand);
-  font-size: 20px;
-  color: var(--red);
-  transform: rotate(-0.8deg);
-}
-.tone-inline {
-  font-family: var(--font-hand);
-  font-size: 16px;
-  color: var(--pencil);
-  line-height: 1.35;
-}
-.tone-inline i {
-  font-style: normal;
-  font-family: var(--font-mono);
-  font-size: 8.5px;
-  letter-spacing: 0.12em;
-  color: var(--red);
-}
-.tone-node {
-  font-size: 30px;
-}
 
 /* ── 两条道 ────────────────────────────────────────────── */
 .wires .lane {
@@ -941,28 +675,9 @@ body {
   stroke-dasharray: 22 6 2 6;
   opacity: 0.75;
 }
-.drawing .wires .lane {
-  animation: fade-in 0.8s ease-out backwards;
-  animation-delay: var(--d, 0s);
-}
-.tone-lanehead {
-  font-size: 30px;
-  color: var(--ink);
-}
-.tone-lanehead2 {
-  font-family: var(--font-hand);
-  font-size: 24px;
-  color: var(--ink);
-}
-.tone-lanesub {
-  font-size: 16px;
-  color: var(--pencil);
-}
 
 /* ═══ harness 树 ═══════════════════════════════════════ */
 .stage-wrap { padding: 30px 30px 30px 76px; overflow-x: auto; }
-
-.wires .brace { stroke: var(--ink-2); stroke-width: 1.7; }
 .wires .box-blackbox { stroke: var(--ink); stroke-width: 2.6; }
 
 /* 落笔：只画标了 fresh 的 */
@@ -972,29 +687,6 @@ body {
   animation: draw 0.85s ease-out forwards;
   animation-delay: var(--d, 0s);
 }
-.bx.fresh, .branch-head.fresh, .leaf.fresh, .harness-label.fresh {
-  animation: fade-in 0.45s ease-out backwards;
-  animation-delay: calc(var(--d, 0s) + 0.28s);
-}
-
-.harness-label { position: absolute; width: 300px; text-align: right; display: flex; flex-direction: column; gap: 2px; }
-.hl-name { font-family: var(--font-mono); font-size: 13px; letter-spacing: 0.34em; color: var(--red); }
-.hl-sub { font-family: var(--font-hand); font-size: 17px; color: var(--pencil); }
-
-.branch-head {
-  position: absolute; display: grid; grid-template-columns: 22px auto; gap: 0 10px;
-  align-items: baseline; background: none; border: 0; padding: 4px 10px 6px; margin: 0;
-  cursor: pointer; text-align: left; font: inherit; border-radius: 3px; white-space: nowrap;
-}
-.bh-caret { grid-row: 1 / span 2; font-family: var(--font-mono); font-size: 15px; color: var(--pencil-2); }
-.bh-name { font-family: var(--font-hand); font-size: 30px; line-height: 1; color: var(--ink); }
-.bh-en { font-family: var(--font-mono); font-size: 9px; color: var(--pencil-2); margin-left: 8px; }
-.bh-gist { grid-column: 2; font-family: var(--font-hand); font-size: 16px; color: var(--pencil); }
-.bh-dim { grid-column: 2; font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.12em; color: var(--red); }
-.branch-head:hover { background: var(--hi); }
-.branch-head:hover .bh-name, .branch-head.open .bh-name { color: var(--red); }
-.branch-head.open .bh-caret { color: var(--red); }
-.branch-head:focus-visible { outline: 2px dashed var(--red); outline-offset: 2px; }
 .star { font-style: normal; color: var(--red); font-size: 18px; }
 
 .stage .leaf { position: absolute; display: flex; align-items: baseline; gap: 9px; background: none; border: 0;
@@ -1002,7 +694,6 @@ body {
 
 /* 叶子文字的层级（这两条在某次重写里被丢了） */
 .stage .lf-name { font-family: var(--font-hand); font-size: 20px; line-height: 1; color: var(--ink-2); }
-.stage .lf-meta { font-family: var(--font-mono); font-size: 9px; line-height: 1.4; color: var(--pencil-2); letter-spacing: 0.01em; }
 .stage .leaf:hover .lf-name, .stage .leaf[aria-current='true'] .lf-name { color: var(--red); }
 .stage .leaf:hover { background: var(--hi); }
 .stage .leaf[aria-current='true'] { background: var(--red-soft); }
@@ -1010,30 +701,16 @@ body {
 
 /* L3：一张纸滚到底，不翻页 */
 .deck-body .sheet + .sheet { margin-top: 26px; padding-top: 22px; border-top: 1px solid var(--grid-strong); }
-.sheet h3 { font-family: var(--font-hand); font-size: 22px; margin: 0 0 8px; color: var(--ink); }
-.sheet h3 i { font-style: normal; font-family: var(--font-mono); font-size: 9px; color: var(--red); letter-spacing: .12em; margin-right: 8px; }
-.sheet p { font-size: 13.5px; line-height: 1.7; color: var(--ink-2); margin: 0 0 8px; max-width: 56ch; }
-.sheet ul { margin: 0; padding-left: 18px; }
-.sheet li { font-size: 13.5px; line-height: 1.65; color: var(--ink-2); margin-bottom: 4px; }
 
 /* 根：被分解的那个东西 */
 .root-node { position: absolute; width: 250px; display: flex; flex-direction: column; gap: 4px; text-align: right; }
-.rt-label { font-family: var(--font-mono); font-size: 13px; letter-spacing: 0.36em; color: var(--red); }
-.rt-title { font-family: var(--font-hand); font-size: 34px; line-height: 1.05; color: var(--ink); }
-.rt-sub { font-family: var(--font-hand); font-size: 19px; color: var(--pencil); }
 
 /* 唯一点不开的那个 */
 .leaf.opaque { display: grid; place-items: center; cursor: default; background: none; pointer-events: none; }
-.leaf.opaque .lf-name { font-size: 21px; color: var(--ink); background: var(--paper); padding: 0 8px; }
-.opaque-meta { position: absolute; font-family: var(--font-mono); font-size: 9px; color: var(--pencil-2); }
 .aside-note { position: absolute; font-family: var(--font-hand); font-size: 17px; color: var(--pencil); max-width: 420px; }
-.opaque-meta.fresh, .aside-note.fresh { animation: fade-in .45s ease-out backwards; animation-delay: calc(var(--d,0s) + .28s); }
 
 /* 介于 I/O 之间的黑盒 */
 .wires .in-arrow { stroke: var(--ink-2); stroke-width: 1.4; }
-.io-label { position: absolute; font-family: var(--font-mono); font-size: 9px; color: var(--pencil); white-space: nowrap; }
-.io-label.fresh { animation: fade-in .45s ease-out backwards; animation-delay: calc(var(--d,0s) + .28s); }
-.leaf.opaque .lf-name { font-size: 19px; }
 
 /* ═══ 两张图 ═══════════════════════════════════════════ */
 .figure-sec { padding: 48px 30px 10px 76px; scroll-margin-top: 76px; }
@@ -1131,3 +808,66 @@ body {
 .lane-label.openable[aria-current='true'] { background: var(--red-soft); }
 .lane-label.openable[aria-current='true'] .ln-name { color: var(--red); border-bottom-color: var(--red); }
 .lane-label.openable:focus-visible { outline: 2px dashed var(--red); outline-offset: 2px; }
+
+/* 语言开关 */
+.tool.lang { font-family: var(--font-mono); font-size: 11px; letter-spacing: .12em;
+  border: 1px solid var(--grid-strong); border-radius: 3px; padding: 4px 9px; }
+.tool.lang:hover { border-color: var(--red); }
+.code-loc { font-family: var(--font-mono); font-size: 9.5px; color: var(--red); letter-spacing: .04em; margin: 0 0 6px; }
+.slide .kv { display: flex; gap: 12px; margin: 0 0 8px; }
+.slide .kv span { flex: 0 0 74px; font-family: var(--font-hand); font-size: 18px; color: var(--red); }
+.slide li b { font-family: var(--font-hand); font-size: 17px; font-weight: 500; color: var(--red); }
+.todo { font-family: var(--font-hand); font-size: 19px; color: var(--pencil-2); }
+
+/* 机制小图 */
+.mf-stage { position: relative; margin: 0 0 14px; }
+.mf-stage svg { display: block; width: 100%; height: auto; overflow: visible; }
+.mf-box { position: absolute; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 2px; text-align: center; padding: 2px 6px; }
+.mf-title { font-family: var(--font-hand); font-size: 17px; line-height: 1.05; color: var(--ink); }
+.mf-sub { font-family: var(--font-mono); font-size: 7.5px; color: var(--pencil); }
+.mf-box .mf-title { background: var(--paper-2); padding: 0 4px; }
+.mf-elabel { position: absolute; font-family: var(--font-mono); font-size: 8px; color: var(--pencil); white-space: nowrap; }
+.mf-label { position: absolute; font-family: var(--font-hand); font-size: 14px; line-height: 1.3; }
+.mf-label.tone-edge { color: var(--pencil); }
+.mf-label.tone-red { color: var(--red); }
+.mf-stage.drawing .wires path { stroke-dasharray: var(--len); stroke-dashoffset: var(--len);
+  animation: draw .7s ease-out forwards; animation-delay: var(--d, 0s); }
+.mf-stage.drawing .mf-box, .mf-stage.drawing .mf-elabel, .mf-stage.drawing .mf-label {
+  animation: fade-in .4s ease-out backwards; animation-delay: calc(var(--d, 0s) + .22s); }
+
+/* ═══ 可读性：等宽小字整体上调（原来 7.5–9px 太小） ═══════
+   用 .stage / .mf-stage 前缀是为了压过前面同名规则的特异性。 */
+.mf-stage .mf-title { font-size: 19px; }
+.mf-title   { font-size: 19px; }
+.mf-stage .mf-sub { font-size: 9.5px; }
+.mf-stage .mf-elabel { font-size: 9.5px; }
+.mf-stage .mf-label { font-size: 15.5px; }
+
+.stage .lf-name { font-size: 21px; }
+.br-en      { font-size: 10px; }
+.br-dim     { font-size: 9.5px; letter-spacing: .09em; }
+.rb-sub     { font-size: 10px; }
+.io-v       { font-size: 17px; }
+.io-k       { font-size: 13px; }
+.aside-note { font-size: 16px; }
+
+.ln-name    { font-size: 22px; }
+.ln-sub     { font-size: 10px; }
+.sp-name    { font-size: 21px; }
+.sp-meta    { font-size: 10px; }
+.arrow-label{ font-size: 10.5px; }
+
+/* 详页正文 */
+.slide p, .slide li { font-size: 15px; line-height: 1.8; }
+.slide h3 { font-size: 27px; }
+.slide h3 i { font-size: 11px; }
+.slide .kv span { font-size: 19px; flex-basis: 82px; }
+.code { font-size: 12.5px; line-height: 1.8; }
+.code-loc { font-size: 10.5px; }
+.deck-meta { font-size: 11px; }
+
+/* 页面正文 */
+.fig-lede { font-size: 15px; }
+.pro-body { font-size: 15px; }
+.pro-card p { font-size: 14px; }

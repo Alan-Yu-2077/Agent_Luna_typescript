@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Ma+Shan+Zheng&display=swap" />
-    <link rel="stylesheet" href="./css/style.css?v=7" />
+    <link rel="stylesheet" href="./css/style.css?v=17" />
   </head>
   <body>
     <section class="prologue" id="prologue">
@@ -18,34 +18,38 @@
         <h1 class="pro-h" id="proH"></h1>
         <p class="pro-sub" id="proSub"></p>
         <div class="pro-body" id="proBody"></div>
-        <button class="flip" id="flip" type="button">翻开图谱 →</button>
+        <button class="flip" id="flip" type="button" data-i18n="flip"></button>
       </div>
     </section>
 
     <header class="topbar">
       <p class="brand">Luna · 工程图谱<em>.</em></p>
-      <p class="subtitle">黑盒之外的一切 · agent harness</p>
+      <p class="subtitle" data-i18n="tagline"></p>
       <span class="topbar-spacer"></span>
-      <nav class="jump"><a href="#tree">结构</a><a href="#flow">时序</a></nav>
-      <a class="tool" href="./story/">开发故事 →</a>
-      <button class="tool" id="proBtn" type="button">重看扉页</button>
+      <nav class="jump">
+        <a href="#tree" data-i18n="navTree"></a>
+        <a href="#flow" data-i18n="navFlow"></a>
+      </nav>
+      <a class="tool" href="./story/" data-i18n="navStory"></a>
+      <button class="tool" id="proBtn" type="button" data-i18n="reopen"></button>
+      <button class="tool lang" id="langBtn" type="button">EN</button>
     </header>
 
     <main>
       <section class="figure-sec" id="tree">
         <div class="fig-head">
-          <p class="fig-no">图一</p>
-          <h2 class="fig-title">结构 · 黑盒之外有什么</h2>
-          <p class="fig-lede">〔占位：一句说清这张图的读法——根是一对：点不开的 LLM，和被分解的 Agent system；六支从后者向下扇开，全部展开，不用点。〕</p>
+          <p class="fig-no" data-i18n="fig1no"></p>
+          <h2 class="fig-title" data-i18n="fig1title"></h2>
+          <p class="fig-lede" data-i18n="fig1lede"></p>
         </div>
         <div class="stage-wrap"><div class="stage" id="treeStage"></div></div>
       </section>
 
       <section class="figure-sec" id="flow">
         <div class="fig-head">
-          <p class="fig-no">图二</p>
-          <h2 class="fig-title">时序 · 一条消息的一生</h2>
-          <p class="fig-lede">〔占位：结构图说"有哪些部件"，这张说"谁在什么时候跟谁讲话"——五条泳道，两条回边。〕</p>
+          <p class="fig-no" data-i18n="fig2no"></p>
+          <h2 class="fig-title" data-i18n="fig2title"></h2>
+          <p class="fig-lede" data-i18n="fig2lede"></p>
         </div>
         <div class="stage-wrap"><div class="stage" id="flowStage"></div></div>
       </section>
@@ -70,8 +74,9 @@
       </div>
     </aside>
 
-    <script src="./js/data.js?v=7"></script>
-    <script src="./js/sketch.js?v=7"></script>
-    <script src="./js/app.js?v=7"></script>
+    <script src="./js/decks.js?v=17"></script>
+    <script src="./js/data.js?v=17"></script>
+    <script src="./js/sketch.js?v=17"></script>
+    <script src="./js/app.js?v=17"></script>
   </body>
 </html>
