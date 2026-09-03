@@ -169,9 +169,13 @@ body {
   max-width: 62ch;
 }
 
+/* overflow:hidden，不是 auto——fitAll() 已经把 .stage 缩到刚好塞进 wrap 的宽度，
+   但 transform:scale() 不缩小浏览器算「可滚动溢出」用的那个布局框，浏览器还是照着
+   缩放前的原始宽度（1760px 那张图）判定溢出，于是明明视觉上放得下也冒出一条横拖
+   拽栏。hidden 只是不再暴露那个滚动机制，视觉上什么都不会被裁——缩放后的内容本
+   来就在框内，和 47 张机制图用的 .mf-stage{overflow:hidden} 是同一个道理。 */
 .stage-wrap {
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow: hidden;
 }
 .stage {
   position: relative;
@@ -680,7 +684,9 @@ body {
 }
 
 /* ═══ harness 树 ═══════════════════════════════════════ */
-.stage-wrap { padding: 30px 30px 30px 76px; overflow-x: auto; }
+/* 左边不再重复缩进：.figure-sec 自己已经有 76px 的左内边距（跟标题对齐），
+   这里再加一次 76px，图就比标题多缩进了 76px，看着像整体偏右。 */
+.stage-wrap { padding: 30px 30px 30px 0; }
 .wires .box-blackbox { stroke: var(--ink); stroke-width: 2.6; }
 
 /* 落笔：只画标了 fresh 的 */
