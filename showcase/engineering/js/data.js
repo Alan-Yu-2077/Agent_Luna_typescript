@@ -47,8 +47,8 @@ window.LUNA_MAP = (function () {
         en: 'The model is swappable. This part is not. It has a name: the agent harness.',
       },
       lead: {
-        zh: '〔占位：两三句说清主张——推理是买来的；让它变成一个能记事、会动手、有分寸的伙伴的那部分，是写出来的。〕',
-        en: '[placeholder: two or three sentences — inference is bought; what turns it into a companion that remembers, acts and holds back is written.]',
+        zh: '推理是买来的。让它记得住昨天、伸得出手、并且知道什么时候该闭嘴的那一层，是写出来的——这份图谱讲的就是那一层。',
+        en: 'The inference is bought. The layer that lets it remember yesterday, reach into the world, and know when to keep quiet is written — and that layer is what this map is about.',
       },
       cards: [
         {
@@ -66,12 +66,16 @@ window.LUNA_MAP = (function () {
           },
         },
       ],
-      tail: { zh: '〔占位：一句收尾。〕', en: '[placeholder: one closing line.]' },
+      tail: {
+        zh: '每一条主张下面都压着一段真代码。翻开看。',
+        en: 'Every claim here sits on top of real code. Open it.',
+      },
     },
 
+    /* 数字口径写在明面上：会数的人一定会数。 */
     footnote: {
-      zh: '〔占位：脚注——数字口径 / 最后更新 / 产品端展示与开发故事的链接。〕',
-      en: '[placeholder: footnote — how the numbers are counted, last updated, links.]',
+      zh: '数字口径：工具数 = protocol/src/tools.ts 里 ToolName 枚举的成员数（不含注释里出现的字符串）。构件详页 47 个，每一个都带逐字代码片段，全部与仓库当前提交逐行比对通过；其中 31 个另配机制图。图谱随代码走，不随文案走。',
+      en: 'How the numbers are counted: the tool count is the number of members in the ToolName enum in protocol/src/tools.ts — strings appearing in comments do not count. All 47 component pages carry a verbatim code excerpt, each checked line by line against the current commit; 31 of them also carry a mechanism figure. The map follows the code, not the prose.',
     },
 
     root: {

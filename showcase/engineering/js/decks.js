@@ -5077,4 +5077,762 @@ window.LUNA_DECKS = {
       }
     }
   },
+
+  /* ── 五条泳道 ───────────────────────────── */
+  "lane-user": {
+    "claim": {
+      "zh": "一条消息的一生只经过一个客户端接口：一条 WebSocket。用户这一侧能说的话是 8 种 ClientEvent，她能回的话是 14 种 ServerEvent —— 两个联合写在 packages/protocol 的同一份 Zod 文件里，被服务端和网页端 import 同一份源码。",
+      "en": "A message's whole life passes through exactly one client-facing interface: one WebSocket. This side can say 8 kinds of ClientEvent; she can answer with 14 kinds of ServerEvent — both unions live in a single Zod file under packages/protocol, and the server and the web page import that same source."
+    },
+    "mechanism": {
+      "zh": "这一刻的帧要过四道校验，两端各两道：网页端 send 只做类型约束，不做运行时校验；服务端 handleMessage 对每一帧 ClientEvent.safeParse，不合就回一条 error 事件而不是断连；服务端每一条出站帧都经 outbound 的 ServerEvent.parse（严格 parse，会抛 —— 所以 ws 那侧把 emit 包成 safeEmit，socket 没了就吞掉，回合照跑）；网页端每一条入站帧 ServerEvent.safeParse，不成功就不进 onEvent。断线之后：网页端指数退避重连，间隔是 1500ms × 2^n 封顶 15 秒再加 0–250ms 抖动，而且连上之后要稳稳撑满 5 秒才把退避计数清零 —— 一个 accept 完立刻 close 的服务端仍然会被逐步退避，而不是被以基础间隔猛敲。断线期间要发的帧进 outbox（上限 100 条，满了从队头丢最老的），重连后一次性 flush。历史不是浏览器里缓着的：连接一建立，handleOpen 就从 SQLite 的 L2 时间线拉最多 2000 行，滤掉两侧都空的行，取最后 300 行，作为一条 history 事件推过去，紧跟着再推一条 settings.state。所以刷新之后看到的对话是从库里重放出来的。",
+      "en": "A frame at this moment passes four checks, two on each end. The web client's send is type-constrained only, with no runtime validation. The server's handleMessage runs ClientEvent.safeParse on every frame and answers a malformed one with an error event rather than closing the socket. Every outbound frame goes through outbound's ServerEvent.parse — the strict parse, which throws, which is why the ws layer wraps emit as safeEmit: if the socket is gone the throw is swallowed and the turn keeps running. On the web side every inbound frame is ServerEvent.safeParse'd, and a frame that fails never reaches onEvent. After a drop: the client reconnects on exponential backoff, 1500ms × 2^n capped at 15 seconds plus 0–250ms of jitter, and it only resets the backoff counter after the socket has stayed open for a full 5 seconds — so a server that accepts and immediately closes still escalates instead of being hammered at the base interval. Frames written while the socket is down go into an outbox (capped at 100; past that the oldest is dropped) and are flushed on reopen. The history is not cached in the browser: the moment a connection opens, handleOpen pulls up to 2000 rows from the L2 timeline in SQLite, filters out rows empty on both sides, keeps the last 300, and pushes them as one history event, immediately followed by a settings.state. What you see after a refresh is replayed from the database."
+    },
+    "contract": {
+      "exposes": {
+        "zh": "8 种入站 ClientEvent（ping / chat.send / dream.enter / dream.wake / proactive.fire / client.geo / settings.set / dev.dispatch_tool），14 种出站 ServerEvent。其中只有 pong 是应答；history 与 settings.state 是连接时的无请求推送 —— 刻意没有 settings.get 这种事件。",
+        "en": "Eight inbound ClientEvent kinds (ping, chat.send, dream.enter, dream.wake, proactive.fire, client.geo, settings.set, dev.dispatch_tool) and fourteen outbound ServerEvent kinds. Only pong is a reply; history and settings.state are pushed on connect with nothing having asked — there is deliberately no settings.get event."
+      },
+      "depends": {
+        "zh": "@luna/protocol（workspace:* 依赖，main 指向 src/index.ts，即两端吃的是同一份 TypeScript 源码）、L2 时间线（历史重放）、settings 注册表。",
+        "en": "@luna/protocol (a workspace:* dependency whose main points at src/index.ts, so both ends consume the same TypeScript source), the L2 timeline (for the history replay), and the settings registry."
+      },
+      "boundary": {
+        "zh": "升级之前先过 Origin 闸：浏览器 Origin 必须是 loopback（任意端口），没有 Origin 的原生客户端放行，字面量 \"null\"（file:// 或沙箱页）拒绝。帧上限 1MB，chat.send 的正文上限 8000 字。",
+        "en": "Before the upgrade there is an Origin gate: a browser Origin must be loopback (any port), a client sending no Origin at all is let through, and the literal \"null\" (a file:// or sandboxed page) is refused. Frames are capped at 1MB and a chat.send body at 8000 characters."
+      },
+      "invariant": {
+        "zh": "每一条出站帧都被 ServerEvent.parse 过一遍才上线；两端编译自同一份 schema 源码，网页端对 ServerEvent 做穷尽 switch，最后一支是 assertNever。",
+        "en": "Every outbound frame is validated by ServerEvent.parse before it goes on the wire; both ends compile against the same schema source, and the web controller switches exhaustively over ServerEvent with assertNever as its last arm."
+      }
+    },
+    "code": {
+      "file": "packages/server/src/ws.ts",
+      "lines": "97-101",
+      "snippet": "  const turns = listL2(ws.data.sessionId, { limit: 2000 })\n    .map((r) => ({ user_text: r.user_text, assistant_text: r.assistant_text, t_ms: r.t_ms }))\n    .filter((t) => t.user_text !== '' || t.assistant_text !== '')\n    .slice(-300);\n  if (turns.length > 0) outbound(ws, { type: 'history', turns });",
+      "note": {
+        "zh": "重连时回来的到底是什么：不是这个浏览器上次的 DOM，是 L2 里每一轮的 user_text / assistant_text / t_ms 三元组 —— 时间戳是那一轮真实发生的时间，所以刷新之后时间线是诚实的。主动回合的 user_text 是空串（她自己醒来时没有用户消息），所以那一条渲染成一个没有用户气泡的回合。",
+        "en": "What actually comes back on a reconnect: not this browser's last DOM, but a user_text / assistant_text / t_ms triple per turn out of L2 — and t_ms is the turn's real time, so the timeline after a refresh is honest. A proactive turn has an empty user_text (she woke on her own; there was no user message), so it renders as a turn with no user bubble."
+      }
+    },
+    "decision": {
+      "why": {
+        "zh": "一份 schema，两端 import 源码。所以「改一端不改另一端」在 tsc 就炸：往 ServerEvent 里加一种而网页端不处理，controller 末尾的 assertNever 会是一个编译错误，不是一个运行时惊喜。真正还能漂移的只剩一种情形 —— 网页产物是旧的（没重新打包）。那种情形下客户端 safeParse 失败直接丢帧：不会误处理，但也不会告诉你。",
+        "en": "One schema, imported as source by both ends. So \"change one end and forget the other\" fails at tsc: add a ServerEvent kind and leave the web unhandled, and the assertNever at the bottom of the controller is a compile error, not a runtime surprise. Only one drift remains possible — a stale web bundle. In that case the client's safeParse simply drops the frame: never mishandled, but never reported either."
+      },
+      "rejected": {
+        "zh": "断线期间直接丢掉待发的帧。气泡已经渲染出来了，丢一帧等于「用户看到自己发过一句话，服务端从没收到」—— 所以有了 outbox。",
+        "en": "Silently dropping frames written while the socket is down. The bubble has already been rendered, so a dropped frame means a message the user watched themselves send and the server never received — hence the outbox."
+      },
+      "cost": {
+        "zh": "outbox 上限 100 条，超出从队头丢最老的一条；足够长的断线里，最早那几句会无声消失。",
+        "en": "The outbox holds 100 frames and drops the oldest past that; in a long enough outage the earliest messages disappear without a sound."
+      }
+    }
+  },
+  "lane-harness": {
+    "claim": {
+      "zh": "五条泳道里只有这一条同时持有状态与模型调用权。其余四方都是无状态的被调用者：模型每一轮拿到的是全量重发的上下文，工具只拿到一次调用的入参和一个 abort 信号，存储只认写进去的行，用户那条线只认帧。所以「一条消息的一生」这句话有主语，主语是它。",
+      "en": "Of the five lanes only this one both holds state and owns the call to the model. The other four are stateless callees: the model gets the whole context resent every round, a tool gets one call's input and an abort signal, the store knows only the rows written to it, and the user lane knows only frames. So \"the life of a message\" has a subject, and this is it."
+    },
+    "mechanism": {
+      "zh": "这一刻的时间边界是两行赋值：进图之前同步写下 session.activeTurn = turnId，finally 里再清成 null。这两行之间的整段时间里，chat.send、dream.enter、proactive.fire 三个入口都会被顶回一条 turn_in_progress 的 error —— 不是排队，是拒绝。同一处还记下 historyStart（进图前 history 的长度），它是整段回合唯一的回滚锚点。整张图跑在一个 try 里：任何节点抛出，finishReason 变成 error、发一条 turn_failure 出去，然后照样落进 finally —— 「回合失败」在这里不是进程事件，只是一次状态转移。finally 按固定顺序做四件事：清 activeTurn、turnSeq 自增、持久化（自己再套一层 try，SQLite 抛了只记日志加一条 persistence_failed，不致命也不跳过后面）、决策审计与 flushTrace，最后 fire-and-forget 一次折叠。它还刻意不认识 socket：emit 是注入进来的一个函数，反应式回合传的是 ws 那侧包好的 safeEmit，主动回合和梦传的是 broadcast —— 一个没有任何监听者的主动回合照样跑完、照样落库。",
+      "en": "The time boundary of this moment is two assignments: session.activeTurn = turnId written synchronously before entering the graph, and cleared back to null in the finally. For everything between those two lines, all three entrances — chat.send, dream.enter, proactive.fire — are turned away with a turn_in_progress error. Not queued: refused. The same place records historyStart, the length of history before the graph runs, which is the turn's single rollback anchor. The whole graph runs inside one try: any node that throws sets finishReason to error, emits a turn_failure, and still lands in the finally — a \"failed turn\" here is not a process event, only a state transition. The finally then does four things in fixed order: clear activeTurn, increment turnSeq, persist (inside its own try, so a SQLite throw is logged and surfaced as persistence_failed but is neither fatal nor allowed to skip what follows), run the decision audit and flushTrace, and finally fire off a fold. It also deliberately does not know what a socket is: emit is injected. A reactive turn is handed the safeEmit the ws layer wrapped; a proactive turn and a dream are handed broadcast — and a proactive turn with no listener at all still runs to the end and still persists."
+    },
+    "contract": {
+      "exposes": {
+        "zh": "runTurn(RunTurnOptions) → Promise<TurnState>。入参八项：session、turnId、userText、provider、registry、emit，以及可选的 onTransition / proactiveTurn / signal。对外可观测的一切都在 emit 出去的 ServerEvent 上。",
+        "en": "runTurn(RunTurnOptions) → Promise<TurnState>. Eight fields in: session, turnId, userText, provider, registry, emit, plus optional onTransition, proactiveTurn and signal. Everything observable from outside rides the ServerEvents it emits."
+      },
+      "depends": {
+        "zh": "Provider（全进程唯一的模型调用点）、ToolRegistry（boot 时冻结，turn loop 全程不再读能力相关的环境变量）、Session（history、mutex、activeTurn）、sessionStore。",
+        "en": "The Provider (the process's only call site to a model), the ToolRegistry (frozen at boot — the turn loop never reads a capability env var again), the Session (history, mutex, activeTurn), and sessionStore."
+      },
+      "boundary": {
+        "zh": "它不持有 socket、不持有数据库句柄之外的 IO、不决定工具怎么并发（那是分发器）、不决定上游长什么样（那是 provider 缝）。它决定的只有顺序、轮数、和什么时候停。",
+        "en": "It holds no socket, no IO beyond the database handle, no say in how tools run concurrently (that is the dispatcher's) and none in what upstream looks like (that is the provider seam's). What it decides is order, how many rounds, and when to stop."
+      },
+      "invariant": {
+        "zh": "一个会话同一时刻至多一个 activeTurn；轮数只在 append_results 里自增一次 —— 所以「一轮」的定义是「工具结果回灌了一次」，不是「模型被调用了一次」。",
+        "en": "At most one activeTurn per session at any instant; the round counter is incremented in exactly one place, append_results — so \"a round\" means \"tool results were fed back once\", not \"the model was called once\"."
+      }
+    },
+    "code": {
+      "file": "packages/server/src/turn/runTurn.ts",
+      "lines": "1007-1017",
+      "snippet": "  opts.session.activeTurn = opts.turnId;\n  const historyStart = opts.session.history.length;\n  try {\n    await runGraph(graph, 'parse_input', state, onTransition);\n  } catch (e) {\n    const message = e instanceof Error ? e.message : String(e);\n    state.finishReason = 'error';\n    state.emit({ type: 'error', code: 'turn_failure', message });\n  } finally {\n    opts.session.activeTurn = null;\n    opts.session.turnSeq += 1;",
+      "note": {
+        "zh": "十一行里装着这条泳道的全部形状：一个占用标记、一个回滚锚点、一张图、一个不会漏的出口。六个节点（parse_input / build_request / open_stream / dispatch_tools / append_results / finalize）与两条回边都在 graph 这个对象里，这里只负责起跑和收尾。",
+        "en": "Eleven lines carry this lane's whole shape: an occupancy flag, a rollback anchor, a graph, and an exit nothing escapes. The six nodes (parse_input, build_request, open_stream, dispatch_tools, append_results, finalize) and both return edges live inside the graph object; this code only starts it and closes it out."
+      }
+    },
+    "decision": {
+      "why": {
+        "zh": "状态留在 harness，不往下推。模型无状态（每轮重发全量 messages），工具拿不到 session 对象、只拿到 {sessionId, callId, abortSignal}，存储只被写行。于是「她现在在做什么」这个问题在全仓只有一个地方能回答。",
+        "en": "State stays in the harness rather than being pushed down. The model is stateless (the whole message list is resent each round), a tool never sees the session object — only {sessionId, callId, abortSignal} — and the store is only ever written rows. So \"what is she doing right now\" has exactly one place in the repo that can answer it."
+      },
+      "cost": {
+        "zh": "无状态上游的代价是每一轮把整段上下文重新发一遍；这就是为什么折叠、缓存断点和那个按轮触发的成本告警都长在这条泳道上。",
+        "en": "A stateless upstream costs a full context resend every round; that is why the fold, the cache breakpoint, and the per-round cost tripwire all grow on this lane."
+      }
+    }
+  },
+  "lane-llm": {
+    "claim": {
+      "zh": "这一刻是整条线上唯一一次跨出进程的调用，也是唯一一段我们不控制的时间。我们对这个黑盒的全部知识写在两个类型里：送进去的 ProviderRequest 四个字段，收回来的 ProviderEvent 五种。图上那个盒子点不开，是因为里面确实没有我们的代码。",
+      "en": "This moment is the only call on the whole line that leaves the process, and the only stretch of time we do not control. Everything we know about the black box fits in two types: four fields going in as a ProviderRequest, five event kinds coming back as ProviderEvent. The box in the diagram does not open because there is genuinely none of our code inside it."
+    },
+    "mechanism": {
+      "zh": "送什么：system（一个字符串，或带 cache_control 断点的 TextBlockParam[]）、messages（全量重发）、tools（由注册表直接映射，没挂载的组连 JSON schema 都生成不出来）、一个可选的 signal。就这四项 —— 没有 session、没有 turn_id、没有除工具结果之外的任何服务端状态。收什么：text_delta、thinking_delta、tool_use_start、tool_input_delta、message_stop 五种。最后那种里的 assistantContent 刻意用 ContentBlockParam[]（入参类型）而不是响应类型，好让非 Anthropic 的 provider 能自己合成一段可回放的 assistant 轮，而不必伪造只在响应里存在的字段。不假设什么：stopReason 的类型是 string，不是枚举 —— 我们不假设黑盒只会说我们见过的那几个词，open_stream 只认 tool_use / max_tokens / refusal 三个已知值，其余一律落到 end_turn。也不假设它给的入参是干净的：有些网关会把自己没能映射的工具入参包成 {\"_noargs\": \"<原始文本>\"}，unwrapGatewayInput 在 message_stop 之前试着拆开；拆不出来就原样放过，交给分发器的 Zod 校验回一条 recoverable 的错，让模型下一轮自己改。缝抹平了什么：走 OpenAI 协议时，systemToOpenAI 把 cache_control 断点直接不读（那边没有显式缓存控制），thinking 块在回放时丢掉，一条带 tool_result 的 user 轮拆成多条 tool 消息，SSE 分片里 id 为空时按 index 合成一个稳定 id —— 否则下一轮请求会因为空的 tool_call_id 直接 400。",
+      "en": "What goes in: system (a string, or TextBlockParams carrying a cache_control breakpoint), messages (resent in full), tools (mapped straight off the registry — an unmounted group cannot even produce a JSON schema), and an optional signal. Those four and nothing else: no session, no turn_id, no server-side state beyond tool results. What comes back: text_delta, thinking_delta, tool_use_start, tool_input_delta, message_stop. The assistantContent on that last one is deliberately typed as ContentBlockParam[] — the input type, not the response type — so a non-Anthropic provider can synthesize a replayable assistant turn without forging fields that exist only on responses. What we do not assume: stopReason is typed string, not an enum. We do not assume the box only says words we have seen; open_stream recognizes tool_use, max_tokens and refusal, and everything else falls through to end_turn. Nor do we assume the arguments it hands back are clean: some gateways wrap tool input they failed to map as {\"_noargs\": \"<raw text>\"}, so unwrapGatewayInput tries to unwrap it before message_stop and, failing that, passes it through untouched for the dispatcher's Zod validation to reject as a recoverable error the model can act on next round. What the seam absorbs: on the OpenAI protocol, systemToOpenAI simply does not read the cache_control breakpoint (there is no explicit cache control over there), thinking blocks are dropped on replay, one user turn carrying tool_results expands into several tool messages, and when an SSE fragment arrives with an empty id a stable one is synthesized from its index — otherwise the next request 400s on an empty tool_call_id."
+    },
+    "contract": {
+      "exposes": {
+        "zh": "Provider 接口三件：只读的 capabilities、chatStream(req) → AsyncIterable<ProviderEvent>、complete(req) → Promise<CompleteResult>（后者给摘要与梦里的补丁调用用，那条路刻意不开思考 —— 思考也算进 max_tokens，会把真正的输出饿死）。",
+        "en": "Three things on the Provider interface: a readonly capabilities, chatStream(req) → AsyncIterable<ProviderEvent>, and complete(req) → Promise<CompleteResult>. The last backs summarization and the dream's patch calls, and deliberately runs without thinking — thinking counts against max_tokens and can starve the actual output."
+      },
+      "depends": {
+        "zh": "只有网络和一把 key。构造点唯一：providerFor() 按 LUNA_MODEL 查模型注册表定协议，LUNA_PROVIDER 可以强制覆盖但只接受 anthropic / openai，别的值当场抛。",
+        "en": "Only the network and a key. There is one construction point: providerFor() resolves LUNA_MODEL through the model registry to pick a protocol, and LUNA_PROVIDER may override it but accepts only anthropic or openai — anything else throws on the spot."
+      },
+      "boundary": {
+        "zh": "上游的形状差异一律吃在 provider 内部，不越过 ProviderEvent 这道门。harness 只见五种事件，一次也没有按 model id 分支过。",
+        "en": "Every difference in upstream shape is absorbed inside the provider and never crosses the ProviderEvent door. The harness sees five event kinds and has never once branched on a model id."
+      },
+      "invariant": {
+        "zh": "每次 chatStream 恰好产出一个 message_stop；usage 的两个数从那里累加，turn.result 上报的就是它。",
+        "en": "Each chatStream yields exactly one message_stop; both usage numbers accumulate from there, and that is what turn.result reports."
+      }
+    },
+    "code": {
+      "file": "packages/server/src/provider/capabilities.ts",
+      "lines": "5-12",
+      "snippet": "export type ProviderCapabilities = {\n  thinking: boolean; // adaptive/extended thinking or reasoning content\n  promptCache: boolean; // honors explicit cache_control breakpoints (else they're stripped)\n  interleavedToolStreaming: boolean; // tool-use streams mid-reply (not buffered to the end)\n  toolUse: boolean; // function/tool calling\n  systemRole: boolean; // a dedicated system message/param (vs folding into the first user turn)\n  maxOutputTokens: number;\n};",
+      "note": {
+        "zh": "六项能力，每个 Provider 自报，而不是拿 model id 正则去猜。要如实说清今天谁在读它：只有两处 —— provider 自己（OpenAI 那侧用 thinking 决定要不要发 reasoning_effort、用 toolUse 决定要不要带 tools）和启动日志里的 describeCapabilities。turn loop 一处也不读，因为它拿到的已经是一个把差异吃干净了的 provider。这张表的价值是给这道缝一套词汇，不是当运行时开关用。",
+        "en": "Six capabilities, each Provider declaring its own rather than being guessed at by a model-id regex. To be exact about who reads it today: two places only — the provider itself (the OpenAI side uses thinking to decide whether to send reasoning_effort, and toolUse to decide whether to send tools) and describeCapabilities in the startup log. The turn loop reads it nowhere, because what it holds is already a provider with the differences absorbed. This table's value is giving the seam a vocabulary, not acting as a runtime switch."
+      }
+    },
+    "decision": {
+      "why": {
+        "zh": "显式声明而不是假设。Anthropic 那侧六项全 true；OpenAI 那侧逐项由模型注册表算出来（thinking 看 entry.reasoning、promptCache 恒 false、交错流式看 LUNA_OPENAI_STREAM）。换模型是注册表里加一条，甚至可以用 LUNA_MODELS_JSON 从环境注入，不用改任何调用点。",
+        "en": "Declare explicitly instead of assuming. The Anthropic side declares all six true; the OpenAI side derives each from the model registry (thinking from entry.reasoning, promptCache always false, interleaved streaming from LUNA_OPENAI_STREAM). Adding a model is one registry entry, injectable from the environment via LUNA_MODELS_JSON, with no call site touched."
+      },
+      "rejected": {
+        "zh": "在调用点写 model-id 正则。注册表文件里把这条写成了明令：模型 id 的匹配只发生在注册表这一个地方。",
+        "en": "Model-id regexes at the call sites. The registry file states the rule outright: model ids are matched in the registry and nowhere else."
+      },
+      "cost": {
+        "zh": "能力表目前没有消费者在 turn loop 里，所以一项声明写错了不会在回合里暴露；它挡住的是差异，不是错误。",
+        "en": "The capability table has no consumer in the turn loop, so a wrong declaration will not surface during a turn; what it holds back is difference, not error."
+      }
+    }
+  },
+  "lane-tools": {
+    "claim": {
+      "zh": "这一刻是整条线上唯一一次真正的并发。模型一轮可以发出多个 tool_use，分发器在这里把它们摊成三条流同时跑 —— 而这一方怎么被调度，完全由工具自己在定义处声明的三个属性决定：concurrency、timeoutMs、proactiveRisk。调度器不认识任何一个具体工具。",
+      "en": "This moment is the only genuine concurrency on the line. The model can emit several tool_uses in one round, and the dispatcher fans them into three streams that run at once — and how this party gets scheduled is decided entirely by three properties each tool declares at its own definition site: concurrency, timeoutMs, proactiveRisk. The scheduler knows no individual tool."
+    },
+    "mechanism": {
+      "zh": "先砍：一批里超过 8 个的调用当场回一条 recoverable 的 err，不排队 —— 模型下一轮可以自己重发。再分桶：28 个工具每一个都声明了档位，15 个 safe-parallel、12 个 session-serial、1 个 global-serial（music_control，因为播放器是跨会话共享的那一个外部世界）。safe-parallel 每个调用起一条独立流；session-serial 整组排进这个会话自己的 mutex，组内按数组顺序逐个过；global-serial 排进 dispatcher 模块里的那个进程级单例。三条流交给 mergeAsync 竞速合并 —— 所以「串行」只发生在组内，组与组之间照样并发。锁在这里争：Mutex 是 acquire/release 两段，等待者排 FIFO 队列；持锁期间的执行包在 try/finally 里，工具抛异常也一定 release。超时：每次调用起一个自己的 AbortController，setTimeout(tool.timeoutMs) 到点 abort。这个跨度很大 —— message 和 enter_dream 是 1 000 毫秒，shell 和 save_skill 是 1 800 000 毫秒（30 分钟）。abort 与 iter.next() 竞速：abort 赢了就回一条 timeout 的 err 然后 return，finally 里给生成器的 iter.return() 最多 100 毫秒收尾，收不完就不等了。中断要说准一件事：客户端断开触发的那个 AbortController 不在这里。ws.handleClose 在最后一个监听者消失时 abort 的是 session.activeTurnAbort，它经 runTurn 的 signal 送进 provider.chatStream —— 断的是上游那条流。dispatchToolCalls 的上下文只有 { sessionId, sessionMutex }，没有 signal：这一刻已经开跑的工具，只会被它自己的 timeoutMs 停下来。",
+      "en": "First it cuts: anything past the eighth call in a batch gets a recoverable err immediately instead of a queue slot — the model can simply re-issue it next round. Then it sorts: all 28 tools declare a policy — 15 safe-parallel, 12 session-serial, 1 global-serial (music_control, because the player is the one piece of outside world shared across sessions). Each safe-parallel call gets its own stream; the session-serial group queues on this session's own mutex and goes through one at a time in array order; the global-serial group queues on the process-wide singleton inside the dispatcher module. The three streams are merged by mergeAsync as they produce — so \"serial\" happens only inside a group, and the groups still run against each other. The lock is contended right here: the Mutex is acquire/release with a FIFO queue of waiters, and the execution it guards sits in a try/finally, so a tool that throws still releases. Timeouts: every call gets its own AbortController with a setTimeout(tool.timeoutMs). The span is wide — message and enter_dream are 1,000ms; shell and save_skill are 1,800,000ms (thirty minutes). The abort races iter.next(); if the abort wins, a timeout err is yielded and the generator gets at most 100ms in the finally to close itself down before we stop waiting. One thing to state precisely about interruption: the AbortController that a client disconnect fires is not this one. What ws.handleClose aborts when the last listener disappears is session.activeTurnAbort, which travels through runTurn's signal into provider.chatStream — it cuts the upstream stream. The dispatcher's context is only { sessionId, sessionMutex }; there is no signal in it, so a tool already running at this moment will only ever be stopped by its own timeoutMs."
+    },
+    "contract": {
+      "exposes": {
+        "zh": "dispatchToolCalls(calls, ctx, registry) → 一条 ToolEvent 的异步流：started / progress / final。progress 是让 message 这类工具边跑边把字吐给前端用的。",
+        "en": "dispatchToolCalls(calls, ctx, registry) → an async stream of ToolEvents: started, progress, final. The progress kind is what lets a tool like message push characters to the frontend while it is still running."
+      },
+      "depends": {
+        "zh": "注册表（boot 时冻结，关掉的一组根本不在里面，于是既不进提示词也不进分发）、会话 mutex、以及 dispatcher 模块里那个进程级 mutex 单例。",
+        "en": "The registry (frozen at boot; a switched-off group is simply not in it, so it reaches neither the prompt nor the dispatcher), the session mutex, and the process-wide mutex singleton inside the dispatcher module."
+      },
+      "boundary": {
+        "zh": "两侧都不信：入参过 tool.input.safeParse，出参过 tool.output.safeParse。入参校验失败回 recoverable=true（模型能改），出参校验失败回 recoverable=false（模型改不了）。工具拿到的上下文只有 sessionId / callId / abortSignal —— 它看不见 session，也看不见历史。",
+        "en": "Neither side is trusted: input goes through tool.input.safeParse, output through tool.output.safeParse. A failed input is recoverable=true (the model can fix it); a failed output is recoverable=false (the model cannot). A tool's context is only sessionId, callId and abortSignal — it can see neither the session nor the history."
+      },
+      "invariant": {
+        "zh": "每个 call_id 恰好产出一个 final 事件。生成器一个 final 都没给就结束，也会被补一条 execution_exception 的 err —— 因为上游要求每个 tool_use 必须配一个 tool_result，缺一个这段历史就永久坏掉。",
+        "en": "Exactly one final event per call_id. A generator that ends without producing one still gets an execution_exception err synthesized for it — upstream requires every tool_use to be paired with a tool_result, and one missing pair poisons that history forever."
+      }
+    },
+    "code": {
+      "file": "packages/server/src/tools/dispatcher.ts",
+      "lines": "112-119",
+      "snippet": "  const abortController = new AbortController();\n  const timeoutId = setTimeout(() => abortController.abort('timeout'), tool.timeoutMs);\n\n  const iter = tool.execute(inputParse.data, {\n    sessionId: ctx.sessionId,\n    callId: call.call_id,\n    abortSignal: abortController.signal,\n  });",
+      "note": {
+        "zh": "这就是工具能被打断的全部机制：一个只由超时触发的 AbortController，一个工具（如果它愿意读 abortSignal）唯一能听见的信号。八行里没有 ctx.signal —— 分发上下文里根本没有这个字段。",
+        "en": "This is the entirety of how a tool can be interrupted: one AbortController, fired by a timeout and nothing else, carrying the only signal a tool can hear (if it bothers to read abortSignal). There is no ctx.signal in these eight lines — the dispatch context has no such field."
+      }
+    },
+    "decision": {
+      "why": {
+        "zh": "超出并发上限的调用当场回一条可恢复的错误，而不是排队。排队会让一轮的时长被最长的那一批拖住，而模型本来就有下一轮 —— 让它自己重发，比在这里攒一个隐形队列诚实。",
+        "en": "Calls past the concurrency cap get a recoverable error on the spot instead of a queue slot. A queue would tie a round's duration to its longest batch, and the model already has a next round — letting it re-issue is more honest than accumulating an invisible queue here."
+      },
+      "rejected": {
+        "zh": "把超出的调用排到下一批执行。",
+        "en": "Holding the overflow calls back and running them in a following batch."
+      },
+      "cost": {
+        "zh": "模型一轮发了 9 个调用，第 9 个这一轮不会跑；它得自己注意到并重发。",
+        "en": "If the model emits nine calls in one round, the ninth does not run that round; it has to notice and re-issue."
+      }
+    }
+  },
+  "lane-store": {
+    "claim": {
+      "zh": "前面四方都是易失的：socket 会断，harness 的 session 活在进程里，模型不记得上一轮，工具跑完就忘。存储是唯一跨进程活着的一方，也是反应式路径与主动/梦路径之间唯一的持久交接面 —— 两条路径从不互相持有对象，它们只在这里碰面。",
+      "en": "The other four parties are all volatile: the socket drops, the harness's session lives inside a process, the model does not remember last round, and a tool forgets the moment it finishes. The store is the only party that survives the process, and the only durable handoff surface between the reactive path and the proactive/dream path — the two never hold each other's objects; they meet only here."
+    },
+    "mechanism": {
+      "zh": "谁在写：L2 时间线只有一个写者。appendL2 全仓只有一处调用点，在 runTurn 的 finally 里，而且只有 realReply 非空才写；否则 history 整段回滚到 historyStart，一个字都不落 —— 一条空的助手行会同时毒化召回和重建出来的窗口。主动回合走的是同一个 runTurn，所以它也从这一处落库，只是 user_text 存空串。谁在读：读者是散开的 —— 连接时的历史重放（最近 300 轮）、进程重启后的会话重建、L1 折叠（按绝对偏移索引，所以这一处必须不带 limit 地读整条时间线）、召回的候选集（最近 500 行）、主动路径的「上一次用户回合是什么时候」锚点、梦里四处读。全仓有 21 个非测试模块直接持有 db 句柄，但往 l2_turns 写的只有那一处。交接的形状：进程重启后内存里的 session 全没了，loadSession 不读 sessions.history_json（那一列自 v0.16.2 起只写一个常量 [] 占位），而是把 l2_turns 每行的 raw_json 按时间顺序 flatMap 起来 —— 每一行正好是那一轮往 history 追加的消息，拼起来就是完整历史。降级路径要说实话：boot 时 initCustomSqlite() 在任何 Database 构造之前跑一次，按 LUNA_SQLITE_LIB 再加 6 个 Unix 候选路径找一个能加载扩展的 libsqlite3；win32 的候选列表是空的（系统 winsqlite3.dll 编译时就关掉了扩展加载），只认那个覆盖变量。找不到就返回 false，不抛。但今天这条降级路径没有可降的东西 —— tryLoadVec 在生产代码里没有任何调用点，vec0 / vec_cache 虚拟表在 v0.16.2 已经随「只写不读」的死路径一起删掉，检索本来就是 recall.ts 里的 TS 余弦。扩展加载器和 sqlite-vec 依赖是被有意留着的空位，不是正在工作的快路径。",
+      "en": "Who writes: the L2 timeline has exactly one writer. appendL2 has a single call site in the whole repo, inside runTurn's finally, and it only fires when realReply is non-empty; otherwise history is rolled all the way back to historyStart and not a word lands — an empty assistant row would poison both recall and the rebuilt window. A proactive turn runs through the same runTurn, so it persists from that same place, just with an empty user_text. Who reads: the readers are scattered — the history replay on connect (the last 300 turns), session rehydration after a restart, the L1 fold (which indexes by absolute offset, so that one caller must read the whole timeline with no limit), recall's candidate set (the most recent 500 rows), the proactive path's \"when was the last user turn\" anchor, and four reads inside the dream. Twenty-one non-test modules hold a database handle directly, but only one of them writes to l2_turns. The shape of the handoff: after a restart the in-memory sessions are gone, and loadSession does not read sessions.history_json (that column has held nothing but a constant [] placeholder since v0.16.2) — it flatMaps the raw_json of each l2_turns row in time order, because each row is exactly the messages that turn appended, so concatenating them reconstitutes the full history. About the degradation path, honestly: at boot initCustomSqlite() runs once before any Database is constructed, looking for an extension-capable libsqlite3 via LUNA_SQLITE_LIB plus six Unix candidate paths; on win32 the candidate list is empty (the system winsqlite3.dll has extension loading compiled out) and only the override counts. Finding none, it returns false rather than throwing. But there is nothing left for that path to degrade from today — tryLoadVec has no production call site, the vec0 / vec_cache virtual table was deleted at v0.16.2 along with the write-only dead path that fed it, and retrieval has always been the TypeScript cosine in recall.ts. The extension loader and the sqlite-vec dependency are a deliberately reserved seat, not a fast path in service."
+    },
+    "contract": {
+      "exposes": {
+        "zh": "仓库根上的一个文件 luna.sqlite：22 个迁移之后 18 张活着的表（20 条 CREATE TABLE，0017 把 core_memory 与它的审计表一起退役）。",
+        "en": "One file at the repo root, luna.sqlite: eighteen live tables after twenty-two migrations (twenty CREATE TABLEs, with 0017 retiring core_memory and its audit table together)."
+      },
+      "depends": {
+        "zh": "bun:sqlite。持久化整体可以关掉 —— LUNA_PERSIST=0 时 setMemoryDb 不被调用，于是 sessionStore 的每个函数都变成 no-op，会话纯内存。",
+        "en": "bun:sqlite. Persistence as a whole can be switched off — with LUNA_PERSIST=0 setMemoryDb is never called, every sessionStore function becomes a no-op, and sessions stay purely in memory."
+      },
+      "boundary": {
+        "zh": "它不回调任何人。没有触发器、没有监听、没有通知 —— 上面每一层要知道发生了什么，都得自己来读。这也是为什么它能当交接面：交接是靠读，不是靠推。",
+        "en": "It calls nobody back. No triggers, no listeners, no notifications — every layer above it has to come and read. That is exactly what makes it usable as a handoff surface: the handoff happens by reading, not by pushing."
+      },
+      "invariant": {
+        "zh": "L2 是历史的真相源。每行 raw_json 恰好是那一轮往 history 追加的消息，按 t_ms 升序拼接可重建完整历史 —— 所以每轮的持久化是 O(1)，不是把整段历史重新序列化一遍。",
+        "en": "L2 is the source of truth for history. Each row's raw_json is exactly what that turn appended, and concatenating them in ascending t_ms order rebuilds the whole history — which is why per-turn persistence is O(1) rather than a full re-serialization."
+      }
+    },
+    "code": {
+      "file": "packages/server/src/memory/sessionStore.ts",
+      "lines": "29-42",
+      "snippet": "export function loadSession(id: string): PersistedSession | null {\n  if (!db) return null;\n  const row = db\n    .prepare('SELECT turn_seq, rolling_summary, window_low_water FROM sessions WHERE id = ?')\n    .get(id) as { turn_seq: number; rolling_summary: string; window_low_water: number } | null;\n  const history = listL2(id).flatMap((r) => JSON.parse(r.raw_json) as Anthropic.MessageParam[]);\n  if (!row && history.length === 0) return null;\n  return {\n    history,\n    turnSeq: row?.turn_seq ?? 0,\n    rollingSummary: row?.rolling_summary ?? '',\n    windowLowWater: row?.window_low_water ?? 0,\n  };\n}",
+      "note": {
+        "zh": "交接真正发生的那一行是 flatMap 那一行：进程死过一次之后，一段完整的对话历史从一张追加式的表里长回来。旁边三个字段（turn_seq / rolling_summary / window_low_water）是折叠的账，是唯一还从 sessions 表读的东西。",
+        "en": "The line where the handoff actually happens is the flatMap: after the process has died once, a complete conversation history grows back out of an append-only table. The three fields beside it (turn_seq, rolling_summary, window_low_water) are the fold's bookkeeping, and the only things still read out of the sessions table."
+      }
+    },
+    "decision": {
+      "why": {
+        "zh": "历史从追加式的 L2 重建，而不是每一轮把整段 history 重新序列化进一个 blob —— 后者是这个仓库里最后一处 O(N²) 的写。",
+        "en": "History is rebuilt from the append-only L2 rather than re-serialized into a blob every turn — the latter was the last O(N²) write left in this repo."
+      },
+      "rejected": {
+        "zh": "把 sessions.history_json 当真相源。那一列还在，但现在只写一个常量占位，留着是为了不动表结构。",
+        "en": "Treating sessions.history_json as the source of truth. The column is still there, now written only as a constant placeholder, kept so the schema need not change."
+      },
+      "cost": {
+        "zh": "每次重建都要把整条时间线读出来并逐行 JSON.parse；boot 和每次折叠各付一次这个钱。",
+        "en": "Every rebuild reads the whole timeline and JSON.parses each row; that cost is paid once at boot and once per fold."
+      }
+    }
+  },
+
+  /* ── 时序 · 前五步 ───────────────────────────── */
+  "msg": {
+    "claim": {
+      "zh": "「一条消息」不是从模型那里开始的，是从一个 WebSocket 帧开始的。这一帧要连过五道闸——JSON 能不能解析、schema 认不认（正文上限 8000 字符）、她是不是在做梦、provider 配没配、这个会话是不是已经有一轮在跑——五道全过，服务端才在这一刻打上两个时间戳、new 一个 AbortController，然后把回合甩出去（void runTurn），处理函数当场返回。",
+      "en": "A message does not begin at the model; it begins as a WebSocket frame. That frame passes five gates in a row — does the JSON parse, does the schema accept it (the body caps at 8000 characters), is she dreaming, is a provider configured at all, is a turn already running in this session — and only when all five pass does the server stamp two timestamps, create an AbortController and fire the turn off with void runTurn, returning from the handler immediately."
+    },
+    "mechanism": {
+      "zh": "五道闸的顺序是有意义的。前两道住在 protocol 包里：JSON.parse 失败回 invalid_event、文案「invalid JSON」；Zod 不过也回 invalid_event，但文案是 Zod 自己的报错串。8000 字符的上限就钉在这一层——z.string().min(1).max(CHAT_SEND_MAX_CHARS)——外面还罩着一层 1 MiB 的帧上限。后三道住在 ws.ts：中间那道是 runtime_not_configured（provider 压根没配，文案「no provider configured; chat.send unavailable」），另外两道则是两种截然不同的拒绝——做梦时回 dreaming，文案「Luna is dreaming — send dream.wake to wake her」，与其说是错误不如说是指路牌，直接告诉客户端该改发哪个事件；正忙时回 turn_in_progress，文案是模板串 `turn ${session.activeTurn} is still running`，把正在跑的那一轮的 id 原样念回去。两者都不排队。五道全过之后，lastUserMs 和 markActivity 分头拨两个时钟（前者是升级阶梯的复位锚，后者是沉默计时器），turn_id 允许客户端自己起名，不起就落到「会话 id:turn:序号」。",
+      "en": "The order of the five gates matters. The first two live in the protocol package: a failed JSON.parse returns invalid_event with the message \"invalid JSON\"; a failed Zod parse also returns invalid_event, but carries Zod's own error text. The 8000-character cap is pinned at that layer — z.string().min(1).max(CHAT_SEND_MAX_CHARS) — with a 1 MiB frame cap outside it. The last three live in ws.ts: the middle one is runtime_not_configured (no provider configured at all, message \"no provider configured; chat.send unavailable\"), and the other two are two entirely different refusals — while dreaming the reply is code dreaming, message \"Luna is dreaming — send dream.wake to wake her\", less an error than a signpost telling the client which event to send instead; while busy it is turn_in_progress, whose message is the template `turn ${session.activeTurn} is still running`, reading the running turn's id back verbatim. Neither queues anything. Past all five, lastUserMs and markActivity move two separate clocks (the first is the escalation-reset anchor, the second the silence timer), and turn_id may be named by the client, falling back to \"session id:turn:sequence\"."
+    },
+    "contract": {
+      "exposes": {
+        "zh": "成功不回执。客户端收到的第一个信号是 turn.started，而那要等 ①装配 整个跑完才发得出来；失败则立刻回一条 error{code, message}。",
+        "en": "Success sends no acknowledgement. The first signal a client sees is turn.started, and that cannot fire until ① assemble has run to completion; a failure returns one error{code, message} immediately."
+      },
+      "depends": {
+        "zh": "isDreaming()（进程级的做梦状态）、runtime（provider 与工具注册表是否已配好）、session.activeTurn。",
+        "en": "isDreaming() (the process-level dream state), runtime (whether a provider and tool registry are configured at all), and session.activeTurn."
+      },
+      "boundary": {
+        "zh": "内容校验全在 protocol 包，ws.ts 一个字符都不看——它只问状态。",
+        "en": "Content validation lives entirely in the protocol package; ws.ts inspects not one character of the text — it only asks about state."
+      },
+      "invariant": {
+        "zh": "一个会话同一时刻最多一轮。activeTurn 由 runTurn 在 try 之前置位、在 finally 里清空，所以哪怕回合抛异常，闸也一定会重新打开。",
+        "en": "At most one turn per session at a time. runTurn sets activeTurn before its try and clears it in the finally, so the gate reopens even when the turn throws."
+      }
+    },
+    "code": {
+      "file": "packages/server/src/ws.ts",
+      "lines": "226-239",
+      "snippet": "      const session = getSession(ws.data.sessionId);\n      if (session.activeTurn !== null) {\n        outbound(ws, {\n          type: 'error',\n          code: 'turn_in_progress',\n          message: `turn ${session.activeTurn} is still running`,\n        });\n        return;\n      }\n      const userNowMs = Date.now();\n      session.lastUserMs = userNowMs; // the escalation-reset anchor (user reply → engaged)\n      markActivity(session, userNowMs); // a user message is conversation activity → bump the silence timer\n      const { provider, registry } = runtime; // narrowed by the guard above\n      const turnId = event.turn_id ?? `${session.id}:turn:${session.turnSeq}`;",
+      "note": {
+        "zh": "这十四行是第五道闸和它之后的全部。先看先后：闸排在两个时间戳前面，所以一条被弹回的消息不会污染沉默计时器。再看那句模板串——它把正在跑的那一轮的 id 原样念回给客户端。",
+        "en": "These fourteen lines are the fifth gate and everything after it. Read the order first: the gate precedes both timestamps, so a bounced message never pollutes the silence timer. Then read the template string — it reads the running turn's id back to the client verbatim."
+      }
+    },
+    "decision": {
+      "cost": {
+        "zh": "这道闸的副作用被代码自己记在案：v0.32.4 的注释写着，回合末尾那次多余的模型往返期间 activeTurn 仍然锁着，用户此刻发出的消息会被弹回 turn_in_progress，而她已经送达的回复在屏幕上看起来明明已经说完了。修法不是撤掉闸，是缩短那个窗口。",
+        "en": "The gate's side effect is recorded in the code itself: the v0.32.4 comment notes that activeTurn stays locked through the redundant trailing model round-trip, so a message sent in that window bounces with turn_in_progress while her already-delivered reply sits on screen looking finished. The fix was to shorten the window, not to remove the gate."
+      }
+    }
+  },
+  "assemble": {
+    "claim": {
+      "zh": "整轮里只有这一刻会装感知。parse_input 是图的入口节点，后面每一次工具迭代都从 ②schema 重新进入——所以这条最多七块的 user 消息一整轮只装一次：她在第 8 轮读到的时间、天气、在放的歌，还是第 1 轮那一份。",
+      "en": "Perception is assembled at this moment and at no other. parse_input is the graph's entry node, and every later tool round re-enters at ② schema — so this user message of at most seven blocks is built exactly once per turn: the time, weather and current track she reads in round 8 are still the ones from round 1."
+    },
+    "mechanism": {
+      "zh": "这一刻的先后里只有一处需要等：召回。await retrieve(...) 要算这句话的向量、跟四个源打分；其余每一块都是同步地读一份后台早就热好的缓存（天气快照、常驻音乐 provider 的内存），反应路径上不发一个网络请求。还有两件事在这一刻被「烧掉」：开机后第一条真实用户回合消费掉醒来场景（wakePending 置 false），换歌后第一轮消费掉整首歌词，并把是哪一首记在 lyricsBurnedFor 上——万一这一轮被回滚，这一口还能还回去。每个可选块各自包在 try/catch 里，任何一块的构造函数抛了，只丢那一块、warn 一行、回合继续。最后才 push 用户原话，整条消息进 history，turn.started 到这时候才发出去。",
+      "en": "Only one step in this moment waits: recall. await retrieve(...) has to embed the wording and score it against four sources; every other block is a synchronous read of a cache a background job already warmed (the weather snapshot, the resident music provider's memory), so the reactive path makes no network call. Two things are also burned here: the first real user turn after boot consumes the wake scene (wakePending goes false), and the first turn after a track change consumes the whole lyric and records which track it was in lyricsBurnedFor — so a rolled-back turn can give the sip back. Each optional block sits in its own try/catch: if a builder throws, that one block is dropped, one line is warned, and the turn continues. The user's own words are pushed last, the whole message goes into history, and only then does turn.started go out."
+    },
+    "contract": {
+      "exposes": {
+        "zh": "一条 role 为 user 的消息被 push 进 session.history，节点随后返回 build_request。",
+        "en": "One message with role user is pushed into session.history, and the node then returns build_request."
+      },
+      "depends": {
+        "zh": "retrieve + renderRecallBlock（整步唯一的 await）、buildTimeBlock、getSnapshot + buildWeatherBlock、musicBlockFor、lyricsBurstFor。",
+        "en": "retrieve + renderRecallBlock (the only await in the whole step), buildTimeBlock, getSnapshot + buildWeatherBlock, musicBlockFor, lyricsBurstFor."
+      },
+      "boundary": {
+        "zh": "主动回合在这一刻少三样：不召回（它的「用户文本」是内部舞台指示，不是查询）、不吃醒来场景、不发 turn.started。",
+        "en": "A proactive turn does three fewer things here: no recall (its \"user text\" is an internal stage direction, not a query), no wake scene, no turn.started."
+      },
+      "invariant": {
+        "zh": "缺席即零残留——没有占位符、没有空标签；一块抛异常只丢一块，从不让整轮失败。",
+        "en": "Absence leaves zero residue — no placeholder, no empty tag; a throwing block costs that block only, never the turn."
+      }
+    },
+    "code": {
+      "file": "packages/server/src/turn/runTurn.ts",
+      "lines": "363-376",
+      "snippet": "      try {\n        const burst = lyricsBurstFor();\n        if (burst) {\n          blocks.push({ type: 'text', text: burst });\n          // v0.45.17: remember WHICH track's burn this turn spent, so a rolled-back turn can\n          // give it back (the block goes with the history; the mark must too).\n          s.lyricsBurnedFor = getNowPlaying()?.track?.id ?? null;\n        }\n      } catch (e) {\n        console.warn('[music] lyricsBurstFor failed — omitting the lyrics block:', e);\n      }\n    }\n    blocks.push({ type: 'text', text: s.userText });\n    s.session.history.push({ role: 'user', content: blocks });",
+      "note": {
+        "zh": "一个 try 里包着三件事：拿歌词、推进块、记下这一口烧在了哪首歌上——三件必须同生共死，所以它们在同一个 try 里。紧接的两行就是用户原话和 history。",
+        "en": "One try wraps three things: fetch the lyric, push the block, record which track the sip was spent on — all three must live or die together, which is why they share a try. The two lines that follow are the user's own words and history."
+      }
+    },
+    "decision": {
+      "why": {
+        "zh": "每个感知块单独 try/catch 是刻意的降级设计：天气、时间、音乐都是锦上添花，没有一件值得让一整轮对话失败。三处 catch 的措辞是同一个模式——「omitting the … block」，而不是让回合出错。",
+        "en": "Giving each perception block its own try/catch is a deliberate degradation design: weather, time and music are all garnish, and not one of them is worth failing a conversation over. All three catches are worded the same way — \"omitting the … block\" — rather than failing the turn."
+      },
+      "cost": {
+        "zh": "装一次的代价是会过时。一轮跑到第 8 次迭代时，她手上的时间仍然停在回合开始的那一刻；想要更新的，她得自己去调 time_now 或 weather 工具。",
+        "en": "Assembling once means going stale. By the eighth iteration of a turn the time in her hands is still the moment the turn began; if she wants a fresher one she has to call the time_now or weather tool herself."
+      }
+    }
+  },
+  "schema": {
+    "claim": {
+      "zh": "六行，一个 if，一次赋值。这个节点只做一件事：把注册表里每个工具的 Zod schema 转成模型读得懂的 JSON Schema——而且一整轮只做一次。守卫是 length === 0，结果缓存在这一轮的 state 上。",
+      "en": "Six lines, one if, one assignment. This node does exactly one thing: turn every tool's Zod schema in the registry into JSON Schema the model can read — once per turn. The guard is length === 0 and the result is cached on this turn's state."
+    },
+    "mechanism": {
+      "zh": "它之所以是一个独立节点、而不是 open_stream 开头的两行，有两个可查的后果。其一是可观测：图的每一次节点转移都由 onTransition 记一条 kind 为 node 的 trace，于是 parse_input → build_request → open_stream 之间，「装配完了、还没发请求」这个瞬间有了一根带时间戳的界桩。其二是重入：append_results 跑完返回的是 build_request 而不是 open_stream，所以一轮里这个节点最多被进 8 次，但 zodToJsonSchema 只在第一次真的跑。缓存挂在 TurnState 而不是模块级，是因为 registry 是按回合传进来的——换一套工具集，自然就重算。",
+      "en": "Being its own node rather than two lines at the top of open_stream has two checkable consequences. One is observability: every node transition is traced by onTransition as a kind: node record, so between parse_input → build_request → open_stream the instant of \"assembly done, request not yet sent\" gets a timestamped boundary marker. The other is re-entry: append_results returns build_request, not open_stream, so this node is entered up to 8 times in a turn while zodToJsonSchema actually runs only on the first. The cache lives on TurnState rather than at module level because the registry is handed in per turn — a different tool set simply recomputes."
+    },
+    "contract": {
+      "exposes": {
+        "zh": "只写 s.anthropicTools，返回 open_stream。",
+        "en": "It writes s.anthropicTools and returns open_stream."
+      },
+      "depends": {
+        "zh": "toolsToAnthropicFormat，内部是 zodToJsonSchema(tool.input, { $refStrategy: 'none' })。",
+        "en": "toolsToAnthropicFormat, which internally is zodToJsonSchema(tool.input, { $refStrategy: 'none' })."
+      },
+      "boundary": {
+        "zh": "不碰 history、不碰 provider、不发任何事件。",
+        "en": "It touches no history, no provider, and emits no event."
+      },
+      "invariant": {
+        "zh": "一轮之内工具表恒定——模型在第 8 轮看到的和第 1 轮是同一个数组对象。",
+        "en": "The tool table is constant within a turn — what the model sees in round 8 is the very same array object it saw in round 1."
+      }
+    },
+    "code": {
+      "file": "packages/server/src/turn/runTurn.ts",
+      "lines": "386-391",
+      "snippet": "  async build_request(s) {\n    if (s.anthropicTools.length === 0) {\n      s.anthropicTools = toolsToAnthropicFormat(s.registry);\n    }\n    return 'open_stream';\n  },",
+      "note": {
+        "zh": "整个节点就是这六行。最要紧的是那个守卫：判据是数组长度，不是 registry 的内容——因为在一轮之内 registry 根本不会变。",
+        "en": "The whole node is these six lines. The load-bearing part is the guard: it tests the array's length, not the registry's content — because within a turn the registry cannot change."
+      }
+    },
+    "decision": {
+      "why": {
+        "zh": "拆成独立节点的收益是可观测：trace 里看得见「装配结束、请求未发」这条边；折进 open_stream，这条边就不存在了。",
+        "en": "Splitting it out buys observability: the trace carries an edge for \"assembly finished, request not yet sent\". Folded into open_stream, that edge would simply not exist."
+      }
+    }
+  },
+  "request": {
+    "claim": {
+      "zh": "到这一刻才有字节离开进程。真正发出去的请求只有四个字段，而这四个字段来自四种不同的寿命：system 是跨轮记忆化的，messages 是每一轮现算的，tools 是上一步建好之后整轮不动的，signal 是 chat.send 那一刻就 new 出来的。",
+      "en": "Only at this moment do bytes leave the process. The request that actually goes out has four fields, and those four come from four different lifetimes: system is memoized across rounds, messages is recomputed every round, tools was built one step ago and never moves again, and signal was created back at chat.send."
+    },
+    "mechanism": {
+      "zh": "system 在这一刻先读一次 memoryEpoch()：epoch 没动就直接复用上一轮那份人格前缀，动了就在这里重建——所以「上一轮她刚 remember 了一件事」这件事，是在这一刻、赶在下一次请求发出之前生效的，不必等到下一回合。messages 恰好相反，每一轮都从 session.history 重走一遍 buildActiveContext：按低水位切尾 → 若切点落在一对 tool_use/tool_result 中间就往后挪到下一个回合起点 → 折叠旧的工具结果 → 用 300 条 / 120 000 字符的硬上限从尾部往前裁 → 有摘要就在最前面拼一条 <conversation_summary>。所有裁剪只落在回合起点上：从别处切会把 tool_result 和它的 tool_use 拆散，请求当场被 API 打回。signal 则是一路从 WebSocket 传到这里的那一个——最后一个监听者断开时，这条流就在这里被掐断。",
+      "en": "system reads memoryEpoch() once here: if the epoch has not moved, last round's persona prefix is reused as is; if it has, the prefix is rebuilt right here — so the fact that \"she called remember last round\" takes effect at this moment, ahead of the next request, rather than waiting for the next turn. messages is the opposite: every round walks session.history through buildActiveContext again — slice at the low-water mark, then if that cut lands inside a tool_use/tool_result pair advance it to the next turn start, collapse the older tool results, trim backwards from the tail against a hard budget of 300 messages / 120,000 characters, and prepend a <conversation_summary> when there is a digest. Every cut lands on a turn start: cutting anywhere else orphans a tool_result from its tool_use and the API rejects the request outright. signal is the very controller carried down from the WebSocket — when the last listener disconnects, this is the stream that gets cut."
+    },
+    "contract": {
+      "exposes": {
+        "zh": "一个 provider.chatStream(...) 的异步迭代；这一刻之后，事件才开始往回流。",
+        "en": "An async iteration over provider.chatStream(...); only after this moment do events start flowing back."
+      },
+      "depends": {
+        "zh": "memoryEpoch()、buildSystemPrompt、buildActiveContext，以及 provider 适配层。",
+        "en": "memoryEpoch(), buildSystemPrompt, buildActiveContext, and the provider adapter layer."
+      },
+      "boundary": {
+        "zh": "整个请求里缓存断点只有一个，就打在 system 那一块上（cache_control: { type: 'ephemeral' }）；messages 里一个断点都没有。",
+        "en": "The whole request carries exactly one cache breakpoint, on the system block (cache_control: { type: 'ephemeral' }); messages carries none at all."
+      },
+      "invariant": {
+        "zh": "送出去的 messages，第一条永远是一个回合起点（或那条摘要），永不从一对工具消息的中间切开。",
+        "en": "The first entry of the messages that go out is always a turn start (or the summary), never a cut through the middle of a tool pair."
+      }
+    },
+    "code": {
+      "file": "packages/server/src/turn/runTurn.ts",
+      "lines": "414-419",
+      "snippet": "    for await (const ev of s.provider.chatStream({\n      system: s.systemBlock,\n      messages: buildActiveContext(s.session),\n      tools: s.anthropicTools,\n      signal: s.signal,\n    })) {",
+      "note": {
+        "zh": "四行，四种寿命。并排放进一个对象字面量之后最容易忽略的是第三行——buildActiveContext 是一次函数调用，每一轮都会重跑；它上面那个 s.systemBlock 不是。",
+        "en": "Four lines, four lifetimes. Side by side in one object literal, the easy line to miss is the third — buildActiveContext is a call, re-run every round; the s.systemBlock above it is not."
+      }
+    },
+    "decision": {
+      "cost": {
+        "zh": "messages 每轮重算不是免费的：硬上限那一步要从尾部逐条 JSON.stringify 每条消息的 content，直到撞上 300 条或 120 000 字符的预算为止；一轮跑满 8 次迭代就走 8 遍。",
+        "en": "Recomputing messages every round is not free: the hard-cap step JSON.stringifies each message's content walking backwards from the tail until it hits the 300-message or 120,000-character budget — eight times over in a turn that runs its full eight iterations."
+      }
+    }
+  },
+  "dispatch": {
+    "claim": {
+      "zh": "并发在这一刻才真的发生，而它前面还有一段完全串行的判定。dispatch_tools 先用一个纯判定的循环把这一批调用逐个过一遍——名字认不认、主动回合的安全门放不放——过关的攒成一个数组，然后整批一次性交给 dispatcher，锁在那里争。",
+      "en": "Concurrency actually happens at this moment, and a fully serial pass comes first. dispatch_tools walks the batch with a pure decision loop — is the name known, does the proactive safety gate allow it — collects the survivors into one array, and only then hands the whole batch to the dispatcher, where the locks are contended."
+    },
+    "mechanism": {
+      "zh": "判定循环开始之前，surfacedBefore 就已经取好快照了（messageTexts.length > 0），而这一轮自己的 message 调用要等下面真的 dispatch 完才写得进 messageTexts——所以「先说后做」被强制跨轮：同一轮里的一次 message，解锁不了它旁边那个动作。被门挡下的调用走 continue：它既不进 calls（不执行），也不进 toolNamesThisTurn（不计入预算——主动回合的动作预算在 append_results 里读的正是 toolNamesThisTurn.length），但它仍然必须拿到一条 tool_result 回填，否则下一轮请求里就会留下一个没有结果的 tool_use。第二段把整批交出去时才出现真正的并发：会话 mutex 是从这个 session 上取的（所以两个会话互不阻塞），全局 mutex 在 dispatcher 模块里，几条流被 mergeAsync 竞速合并，事件按到达顺序 yield 回来。",
+      "en": "surfacedBefore is snapshotted before the decision loop starts (messageTexts.length > 0), and this round's own message calls do not land in messageTexts until the dispatch below actually completes — so announce-then-act is forced across rounds: a message in this round cannot unlock the action sitting next to it. A blocked call takes the continue: it never enters calls (so it does not run) and never enters toolNamesThisTurn (so it does not count — the proactive action budget in append_results reads exactly toolNamesThisTurn.length), yet it must still be handed a tool_result, or the next request would carry a tool_use with no result. Real concurrency appears only in the second half, when the batch is handed over: the session mutex is taken from this session (so two sessions never block each other), the global mutex lives in the dispatcher module, and the streams are raced together by mergeAsync, yielding events in arrival order."
+    },
+    "contract": {
+      "exposes": {
+        "zh": "每个调用至少一条 tool.finished（被拦的、名字不认识的也有）；结果按到达顺序累进 toolResultBlocks。",
+        "en": "At least one tool.finished per call — blocked ones and unknown names included; results accumulate into toolResultBlocks in arrival order."
+      },
+      "depends": {
+        "zh": "dispatchToolCalls、session.mutex、proactiveRiskOf / isProactiveActionAllowed。",
+        "en": "dispatchToolCalls, session.mutex, proactiveRiskOf / isProactiveActionAllowed."
+      },
+      "boundary": {
+        "zh": "被门挡下的和名字不认识的从不进 dispatcher——它们的 err 是 runTurn 在这个循环里自己造的，dispatcher 根本不知道它们存在过。",
+        "en": "Gated calls and unknown names never reach the dispatcher — their err is constructed by runTurn inside this loop, and the dispatcher never learns they existed."
+      },
+      "invariant": {
+        "zh": "每一个 tool_use 都恰好配一个 tool_result，无论它有没有真的跑过。",
+        "en": "Every tool_use is matched by exactly one tool_result, whether or not it ever ran."
+      }
+    },
+    "code": {
+      "file": "packages/server/src/turn/runTurn.ts",
+      "lines": "535-548",
+      "snippet": "          continue; // not dispatched, not counted toward the action budget\n        }\n      }\n\n      calls.push({ call_id: use.id, tool_name: name, input: use.input });\n      s.toolNamesThisTurn.push(name);\n    }\n\n    if (calls.length > 0) {\n      for await (const evt of dispatchToolCalls(\n        calls,\n        { sessionId: s.session.id, sessionMutex: s.session.mutex },\n        s.registry,\n      )) {",
+      "note": {
+        "zh": "判定和执行的交界正好落在这十四行的中间：上面两行决定这次调用算不算数（calls 决定跑不跑，toolNamesThisTurn 决定算不算预算），下面五行就是整批出手，会话锁在这里被交进 dispatcher。",
+        "en": "The seam between deciding and executing falls in the middle of these fourteen lines: the two lines above settle whether a call counts (calls decides whether it runs, toolNamesThisTurn whether it is billed), and the five below are the whole batch going out, with the session lock handed into the dispatcher."
+      }
+    },
+    "decision": {
+      "why": {
+        "zh": "两段式——先整批判定，再整批出手——让并发策略只有 dispatcher 一处知道，安全门只有这个循环一处知道；没有第三个地方需要同时懂这两件事。",
+        "en": "The two-phase shape — decide the whole batch, then release the whole batch — keeps the concurrency policy known only to the dispatcher and the safety gate known only to this loop; no third place has to understand both."
+      },
+      "cost": {
+        "zh": "快照式的 surfacedBefore 意味着「同一轮里说了再做」不算数。一次真的只想改个音量的主动回合，也要多花一整次模型往返：这一轮说，下一轮才动。",
+        "en": "A snapshotted surfacedBefore means speaking and acting inside one round does not count. A proactive cycle that genuinely only wants to change the volume still spends an entire extra model round-trip: speak this round, act the next."
+      }
+    }
+  },
+
+  /* ── 时序 · 后六步 ───────────────────────────── */
+  "exec": {
+    "claim": {
+      "zh": "这一刻，模型写下的一句 tool_use 才第一次变成真在跑的东西。四件事同时开始：一轮最多 8 个调用被切成三桶，后两桶各排在一把互斥锁后面；每个调用带上自己的 AbortController 和倒计时；工具自己 yield 的进度从这里流回前端。",
+      "en": "This is the moment a tool_use the model merely wrote becomes something actually running. Four things start at once: at most 8 calls per round are sorted into three buckets, two of which queue behind a mutex; every call carries its own AbortController and countdown; and whatever progress a tool yields flows back to the frontend from here."
+    },
+    "mechanism": {
+      "zh": "时机上有一件事容易搞反:message 的字并不是在这一刻才出去的。它在 ③ 的流里就靠 tool_input_delta 一路流成气泡了——所以执行这一刻不是「开始说话」,而是「这句话被承认」:Zod 校验过了才有 tool.started 与 tool.finished。校验没过的那种(比如一句话切出的从句超长)根本不发 tool.started,前端就把那个已经半流出去的气泡静默丢掉，用户看到的是它自己消失。\n\n争抢发生在两处。超出 8 个的调用在跑之前就被判成可恢复的 execution_exception,模型下一轮再发一遍即可；剩下的按工具声明的并发档分桶:safe-parallel 各自开一条流,session-serial 排会话锁,global-serial 排进程锁。三类流由 mergeAsync 交错，所以事件到达顺序是「谁先出谁先到」,不是模型写下的顺序——把顺序拼回去是下一步 ⑤ 的活。\n\n锁按单个调用持有，而且因为 runOne 是异步生成器,yield* 会一直持锁到这个工具的最后一个事件被上游消费完：上游处理得慢，锁就多握一会儿。倒计时是一场赛跑——setTimeout 触发 abort,与生成器的下一个事件 race,abort 赢了就落成不可恢复的 timeout;之后清理生成器最多只等 100 毫秒就走人。",
+      "en": "One thing about the timing is easy to get backwards: a message bubble does not leave here. It already streamed out during ③, delta by delta through tool_input_delta — so execution is not the moment she starts speaking, it is the moment the sentence is acknowledged: only a Zod-validated call gets a tool.started and a tool.finished. A call that fails validation (an over-long clause, say) never emits tool.started at all, and the frontend silently discards the half-streamed bubble; from the outside it simply vanishes.\n\nContention happens in two places. Calls beyond the eighth are answered with a recoverable execution_exception before anything runs — the model can just re-issue them next round. The rest are bucketed by the concurrency tier each tool declares: safe-parallel calls each open their own stream, session-serial ones queue on the session mutex, global-serial ones on the process-wide mutex. The three kinds are interleaved by mergeAsync, so events arrive in finishing order, not in the order the model wrote them — putting the order back is ⑤ job.\n\nThe lock is held per call, and because runOne is an async generator, yield* keeps holding it until the tool last event has been consumed upstream: a slow consumer means a longer-held lock. The countdown is a race — a setTimeout fires abort, which races the generator next event; if abort wins the call ends as a non-recoverable timeout, and cleanup of the generator then waits at most 100 ms before moving on."
+    },
+    "contract": {
+      "exposes": {
+        "zh": "每个被接受的调用一串事件:tool.started(带校验后的输入)→ 若干 tool.progress → 恰好一个 final。",
+        "en": "One event stream per accepted call: tool.started (with the validated input), any number of tool.progress, and exactly one final."
+      },
+      "depends": {
+        "zh": "registry 里那件工具声明的 concurrency 与 timeoutMs;session.mutex;模块级的 globalMutex。",
+        "en": "The concurrency and timeoutMs each tool declares in the registry; session.mutex; the module-level globalMutex."
+      },
+      "boundary": {
+        "zh": "分发不知道工具在做什么。它只认 Zod 的 input/output 两个 schema,和 progress / ok / err 三种内部事件。",
+        "en": "The dispatcher knows nothing about what a tool does. It knows two Zod schemas — input and output — and three internal event kinds: progress, ok, err."
+      },
+      "invariant": {
+        "zh": "一个调用恰好产出一个 final:正常结果、工具自报的 err、超时，或「生成器结束了却没给 final」这条兜底。没有静默消失的调用。",
+        "en": "Every call yields exactly one final: a result, a tool-reported err, a timeout, or the fallback for a generator that ended without one. No call disappears quietly."
+      }
+    },
+    "code": {
+      "file": "packages/server/src/tools/dispatcher.ts",
+      "lines": "72–85",
+      "snippet": "  for (const call of calls) {\n    let release: () => void;\n    try {\n      release = await mutex.acquire();\n    } catch {\n      yield finalErr(call, 'aborted', 'lock acquisition aborted', false);\n      continue;\n    }\n    try {\n      yield* runOne(call, ctx, registry);\n    } finally {\n      release();\n    }\n  }",
+      "note": {
+        "zh": "锁就在这一行争。注意 yield* ——锁不是「调用期间」持有，是「这个调用的事件流被消费完」才放；而 release 在 finally 里，所以工具抛错、超时、上游提前不要了，锁都还得回来。",
+        "en": "This is the line where the lock is contended. Note the yield*: the lock is not held for the duration of the call but until the call event stream has been fully consumed. release() sits in a finally, so a throwing tool, a timeout, or an upstream early exit all still give the lock back."
+      }
+    }
+  },
+  "append": {
+    "claim": {
+      "zh": "结果按模型发起的顺序拼回一条 user 消息——不是按完成顺序。拼完的这一刻决定还转不转：两个预算各自能把回合停下，再加一条 is_final 短路，能直接跳过一整次模型往返。",
+      "en": "The results are stitched back into a single user message in the order the model issued them — not the order they finished. The instant that is done, this node decides whether to go round again: two budgets can each end the turn, and an is_final short-circuit can skip a whole model round-trip."
+    },
+    "mechanism": {
+      "zh": "顺序是用请求去索引结果的：拿 pendingToolUses 逐个去 toolResultBlocks 里找自己的那块，所以跑得快的工具不会插到前面。对不上的丢掉——这一步是防御性的，正常情况下每个 tool_use 都有块：名字不认识的、被主动安全门拦下的、超出并发上限的，在 ④ 里都已经推了一块错误结果进去。\n\n然后是三道判断，顺序固定。第一道:iteration 加一，到 8 轮(默认值,LUNA_MAX_TOOL_ITERATIONS 可调)就把 finishReason 写成 max_iterations 进 finalize——它数的是轮。第二道只对主动回合：这一轮累计的工具调用数到 8(默认)也停——它数的是调用，不是轮，两把闸管的是两件事。第三道就是短路。\n\n短路要同时满足四件事：不是主动回合、跑在 message 模式、最后一次 message 带 is_final:true、并且这一轮的 tool_use 全是 message(混进一次 web_search 就不行，那个结果必须喂回去)。满足了就直接 finalize——省下的那次往返本来只是让模型再确认一遍「我说完了」,而在那次往返里 activeTurn 还锁着，用户这时发的消息会被 turn_in_progress 弹回，屏幕上却已经是一条看起来说完了的回复。",
+      "en": "Order comes from indexing results by request: each pendingToolUse looks up its own block in toolResultBlocks, so a fast tool cannot jump the queue. Anything that fails to match is dropped — a defensive step, since in practice every tool_use has a block: unknown names, calls stopped by the proactive safety gate, and calls past the concurrency cap all had an error block pushed for them back in ④.\n\nThen three checks, in a fixed order. First: iteration goes up by one, and at 8 rounds (the default; LUNA_MAX_TOOL_ITERATIONS overrides it) finishReason becomes max_iterations and the turn goes to finalize — that budget counts rounds. Second, for proactive turns only: once the tool calls accumulated across the turn reach 8 (the default), stop as well — that budget counts calls, not rounds; the two gates guard two different failure modes. Third is the short-circuit.\n\nThe short-circuit needs four things at once: not a proactive turn, message mode, the last message carrying is_final:true, and every tool_use this round being a message (one web_search in the mix disqualifies it — that result has to be fed back). When they hold, the turn goes straight to finalize. The round being skipped would only have had the model re-confirm that it was done — and during it activeTurn is still held, so a message the user sends in that window bounces with turn_in_progress while her already-delivered reply sits on screen looking finished."
+    },
+    "contract": {
+      "exposes": {
+        "zh": "往 history 推一条 user 消息(按请求顺序排好的 tool_result 数组),并把下一站定成 build_request(②)或 finalize(⑥)。",
+        "en": "Pushes one user message onto history — the tool_result blocks in request order — and picks the next stop: build_request (②) or finalize (⑥)."
+      },
+      "depends": {
+        "zh": "pendingToolUses(顺序的唯一真相)、toolResultBlocks(④ 的产物)、lastMessageIsFinal 与 messageTexts(也来自 ④)。",
+        "en": "pendingToolUses (the only source of order), toolResultBlocks (④ output), plus lastMessageIsFinal and messageTexts (also from ④)."
+      },
+      "boundary": {
+        "zh": "它只往 history 里推，从不删。两个预算也不抛错——它们把 finishReason 写成 max_iterations,让 ⑥ 照常收尾。",
+        "en": "It only appends to history, never removes. Neither budget throws — they write finishReason = max_iterations and let ⑥ close the turn normally."
+      },
+      "invariant": {
+        "zh": "出这一步只有两条边：回 ② 再来一轮，或进 finalize。没有第三种走法。",
+        "en": "Exactly two edges leave this node: back to ② for another round, or on to finalize. There is no third way out."
+      }
+    },
+    "code": {
+      "file": "packages/server/src/turn/runTurn.ts",
+      "lines": "661–673",
+      "snippet": "          const freshIntentRetry =\n            Bun.env['LUNA_INTEGRITY_GUARD'] !== '0' &&\n            !s.correctionUsed.has('intent') &&\n            (() => {\n              const d = detectDefection({\n                messageTexts: s.messageTexts.slice(s.correctionWatermark),\n                lastIsFinal: s.lastMessageIsFinal,\n                thinking: s.thinking,\n                calledToolNames: s.toolNamesThisTurn,\n                finishReason: 'end_turn',\n              });\n              return d.defected && d.kind === 'message_intent';\n            })();",
+      "note": {
+        "zh": "这就是短路的例外。它先替 ⑥ 把闸预演一遍：如果现在收尾会当场触发一次「说了要做却没做」的全新纠正，就不短路——因为被省掉的恰恰是她本该动手的那一轮，而闸的防误判逻辑要看着那个动作落地。承诺是干净的(绝大多数寒暄式的收尾),就纯赚一次往返。",
+        "en": "This is the exception to the short-circuit. It rehearses ⑥ guard: if finalizing right now would trip a fresh said-it-would-act-and-did-not correction, the short-circuit is skipped — because the round being saved is exactly the one where she would have acted, and the guard false-positive protection depends on seeing that action land. When the promise is clean (the common conversational sign-off), the round is pure latency saved."
+      }
+    },
+    "decision": {
+      "why": {
+        "zh": "她已经说了 is_final:true,那是一句承诺：我说完了。再花一次模型往返去复核这句承诺，买到的只有延迟和一段用户发不出话的窗口。",
+        "en": "She already said is_final:true — that is a promise that she is done. Spending a model round-trip to double-check the promise buys only latency and a window in which the user cannot get a word in."
+      },
+      "rejected": {
+        "zh": "无条件相信 is_final。那会让「我去查一下」+ is_final:true 这类刚刚成形的失约永远失去被纠正的机会——纠正本来就发生在被省掉的那一轮里。",
+        "en": "Trusting is_final unconditionally. That would let a just-formed defection — I will go look that up, plus is_final:true — escape correction forever, since the correction happens precisely in the round being skipped."
+      },
+      "cost": {
+        "zh": "例外命中时短路失效，那一轮的延迟原样付出。而且例外只看「意图」这一档：承诺档(is_final:false)在这里根本不可能触发，因为进这条分支的前提就是 is_final 为 true。",
+        "en": "When the exception fires, the short-circuit is off and that round latency is paid in full. And the exception only watches the intent kind: the promise kind (is_final:false) cannot fire here at all, since reaching this branch requires is_final to be true."
+      }
+    }
+  },
+  "gate": {
+    "claim": {
+      "zh": "轮转全部结束，才轮到闸。两道闸依次问两个问题：她开口了吗；开了口的话，有没有食言。任何一道拦下，都不是抛错——是往 history 里塞一条 user 角色的舞台提示，然后 return build_request:回 ②,再走一遍。",
+      "en": "Only when the rounds are over does it become the guards turn. Two of them ask two questions in order: did she speak at all; and if she did, did she break a promise. Neither stops the turn by throwing — each pushes a user-role stage direction into history and returns build_request: back to ②, one more pass."
+    },
+    "mechanism": {
+      "zh": "为什么在这里而不是更早：两道闸判的都是「整轮结束时」才成立的事实——messageTexts 是不是还空着、finishReason 是不是干净的 end_turn。中间任何一轮，她都还可能再开口、再动手，提前判必然误伤。\n\n顺序也是有意的。空回复闸先：她一个字都没说，那就给一条最直白的提示——「你没说话，现在调 message 工具」。主动回合跳过这一道，沉默是它的合法结局。完整性闸后：她说了话且干净地结束了,detectDefection 才去判她有没有食言。它有三档，只有前两档能驱动重来——结构档(最后一条气泡标了 is_final:false,却把回合停了，这是机械确定的，不查词典)和文本档(气泡里承诺了要做某事，而这一轮除了 message 没调过任何工具)。第三档只从 thinking 里读，是被总结过的低置信内容，永远只进审计、绝不重来。\n\n每一种原因一生只用一次:correctionUsed 里各占一个键('empty'、'promise'、'intent')。同一个原因第二次成立，不再回，而是降级并留一条 degraded 的 trace——闸宁可放过，也不打转。\n\n回的是 ②,不是 ③,这一点值得说清：回 ② 走的是 build_request,它只在工具 schema 还没转过时转一次，然后进 open_stream;真正被重算的是 open_stream 里的 buildActiveContext——刚推进去的那条舞台提示，正是靠这一步进入下一次请求。它不回 ①:召回、感知、窗口都不重建，用户那条消息也不重新解析。所以一次纠正的账单就是一整次模型往返，仅此而已。\n\n还有一条约束定了提示词的写法：气泡在 ③ 就流出去了。纠正只能「接着说」,不能撤回——所以两条提示都写成继续或跟上，而不是改口。意图那一条更给了双出口(能做就现在做；真做不到就自然地继续),因为意图检测本来就是启发式，一次假阳性只该值一次温和的再提示，而不是一次强行的自我否定。",
+      "en": "Why here and not earlier: both guards judge facts that only hold once the rounds are done — whether messageTexts is still empty, whether finishReason is a clean end_turn. In any intermediate round she might still speak or still act, so judging early would mean judging wrong.\n\nThe order is deliberate too. The empty-reply guard comes first: she said nothing, so it hands her the bluntest possible direction — you ended without speaking, call the message tool now. Proactive turns skip this one; silence is a legitimate outcome for them. The integrity guard comes second: only once she has spoken and ended cleanly does detectDefection ask whether she broke a promise. It has three tiers, and only the first two can drive a retry — the structural one (the last bubble was marked is_final:false and yet the turn stopped: mechanically certain, no dictionary needed) and the message-text one (a delivered bubble promised an act, and no tool other than message ran this turn). The third reads only her thinking, which is summarized and therefore low-confidence: counted in the audit, never a retry.\n\nEach reason is spent once per turn: correctionUsed holds one key each — empty, promise, intent. A second occurrence of the same reason does not loop back; it degrades and leaves a degraded trace instead. The guard would rather let one through than spin.\n\nThat it returns to ② rather than ③ is worth being exact about: ② is build_request, which converts the tool schemas only if they have not been converted yet and then goes on to open_stream. What actually gets recomputed is buildActiveContext inside open_stream — and that is precisely how the stage direction just pushed enters the next request. It does not go back to ①: recall, perception and the window are not rebuilt, and the user message is not re-parsed. So one correction costs exactly one model round-trip, and nothing else.\n\nOne more constraint shapes the wording of the directives: the bubbles left during ③. A correction can only continue, never retract — so both directives are written as follow through or carry on, never as take it back. The intent one even offers a double exit (act now if you can; if you genuinely cannot, simply continue), because intent detection is a heuristic and a false positive should cost one gentle re-prompt, not a forced walk-back."
+    },
+    "contract": {
+      "exposes": {
+        "zh": "两条回边，都指向 build_request(②);正常放行时发出 turn.result 并结束。",
+        "en": "Two return edges, both pointing at build_request (②); when everything passes it emits turn.result and ends."
+      },
+      "depends": {
+        "zh": "detectDefection(纯函数，与旁路审计共用同一份实现)、correctionUsed(每种原因一次)、correctionWatermark(只判纠正之后新说的那些气泡)。",
+        "en": "detectDefection (a pure function, the same implementation the side-channel audit uses), correctionUsed (once per reason), correctionWatermark (judge only the bubbles delivered since the last correction)."
+      },
+      "boundary": {
+        "zh": "thinking 那一档只进审计，永远不驱动重试；主动回合的沉默从不算失败。",
+        "en": "The thinking tier is audit-only and never drives a retry; a silent proactive turn is never counted as a failure."
+      },
+      "invariant": {
+        "zh": "每种原因至多纠正一次；第二次成立就降级。所以一个回合最多多跑三次往返，不会因为闸而不终止。",
+        "en": "At most one correction per reason; a second occurrence degrades. A turn therefore costs at most three extra round-trips, and the guards can never make it non-terminating."
+      }
+    },
+    "code": {
+      "file": "packages/server/src/turn/runTurn.ts",
+      "lines": "706–715",
+      "snippet": "      if (\n        !s.proactiveTurn &&\n        s.messageTexts.length === 0 &&\n        s.finishReason === 'end_turn' &&\n        !s.correctionUsed.has('empty')\n      ) {\n        s.correctionUsed.add('empty');\n        pushDirective(s, SILENT_TURN_DIRECTIVE);\n        return 'build_request';\n      }",
+      "note": {
+        "zh": "四个条件全是「整轮」的事实——这正是它必须等到这一刻的原因。最后一行是那条回边:return build_request,不是 open_stream,更不是 parse_input。",
+        "en": "All four conditions are whole-turn facts — which is exactly why this has to wait until now. The last line is the return edge itself: build_request, not open_stream, and certainly not parse_input."
+      }
+    },
+    "decision": {
+      "why": {
+        "zh": "把「她这一轮没说话」变成一次可恢复的重来，而不是一个空回复。用户看到的应该是慢了一拍的一句话，不是一片沉默。",
+        "en": "Turn she did not speak this turn into a recoverable retry instead of an empty reply. What the user should see is a sentence a beat late, not silence."
+      },
+      "rejected": {
+        "zh": "把纠正写成 system 角色。代码里点名了这条：纠正必须是 user 角色的舞台提示(Python v0.27.1 的 hoisting 教训),绝不进系统块。",
+        "en": "Writing the correction as a system-role message. The code names this explicitly: a correction is a user-role stage direction, never system (the Python v0.27.1 hoisting lesson)."
+      },
+      "cost": {
+        "zh": "每次纠正都是一整次模型往返；而且这些舞台提示是以 user 身份进 history 的——它们必须在落库前被摘掉，否则以后每一轮的窗口都会重读一段用户从没说过的训话。摘除逻辑在 ⑦。",
+        "en": "Every correction is a full model round-trip; and these stage directions enter history wearing the user role — so they have to be removed before the turn becomes durable, or every later turn window would re-read a scolding the user never wrote. That removal happens in ⑦."
+      }
+    }
+  },
+  "reply": {
+    "claim": {
+      "zh": "turn.result 发出的这一刻，用户其实早就把这句话看完了——气泡在 ③ 的流里就一个字一个字出去了。这条事件不是交付，是收尾：文本的权威版本、这一轮用过的网页来源、以及「回合结束」这个信号本身。",
+      "en": "By the time turn.result goes out, the user has long since finished reading the reply — the bubbles streamed out character by character back in ③. This event is not delivery; it is closure: the canonical text, the web sources used this turn, and the end-of-turn signal itself."
+    },
+    "mechanism": {
+      "zh": "text 从哪来，是这一步最容易看错的地方。事件里写的是 s.text,但 finalize 在发出前刚刚把 s.text 整个覆盖掉了:message 模式下它等于 messageTexts.join('\\n')——一行一个气泡，来源是 message 工具真正投递过的那些字。流式过程中累积进 s.text 的顶层文本(模型在工具外面自言自语的那部分)到这一刻被丢弃，只留在 history 和 trace 里当作泄漏信号。唯一的例外是双次沉默的降级路径:messageTexts 是空的，那段泄漏文本原样成为回复，并被记一条 empty_turn,让这次失败是可数的。\n\n引用是在 ④ 顺手收的:web_search 结果里的 url、web_fetch 的 final_url,在工具的 final 事件里就被收进 citations,这里去重挂上；一条来源都没有时整个字段不出现，而不是发一个空数组。\n\n前端拿到它做三件事：把来源渲染成可点的 chip(url 走 href,不拼进标签文字);只有 text 模式才用它 finalize 那个合成气泡——message 模式的气泡在各自的 tool.finished 时就已经定稿了；然后清空回合状态、打字点收起、Live2D 回 neutral。\n\n还有一条不对称：主动回合根本不发 turn.result。它走 proactive.finished,所以前端必须在那条分支里再清一次状态，否则她主动说完话之后打字点会永远悬着。",
+      "en": "Where the text comes from is the easiest thing here to get wrong. The event field reads s.text — but finalize has just overwritten s.text wholesale: in message mode it is messageTexts.join(newline), one line per bubble, sourced from what the message tool actually delivered. The top-level text accumulated into s.text during streaming — the model narrating outside the tool — is discarded at this moment and survives only in history and traces, as the observable leak signal. The one exception is the double-silent degraded path: messageTexts is empty, so the leaked text becomes the reply as-is and an empty_turn trace is written, which is what makes that failure countable.\n\nCitations were gathered back in ④: web_search result urls and the web_fetch final_url are collected off the tool final event, then deduped and attached here. With no sources at all the field is omitted entirely rather than sent as an empty array.\n\nThe frontend does three things with it: renders the sources as clickable chips (the url rides as an href, never baked into the label text); finalizes the synthetic bubble only in text mode — message-mode bubbles were each finalized at their own tool.finished; then clears turn state, drops the typing dots and returns Live2D to neutral.\n\nOne asymmetry: a proactive turn emits no turn.result at all. It ends with proactive.finished, so the frontend has to clear state on that branch too — otherwise the typing dots would hang forever after she speaks unprompted."
+    },
+    "contract": {
+      "exposes": {
+        "zh": "turn.result { turn_id, text, finish_reason, usage, citations? } —— 一个反应式回合恰好一条。",
+        "en": "turn.result { turn_id, text, finish_reason, usage, citations? } — exactly one per reactive turn."
+      },
+      "depends": {
+        "zh": "messageTexts 与 citations(都在 ④ 收集)、finishReason(由 ⑤ 或 ⑥ 写定)。",
+        "en": "messageTexts and citations (both gathered in ④), and finishReason (written by ⑤ or ⑥)."
+      },
+      "boundary": {
+        "zh": "它不负责把话送到用户面前——那件事在 tool.progress / tool.finished 就做完了。它是这一轮的权威记录，以及前端收拾状态的触发器。",
+        "en": "It is not what puts the words in front of the user — tool.progress and tool.finished already did that. It is the authoritative record of the turn, and the trigger for the frontend to tidy up."
+      },
+      "invariant": {
+        "zh": "反应式回合一条，主动回合零条。前端两条路径都必须能收干净状态。",
+        "en": "One per reactive turn, zero per proactive turn — so the frontend has to be able to clean up on both paths."
+      }
+    },
+    "code": {
+      "file": "packages/server/src/turn/runTurn.ts",
+      "lines": "752–757",
+      "snippet": "      // The turn's text is what was actually delivered through the message\n      // tool (one line per bubble). Stray top-level text stays in history and\n      // traces — the observable leak signal — but never becomes the reply\n      // unless the degraded fallback below fires.\n      if (s.messageTexts.length > 0) {\n        s.text = s.messageTexts.join('\\n');",
+      "note": {
+        "zh": "这六行就是「turn.result 的 text 不是流式文本」的全部原因。发出去的字段确实叫 s.text,但它在这一刻已经被 message 工具投递过的内容整个换掉了。",
+        "en": "These six lines are the whole reason turn.result text is not the streamed text. The field emitted really is s.text — but by this moment it has been replaced wholesale by what the message tool delivered."
+      }
+    }
+  },
+  "persist": {
+    "claim": {
+      "zh": "这一步不在状态图上——它在 finally 里。不管前面是干净收尾、抛了错、还是被客户端断线 abort 掉，它都会走一遍。而它做的第一件事是问一个问题：这一轮到底说出话了没有。答案是「没有」,这一轮就整个不存在。",
+      "en": "This step is not in the graph — it lives in the finally. It runs whether the turn ended cleanly, threw, or was aborted by a client disconnect. And the first thing it does is ask one question: did this turn actually say anything. If the answer is no, the turn ceases to have happened at all."
+    },
+    "mechanism": {
+      "zh": "finally 里的顺序是固定的：先放开 activeTurn、turnSeq 加一，再进真回复关口 → 剥 thinking → 摘纠正指令 → appendL2 → persistSession → 旁路审计 → flushTrace → 最后把折叠踢出去(不等)。\n\n真回复关口就是那一行 realReply:message 模式下取 messageTexts.join('\\n').trim(),text 模式下取 state.text.trim()。非空，这一轮才配落库。\n\n非空那一支还顺手做了一件不显眼的事:markActivity。这是每一种会说话的回合——反应、续说、主动——都必经的唯一一个点，所以沉默计时是从她最后一句话开始算的，不是从用户那条消息。空回合走另一支，不打这个点：它什么都没说。\n\n落库前有两次清洗。剥 thinking 只对这一轮(historyStart 之后)做，而且只能在回合结束后做——在飞的签名 thinking 被改会直接 400。摘纠正指令是另一回事:⑥ 推进去的那些 user 角色舞台提示按引用记在 directiveMessages 里，这里从 history 里删掉，再把因此相邻的同角色消息合并回合法的交替。这一步跟 LUNA_CLEAN_HISTORY 无关——它是正确性，不是省 token。\n\nappendL2 里有两处替换。主动回合的 user_text 存空字符串：它的「用户消息」其实是内部舞台提示，原样存进去会在聊天记录里长出一个幽灵用户气泡。assistant_text 存 realReply 而不是 state.text——因为一个出错或短路的回合上 finalize 根本没跑过，那时 state.text 里还是那段顶层泄漏。\n\n空回合那一支只有两行，却是整个回滚:session.history.length = historyStart,内存历史整段砍回回合开始之前，连那条用户消息一起——不然一次重试会让它在窗口里出现两遍。然后把这一轮烧掉的整首歌词额度还回去。\n\n整个持久化块包在自己的 try 里:SQLite 抛错(锁死、只读、磁盘满)只记日志加发一条 persistence_failed,绝不吃掉后面的审计、trace flush 和折叠。\n\n这条关口历史上修过三件事，都写在代码注释里：一，空 assistant 行会毒化召回和重建出来的窗口(「你说了 X,我什么都没说」),而且 A3 之后它每次重载都还在——这就是 401 断供期间她看起来失忆的原因。二，错误或短路的回合上 state.text 里那段顶层泄漏被当成可见回复存了下去。三,v0.45.17:回滚把歌词块带走了，但「已送达」的标记还留着——那首歌的词既不在提示里也不在过去里，而「她读过这首歌」是假的；回滚现在是对称的。",
+      "en": "The order inside the finally is fixed: release activeTurn and bump turnSeq, then the real-reply gate, strip thinking, strip the corrective directives, appendL2, persistSession, the side-channel audit, flushTrace, and finally kick the fold off without waiting for it.\n\nThe real-reply gate is that one realReply line: messageTexts.join(newline).trim() in message mode, state.text.trim() in text mode. Only a non-empty value earns durability.\n\nThe non-empty branch also does something quiet: markActivity. This is the single choke point every reply-producing turn passes — reactive, continuation, proactive — so the silence clock counts from her last word, not from the user earlier message. An empty turn falls to the other branch and does not mark activity: it said nothing.\n\nTwo cleanups happen before the write. Stripping thinking touches only this turn (everything after historyStart) and can only happen once the turn is over — editing in-flight signed thinking is a straight 400. Stripping the corrective directives is a different job: the user-role stage directions pushed in ⑥ are tracked by reference in directiveMessages, removed from history here, and the same-role messages left adjacent are coalesced back into valid alternation. This one is independent of LUNA_CLEAN_HISTORY — it is correctness, not the token diet.\n\nappendL2 makes two substitutions. A proactive turn stores an empty user_text: its user message is really an internal stage direction, and storing it verbatim grew a phantom user bubble in the chat log. And assistant_text stores realReply rather than state.text — because on an errored or short-circuited turn finalize never ran, and state.text still holds the top-level leak.\n\nThe empty branch is two lines and a whole rollback: session.history.length = historyStart cuts the in-memory history back to before the turn began, the user message included — otherwise a retry would double it up in the window. Then the one-shot lyrics delivery this turn burned is handed back.\n\nThe whole persistence block sits in its own try: a SQLite throw (locked, readonly, disk full) is logged and surfaced as persistence_failed, and never swallows the audit, the trace flush or the fold that follow.\n\nThree fixes are recorded in the comments around this gate. One: an empty assistant row poisons recall and the rebuilt window (you said X, I said nothing), and post-A3 it survives every reload — this is what made Luna look amnesiac through a 401 outage. Two: on errored or short-circuited turns the top-level leak in state.text was being persisted as the visible reply. Three, v0.45.17: the rollback took the lyrics block with it but left the delivered mark set — the words were in neither the prompt nor the past, and she read this song was simply false. The rollback is symmetric now."
+    },
+    "contract": {
+      "exposes": {
+        "zh": "成功时:l2_turns 一行(user_text / assistant_text / raw_json / 内容哈希)加一次会话快照。失败时：一条 persistence_failed 事件。",
+        "en": "On success: one l2_turns row (user_text, assistant_text, raw_json, content hash) plus a session snapshot. On failure: one persistence_failed event."
+      },
+      "depends": {
+        "zh": "historyStart(进 try 之前记下的历史长度)、directiveMessages、lyricsBurnedFor —— 三件都是回合开始时就备好的回滚凭据。",
+        "en": "historyStart (the history length recorded before the try), directiveMessages, and lyricsBurnedFor — three pieces of rollback bookkeeping set up when the turn began."
+      },
+      "boundary": {
+        "zh": "它只看 realReply,不看 finishReason。一个以 error 收尾但已经说过话的回合照样留下——那些字用户已经看见了。",
+        "en": "It looks at realReply, not at finishReason. A turn that errored after delivering messages is still kept — the user already saw those words."
+      },
+      "invariant": {
+        "zh": "说过话 ⇔ 有一行 L2;没说过话 ⇔ 内存历史与歌词额度都回到回合开始之前。没有中间态。",
+        "en": "Spoke if and only if there is an L2 row; said nothing if and only if both the in-memory history and the lyrics quota are back to where the turn started. No middle state."
+      }
+    },
+    "code": {
+      "file": "packages/server/src/turn/runTurn.ts",
+      "lines": "1070–1075",
+      "snippet": "      } else {\n        opts.session.history.length = historyStart;\n        // v0.45.17: the lyrics block just went with it — hand the delivery back so the next\n        // turn can carry the words she never actually received.\n        if (state.lyricsBurnedFor !== null) unmarkLyricsDelivered(state.lyricsBurnedFor);\n      }",
+      "note": {
+        "zh": "一整轮回滚就这两条语句。第一条抹掉这一轮所有的内存历史(含用户那条消息);第二条把这一轮消耗掉的一次性歌词投递还回去——因为承载它的那段历史刚刚被抹了，标记不还,「她读过这首歌」就成了假话。",
+        "en": "A whole-turn rollback in two statements. The first erases every message this turn added to the in-memory history, the user message included; the second returns the one-shot lyrics delivery it consumed — because the history that carried it has just been erased, and leaving the mark set would make she read this song a lie."
+      }
+    },
+    "decision": {
+      "why": {
+        "zh": "宁可丢掉一整轮，也不留一行空的。一行空 assistant 会同时污染两处：召回排序，和从 L2 重建出来的窗口——而且它会一直在。",
+        "en": "Better to lose a whole turn than to leave one empty row. An empty assistant row poisons two things at once — recall ranking, and the window rebuilt from L2 — and it stays."
+      },
+      "rejected": {
+        "zh": "为了时间线连续而存一行空 assistant。那正是断供期间「她好像失忆了」的成因：每次重载都把那段空白重新读回来。",
+        "en": "Storing an empty assistant row to keep the timeline contiguous. That is exactly what produced the she seems amnesiac behavior during an outage: every reload read the blank back in."
+      },
+      "cost": {
+        "zh": "回滚是内存与 L2 的，不是屏幕上的。用户可能已经看见过一段半流出的预览——前端在 error 分支里会把那些气泡 discard 掉，但它确实短暂存在过。",
+        "en": "The rollback covers memory and L2, not the screen. The user may have seen a half-streamed preview — the frontend discards those bubbles on its error branch, but they did briefly exist."
+      }
+    }
+  },
+  "after": {
+    "claim": {
+      "zh": "落库不是终点。同一个 finally 的最后一行把 L1 折叠踢出去就不再管它——那是一整次模型调用，不该挂在这条线上。梦更不是这条线的下一步：它是另一台状态机、另一把 key、另一个触发器。",
+      "en": "Persisting is not the end. The last line of the same finally kicks the L1 fold out and stops caring — it is a whole model call, and it does not belong on this line. The dream is not the next step on this line at all: another state machine, another key, another trigger."
+    },
+    "mechanism": {
+      "zh": "那个 void 不是装饰。它是「我知道这是个 Promise,而且我故意不等它」的显式记号——去掉它，这一行就变成一个没人管的 Promise,读代码的人分不清是忘了 await 还是有意为之。后面挂的 .catch 干的是另一件事：让它被拒绝时不成为未处理的拒绝。两个记号各管一头，缺一不可。\n\n为什么必须是不等：折叠本身是一整次模型往返(压缩器 prompt,maxTokens 1024)。反应式路径上 ws.ts 用的是 void runTurn(...),本来就没人等；但主动路径是 await runTurn(...),而且整个主动回合跑在主动锁里面——真去 await 折叠，那把锁就要多握住一次压缩往返。\n\n折叠这一刻在算什么:planFold 按 L2 的整轮切，只有「未折叠轮数 > 保留轮数 + 一批」才动手(默认保留 100 轮、一批 10 轮),边界永远落在轮起点，绝不切开 tool_use / tool_result 对。压缩器拿到「当前摘要 + 这批旧对话」重新推导一份带硬上限的摘要(默认 3000 字符),重要度 ≥ 4 的轮被标成 [salient],细节要原样保住。空摘要不写——那会悄悄缩掉活动上下文，留到下次再折。提交是带期望值的：低水位还是折叠开始时那个值才落，所以两条路径撞上也不会互相盖掉。\n\n梦怎么开始：三个触发器——shutdown(退出路径)、manual(菜单里的 dream.enter)、self(她自己在主动回合里调 enter_dream 之后的交接)。enterDream() 是同步的门，在第一个 await 之前就设好，所以并发的调用者不会重叠成两场梦。\n\n梦跑的是同一套 runGraph,八个节点按固定顺序:rate_salience → refine_semantic → refine_layer1 → memory_audit → persona_update → run_diaries → distill_skills → rag_refresh。每一步自己 try/catch,失败只留一条 dream.step,不打断后面的步；每步跑完立刻 flushTrace,中途崩了也不丢已完成的那些。\n\n另一把 key 在 dreamCall 里：两次尝试的级联，先走 summarizer key 那个 provider(梦的活不跟主回复抢配额),空文本或异常才落回默认 provider。而 refine_layer1 调的就是同一个 maybeFold——同一段折叠逻辑，两个入口：回合的尾巴，和梦的第三步。",
+      "en": "That void is not decoration. It is the explicit marker for I know this is a Promise and I am deliberately not awaiting it — without it the line is just an unattended Promise, and a reader cannot tell a missing await from an intentional one. The .catch after it does a different job: it keeps a rejection from becoming an unhandled rejection. Two markers, one each, and neither is redundant.\n\nWhy it has to be un-awaited: the fold is itself a full model round-trip (a compressor prompt, maxTokens 1024). On the reactive path ws.ts already calls void runTurn(...), so nobody is waiting; but the proactive path does await runTurn(...), and the whole proactive turn runs inside the proactive lock — awaiting the fold there would hold that lock across an extra compression round-trip.\n\nWhat the fold is computing at that moment: planFold cuts on whole L2 turns and only acts when unfolded turns exceed the kept window by a batch (100 turns kept, 10 per batch, by default), with the boundary always landing on a turn start so a tool_use / tool_result pair is never split. The compressor gets the current digest plus the batch of older exchanges and re-derives a hard-capped digest (3000 characters by default), with turns rated 4 or above marked [salient] so their specifics survive. An empty digest is never written — that would silently shrink the active context; it waits for the next fold. The commit is compare-and-set: it lands only if the low-water mark is still what it was when the fold began, so the two entry points cannot overwrite each other.\n\nHow the dream starts: three triggers — shutdown (the exit path), manual (dream.enter from the menu), and self (the handoff after she calls enter_dream inside a proactive turn). enterDream() is a synchronous gate set before the first await, so concurrent callers cannot overlap into two dreams.\n\nThe dream runs the same runGraph with eight nodes in a fixed order: rate_salience, refine_semantic, refine_layer1, memory_audit, persona_update, run_diaries, distill_skills, rag_refresh. Each step try/catches itself — a failure leaves one dream.step and does not stop the ones after it — and flushes traces the moment it ends, so a crash mid-cycle does not lose the completed steps.\n\nThe other key lives in dreamCall: a two-attempt cascade that tries the summarizer-key provider first, so dream work never competes with the main reply key quota, and falls back to the default provider only on empty text or an exception. And refine_layer1 calls the very same maybeFold — one fold implementation, two entry points: the tail of a turn, and the third step of a dream."
+    },
+    "contract": {
+      "exposes": {
+        "zh": "对这条时间线什么都不返回。折叠的成果落在 rolling_summary 与 window_low_water 上，梦的成果落在 L2 的重要度、L3 事实、灵魂的演化段、日记、技能货架和向量缓存上。",
+        "en": "Nothing at all is returned to this timeline. The fold result lands in rolling_summary and window_low_water; the dream results land in L2 importance, L3 facts, the evolving half of the soul, the diaries, the skill shelf and the embedding cache."
+      },
+      "depends": {
+        "zh": "折叠依赖 session 与 provider,以及 L2 的逐字列；梦依赖它自己那对 provider 和 embed 客户端。",
+        "en": "The fold depends on the session, a provider, and the verbatim L2 columns; the dream depends on its own provider pair and an embed client."
+      },
+      "boundary": {
+        "zh": "折叠只读 L2 的逐字内容，从不拿上一版摘要当输入源；梦只写灵魂的演化段——没有任何代码路径通向那份固定核心。",
+        "en": "The fold reads only verbatim L2 content and never takes a prior summary as its source; the dream writes only the evolving section of the soul — there is no code path from it to the fixed core."
+      },
+      "invariant": {
+        "zh": "折叠失败，逐字历史原样留着；摘要为空就不提交。梦的每一步失败都被隔离，不影响后面的步。",
+        "en": "A failed fold leaves the verbatim history intact, and an empty digest is never committed. Each dream step failure is isolated and does not affect the steps after it."
+      }
+    },
+    "code": {
+      "file": "packages/server/src/turn/runTurn.ts",
+      "lines": "1118–1120",
+      "snippet": "    void maybeFold(opts.session, opts.provider).catch(() => {\n      /* fold is best-effort; a failed fold leaves verbatim history intact */\n    });",
+      "note": {
+        "zh": "finally 的最后一行，也是整条时间线的最后一行。void 说明「不等」,.catch 说明「拒绝了也不炸」——一个回合到此为止，而折叠自己往下跑。",
+        "en": "The last line of the finally, and the last line of the whole timeline. void says it is not awaited, .catch says a rejection will not blow up — the turn ends here, and the fold runs on by itself."
+      }
+    },
+    "decision": {
+      "why": {
+        "zh": "把一次模型调用挪出热路径。折叠不影响这一轮的任何观感——回复早就发了、库也已经落了——所以它没有理由让任何人等。",
+        "en": "Move a model call off the hot path. The fold changes nothing about how this turn reads — the reply went out long ago and the row is already written — so there is no reason for anyone to wait on it."
+      },
+      "rejected": {
+        "zh": "在回合里同步折叠。那会把一次压缩往返记在回合的账上，并且在主动路径上多握一次主动锁。",
+        "en": "Folding synchronously inside the turn. That would bill a compression round-trip to the turn, and on the proactive path hold the proactive lock across it."
+      },
+      "cost": {
+        "zh": "折叠可能滞后。所以窗口另有一道硬剪兜底(默认 300 条消息 / 12 万字符，只在轮起点下刀，并且会打日志说「折叠滞后了」)——那是安全网，不是计划。",
+        "en": "The fold can fall behind. So the window carries a hard trim as a backstop — 300 messages and 120,000 characters by default, cutting only at turn starts and logging that folding is lagging. That is a safety net, not the plan."
+      }
+    }
+  },
 };
