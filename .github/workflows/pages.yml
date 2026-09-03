@@ -1,14 +1,14 @@
 name: Pages
 
-# Deploys the standalone showcase page (showcase/ — the "Luna TV" capability demo) to GitHub
-# Pages. Pure static upload, no build step: fonts are vendored in showcase/fonts/, and demo
-# videos are optional (a channel with no video shows the page's built-in test-card state).
+# Deploys the engineering showcase (showcase/engineering/ — the agent-harness map + component
+# decks) to GitHub Pages as the site root. Pure static upload, no build step. Luna TV (the
+# earlier showcase/ CRT-channel page) is retired — see the commit that removed it.
 
 on:
   push:
     branches: [main]
     paths:
-      - 'showcase/**'
+      - 'showcase/engineering/**'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
@@ -32,6 +32,6 @@ jobs:
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: showcase
+          path: showcase/engineering
       - id: deployment
         uses: actions/deploy-pages@v4

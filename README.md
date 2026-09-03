@@ -18,8 +18,7 @@ code-agent capability — embodied as a Live2D avatar with lip-synced custom voi
 
 <img src="docs/assets/moment-fries.png" width="820" alt="Luna, a Live2D companion, sharing a joke" />
 
-[![Luna TV — live capability showcase](https://img.shields.io/badge/%E2%96%B6_Luna_TV-see_her_in_motion-bfe0fb?style=for-the-badge)](https://alan-yu-2077.github.io/Luna/)
-[![Engineering Map — the agent harness, mapped](https://img.shields.io/badge/%E2%9A%99_Engineering_Map-the_agent_harness%2C_mapped-2c3e50?style=for-the-badge)](https://alan-yu-2077.github.io/Luna/engineering/)
+[![Engineering Map — the agent harness, mapped](https://img.shields.io/badge/%E2%9A%99_Engineering_Map-the_agent_harness%2C_mapped-2c3e50?style=for-the-badge)](https://alan-yu-2077.github.io/Luna/)
 
 <sub>This repository is the <b>engineering, published as a reference</b> — not a distributed product.<br/>
 There are no installers: Luna is one person's companion, and the instance that matters lives on one
