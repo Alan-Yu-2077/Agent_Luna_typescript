@@ -764,8 +764,9 @@ body {
 .stage .rootbox, .stage .branch, .stage .leaf, .stage .io-pill, .stage .aside-note,
 .stage .lane-label, .stage .step, .stage .arrow-label { opacity: 1; }
 
-/* L3：翻页幻灯 */
-.deck-body { overflow: hidden; }
+/* L3：翻页幻灯。overflow-x 单独关，不用简写 overflow——写 overflow:hidden 会
+   把第 490 行设的 overflow-y:auto 一并清掉，长的机制图页因此被裁掉且滚不动。 */
+.deck-body { overflow-x: hidden; }
 .slide { display: none; }
 .slide.on { display: block; }
 .slide.from-right { animation: slide-r .34s cubic-bezier(.22,.61,.36,1) both; }
@@ -819,7 +820,7 @@ body {
 .code-loc { font-family: var(--font-mono); font-size: 9.5px; color: var(--red); letter-spacing: .04em; margin: 0 0 6px; }
 .slide .kv { display: flex; gap: 12px; margin: 0 0 8px; }
 .slide .kv span { flex: 0 0 74px; font-family: var(--font-hand); font-size: 18px; color: var(--red); }
-.slide li b { font-family: var(--font-hand); font-size: 17px; font-weight: 500; color: var(--red); }
+.slide li b { font-family: var(--font-hand); font-size: 19px; font-weight: 500; color: var(--red); }
 .todo { font-family: var(--font-hand); font-size: 19px; color: var(--pencil-2); }
 
 /* 机制小图 */
@@ -862,14 +863,14 @@ body {
 .sp-meta    { font-size: 10px; }
 .arrow-label{ font-size: 10.5px; }
 
-/* 详页正文 */
-.slide p, .slide li { font-size: 15px; line-height: 1.8; }
-.slide h3 { font-size: 27px; }
-.slide h3 i { font-size: 11px; }
-.slide .kv span { font-size: 19px; flex-basis: 82px; }
-.code { font-size: 12.5px; line-height: 1.8; }
-.code-loc { font-size: 10.5px; }
-.deck-meta { font-size: 11px; }
+/* 详页正文——上一档还是偏小，再调一档，且现在超出的部分滚得到了 */
+.slide p, .slide li { font-size: 17px; line-height: 1.85; }
+.slide h3 { font-size: 29px; }
+.slide h3 i { font-size: 12px; }
+.slide .kv span { font-size: 20px; flex-basis: 88px; }
+.code { font-size: 13.5px; line-height: 1.85; }
+.code-loc { font-size: 11px; }
+.deck-meta { font-size: 12px; }
 
 /* 页面正文 */
 .fig-lede { font-size: 15px; }
