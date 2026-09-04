@@ -96,12 +96,10 @@ bun run dev            # server + web at http://localhost:5173
 
 <div align="center">
 
-<img src="docs/assets/architecture.svg" width="880" alt="Luna runtime topology: the desktop shell spawns and supervises web, server, and the GPT-SoVITS voice sidecar; web and server sit inside one shared Zod contract; server owns luna.sqlite behind a loopback boundary and reaches the model provider through a seam" />
+<img src="docs/assets/architecture-overview.svg" width="900" alt="A conceptual diagram of Luna as an agent harness. At the centre is the LLM, drawn as a stateless black box that takes one array of messages in and emits a token stream plus tool-call intents out. To its left, the context assembled fresh for every call: cached identity, retrieved recall, volatile perception, and the recent window. To its right, the output and what is done with it: words, tool calls, silence, and an integrity gate. Below, three return loops carry state across calls — tool results rejoining the same request, the exchange being persisted into luna.sqlite and recalled later, and an offline dream pass in which the same box re-reads and rewrites that store." />
 
-[![Open the interactive version](https://img.shields.io/badge/%E2%86%97%20Open%20the%20interactive%20version-2c3e50?style=for-the-badge)](https://alan-yu-2077.github.io/Luna/diagrams/architecture.html)
-
-<sub>The live version pans, zooms, traces a single relationship, and exports — every box also carries the
-source file it was drawn from, pinned to a commit.</sub>
+<sub>The model is the one part nobody here wrote. Everything else is a decision about what it may see,
+what it may do, and what survives to the next call.</sub>
 
 </div>
 
@@ -111,6 +109,17 @@ shared wire contract — a wire change that isn't reflected on both sides is a *
 [`web`](packages/web) (a thin reactive view), [`music-cli`](packages/music-cli) (a vendored
 macOS Now-Playing observer), and [`desktop`](packages/desktop) (an optional
 Electron shell). The deep dive lives in [`ARCHITECTURE.md`](ARCHITECTURE.md).
+
+<div align="center">
+
+<img src="docs/assets/architecture.svg" width="820" alt="Luna runtime topology: the desktop shell spawns and supervises web, server, and the GPT-SoVITS voice sidecar; web and server sit inside one shared Zod contract; server owns luna.sqlite behind a loopback boundary and reaches the model provider through a seam" />
+
+[![Open the interactive version](https://img.shields.io/badge/%E2%86%97%20Open%20the%20interactive%20version-2c3e50?style=for-the-badge)](https://alan-yu-2077.github.io/Luna/diagrams/architecture.html)
+
+<sub>The live version pans, zooms, traces a single relationship, and exports — every box also carries the
+source file it was drawn from, pinned to a commit.</sub>
+
+</div>
 
 ## 🎬 Moments
 

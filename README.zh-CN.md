@@ -85,18 +85,31 @@ bun run dev            # server + web,http://localhost:5173
 
 ## 🏗 架构一图流
 
-```mermaid
-graph LR
-  D[desktop 外壳<br/><sub>桌宠 · 向导 · 进程守护</sub>] -.承载.-> W
-  W[web 前端<br/><sub>Live2D · 口型 · 聊天 UI</sub>] <-- "一条 WS,Zod 强类型事件" --> S[server 大脑<br/><sub>回合 · 工具 · 主动性护栏</sub>]
-  S --- M[(SQLite<br/><sub>三层记忆 · 梦境 · 技能</sub>)]
-  S -- provider 接缝 --> L[Anthropic / OpenAI 兼容]
-```
+<div align="center">
 
-四个 Bun workspace 包,依赖箭头单向:[`protocol`](packages/protocol)(共享线上契约——两端不同步
+<img src="docs/assets/architecture-overview.svg" width="900" alt="Luna 作为 agent harness 的概念图。中心是 LLM,画成一个无状态黑盒:输入一个 messages 数组,输出 token 流与工具调用意图。左边是每次调用都重新拼装的上下文:可缓存的身份、按查询检索的回忆、易变的感知、最近的对话窗口。右边是输出以及对输出的处置:说话、工具调用、沉默,以及一道诚信闸门。下方三条回路把状态带过每一次调用——工具结果回到同一次请求、这轮对话被写进 luna.sqlite 并在日后被召回、以及离线的梦境里同一个盒子重读并改写这个存储。" />
+
+<sub>模型是这里唯一不是我写的部分。剩下的全部工程,都是在决定它能看见什么、能做什么,
+以及什么东西能活到下一次调用。</sub>
+
+</div>
+
+五个 Bun workspace 包,依赖箭头单向:[`protocol`](packages/protocol)(共享线上契约——两端不同步
 的改动是*编译错误*而不是运行时漂移)、[`server`](packages/server)(大脑,持有全部状态与模型调用)、
-[`web`](packages/web)(轻薄响应式视图)、[`desktop`](packages/desktop)(可选 Electron 外壳)。
+[`web`](packages/web)(轻薄响应式视图)、[`music-cli`](packages/music-cli)(内置的 macOS
+Now-Playing 观测器)、[`desktop`](packages/desktop)(可选 Electron 外壳)。
 深入细节见 [`ARCHITECTURE.md`](ARCHITECTURE.md)。
+
+<div align="center">
+
+<img src="docs/assets/architecture.svg" width="820" alt="Luna 运行时拓扑:desktop 外壳拉起并守护 web、server 与 GPT-SoVITS 语音边车;web 与 server 共处一份 Zod 契约;server 在回环边界内独占 luna.sqlite,并通过接缝连到模型 provider" />
+
+[![打开可交互版本](https://img.shields.io/badge/%E2%86%97%20%E6%89%93%E5%BC%80%E5%8F%AF%E4%BA%A4%E4%BA%92%E7%89%88%E6%9C%AC-2c3e50?style=for-the-badge)](https://alan-yu-2077.github.io/Luna/diagrams/architecture.html)
+
+<sub>可交互版本支持平移、缩放、单独追一条关系、导出——每个框还标了它是从哪个源文件画出来的,
+并锚定到某个 commit。</sub>
+
+</div>
 
 ## 🎬 一些瞬间
 

@@ -1,0 +1,121 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="660" viewBox="0 0 1000 660" role="img" lang="en" aria-labelledby="ov-title ov-desc">
+<title id="ov-title">Luna — the agent infrastructure around a black box</title>
+<desc id="ov-desc">A conceptual diagram of Luna as an agent harness. At the centre is the LLM, drawn as a stateless black box that takes one array of messages in and emits a token stream plus tool-call intents out. To its left, the context that is assembled fresh for every call: cached identity, retrieved recall, volatile perception, and the recent window. To its right, the output and what is done with it: words, tool calls, silence, and an integrity gate. Below, three return loops carry state across calls: tool results rejoining the same request, the exchange being persisted into luna.sqlite and recalled later, and an offline dream pass in which the same box re-reads and rewrites that store.</desc>
+<style>
+svg{--text:#0f172a;--muted:#64748b;--dim:#94a3b8;--line:#cbd5e1;
+--in:#0891b2;--out:#d97706;--store:#7c3aed;--gate:#e11d48;
+font-family:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace;}
+.panel{fill:#ffffff;stroke:#e2e8f0;stroke-width:1.1;}
+.s-in{fill:#ecfeff;stroke:#a5f3fc;stroke-width:1;}
+.s-out{fill:#fffbeb;stroke:#fde68a;stroke-width:1;}
+.s-gate{fill:#fff1f2;stroke:#fecdd3;stroke-width:1;}
+.s-trig{fill:#f8fafc;stroke:#cbd5e1;stroke-width:1;stroke-dasharray:5 3;}
+.box{fill:#0f172a;stroke:none;}
+.store{fill:#f5f3ff;stroke:var(--store);stroke-width:1.4;}
+.t{fill:var(--text);} .m{fill:var(--muted);} .d{fill:var(--dim);} .b{font-weight:700;}
+.c-in{fill:var(--in);} .c-out{fill:var(--out);} .c-store{fill:var(--store);} .c-gate{fill:var(--gate);}
+.flow{fill:none;stroke:#0f172a;stroke-width:1.8;}
+.loop{fill:none;stroke:#94a3b8;stroke-width:1.5;}
+.loop-d{fill:none;stroke:var(--store);stroke-width:1.4;stroke-dasharray:5 4;opacity:0.8;}
+</style>
+<defs>
+<marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#0f172a"/></marker>
+<marker id="al" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/></marker>
+<marker id="ad" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7c3aed"/></marker>
+</defs>
+<rect x="0" y="0" width="1000" height="660" fill="#f8fafc"/>
+
+<text x="40" y="40" class="t b" font-size="16">Luna — the agent infrastructure around a black box</text>
+<text x="40" y="60" class="m" font-size="10">the model is stateless and identical on every call — the engineering is what it may see, what it may do, and what survives to the next call</text>
+
+<!-- trigger -->
+<rect x="40" y="92" width="320" height="44" rx="8" class="s-trig"/>
+<text x="52" y="111" class="t b" font-size="10">WHAT STARTS A TURN</text>
+<text x="52" y="127" class="m" font-size="9">he speaks · a ~60 s heartbeat · a dream falls due</text>
+<path d="M200,136 V156" class="flow" marker-end="url(#a)"/>
+
+<!-- context -->
+<rect x="40" y="160" width="320" height="294" rx="10" class="panel"/>
+<text x="52" y="182" class="c-in b" font-size="11.5">CONTEXT — assembled fresh for every call</text>
+
+<rect x="52" y="190" width="296" height="56" rx="6" class="s-in"/>
+<text x="64" y="209" class="t b" font-size="9.5">IDENTITY — cached, byte-stable</text>
+<text x="64" y="224" class="m" font-size="9">directives · a thinking contract ·</text>
+<text x="64" y="237" class="m" font-size="9">her soul · the skill shelf</text>
+
+<rect x="52" y="254" width="296" height="56" rx="6" class="s-in"/>
+<text x="64" y="273" class="t b" font-size="9.5">RECALL — retrieved per query</text>
+<text x="64" y="288" class="m" font-size="9">turns, facts, diaries and skills,</text>
+<text x="64" y="301" class="m" font-size="9">ranked by relevance, not recency alone</text>
+
+<rect x="52" y="318" width="296" height="56" rx="6" class="s-in"/>
+<text x="64" y="337" class="t b" font-size="9.5">PERCEPTION — volatile, never cached</text>
+<text x="64" y="352" class="m" font-size="9">the time, the weather, what he is</text>
+<text x="64" y="365" class="m" font-size="9">playing right now</text>
+
+<rect x="52" y="382" width="296" height="56" rx="6" class="s-in"/>
+<text x="64" y="401" class="t b" font-size="9.5">THE WINDOW — the recent past</text>
+<text x="64" y="416" class="m" font-size="9">turns verbatim; older ones folded</text>
+<text x="64" y="429" class="m" font-size="9">into a running digest</text>
+
+<!-- the box -->
+<text x="500" y="232" class="d" font-size="9" text-anchor="middle">the only part nobody here wrote</text>
+<rect x="405" y="250" width="190" height="180" rx="14" class="box"/>
+<text x="500" y="300" fill="#ffffff" font-size="27" font-weight="700" text-anchor="middle">LLM</text>
+<text x="500" y="322" fill="#94a3b8" font-size="9" text-anchor="middle">stateless · no memory</text>
+<text x="500" y="335" fill="#94a3b8" font-size="9" text-anchor="middle">between calls</text>
+<path d="M425,352 H575" stroke="#334155" stroke-width="1"/>
+<text x="425" y="374" fill="#cbd5e1" font-size="9">in  · one array of messages</text>
+<text x="425" y="390" fill="#cbd5e1" font-size="9">out · tokens + tool intents</text>
+<text x="500" y="414" fill="#64748b" font-size="8.5" text-anchor="middle">identical for everyone</text>
+
+<path d="M360,340 H399" class="flow" marker-end="url(#a)"/>
+<path d="M595,340 H634" class="flow" marker-end="url(#a)"/>
+
+<!-- output -->
+<rect x="640" y="160" width="320" height="294" rx="10" class="panel"/>
+<text x="652" y="182" class="c-out b" font-size="11.5">OUTPUT — and what is done with it</text>
+
+<rect x="652" y="190" width="296" height="56" rx="6" class="s-out"/>
+<text x="664" y="209" class="t b" font-size="9.5">WORDS</text>
+<text x="664" y="224" class="m" font-size="9">streamed live to the face and the voice —</text>
+<text x="664" y="237" class="m" font-size="9">only a message tool call counts as speech</text>
+
+<rect x="652" y="254" width="296" height="56" rx="6" class="s-out"/>
+<text x="664" y="273" class="t b" font-size="9.5">TOOL CALLS</text>
+<text x="664" y="288" class="m" font-size="9">dispatched as the stream yields them:</text>
+<text x="664" y="301" class="m" font-size="9">perceive, remember, read code, search, act</text>
+
+<rect x="652" y="318" width="296" height="56" rx="6" class="s-out"/>
+<text x="664" y="337" class="t b" font-size="9.5">NOTHING</text>
+<text x="664" y="352" class="m" font-size="9">a turn may legitimately end in silence,</text>
+<text x="664" y="365" class="m" font-size="9">and that outcome is recorded too</text>
+
+<rect x="652" y="382" width="296" height="56" rx="6" class="s-gate"/>
+<text x="664" y="401" class="c-gate b" font-size="9.5">THE GATE</text>
+<text x="664" y="416" class="m" font-size="9">a promise with no matching act is caught,</text>
+<text x="664" y="429" class="m" font-size="9">and the turn is re-run once</text>
+
+<!-- loop 1 -->
+<path d="M760,454 V492 H240 V459" class="loop" marker-end="url(#al)"/>
+<rect x="309" y="486" width="382" height="13" fill="#f8fafc"/>
+<text x="500" y="496" class="m" font-size="9" text-anchor="middle">① tool results rejoin the same request — the turn loops until she stops</text>
+
+<!-- loop 2 -->
+<path d="M880,454 V554 H626" class="loop" marker-end="url(#al)"/>
+<text x="752" y="546" class="m" font-size="9" text-anchor="middle">② persisted and scored</text>
+<path d="M380,554 H140 V459" class="loop" marker-end="url(#al)"/>
+<text x="260" y="546" class="m" font-size="9" text-anchor="middle">recall brings it back later</text>
+
+<!-- store -->
+<rect x="380" y="530" width="240" height="48" rx="10" class="store"/>
+<text x="500" y="550" class="c-store b" font-size="11" text-anchor="middle">luna.sqlite</text>
+<text x="500" y="566" class="m" font-size="9" text-anchor="middle">the only thing that survives a restart</text>
+
+<!-- loop 3 -->
+<path d="M560,578 V612 H440 V583" class="loop-d" marker-end="url(#ad)"/>
+<text x="636" y="602" class="m" font-size="9">③ between conversations the same box re-reads</text>
+<text x="636" y="614" class="m" font-size="9">her own days and rewrites what it finds here</text>
+
+<text x="40" y="644" class="d" font-size="9">The box remembers nothing between calls. Everything that makes her continuous is a loop drawn below it, and a file at the bottom of them.</text>
+</svg>
