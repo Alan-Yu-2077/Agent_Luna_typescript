@@ -94,13 +94,16 @@ bun run dev            # server + web at http://localhost:5173
 
 ## 🏗 How it fits together
 
-```mermaid
-graph LR
-  D[desktop shell<br/><sub>pet mode · wizard · supervision</sub>] -.hosts.-> W
-  W[web<br/><sub>Live2D · lip-sync · chat UI</sub>] <-- "one WS, Zod-typed events" --> S[server<br/><sub>turns · tools · proactive rails</sub>]
-  S --- M[(SQLite<br/><sub>3-layer memory · dreams · skills</sub>)]
-  S -- provider seam --> L[Anthropic / OpenAI-compatible]
-```
+<div align="center">
+
+<img src="docs/assets/architecture.svg" width="880" alt="Luna runtime topology: the desktop shell spawns and supervises web, server, and the GPT-SoVITS voice sidecar; web and server sit inside one shared Zod contract; server owns luna.sqlite behind a loopback boundary and reaches the model provider through a seam" />
+
+[![Open the interactive version](https://img.shields.io/badge/%E2%86%97%20Open%20the%20interactive%20version-2c3e50?style=for-the-badge)](https://alan-yu-2077.github.io/Luna/diagrams/architecture.html)
+
+<sub>The live version pans, zooms, traces a single relationship, and exports — every box also carries the
+source file it was drawn from, pinned to a commit.</sub>
+
+</div>
 
 Five Bun workspace packages with a one-way dependency arrow: [`protocol`](packages/protocol) (the
 shared wire contract — a wire change that isn't reflected on both sides is a *compile error*),
