@@ -9,7 +9,7 @@
      decision   { why, rejected, cost }
 
    可显示的串一律 { zh, en }。
-   全部 code.snippet 已用脚本逐行比对过仓库，31/31 逐字命中。
+   全部 code.snippet 已用脚本逐行比对过仓库，47/47 逐字命中。
    ═══════════════════════════════════════════════════════════════ */
 window.LUNA_DECKS = {
 
@@ -135,9 +135,168 @@ window.LUNA_DECKS = {
         }
       ]
     },
+    "claimFigure": {
+      "w": 500,
+      "h": 212,
+      "boxes": [
+        {
+          "x": 4,
+          "y": 40,
+          "w": 20,
+          "h": 30,
+          "title": ""
+        },
+        {
+          "x": 33.7,
+          "y": 40,
+          "w": 20,
+          "h": 30,
+          "title": ""
+        },
+        {
+          "x": 63.4,
+          "y": 40,
+          "w": 20,
+          "h": 30,
+          "title": ""
+        },
+        {
+          "x": 93.1,
+          "y": 40,
+          "w": 20,
+          "h": 30,
+          "title": ""
+        },
+        {
+          "x": 122.9,
+          "y": 40,
+          "w": 20,
+          "h": 30,
+          "title": ""
+        },
+        {
+          "x": 152.6,
+          "y": 40,
+          "w": 20,
+          "h": 30,
+          "title": ""
+        },
+        {
+          "x": 182.3,
+          "y": 40,
+          "w": 20,
+          "h": 30,
+          "title": ""
+        },
+        {
+          "x": 212,
+          "y": 40,
+          "w": 20,
+          "h": 30,
+          "title": ""
+        },
+        {
+          "x": 264,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "一个 block",
+            "en": "one block"
+          },
+          "sub": "buildSystemPrompt"
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              441.8,
+              88
+            ],
+            [
+              441.8,
+              110
+            ],
+            [
+              318.7,
+              110
+            ],
+            [
+              318.7,
+              89
+            ]
+          ],
+          "label": {
+            "zh": "复用 ×7",
+            "en": "reused ×7"
+          },
+          "at": [
+            332.4,
+            112
+          ]
+        },
+        {
+          "pts": [
+            [
+              248,
+              30
+            ],
+            [
+              248,
+              172
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        }
+      ],
+      "labels": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "没有断点 · 没有记忆化",
+            "en": "no breakpoint, no memoization"
+          }
+        },
+        {
+          "x": 262,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "一整块，一个断点",
+            "en": "one block, one breakpoint"
+          }
+        },
+        {
+          "x": 0,
+          "y": 170,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "人格 / 灵魂 / L3 每轮全额计费",
+            "en": "persona, soul and L3 billed in full every round"
+          }
+        },
+        {
+          "x": 262,
+          "y": 170,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "失效判据 = 一次整数比较",
+            "en": "invalidation is one integer comparison"
+          }
+        }
+      ]
+    },
     "claim": {
-      "zh": "没有它，人格、灵魂、长期事实、日记摘要、技能货架这一整套会在每一回合、每一次工具迭代里被重新计费——而这套东西一个字都不随回合变。它是系统提示里唯一那个带 cache_control 断点的文本块：所有跨回合稳定的自我描述先拼成一整块，再由 memoryEpoch 在回合内记忆化。",
-      "en": "Without it, the persona, the soul, the long-term facts, the diary digest and the skill shelf would be re-billed on every turn and every tool iteration — none of which changes from turn to turn. It is the one text block in the system prompt that carries the cache_control breakpoint: everything stable about who she is is joined into a single block, then memoized within the turn against memoryEpoch."
+      "zh": "系统提示里唯一带 cache_control 断点的文本块。人格、灵魂、L3 长期事实、日记摘要、技能货架这些跨回合不变的内容先拼成一整块，再由 memoryEpoch 在回合内记忆化——一个回合最多 8 轮工具迭代，前缀不会重建 8 次。",
+      "en": "The one text block in the system prompt that carries a cache_control breakpoint. Persona, soul, L3 long-term facts, diary digest and skill shelf — everything stable across turns — are concatenated into a single block, then memoized within a turn by memoryEpoch, so a turn's eight tool iterations do not rebuild the prefix eight times."
     },
     "mechanism": {
       "zh": "buildSystemPrompt 最多推入十段内容，顺序固定：基础指令、message-mode 指令、L1 思维契约、web 不可信内容规则、灵魂(固定核心 + 她自己演化的部分)、具身块、humanity 块、L3 长期事实、日记摘要、技能货架。十段 join 成一个 text block,整个进程只有这一处断点。一个回合最多跑 8 轮工具迭代，但前缀不会重建八次:open_stream 每轮先读 memoryEpoch,只有 epoch 变了(这一回合真的写了记忆、改了灵魂、存了技能)才重渲染一次。",
@@ -302,9 +461,156 @@ window.LUNA_DECKS = {
         }
       ]
     },
+    "claimFigure": {
+      "w": 500,
+      "h": 208,
+      "boxes": [
+        {
+          "x": 4,
+          "y": 40,
+          "w": 121,
+          "h": 46,
+          "title": {
+            "zh": "稳定前缀",
+            "en": "stable prefix"
+          }
+        },
+        {
+          "x": 133,
+          "y": 40,
+          "w": 99,
+          "h": 46,
+          "title": {
+            "zh": "+ 天气",
+            "en": "+ weather"
+          },
+          "kind": "ghost"
+        },
+        {
+          "x": 4,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "断点每回合失效",
+            "en": "the breakpoint dies every turn"
+          }
+        },
+        {
+          "x": 264,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "六种感知块",
+            "en": "six perception blocks"
+          },
+          "sub": {
+            "zh": "醒来 · 召回 · 时间 · 天气 · 音乐 · 歌词，缺席即零残留",
+            "en": "wake · recall · time · weather · music · lyrics — absent means absent"
+          }
+        },
+        {
+          "x": 264,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "用户原话",
+            "en": "the user's own words"
+          },
+          "sub": {
+            "zh": "永远是最后一块",
+            "en": "always the last block"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              118,
+              88
+            ],
+            [
+              118,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              378,
+              88
+            ],
+            [
+              378,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              248,
+              30
+            ],
+            [
+              248,
+              168
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        }
+      ],
+      "labels": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "易变内容塞进系统提示",
+            "en": "volatile content pushed into the system prompt"
+          }
+        },
+        {
+          "x": 262,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "一条 user 消息，最多七块",
+            "en": "one user message, at most seven blocks"
+          }
+        },
+        {
+          "x": 0,
+          "y": 166,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "省下的那点位置，代价是整块前缀",
+            "en": "a little room saved, the whole prefix paid for"
+          }
+        },
+        {
+          "x": 262,
+          "y": 166,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "整条消息在断点右侧，不带 cache_control",
+            "en": "the whole message sits right of the breakpoint"
+          }
+        }
+      ]
+    },
     "claim": {
-      "zh": "没有它，这一回合的时间、天气、在放的歌、刚召回到的记忆就无处安放——要么塞进缓存前缀把断点炸掉，要么干脆不给她。它是 parse_input 把本回合所有易变内容和用户原话拼成的那一条 user 消息：最多七个 text block,一次性 push 进 history。",
-      "en": "Without it, this turn’s time, weather, current track and freshly recalled memories have nowhere to live — either they go into the cached prefix and blow the breakpoint, or she never gets them. It is the single user message parse_input assembles: up to seven text blocks, pushed into history in one go."
+      "zh": "parse_input 拼出的那条 user 消息：本回合的召回结果、时间、天气、在放的曲目、整首歌词和用户原话，最多七个 text block，一次性推进 history。所有随回合变化的内容都落在缓存断点右侧。",
+      "en": "The user message assembled by parse_input: this turn's recall hits, time, weather, current track, lyrics and the user's own words — at most seven text blocks, pushed into history in one go. Everything that varies per turn sits to the right of the cache breakpoint."
     },
     "mechanism": {
       "zh": "顺序是固定的：醒来场景(只在开机后第一条真实用户回合)、召回块、时间块、天气块、音乐块、整首歌词块，最后才是用户原话。每一块都可以缺席，缺席就是零残留——没有占位符、没有空标签。整条消息按发出去的样子进 history 并持久化，所以下一回合她读到的历史，和当时真正发给模型的字节是同一份。",
@@ -424,9 +730,160 @@ window.LUNA_DECKS = {
         }
       ]
     },
+    "claimFigure": {
+      "w": 500,
+      "h": 208,
+      "boxes": [
+        {
+          "x": 4,
+          "y": 40,
+          "w": 121,
+          "h": 46,
+          "title": {
+            "zh": "前缀",
+            "en": "prefix"
+          }
+        },
+        {
+          "x": 133,
+          "y": 40,
+          "w": 99,
+          "h": 46,
+          "title": "14:32:07",
+          "kind": "ghost"
+        },
+        {
+          "x": 4,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "每回合重新计费",
+            "en": "re-billed every turn"
+          }
+        },
+        {
+          "x": 264,
+          "y": 40,
+          "w": 121,
+          "h": 46,
+          "title": {
+            "zh": "稳定前缀",
+            "en": "stable prefix"
+          },
+          "sub": "cache_control"
+        },
+        {
+          "x": 393,
+          "y": 40,
+          "w": 99,
+          "h": 46,
+          "title": {
+            "zh": "易变块",
+            "en": "volatile"
+          },
+          "sub": {
+            "zh": "消息层",
+            "en": "message layer"
+          }
+        },
+        {
+          "x": 264,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "前缀命中",
+            "en": "the prefix hits"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              118,
+              88
+            ],
+            [
+              118,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              378,
+              88
+            ],
+            [
+              378,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              248,
+              30
+            ],
+            [
+              248,
+              168
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        }
+      ],
+      "labels": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "一个时间戳溜进前缀",
+            "en": "a timestamp slips into the prefix"
+          }
+        },
+        {
+          "x": 262,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "断点左边只放跨回合稳定的字节",
+            "en": "only turn-stable bytes to the left of it"
+          }
+        },
+        {
+          "x": 0,
+          "y": 166,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "缓存命中变成随机事件",
+            "en": "a cache hit becomes a matter of luck"
+          }
+        },
+        {
+          "x": 262,
+          "y": 166,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "全仓生产代码只有这一处断点",
+            "en": "the only breakpoint in production code"
+          }
+        }
+      ]
+    },
     "claim": {
-      "zh": "没有这条约束，缓存命中就变成随机事件：任何一个悄悄溜进系统提示的时间戳、温度、歌名，都会让整块前缀每回合失效。它是整个上下文装配唯一的硬边界——buildSystemPrompt 返回的那一个 block 上，那一处 cache_control。",
-      "en": "Without this constraint, cache hits become a coin flip: one timestamp, temperature or song title that slips into the system prompt invalidates the whole prefix every turn. It is the single hard boundary of the entire assembly — the one cache_control on the one block buildSystemPrompt returns."
+      "zh": "全仓生产代码中唯一一处 cache_control。命中要求断点左侧的字节序列与上次完全一致，所以它是一条反向约束：所有系统提示渲染器都不得写入时间戳、计数或任何随回合变化的值。",
+      "en": "The only cache_control in the repository's production code. A hit requires the byte sequence to its left to be identical to last time, so it works as a constraint running backwards: no system-prompt renderer may emit a timestamp, a count, or anything else that varies per turn."
     },
     "mechanism": {
       "zh": "断点是位置性的：命中要求断点左边的字节序列与上次完全一致。所以这不是一条建议，而是一条反向约束所有渲染器的全局不变量。三个具体后果:renderCoreBlock 在注释里明文禁止插入时间戳;renderSkillShelf 按名字排序、不带日期不带计数；开机醒来场景本该是系统级设定，却被推进了用户消息里，只为了不让开机这个状态变化改动前缀的一个字节。",
@@ -624,9 +1081,142 @@ window.LUNA_DECKS = {
         }
       ]
     },
+    "claimFigure": {
+      "w": 500,
+      "h": 208,
+      "boxes": [
+        {
+          "x": 4,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "8 天前那条",
+            "en": "the one from 8 days ago"
+          },
+          "sub": "recency = 1/9 ≈ 0.11"
+        },
+        {
+          "x": 4,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "排到第 147 / 500",
+            "en": "lands at #147 of 500"
+          }
+        },
+        {
+          "x": 264,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "纯余弦挑至多 3 条",
+            "en": "up to 3 by cosine alone"
+          },
+          "sub": {
+            "zh": "余弦 ≥ 0.35，插到最前",
+            "en": "cosine ≥ 0.35, placed first"
+          }
+        },
+        {
+          "x": 264,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "混合分填满 18 位",
+            "en": "the hybrid score fills 18 slots"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              118,
+              88
+            ],
+            [
+              118,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              378,
+              88
+            ],
+            [
+              378,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              248,
+              30
+            ],
+            [
+              248,
+              168
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        }
+      ],
+      "labels": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "只按时近排序",
+            "en": "ranked by recency alone"
+          }
+        },
+        {
+          "x": 262,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "混合分 + 相关性地板",
+            "en": "a hybrid score with a relevance floor"
+          }
+        },
+        {
+          "x": 0,
+          "y": 166,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "确实相关但旧的记忆被埋掉",
+            "en": "genuinely relevant but old memories get buried"
+          }
+        },
+        {
+          "x": 262,
+          "y": 166,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "查询正常时，地板是一次空操作",
+            "en": "on a normal query the floor is a no-op"
+          }
+        }
+      ]
+    },
     "claim": {
-      "zh": "没有它，她只有最近约 100 轮的逐字窗口，窗口之外的一切等于不存在——三周前那句话既检索不到，也不会自己浮现。它是每个用户回合开头那一步：按这句话的措辞给四类候选打分，选出至多 18 条，拼成一个 <memory> 块塞进未缓存尾部。",
-      "en": "Without it she has only the verbatim window of roughly the last 100 turns; anything outside it may as well not exist — a sentence from three weeks ago is neither retrievable nor spontaneously surfaced. It is the first step of every user turn: score four kinds of candidate against the wording of this message, take at most 18, and render them as one <memory> block on the uncached tail."
+      "zh": "每个用户回合开头的检索步骤：从 L2 对话、L3 事实、日记、技能四类候选里按时近 / 重要度 / 相关性打分，取至多 18 条拼成 <memory> 块放进未缓存尾部。逐字窗口之外的记忆只能由它带回来。",
+      "en": "The retrieval step at the head of every user turn: candidates from four sources (L2 turns, L3 facts, diaries, skills) are scored on recency, importance and relevance, and up to 18 hits are rendered into a <memory> block in the uncached tail. It is the only path back to anything outside the verbatim window."
     },
     "mechanism": {
       "zh": "候选来自四个源:L2 最近 500 轮对话、全部 L3 事实、最近 30 篇日记、至多 500 条技能。每条算三项:recency = 1/(1+天数);importance(未评分 0.4、日记 0.7、技能 0.75);relevance = 0.7×余弦 + 0.3×词法重叠。三项按权重(默认各为 1)取平均。词法侧对中文用滑动 bigram 切词，不依赖任何分词器依赖。技能是特例:recency 项被清零，而且必须有真实信号(词法重叠大于 0,或余弦不低于 0.5)才有资格进榜，否则一次存技能的爆发就会把整个 k 位淹掉。",
@@ -774,9 +1364,150 @@ window.LUNA_DECKS = {
         }
       ]
     },
+    "claimFigure": {
+      "w": 500,
+      "h": 208,
+      "boxes": [
+        {
+          "x": 4,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "调 weather",
+            "en": "call weather"
+          },
+          "sub": {
+            "zh": "一整轮模型往返",
+            "en": "a full model round-trip"
+          }
+        },
+        {
+          "x": 4,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "而实际上往往不查",
+            "en": "and mostly it is never called"
+          },
+          "kind": "ghost"
+        },
+        {
+          "x": 264,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "后台刷快照",
+            "en": "kept warm in the background"
+          },
+          "sub": {
+            "zh": "天气 30 分钟一次 · 音乐来自常驻 provider",
+            "en": "weather every 30 min · music from the resident provider"
+          }
+        },
+        {
+          "x": 264,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "同步读，零网络",
+            "en": "read synchronously, no network"
+          },
+          "sub": {
+            "zh": "在 TS 里格式化成一句人话",
+            "en": "formatted into a sentence in TypeScript"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              118,
+              88
+            ],
+            [
+              118,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              378,
+              88
+            ],
+            [
+              378,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              248,
+              30
+            ],
+            [
+              248,
+              168
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        }
+      ],
+      "labels": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "要知道就得烧一次工具调用",
+            "en": "knowing costs a tool call"
+          }
+        },
+        {
+          "x": 262,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "三块同步读内存快照",
+            "en": "three blocks read from memory, synchronously"
+          }
+        },
+        {
+          "x": 0,
+          "y": 166,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "反应路径上多一次网络等待",
+            "en": "one more network wait on the reactive path"
+          }
+        },
+        {
+          "x": 262,
+          "y": 166,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "快照太旧就整块省略，而不是给一个旧数值",
+            "en": "a stale snapshot is omitted, not reported"
+          }
+        }
+      ]
+    },
     "claim": {
-      "zh": "没有它，她要知道现在几点、外面下不下雨、他在听什么，只能烧一次工具调用去查，而实际上往往根本不查。它是每个用户回合开头同步读三份内存快照、在 TS 里格式化成一句人话、推进未缓存尾部的那三个块。",
-      "en": "Without it, knowing the time, the weather or what he is listening to costs her a tool call — and in practice she mostly just does not ask. It is the three blocks that, at the top of every user turn, read three in-memory snapshots synchronously, format them into finished sentences in TypeScript, and ride the uncached tail."
+      "zh": "时间、天气、在放的曲目三块：同步读后台已经刷好的内存快照，在 TS 里格式化成文本，推进未缓存尾部。反应路径上不发起任何网络请求；任一块构造失败只丢这一块，不影响整轮。",
+      "en": "Three blocks — time, weather, current track — read synchronously from in-memory snapshots kept warm by background timers, formatted in TypeScript and pushed into the uncached tail. The reactive path makes no network request, and a block that fails to build is dropped on its own without failing the turn."
     },
     "mechanism": {
       "zh": "三块共享同一条契约：反应路径上绝不发起网络请求。天气由一个 unref 过的后台定时器(默认 30 分钟)刷进内存快照,parse_input 只做一次同步读，快照超过 4 倍 TTL(默认 2 小时)判冷、直接省略这一块。音乐由常驻 provider 的推流写进内存。时间纯 TS 计算。任何一块的构造抛异常都只是 warn 一句、丢掉这一块，绝不掀翻这一回合。音乐块还额外有一道类型层防火墙:builder 的入参类型只有标量字段，几十 KB 的 base64 封面在类型层面就没有门可以进 prompt。",
@@ -942,9 +1673,172 @@ window.LUNA_DECKS = {
         }
       ]
     },
+    "claimFigure": {
+      "w": 500,
+      "h": 208,
+      "boxes": [
+        {
+          "x": 4,
+          "y": 40,
+          "w": 20,
+          "h": 30,
+          "title": ""
+        },
+        {
+          "x": 30,
+          "y": 40,
+          "w": 20,
+          "h": 30,
+          "title": ""
+        },
+        {
+          "x": 56,
+          "y": 40,
+          "w": 20,
+          "h": 30,
+          "title": ""
+        },
+        {
+          "x": 82,
+          "y": 40,
+          "w": 20,
+          "h": 30,
+          "title": ""
+        },
+        {
+          "x": 108,
+          "y": 40,
+          "w": 20,
+          "h": 30,
+          "title": ""
+        },
+        {
+          "x": 134,
+          "y": 40,
+          "w": 20,
+          "h": 30,
+          "title": ""
+        },
+        {
+          "x": 160,
+          "y": 40,
+          "w": 20,
+          "h": 30,
+          "title": ""
+        },
+        {
+          "x": 186,
+          "y": 40,
+          "w": 20,
+          "h": 30,
+          "title": ""
+        },
+        {
+          "x": 212,
+          "y": 40,
+          "w": 20,
+          "h": 30,
+          "title": ""
+        },
+        {
+          "x": 264,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "整首词",
+            "en": "the whole lyric"
+          },
+          "sub": {
+            "zh": "≤ 60 行 / 2000 字",
+            "en": "≤ 60 lines / 2000 chars"
+          }
+        },
+        {
+          "x": 264,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "当场标记 delivered",
+            "en": "marked delivered on the spot"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              378,
+              88
+            ],
+            [
+              378,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              248,
+              30
+            ],
+            [
+              248,
+              168
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        }
+      ],
+      "labels": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "每回合都发整首词",
+            "en": "the whole lyric, every turn"
+          }
+        },
+        {
+          "x": 262,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "换曲后第一回合发一次",
+            "en": "once, on the first turn after a track change"
+          }
+        },
+        {
+          "x": 0,
+          "y": 166,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "否则就只能切当前行假装同步",
+            "en": "the alternative is faking sync with the current line"
+          }
+        },
+        {
+          "x": 262,
+          "y": 166,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "回合被回滚时，按 trackId 把额度还回去",
+            "en": "a rolled-back turn returns the delivery, matched by trackId"
+          }
+        }
+      ]
+    },
     "claim": {
-      "zh": "没有它，要么整首歌词每一回合重发，同一首歌重复计费几十回合；要么她根本读不到完整的词，只能靠切当前行假装同步。它是：换歌之后的第一个回合把整首词给一次(至多 60 行 / 2000 字),给完立刻打上 delivered 标记，之后的回合一个字都不再出现。",
-      "en": "Without it, either the full lyric is re-sent every turn — the same song billed dozens of times — or she never reads the whole thing and has to fake sync by slicing a current line. It is this: the first turn after a track change carries the entire lyric once (at most 60 lines / 2000 characters), marks it delivered on the spot, and no later turn carries a single word of it."
+      "zh": "整首歌词的一次性投递：换曲后第一个回合注入完整歌词（至多 60 行 / 2000 字），当场标记 delivered，之后的回合不再出现。回合被回滚时，这次投递额度按 trackId 归还。",
+      "en": "A one-shot delivery of the full lyrics: the first turn after a track change injects them (at most 60 lines / 2000 characters) and marks the track delivered; later turns carry nothing. If the turn is rolled back, the delivery is returned — matched by trackId."
     },
     "mechanism": {
       "zh": "标记是内存里 enrichment 对象上的一个布尔，随曲目变化重置。真正的难点在回滚:runTurn 只在这一回合确实产出了回复时才落库，否则把 history 长度直接截回回合开始的位置——歌词块跟着一起没了。但标记如果留在那儿，结果就是这首歌的词既不在 prompt 里也不在历史里，而系统仍认为她读过。v0.45.17 让回滚变对称:parse_input 记下这一回合烧掉的是哪一个 trackId,回滚分支调 unmarkLyricsDelivered 把额度还回去，而且只在 trackId 仍然匹配时才还。",
@@ -1101,9 +1995,135 @@ window.LUNA_DECKS = {
         }
       ]
     },
+    "claimFigure": {
+      "w": 500,
+      "h": 208,
+      "boxes": [
+        {
+          "x": 4,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "加一条回边 = 改流程骨架",
+            "en": "one more edge means reshaping the skeleton"
+          }
+        },
+        {
+          "x": 4,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "梦的八步再写一份调度",
+            "en": "the dream re-implements the same scheduling"
+          }
+        },
+        {
+          "x": 264,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "节点自己返回下一站",
+            "en": "each node returns the next node"
+          }
+        },
+        {
+          "x": 264,
+          "y": 96,
+          "w": 110,
+          "h": 46,
+          "title": {
+            "zh": "回合图 · 6",
+            "en": "turn · 6"
+          }
+        },
+        {
+          "x": 382,
+          "y": 96,
+          "w": 110,
+          "h": 46,
+          "title": {
+            "zh": "梦图 · 8",
+            "en": "dream · 8"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              118,
+              88
+            ],
+            [
+              118,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              248,
+              30
+            ],
+            [
+              248,
+              168
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        }
+      ],
+      "labels": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "嵌套的 while 与 if",
+            "en": "nested whiles and ifs"
+          }
+        },
+        {
+          "x": 262,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "runGraph · 十五行",
+            "en": "runGraph, fifteen lines"
+          }
+        },
+        {
+          "x": 0,
+          "y": 166,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "两处编排，两处埋点",
+            "en": "two orchestrators, two sets of instrumentation"
+          }
+        },
+        {
+          "x": 262,
+          "y": 166,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "同一条 onTransition 观测缝，追踪只写一遍",
+            "en": "one onTransition seam; tracing written once"
+          }
+        }
+      ]
+    },
     "claim": {
-      "zh": "没有这一层，一次回合的控制流就是一坨嵌套的 while 与 if：加一条回边等于改流程骨架，梦的八步还得再写一份同样的调度。它是十五行的通用 runGraph——节点自己返回下一个节点名，循环只负责走和记账。",
-      "en": "Without this layer a turn's control flow is a nest of whiles and ifs: adding one back-edge means rewriting the skeleton, and the dream cycle's eight steps need a second copy of the same scheduler. It is a fifteen-line generic runGraph — each node returns the name of the next node, and the loop only walks and only keeps the books."
+      "zh": "一个十五行的通用编排器 runGraph：节点函数自己返回下一个节点名，循环只负责推进和记账。回合图六个节点、梦图八个节点跑在同一个实现上，共享同一条 onTransition 观测缝。",
+      "en": "A fifteen-line generic orchestrator, runGraph: each node function returns the name of the next node, and the loop only advances and bookkeeps. The six-node turn graph and the eight-node dream graph run on this one implementation and share a single onTransition seam."
     },
     "mechanism": {
       "zh": "类型参数把状态 S 和节点名集合 N 都放开，所以同一个 runGraph 跑两张图：回合图六个节点（parse_input、build_request、open_stream、dispatch_tools、append_results、finalize），梦图八个节点（rate_salience 到 rag_refresh）。两张图的形状不一样——回合图有回边，下一步由节点现算；梦图没有回边，nextNode 按一个固定的 ORDER 数组取下一位，某一步失败也照样往前走。runGraph 本身只多做一件事：每次转移调一次 onTransition。回合把它接到 trace 上，于是 node_from / node_to 是一条不用额外埋点的执行轨迹；梦不传这个钩子，自己在 runStep 里记。",
@@ -1224,9 +2244,139 @@ window.LUNA_DECKS = {
         }
       ]
     },
+    "claimFigure": {
+      "w": 500,
+      "h": 208,
+      "boxes": [
+        {
+          "x": 4,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "调用 web_search",
+            "en": "call web_search"
+          }
+        },
+        {
+          "x": 4,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "看不见自己做了什么",
+            "en": "cannot see what it just did"
+          },
+          "kind": "ghost"
+        },
+        {
+          "x": 264,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "结果按发起顺序拼成一条 user 消息",
+            "en": "results ordered as issued, appended as one message"
+          }
+        },
+        {
+          "x": 264,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "回到 build_request",
+            "en": "back to build_request"
+          },
+          "sub": "iteration += 1"
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              118,
+              88
+            ],
+            [
+              118,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              378,
+              88
+            ],
+            [
+              378,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              248,
+              30
+            ],
+            [
+              248,
+              168
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        }
+      ],
+      "labels": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "结果不回灌",
+            "en": "results never fed back"
+          }
+        },
+        {
+          "x": 262,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "append_results 的默认出口",
+            "en": "append_results' default exit"
+          }
+        },
+        {
+          "x": 0,
+          "y": 166,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "能伸手，却拿不到结果再开口",
+            "en": "it can reach out, but not read back"
+          }
+        },
+        {
+          "x": 262,
+          "y": 166,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "一轮 = 工具结果回灌了一次",
+            "en": "a round is one feedback of tool results"
+          }
+        }
+      ]
+    },
     "claim": {
-      "zh": "没有这条回边，工具结果就永远送不回模型：她能调 web_search，却拿不到搜索结果再开口。它是 append_results 的默认出口——把这一轮的工具结果按原调用顺序拼成一条 user 消息压进 history，然后回到 build_request 开下一轮。",
-      "en": "Without this back-edge, tool results never return to the model: she can call web_search but never gets to speak with what it found. It is append_results’ default exit — this round’s results, reordered to match the calls, pushed into history as one user message, then back to build_request for another round."
+      "zh": "append_results 的默认出口：本轮工具结果按模型发起的顺序拼成一条 user 消息压进 history，然后回到 build_request。三个例外（轮数上限、主动回合调用数上限、is_final 短路）才走 finalize。s.iteration 只在这里自增，所以「一轮」的定义是「工具结果回灌了一次」。",
+      "en": "The default exit from append_results: this round's tool results are ordered as the model issued them, appended as one user message, and control returns to build_request. Three exceptions — the round cap, the proactive call cap, the is_final short-circuit — go to finalize instead. s.iteration increments only here, so a round is defined as one feedback of tool results."
     },
     "mechanism": {
       "zh": "这条边是无条件的默认出口，写在函数最后一行；函数体里的三个 return finalize 才是例外——轮数上限、主动回合的调用数上限、以及 is_final 短路。结果块按 pendingToolUses 的顺序重排，不是按完成顺序，因为 API 要求每个 tool_use 对上一个 tool_result；找不到结果的调用被 filter 掉而不是补空。s.iteration 只在这里自增一次，是全文件唯一的自增点——所以「一轮」的定义就是「工具结果回灌了一次」，而不是「模型被调用了一次」。",
@@ -1380,9 +2530,175 @@ window.LUNA_DECKS = {
         }
       ]
     },
+    "claimFigure": {
+      "w": 500,
+      "h": 208,
+      "boxes": [
+        {
+          "x": 4,
+          "y": 40,
+          "w": 110,
+          "h": 46,
+          "title": {
+            "zh": "一句没说",
+            "en": "nothing said"
+          }
+        },
+        {
+          "x": 122,
+          "y": 40,
+          "w": 110,
+          "h": 46,
+          "title": {
+            "zh": "说了没做",
+            "en": "said, not done"
+          }
+        },
+        {
+          "x": 4,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "回合正常收尾",
+            "en": "the turn closes normally"
+          }
+        },
+        {
+          "x": 264,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "压一条舞台指示",
+            "en": "a stage direction goes in"
+          },
+          "sub": {
+            "zh": "user 角色，不是 system",
+            "en": "user role, never system"
+          }
+        },
+        {
+          "x": 264,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "回到 build_request",
+            "en": "back to build_request"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              45,
+              88
+            ],
+            [
+              45,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              118,
+              88
+            ],
+            [
+              118,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              191,
+              88
+            ],
+            [
+              191,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              378,
+              88
+            ],
+            [
+              378,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              248,
+              30
+            ],
+            [
+              248,
+              168
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        }
+      ],
+      "labels": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "收尾没有纠正出口",
+            "en": "no corrective exit before the close"
+          }
+        },
+        {
+          "x": 262,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "finalize 的两个纠正出口",
+            "en": "two corrective exits in finalize"
+          }
+        },
+        {
+          "x": 0,
+          "y": 166,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "对话上已经赖账，系统记的是一次干净结束",
+            "en": "a broken promise recorded as a clean finish"
+          }
+        },
+        {
+          "x": 262,
+          "y": 166,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "每种原因至多纠正一次，第二次降级放行",
+            "en": "each reason corrects once; the second is downgraded"
+          }
+        }
+      ]
+    },
     "claim": {
-      "zh": "没有这两道闸，一个回合可以合法地一句话不说就结束，或者说了「我去查一下」然后什么也没查——她在对话上已经赖了账，系统却认为回合正常收尾。它们是 finalize 里的两个纠正出口：各自把一条 user 角色的舞台指示压进 history，然后回到 build_request，再给她一次机会。",
-      "en": "Without these two gates a turn may legally end without saying anything, or say I will go look that up and never look anything up — she has broken her word in the conversation while the system considers the turn cleanly finished. They are finalize’s two corrective exits: each pushes a user-role stage direction into history and returns to build_request, giving her one more chance."
+      "zh": "finalize 里的两个纠正出口：整轮没发出任何消息，或 detectDefection 判出「说了要做却没做」，就往 history 压一条 user 角色的舞台指示并回到 build_request。correctionUsed 是只有三格的 Set，保证每种原因至多纠正一次。",
+      "en": "Two corrective exits in finalize: if the turn delivered no message at all, or detectDefection finds a stated intent with no matching action, a user-role stage direction is appended and control returns to build_request. correctionUsed is a three-slot set, capping each reason at one correction."
     },
     "mechanism": {
       "zh": "第一道是空回复闸：message 模式下，一个反应式回合、finishReason 是 end_turn、却一条 message 都没发出，就补一条 SILENT_TURN_DIRECTIVE 回去。主动回合豁免这道闸，因为沉默是主动回合的合法结果。第二道是行动完整性闸：她确实说了话且干净收尾，但 detectDefection 判出赖账——结构性的（最后一条标了 is_final:false 却停了），或者文本性的（气泡里出现承诺去做的措辞，而整个回合没有任何非 message 工具落地）。两道闸的终点都是 build_request；防死循环靠 correctionUsed 这个只有三格的 Set：empty、promise、intent 各只纠正一次，同一个原因第二次触发就只记一条 degraded 决策然后放行。第三类 thinking_intent 因为思考是摘要过的、置信度低，只进审计，永远不驱动纠正。",
@@ -1511,9 +2827,150 @@ window.LUNA_DECKS = {
         }
       ]
     },
+    "claimFigure": {
+      "w": 500,
+      "h": 208,
+      "boxes": [
+        {
+          "x": 4,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "只数轮",
+            "en": "rounds only"
+          }
+        },
+        {
+          "x": 4,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "一轮里铺开 9 个调用照样过",
+            "en": "nine calls in one round still slip through"
+          },
+          "kind": "ghost"
+        },
+        {
+          "x": 264,
+          "y": 40,
+          "w": 110,
+          "h": 46,
+          "title": {
+            "zh": "数轮",
+            "en": "rounds"
+          },
+          "sub": "MAX_TOOL_ITERATIONS"
+        },
+        {
+          "x": 382,
+          "y": 40,
+          "w": 110,
+          "h": 46,
+          "title": {
+            "zh": "数调用",
+            "en": "calls"
+          },
+          "sub": "maxProactiveActions"
+        },
+        {
+          "x": 264,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "两处都在 append_results 检查",
+            "en": "both checked in append_results"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              118,
+              88
+            ],
+            [
+              118,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              378,
+              88
+            ],
+            [
+              378,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              248,
+              30
+            ],
+            [
+              248,
+              168
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        }
+      ],
+      "labels": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "一个数管两件事",
+            "en": "one number for two different things"
+          }
+        },
+        {
+          "x": 262,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "两个上限，默认都是 8",
+            "en": "two caps, both defaulting to 8"
+          }
+        },
+        {
+          "x": 0,
+          "y": 166,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "主动漫游常常轮数还早，调用数先贴脸",
+            "en": "a wander usually hits the call count long before the round count"
+          }
+        },
+        {
+          "x": 262,
+          "y": 166,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "共用一个 finishReason，trace 里分不出是谁触发的",
+            "en": "they share one finishReason — the trace cannot tell them apart"
+          }
+        }
+      ]
+    },
     "claim": {
-      "zh": "没有它们，一次工具循环可以一直转到把上下文烧穿为止，而账单是唯一的警报——39 万 token 那次事故就是这么来的。两个上限默认都是 8，但管的不是同一件事：一个数轮，一个数调用次数。",
-      "en": "Without them a tool loop can spin until it burns through the context window, with the bill as the only alarm — that is exactly how the 390K-token incident happened. Both default to 8, but they do not govern the same thing: one counts rounds, the other counts calls."
+      "zh": "两个默认值都是 8 的上限，管的不是同一件事：MAX_TOOL_ITERATIONS 数轮，也就是工具结果回灌的次数；maxProactiveActions 数主动回合内派发出去的工具调用次数。两处都在 append_results 检查，都写成 finishReason = max_iterations。",
+      "en": "Two caps, both defaulting to 8, governing different things: MAX_TOOL_ITERATIONS counts rounds — the number of times tool results are fed back — while maxProactiveActions counts tool calls dispatched within a proactive turn. Both are checked in append_results and both report finishReason = max_iterations."
     },
     "mechanism": {
       "zh": "MAX_TOOL_ITERATIONS 数的是轮：工具结果每回灌一次加一，到 8 就收尾，反应式和主动回合一视同仁，可用 LUNA_MAX_TOOL_ITERATIONS 覆盖（NaN 或小于等于 0 落回默认）。maxProactiveActions() 数的是调用次数：toolNamesThisTurn 的长度，只在主动回合生效，读 LUNA_PROACTIVE_MAX_ACTIONS，默认 8。之所以要两个，是因为一轮可以并发调好几个工具：主动漫游那条链（搜 1 次 + fetch 2 到 3 次 + remember 1 到 2 次）常常轮数还早，调用数先贴脸。两处检查都在 append_results，都发生在这一轮工具已经跑完之后，所以本轮内可以先超一点再停；两处都写成 finishReason 是 max_iterations，从外面看不出是哪个先响。",
@@ -1642,9 +3099,142 @@ window.LUNA_DECKS = {
         }
       ]
     },
+    "claimFigure": {
+      "w": 500,
+      "h": 208,
+      "boxes": [
+        {
+          "x": 4,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": "is_final: true"
+        },
+        {
+          "x": 4,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "多一次模型往返",
+            "en": "one extra model round-trip"
+          },
+          "sub": {
+            "zh": "activeTurn 仍锁着",
+            "en": "activeTurn still held"
+          }
+        },
+        {
+          "x": 264,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "直接进 finalize",
+            "en": "straight to finalize"
+          }
+        },
+        {
+          "x": 264,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "三道判定照常跑",
+            "en": "all three guards still run"
+          },
+          "sub": {
+            "zh": "空回复 · 承诺 · 意图",
+            "en": "empty · promise · intent"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              118,
+              88
+            ],
+            [
+              118,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              378,
+              88
+            ],
+            [
+              378,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              248,
+              30
+            ],
+            [
+              248,
+              168
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        }
+      ],
+      "labels": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "说完还要再跑一轮确认",
+            "en": "one more round just to confirm"
+          }
+        },
+        {
+          "x": 262,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "本轮全是 message 且 is_final",
+            "en": "message-only this round, and is_final"
+          }
+        },
+        {
+          "x": 0,
+          "y": 166,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "此刻用户发的消息被 turn_in_progress 弹回",
+            "en": "a message sent now bounces off turn_in_progress"
+          }
+        },
+        {
+          "x": 262,
+          "y": 166,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "例外：现在收尾会触发一次新的 intent 纠正，就不短路",
+            "en": "unless finalizing now would trigger an unused intent correction"
+          }
+        }
+      ]
+    },
     "claim": {
-      "zh": "没有它，她说完最后一句之后还要再花一次完整的模型往返去确认「我说完了」；这段时间 activeTurn 还锁着，用户此刻发的消息会被 turn_in_progress 弹回来，而屏幕上她的回复看起来早就说完了。它把这次纯确认的往返省掉：这一轮只调了 message、且最后一条标了 is_final:true，就直接去 finalize。",
-      "en": "Without it, after her last sentence she still spends a full model round-trip confirming that she is done; during that window activeTurn stays locked, so a message the user sends right then bounces with turn_in_progress while her reply already looks finished on screen. It removes that purely confirmatory round-trip: if this round called only message and the last one was marked is_final:true, go straight to finalize."
+      "zh": "一个跳过纯确认往返的分支：非主动回合、跑在 message 模式、本轮 tool_use 全是 message、且最后一条标了 is_final:true，就直接进 finalize。唯一的例外是——若此刻收尾会立刻触发一次尚未用过的 intent 纠正，则不短路。",
+      "en": "A branch that skips a round-trip whose only job would be to confirm completion: if the turn is reactive, runs in message mode, every tool_use this round is a message, and the last one is marked is_final:true, control goes straight to finalize. The single exception: if finalizing now would immediately trigger an unused intent correction, it does not short-circuit."
     },
     "mechanism": {
       "zh": "触发要同时满足四条：不是主动回合、registry 里挂着 message 工具、最后一条消息的 is_final 是 true、本轮 pendingToolUses 非空且每一个都叫 message。要求 message-only 是因为真动作工具（比如同一轮里的 web_search）的结果必须回灌给她，那一轮省不掉。省掉的只是往返本身：短路把 finishReason 定成 end_turn，finalize 的三道判定照常跑，所以真赖账仍然会被打回 build_request。例外只有一个——如果现在就去 finalize 会立刻触发一次全新的 intent 纠正，就不短路。这个例外的条件是三条同时成立：LUNA_INTEGRITY_GUARD 不等于 0；这个回合还没用掉 intent 那一格纠正；detectDefection 在「上次纠正之后新发的气泡」上判出 message_intent，也就是气泡里有承诺去做的措辞，而整个回合到此为止没有落地任何非 message 工具。理由是：被省掉的那一轮，恰恰是她本来会去兑现承诺的那一轮（说了我去查一下 + is_final:true）；短路掉，就会把一次本来能自然兑现的机会，变成一次不必要的纠正。",
@@ -1812,9 +3402,526 @@ window.LUNA_DECKS = {
       ],
       "labels": []
     },
+    "claimFigure": {
+      "w": 500,
+      "h": 278,
+      "boxes": [
+        {
+          "x": 4,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "“帮我读一下 x.ts”",
+            "en": "“read x.ts for me”"
+          },
+          "sub": "free text"
+        },
+        {
+          "x": 4,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": "?",
+          "sub": {
+            "zh": "无从校验",
+            "en": "nothing to check against"
+          },
+          "kind": "ghost"
+        },
+        {
+          "x": 264,
+          "y": 110,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "注册表",
+            "en": "registry"
+          },
+          "sub": {
+            "zh": "本次会话真正挂载",
+            "en": "what this session has mounted"
+          }
+        },
+        {
+          "x": 264,
+          "y": 176,
+          "w": 228,
+          "h": 46,
+          "title": "input_schema",
+          "sub": "zodToJsonSchema"
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              118,
+              88
+            ],
+            [
+              118,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              270,
+              40
+            ],
+            [
+              270,
+              64
+            ]
+          ],
+          "head": false
+        },
+        {
+          "pts": [
+            [
+              278,
+              40
+            ],
+            [
+              278,
+              64
+            ]
+          ],
+          "head": false
+        },
+        {
+          "pts": [
+            [
+              286,
+              40
+            ],
+            [
+              286,
+              64
+            ]
+          ],
+          "head": false
+        },
+        {
+          "pts": [
+            [
+              294,
+              40
+            ],
+            [
+              294,
+              64
+            ]
+          ],
+          "head": false
+        },
+        {
+          "pts": [
+            [
+              302,
+              40
+            ],
+            [
+              302,
+              64
+            ]
+          ],
+          "head": false
+        },
+        {
+          "pts": [
+            [
+              310,
+              40
+            ],
+            [
+              310,
+              64
+            ]
+          ],
+          "head": false
+        },
+        {
+          "pts": [
+            [
+              318,
+              40
+            ],
+            [
+              318,
+              64
+            ]
+          ],
+          "head": false
+        },
+        {
+          "pts": [
+            [
+              326,
+              40
+            ],
+            [
+              326,
+              64
+            ]
+          ],
+          "head": false
+        },
+        {
+          "pts": [
+            [
+              334,
+              45
+            ],
+            [
+              334,
+              59
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        },
+        {
+          "pts": [
+            [
+              342,
+              45
+            ],
+            [
+              342,
+              59
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        },
+        {
+          "pts": [
+            [
+              350,
+              45
+            ],
+            [
+              350,
+              59
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        },
+        {
+          "pts": [
+            [
+              358,
+              45
+            ],
+            [
+              358,
+              59
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        },
+        {
+          "pts": [
+            [
+              366,
+              45
+            ],
+            [
+              366,
+              59
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        },
+        {
+          "pts": [
+            [
+              374,
+              45
+            ],
+            [
+              374,
+              59
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        },
+        {
+          "pts": [
+            [
+              382,
+              45
+            ],
+            [
+              382,
+              59
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        },
+        {
+          "pts": [
+            [
+              390,
+              45
+            ],
+            [
+              390,
+              59
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        },
+        {
+          "pts": [
+            [
+              398,
+              45
+            ],
+            [
+              398,
+              59
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        },
+        {
+          "pts": [
+            [
+              406,
+              45
+            ],
+            [
+              406,
+              59
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        },
+        {
+          "pts": [
+            [
+              414,
+              45
+            ],
+            [
+              414,
+              59
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        },
+        {
+          "pts": [
+            [
+              422,
+              45
+            ],
+            [
+              422,
+              59
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        },
+        {
+          "pts": [
+            [
+              430,
+              45
+            ],
+            [
+              430,
+              59
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        },
+        {
+          "pts": [
+            [
+              438,
+              45
+            ],
+            [
+              438,
+              59
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        },
+        {
+          "pts": [
+            [
+              446,
+              45
+            ],
+            [
+              446,
+              59
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        },
+        {
+          "pts": [
+            [
+              454,
+              45
+            ],
+            [
+              454,
+              59
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        },
+        {
+          "pts": [
+            [
+              462,
+              45
+            ],
+            [
+              462,
+              59
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        },
+        {
+          "pts": [
+            [
+              470,
+              45
+            ],
+            [
+              470,
+              59
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        },
+        {
+          "pts": [
+            [
+              478,
+              45
+            ],
+            [
+              478,
+              59
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        },
+        {
+          "pts": [
+            [
+              486,
+              45
+            ],
+            [
+              486,
+              59
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        },
+        {
+          "pts": [
+            [
+              378,
+              158
+            ],
+            [
+              378,
+              174
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              248,
+              30
+            ],
+            [
+              248,
+              238
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        }
+      ],
+      "labels": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "没有约定的动作面",
+            "en": "without a settled action surface"
+          }
+        },
+        {
+          "x": 262,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "ToolName 枚举 · 28 条",
+            "en": "the ToolName enum · 28"
+          }
+        },
+        {
+          "x": 0,
+          "y": 236,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "无处声明超时 / 并发 / 风险",
+            "en": "nowhere to declare timeout, concurrency or risk"
+          }
+        },
+        {
+          "x": 262,
+          "y": 236,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "枚举 = 上限，注册表 = 实际",
+            "en": "the enum is the ceiling; the registry is what exists"
+          }
+        }
+      ]
+    },
     "claim": {
-      "zh": "没有一份收敛的工具清单，模型对世界的意图就只能停留在自然语言里 —— 没有可校验的动作面，也没有地方声明一次调用要花多久、能不能并发、主动轮里能不能静悄悄地跑。Luna 的动作面是 protocol 包里一个 28 条的 ToolName 枚举，每个工具用 Zod 定义入参，发给模型前逐个转成 JSON Schema。",
-      "en": "Without a closed list of tools, the model can only phrase its intent toward the world in prose — no verifiable action surface, and nowhere to declare how long a call may take, whether it can run concurrently, or whether it may run silently in a proactive turn. Luna's action surface is a 28-entry ToolName enum in the protocol package; each tool declares its input in Zod, and every input is converted to JSON Schema before it reaches the model."
+      "zh": "动作面是 protocol 包里一个 28 条的 ToolName 枚举。每个工具用 Zod 定义入参，发给模型前逐个转成 JSON Schema（$refStrategy 设为 none，产物自包含）。枚举是上限，启动时组装出的注册表才是本次会话真正挂载的集合。",
+      "en": "The action surface is a 28-member ToolName enum in the protocol package. Each tool's input is a Zod schema converted to JSON Schema before every request, with $refStrategy set to none so the result is self-contained. The enum is the ceiling; the registry assembled at boot is what this session actually has mounted."
     },
     "mechanism": {
       "zh": "ToolName 是 protocol 里的 z.enum,共 28 条。运行时的注册表是 Partial<Record<ToolName, Tool>>,启动时由 9 个 with* 组合器按开关一层层套出来:8 个工具无条件在 builtinRegistry 里，其余按 LUNA_CODE_WRITE / LUNA_SHELL / LUNA_REPO_MAP / LUNA_SKILLS / LUNA_SELF_EDIT / LUNA_WEB_SEARCH / LUNA_WEB_FETCH / LUNA_WEATHER / LUNA_MUSIC 决定挂不挂。所以枚举是上限，注册表才是本次会话真正存在的工具。每轮请求前,toolsToAnthropicFormat 遍历注册表，把每个工具的 Zod 入参跑 zodToJsonSchema。",
@@ -1992,9 +4099,146 @@ window.LUNA_DECKS = {
         }
       ]
     },
+    "claimFigure": {
+      "w": 500,
+      "h": 208,
+      "boxes": [
+        {
+          "x": 4,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "一整段文字",
+            "en": "one block of prose"
+          }
+        },
+        {
+          "x": 4,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "表情 / 情绪 / 分句 / 长度无处安放",
+            "en": "no place for expression, emotion, pacing or length"
+          },
+          "kind": "ghost"
+        },
+        {
+          "x": 264,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "Zod 硬上限",
+            "en": "hard limits in Zod"
+          },
+          "sub": {
+            "zh": "280 字符 / 5 句 / 从句 150",
+            "en": "280 chars / 5 sentences / 150 per clause"
+          }
+        },
+        {
+          "x": 264,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "服务端分段",
+            "en": "segmented server-side"
+          },
+          "sub": {
+            "zh": "按标点切段，delay_ms 当元数据交前端播",
+            "en": "split on punctuation; delay_ms is metadata the client paces"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              118,
+              88
+            ],
+            [
+              118,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              378,
+              88
+            ],
+            [
+              378,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              248,
+              30
+            ],
+            [
+              248,
+              168
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        }
+      ],
+      "labels": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "自由文本就是回复",
+            "en": "free text is the reply"
+          }
+        },
+        {
+          "x": 262,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "message 是唯一的发声通道",
+            "en": "message is the only way to speak"
+          }
+        },
+        {
+          "x": 0,
+          "y": 166,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "只能靠提示词求模型自觉",
+            "en": "nothing left but asking the model nicely"
+          }
+        },
+        {
+          "x": 262,
+          "y": 166,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "超限 = 一次 recoverable 的重发，用户只看到顿了一下",
+            "en": "over the limit is a recoverable retry — the user sees a pause"
+          }
+        }
+      ]
+    },
     "claim": {
-      "zh": "如果自由文本就是回复，那就没有任何一处可以对一句话施加结构：表情、情绪强度、分句节奏、长度上限全都无处安放，只能靠提示词求模型自觉。message 是 Luna 唯一的发声通道 —— 调用它就是在说话，一次调用等于一个气泡。",
-      "en": "If free-form text were the reply, there would be nowhere to impose structure on an utterance: expression, emotional intensity, sentence pacing and length caps would all have nowhere to live, surviving only as pleading in the prompt. message is Luna's only channel for speech — calling it IS speaking, and one call is one bubble."
+      "zh": "message 是唯一的发声通道，一次调用等于一个气泡。长度上限（280 字符、5 句、单从句 150 字符）写在 Zod 里，超限是一次 recoverable 的校验失败；分句与节奏由服务端从 text 派生，模型无法自己指定。",
+      "en": "message is the only channel that produces speech, and one call is one bubble. The length limits — 280 characters, 5 sentences, 150 characters per clause — live in the Zod schema, and exceeding them is a recoverable validation failure. Segmentation and pacing are derived server-side from text; the model cannot specify them."
     },
     "mechanism": {
       "zh": "在 message 模式下,open_stream 收到 text_delta 时不再向前端发 reply.token —— 自由文本被当成她在心里想，不是聊天气泡。人性硬上限直接写在 Zod 里:280 字符、5 句、单个从句 150 字符，后两条用 superRefine 实现，超限是一个 recoverable 的 validation_failed,模型自己换个说法重发。工具本身只做一件事：按标点把 text 切成段，每段算一个 delay_ms(28ms 每字符，钳在 120 到 900 之间)当元数据发出去 —— 服务端从不 sleep,节奏交给前端播。",
@@ -2143,9 +4387,143 @@ window.LUNA_DECKS = {
         }
       ]
     },
+    "claimFigure": {
+      "w": 500,
+      "h": 254,
+      "boxes": [
+        {
+          "x": 4,
+          "y": 40,
+          "w": 110,
+          "h": 46,
+          "title": {
+            "zh": "全串行",
+            "en": "all serial"
+          },
+          "sub": {
+            "zh": "一次 read_file 卡住整轮",
+            "en": "one read_file stalls the round"
+          }
+        },
+        {
+          "x": 122,
+          "y": 40,
+          "w": 110,
+          "h": 46,
+          "title": {
+            "zh": "全并行",
+            "en": "all parallel"
+          },
+          "sub": {
+            "zh": "两个 edit 写同一文件",
+            "en": "two edits, one file"
+          }
+        },
+        {
+          "x": 264,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "safe-parallel · 15",
+            "en": "safe-parallel · 15"
+          },
+          "sub": {
+            "zh": "各起一条独立流",
+            "en": "a stream of its own"
+          }
+        },
+        {
+          "x": 264,
+          "y": 96,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "session-serial · 12",
+            "en": "session-serial · 12"
+          },
+          "sub": {
+            "zh": "排会话锁",
+            "en": "queued on the session mutex"
+          }
+        },
+        {
+          "x": 264,
+          "y": 152,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "global-serial · 1",
+            "en": "global-serial · 1"
+          },
+          "sub": {
+            "zh": "music_control：播放器是共享的",
+            "en": "music_control — the player is shared"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              248,
+              30
+            ],
+            [
+              248,
+              214
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        }
+      ],
+      "labels": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "只剩两个都错的选项",
+            "en": "two options, both wrong"
+          }
+        },
+        {
+          "x": 262,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "每个工具在定义处声明档位",
+            "en": "every tool declares its policy where it is defined"
+          }
+        },
+        {
+          "x": 0,
+          "y": 212,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "工具不声明，调度器只能猜",
+            "en": "if the tool says nothing, the dispatcher has to guess"
+          }
+        },
+        {
+          "x": 262,
+          "y": 212,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "mergeAsync 竞速合并：串行只发生在组内",
+            "en": "merged by mergeAsync — serialisation happens only within a group"
+          }
+        }
+      ]
+    },
     "claim": {
-      "zh": "没有并发声明，只剩两个都错的选项：全串行，一次 read_file 就把整轮卡住；或者全并行，两个 edit 同时写同一个文件。三档策略让每个工具自己声明它能不能和别人同时跑，分发器据此把一批调用拆成三条流。",
-      "en": "Without a concurrency declaration there are only two options and both are wrong: everything serial, so one read_file stalls the whole round; or everything parallel, so two edit calls write the same file at once. The three-tier policy lets each tool declare whether it may run alongside others, and the dispatcher splits a batch into three streams accordingly."
+      "zh": "每个工具在定义处声明 concurrency，分发器据此把一批调用拆成三条流：safe-parallel 各起一条独立流，session-serial 排会话锁，global-serial 排进程级单例锁。三条流由 mergeAsync 竞速合并，所以串行只发生在组内，组与组之间照样并发。",
+      "en": "Every tool declares a concurrency policy where it is defined, and the dispatcher splits a batch into three streams accordingly: safe-parallel gets a stream per call, session-serial queues on the session mutex, global-serial on a process-wide singleton. The three streams are merged by mergeAsync, so serialisation happens within a group while groups still run in parallel."
     },
     "mechanism": {
       "zh": "dispatchToolCalls 先砍掉超过 8 个的部分 —— 多出来的调用当场回一个 recoverable 的 err(模型下一轮可以重发),不是排队。剩下的按 tool.concurrency 分三个桶:safe-parallel 每个调用起一条独立流;session-serial 整组排进会话自己的 mutex,组内按数组顺序逐个过;global-serial 排进 dispatcher 模块里的那个进程级单例 mutex。三条流交给 mergeAsync 竞速合并，谁先产出事件谁先 yield —— 所以串行是组内的，组与组之间照样并发。",
@@ -2319,9 +4697,142 @@ window.LUNA_DECKS = {
         }
       ]
     },
+    "claimFigure": {
+      "w": 500,
+      "h": 208,
+      "boxes": [
+        {
+          "x": 4,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "整个入参 + 工具执行",
+            "en": "the whole input, then the tool run"
+          }
+        },
+        {
+          "x": 4,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "那句话才第一次出现",
+            "en": "only then does the sentence appear"
+          }
+        },
+        {
+          "x": 264,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "只认深度 1 的 text 键",
+            "en": "only the depth-1 text key"
+          },
+          "sub": {
+            "zh": "任意切点 / 转义 / \\uXXXX",
+            "en": "any cut point, escapes, \\uXXXX"
+          }
+        },
+        {
+          "x": 264,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": "tool.progress",
+          "sub": {
+            "zh": "逐字预览",
+            "en": "a character-by-character preview"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              118,
+              88
+            ],
+            [
+              118,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              378,
+              88
+            ],
+            [
+              378,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              248,
+              30
+            ],
+            [
+              248,
+              168
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        }
+      ],
+      "labels": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "等 JSON 吐完再解析",
+            "en": "wait for the JSON, then parse"
+          }
+        },
+        {
+          "x": 262,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "JsonTextStream 增量提取",
+            "en": "JsonTextStream pulls it out as it arrives"
+          }
+        },
+        {
+          "x": 0,
+          "y": 166,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "一句话的等待 = 一整个工具轮",
+            "en": "waiting for one sentence costs a whole tool round"
+          }
+        },
+        {
+          "x": 262,
+          "y": 166,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "预览不是交付：校验没过，前端丢掉半截气泡",
+            "en": "the preview is not the delivery — a failed check discards it"
+          }
+        }
+      ]
+    },
     "claim": {
-      "zh": "不做增量提取的话，一次 message 要等模型把整个 JSON 入参吐完、工具跑完、结果回来，那句话才第一次出现在屏幕上 —— 一句话的等待等于一整个工具轮的延迟。增量提取让 text 字段边生成边播：用户看到的是她在打字，不是一个转圈的圈。",
-      "en": "Without incremental extraction, a message would appear on screen only after the model finished emitting the whole JSON input, the tool ran, and the result came back — the wait for one sentence equals a full tool round. Incremental extraction plays the text field as it is generated: the user sees her typing rather than a spinner."
+      "zh": "从模型的 input_json_delta 里增量提取 message 工具的 text 字段：一台手写状态机在任意切碎的 partial JSON 上只认深度为 1 的 text 键，有增量就发一条 tool.progress。预览不是交付——校验没过时，前端把已经流出的半截气泡丢掉。",
+      "en": "Incremental extraction of the message tool's text field out of the model's input_json_delta: a hand-written state machine reads only the depth-1 text key from arbitrarily chopped partial JSON and emits a tool.progress for each increment. The preview is not the delivery — when validation fails, the client discards the partial bubble."
     },
     "mechanism": {
       "zh": "provider 把 Anthropic 的 input_json_delta 转成 tool_input_delta 事件，靠 content block 的 index 归属到具体的 call id(一个 Map 在 content_block_start 时建立)。open_stream 只关心 name 是 message 的 delta:每个 call id 配一个 JsonTextStream —— 一台手写状态机，在任意切碎的 partial JSON 上只认深度为 1 的 text 键，顺手解转义(包含 \\uXXXX 四位十六进制),嵌套对象比如 voice_params 整块跳过。有增量就发一个 tool.progress 带 text_delta。",
@@ -2489,9 +5000,148 @@ window.LUNA_DECKS = {
         }
       ]
     },
+    "claimFigure": {
+      "w": 500,
+      "h": 208,
+      "boxes": [
+        {
+          "x": 4,
+          "y": 40,
+          "w": 110,
+          "h": 46,
+          "title": {
+            "zh": "read_file 300ms",
+            "en": "read_file 300ms"
+          }
+        },
+        {
+          "x": 122,
+          "y": 40,
+          "w": 110,
+          "h": 46,
+          "title": "shell 3s"
+        },
+        {
+          "x": 4,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "配对错位 → 历史永久坏掉",
+            "en": "mispaired — the history is permanently broken"
+          }
+        },
+        {
+          "x": 264,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "遍历 pendingToolUses",
+            "en": "iterate pendingToolUses"
+          },
+          "sub": {
+            "zh": "不是遍历结果块",
+            "en": "not the result blocks"
+          }
+        },
+        {
+          "x": 264,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "重排回发起顺序",
+            "en": "reordered as the model issued them"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              118,
+              88
+            ],
+            [
+              118,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              378,
+              88
+            ],
+            [
+              378,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              248,
+              30
+            ],
+            [
+              248,
+              168
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        }
+      ],
+      "labels": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "按完成先后回填",
+            "en": "fed back in completion order"
+          }
+        },
+        {
+          "x": 262,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "用请求去索引结果",
+            "en": "index the results by the requests"
+          }
+        },
+        {
+          "x": 0,
+          "y": 166,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "每个 tool_use 必须对上一个 tool_result",
+            "en": "every tool_use must line up with one tool_result"
+          }
+        },
+        {
+          "x": 262,
+          "y": 166,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "没派发的调用也各自压过一块错误结果",
+            "en": "undispatched calls each get an error result too"
+          }
+        }
+      ]
+    },
     "claim": {
-      "zh": "没有结果回填，工具轮就是单向的：模型发出调用，永远看不到自己做了什么。而且回填必须成对且同序 —— 一个 tool_use 块对一个 tool_result 块，顺序跟着 assistant 消息里的顺序走，否则这段历史会永久坏掉。",
-      "en": "Without result append-back a tool round is one-way: the model issues calls and never sees what it did. And the append-back must be paired and in order — one tool_result block per tool_use block, following the order in the assistant message — or that stretch of history is permanently broken."
+      "zh": "工具结果必须成对且同序回填：一个 tool_use 对一个 tool_result，顺序跟随 assistant 消息里的调用顺序。事件按完成先后到达，所以这一步用 pendingToolUses 去索引结果块，把顺序重排回来。",
+      "en": "Results must be fed back paired and in order: one tool_result per tool_use, following the order in the assistant message. Events arrive in completion order, so this step indexes the result blocks by pendingToolUses to restore the order the model issued."
     },
     "mechanism": {
       "zh": "事件是从 mergeAsync 按完成先后出来的，所以 toolResultBlocks 是完成顺序 —— 一个 300ms 的 read_file 会排在一个 3s 的 shell 前面，哪怕模型先发的是 shell。append_results 拿 pendingToolUses(模型发出的顺序)逐个去 find 对应 tool_use_id 的结果块，重排成同序，再作为一条 user 消息压进 history。没被派发的调用也各自压过结果块：名字不在枚举里的是 tool_not_found,被主动安全门拦下的是那句 SURFACE_FIRST_MESSAGE —— 都是 is_error 为 true 的 tool_result,所以照样配得上对。",
@@ -2639,9 +5289,145 @@ window.LUNA_DECKS = {
         }
       ]
     },
+    "claimFigure": {
+      "w": 500,
+      "h": 208,
+      "boxes": [
+        {
+          "x": 4,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "tools 里仍然有 shell",
+            "en": "shell is still in tools"
+          },
+          "sub": {
+            "zh": "schema 照发",
+            "en": "the schema goes out anyway"
+          }
+        },
+        {
+          "x": 4,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "只能事后拒绝",
+            "en": "nothing left but refusing afterwards"
+          }
+        },
+        {
+          "x": 264,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "registry",
+            "en": "registry"
+          },
+          "sub": {
+            "zh": "九个 with* 组合器，boot 时冻结",
+            "en": "nine with* combinators, frozen at boot"
+          }
+        },
+        {
+          "x": 264,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "不进提示词 / 不进分发器",
+            "en": "never in the prompt, never in the dispatcher"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              118,
+              88
+            ],
+            [
+              118,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              378,
+              88
+            ],
+            [
+              378,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              248,
+              30
+            ],
+            [
+              248,
+              168
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        }
+      ],
+      "labels": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "靠提示词请求「别用 shell」",
+            "en": "asking the prompt not to use shell"
+          }
+        },
+        {
+          "x": 262,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "关掉的一组根本不进注册表",
+            "en": "a disabled group never enters the registry"
+          }
+        },
+        {
+          "x": 0,
+          "y": 166,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "模型照样会调",
+            "en": "the model will call it regardless"
+          }
+        },
+        {
+          "x": 262,
+          "y": 166,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "L1 契约也从注册表反查，不读环境变量",
+            "en": "the L1 contract queries the registry, not the environment"
+          }
+        }
+      ]
+    },
     "claim": {
-      "zh": "没有它，「关掉 shell」只能是提示词里的一句请求 —— 工具 schema 照样发出去，模型照样会调，只能靠事后拒绝兜底。能力门把开关做在注册表上：关掉的一组根本不进注册表，于是既不进提示词，也不进分发器。",
-      "en": "Without it, \"turn shell off\" is only a sentence in the prompt — the schema still ships, the model still calls it, and refusal is the only backstop. The capability gate moves the switch into the registry: a disabled group is never in the registry, so it reaches neither the prompt nor the dispatcher."
+      "zh": "九个 with*(base) 组合器在启动时决定哪些工具进注册表，注册表随后整个进程冻结。未挂载的工具不生成 JSON Schema、不进提示词、不进分发器；L1 契约里的对应条款也由注册表反查决定渲不渲染，而不是读环境变量。",
+      "en": "Nine with*(base) combinators decide at boot which tools enter the registry, which is then frozen for the process. An unmounted tool produces no JSON Schema, never reaches the prompt and never reaches the dispatcher; the matching clauses of the L1 contract are rendered by querying the registry rather than by reading environment variables."
     },
     "mechanism": {
       "zh": "九个 with*(base) 组合器在 main.ts 里一次性套成一个 registry,boot 时冻结;turn loop 全程不再读能力相关的 env。发给模型的 tools 参数由 toolsToAnthropicFormat(registry) 直接映射注册表的值，所以未挂载的组连 JSON schema 都生成不出来。L1 契约里的对应条款同样由 isCodeWriteMode / isShellMode / isRepoMapMode / isSkillsMode 这些「从注册表反推」的判断决定渲不渲染，而不是读 env —— 于是不会出现契约让她去用一个没挂上的工具。真被调到时，分发器返回 tool_not_found。",
@@ -2808,9 +5594,141 @@ window.LUNA_DECKS = {
         }
       ]
     },
+    "claimFigure": {
+      "w": 500,
+      "h": 208,
+      "boxes": [
+        {
+          "x": 4,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "新工具",
+            "en": "a new tool"
+          },
+          "sub": {
+            "zh": "未标注",
+            "en": "unmarked"
+          }
+        },
+        {
+          "x": 4,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "主动回合里静默执行",
+            "en": "runs silently in a proactive turn"
+          }
+        },
+        {
+          "x": 264,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "未标注一律当 surface",
+            "en": "anything unmarked counts as surface"
+          }
+        },
+        {
+          "x": 264,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "先发消息，下一轮才动手",
+            "en": "speak first; act on the next round"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              118,
+              88
+            ],
+            [
+              118,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              378,
+              88
+            ],
+            [
+              378,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              248,
+              30
+            ],
+            [
+              248,
+              168
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        }
+      ],
+      "labels": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "忘了标风险 = 默认放行",
+            "en": "forgetting the risk mark means allowing it"
+          }
+        },
+        {
+          "x": 262,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "只认 proactiveRisk: 'safe'",
+            "en": "only proactiveRisk: 'safe' passes"
+          }
+        },
+        {
+          "x": 0,
+          "y": 166,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "没人看着的时候动了手",
+            "en": "it acted while nobody was watching"
+          }
+        },
+        {
+          "x": 262,
+          "y": 166,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "忘记标注只会让系统更保守，不会更危险",
+            "en": "forgetting to mark makes it safer, never riskier"
+          }
+        }
+      ]
+    },
     "claim": {
-      "zh": "没有它，一次没人看着的主动唤醒里，新加的工具默认就能静默执行 —— 忘了标风险等同于默认放行。主动安全门反过来定方向：只有显式写了 safe 的工具才能在主动回合里悄悄跑，没标的一律当 surface,必须先开口再动手。",
-      "en": "Without it, a tool added later runs silently by default during an unsupervised proactive wake — forgetting to label its risk would mean permission. The proactive gate reverses the direction: only a tool that explicitly opted into safe may run quietly; anything unlabeled counts as surface and must speak before it acts."
+      "zh": "主动回合的动作分类是 fail-closed：只有显式声明 proactiveRisk: 'safe' 的工具才能静默执行，未声明一律当 surface——必须先发出消息，下一轮才能动手。被挡下的调用拿到一条 recoverable 的错误，且不计入动作预算。",
+      "en": "Action classification in proactive turns is fail-closed: only a tool that explicitly declares proactiveRisk: 'safe' may run silently, and anything unmarked is treated as surface — it must send a message first and can act only on the next round. A blocked call receives a recoverable error and does not count against the action budget."
     },
     "mechanism": {
       "zh": "proactiveRiskOf 只认一个正向条件 —— proactiveRisk === safe,其余全部落到 surface,包括 undefined(工具压根不在注册表里)。dispatch_tools 里 surfacedBefore 取的是 messageTexts.length > 0,而本轮的 message 调用要等本轮 dispatch 才写进去，所以「先说后做」被强制跨轮：第一轮只能说，第二轮才能动。被挡下的调用拿到一条 recoverable 的错误(SURFACE_FIRST_MESSAGE,把规则原样讲给模型听),并且不进 toolNamesThisTurn —— 于是它不消耗每轮 8 次的主动动作预算。",
@@ -2970,9 +5888,149 @@ window.LUNA_DECKS = {
       ],
       "labels": []
     },
+    "claimFigure": {
+      "w": 500,
+      "h": 254,
+      "boxes": [
+        {
+          "x": 4,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "“我这就去查”",
+            "en": "“let me look that up”"
+          }
+        },
+        {
+          "x": 4,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": "end_turn",
+          "sub": {
+            "zh": "干净收尾",
+            "en": "a clean finish"
+          }
+        },
+        {
+          "x": 264,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "结构档",
+            "en": "structural"
+          },
+          "sub": {
+            "zh": "is_final:false 却停了 → 重来",
+            "en": "marked is_final:false yet stopped → retry"
+          }
+        },
+        {
+          "x": 264,
+          "y": 96,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "文本档",
+            "en": "textual"
+          },
+          "sub": {
+            "zh": "承诺句式且没调过工具 → 重来",
+            "en": "a promise phrasing with no tool call → retry"
+          }
+        },
+        {
+          "x": 264,
+          "y": 152,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "thinking 档",
+            "en": "thinking"
+          },
+          "sub": {
+            "zh": "只进审计，永不重试",
+            "en": "audit only, never a retry"
+          },
+          "kind": "ghost"
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              118,
+              88
+            ],
+            [
+              118,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              248,
+              30
+            ],
+            [
+              248,
+              214
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        }
+      ],
+      "labels": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "收尾前不重放",
+            "en": "nothing replays the turn before it closes"
+          }
+        },
+        {
+          "x": 262,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "detectDefection · 按置信度三档",
+            "en": "detectDefection — three tiers by confidence"
+          }
+        },
+        {
+          "x": 0,
+          "y": 212,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "用户看到一句承诺，系统记下一次成功",
+            "en": "the user sees a promise; the system records a success"
+          }
+        },
+        {
+          "x": 262,
+          "y": 212,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "纯函数，零 LLM 调用",
+            "en": "a pure function, no model call"
+          }
+        }
+      ]
+    },
     "claim": {
-      "zh": "没有它，「我这就去查」之后什么都不发生，是一次完全合法的收尾 —— 用户看到的是一句承诺，系统记下的是一次干净结束。完整性闸在收尾前把这一轮重放一遍：承诺了却没动手，就退回去再跑一轮。",
-      "en": "Without it, \"let me go look that up\" followed by nothing at all is a perfectly legal way to end a turn — the user sees a promise, the system records a clean finish. The integrity gate replays the turn before it closes: a promise with no action sends it back for one more round."
+      "zh": "收尾前的一次重放。detectDefection 是零 LLM 调用的纯函数，按置信度分三档判「说了要做却没做」：结构档（最后一条标了 is_final:false 却停了）、文本档（承诺句式且本轮除 message 外没调过工具）、thinking 档（只进审计）。前两档各驱动至多一次重来。",
+      "en": "A replay run before the turn closes. detectDefection is a pure function with no LLM call, ranking \"stated but not done\" in three tiers by confidence: structural (a final message marked is_final:false yet the turn stopped), textual (a promise phrasing with no non-message tool called this turn), and thinking (audit only). The first two each drive at most one retry."
     },
     "mechanism": {
       "zh": "detectDefection 是纯函数、零 LLM,按置信度排三档并返回第一个命中:is_final_promise 是结构性的 —— 最后一条消息标了 is_final:false(还有下文)却以 end_turn 收场，机械确定，不需要词典;message_intent 只对「实际发出去的消息文本」逐字匹配承诺句式，而且要求这一轮除 message 外没调过任何工具;thinking_intent 匹配的是 thinking,只审计不重试(thinking 是 summarized 的，置信度天生低)。finalize 里的闸只对前两档动手:correctionUsed 这个 Set 保证每个原因至多纠正一次，第二次落到 degraded —— 只补一条 trace,不再循环;correctionWatermark 记住上次纠正时已发的气泡数，下一轮只审这之后的新气泡，同一句话不会被反复判定。",
@@ -3148,9 +6206,139 @@ window.LUNA_DECKS = {
         }
       ]
     },
+    "claimFigure": {
+      "w": 500,
+      "h": 254,
+      "boxes": [
+        {
+          "x": 4,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": "web_fetch",
+          "sub": "169.254.169.254"
+        },
+        {
+          "x": 4,
+          "y": 96,
+          "w": 228,
+          "h": 46,
+          "title": "shell",
+          "sub": "rm -rf · ~/.ssh"
+        },
+        {
+          "x": 4,
+          "y": 152,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "改掉评判自己的文件",
+            "en": "edit the files that judge it"
+          },
+          "sub": "safetyGate.ts · shellDeny.ts"
+        },
+        {
+          "x": 264,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "DNS 钉住已验地址",
+            "en": "the socket is pinned"
+          },
+          "sub": {
+            "zh": "连上的就是刚验过的那个 IP；重定向每跳重验，≤ 5 跳",
+            "en": "it connects to the address just validated; each redirect hop re-checked, up to five"
+          }
+        },
+        {
+          "x": 264,
+          "y": 96,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "shellDeny",
+            "en": "shellDeny"
+          },
+          "sub": {
+            "zh": "17 条拒绝正则 + 16 个交互式命令",
+            "en": "17 refusal patterns + 16 interactive commands"
+          }
+        },
+        {
+          "x": 264,
+          "y": 152,
+          "w": 228,
+          "h": 46,
+          "title": "EVALUATOR FIREWALL",
+          "sub": {
+            "zh": "读放行 · 写与执行拒绝",
+            "en": "reads allowed; writes and execution refused"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              248,
+              30
+            ],
+            [
+              248,
+              214
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        }
+      ],
+      "labels": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "没有护栏",
+            "en": "without guardrails"
+          }
+        },
+        {
+          "x": 262,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "三道静态与连接期的闸",
+            "en": "three static or connection-time guards"
+          }
+        },
+        {
+          "x": 0,
+          "y": 212,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "三条路都直通",
+            "en": "all three go straight through"
+          }
+        },
+        {
+          "x": 262,
+          "y": 212,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "黑名单模型：名单必须写全并被穷举测试",
+            "en": "a deny list is only as good as its coverage — so it is exhaustively tested"
+          }
+        }
+      ]
+    },
     "claim": {
-      "zh": "没有它，一次 web_fetch 就是一条从模型直通内网的路(169.254.169.254 那类地址近在咫尺),一条 shell 命令就能 rm -rf 或者把 ~/.ssh 读出来，而且她可以直接改掉判她的那些文件。护栏钉死三件事：出网前先验解析出的 IP、并把 socket 钉在这个 IP 上；危险命令在到达 spawner 之前就拒；评判她的代码，她读得了、写不了。",
-      "en": "Without it, one web_fetch is a straight road from the model into the internal network (169.254.169.254 is one hostname away), one shell command can rm -rf or read ~/.ssh, and she can edit the very files that judge her. The guardrails pin three things: validate the resolved IP before leaving the machine and pin the socket to that IP; refuse dangerous commands before they reach a spawner; and make the code that judges her readable but never writable."
+      "zh": "三道静态与连接期的护栏。safeFetch 先解析域名、逐个地址过 deny 列表，再把 socket 钉在刚验过的那个 IP 上，重定向每跳重验、上限 5 跳；shellDeny 是 17 条拒绝正则加 16 个交互式命令；workspace 分 SECRETS 与 EVALUATOR FIREWALL 两层，后者放行读、拒绝写与执行。",
+      "en": "Three guardrails, all static or connection-time. safeFetch resolves the host, checks every resolved address against a deny list, then pins the socket to the address it just validated, re-validating each redirect hop up to five times; shellDeny is 17 refusal patterns plus 16 interactive commands; the workspace has a SECRETS layer and an EVALUATOR FIREWALL layer, the latter allowing reads while refusing writes and execution."
     },
     "mechanism": {
       "zh": "safeFetch 的顺序是:canonicalize URL → 解析 → 把解析出的每一个地址过 deny 列表 → 然后把 node:http(s) 的 lookup 换成一个恒返回该地址的函数。TOCTOU 是关掉的而不是变窄的 —— 连上的就是刚验过的那一个地址，而 TLS SNI 与证书仍按 URL 主机名校验，所以 HTTPS 依然正确；重定向不自动跟随，每一跳回到循环顶端重新验一遍，上限 5 跳。shellDeny 是 17 条拒绝正则加 16 个交互式命令(无 TTY 会挂死),匹配前先把空引号拼接折叠掉，免得用引号切词绕过。workspace 分两层:SECRETS 层读写执行全拒,EVALUATOR FIREWALL 层只拒写和执行、放行读 —— 路径先 canonicalize(存在就 realpath,不存在就 realpath 最近的祖先再拼回去),所以指进敏感目录的符号链接一样被抓到;macOS 与 Windows 上所有比较都折叠大小写，否则 .ENV 或 ID_RSA 能整个绕过两层。",
@@ -3303,9 +6491,193 @@ window.LUNA_DECKS = {
         }
       ]
     },
+    "claimFigure": {
+      "w": 500,
+      "h": 208,
+      "boxes": [
+        {
+          "x": 4,
+          "y": 40,
+          "w": 121,
+          "h": 46,
+          "title": {
+            "zh": "流出的文字",
+            "en": "streamed text"
+          }
+        },
+        {
+          "x": 133,
+          "y": 40,
+          "w": 99,
+          "h": 46,
+          "title": "tool_use",
+          "sub": {
+            "zh": "没有配对结果",
+            "en": "no matching result"
+          }
+        },
+        {
+          "x": 4,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": "400",
+          "sub": {
+            "zh": "此后每一次请求",
+            "en": "every later request"
+          }
+        },
+        {
+          "x": 264,
+          "y": 40,
+          "w": 121,
+          "h": 46,
+          "title": {
+            "zh": "流出的文字",
+            "en": "streamed text"
+          },
+          "sub": {
+            "zh": "保留",
+            "en": "kept"
+          }
+        },
+        {
+          "x": 393,
+          "y": 40,
+          "w": 99,
+          "h": 46,
+          "title": "tool_use",
+          "sub": {
+            "zh": "剥掉",
+            "en": "stripped"
+          },
+          "kind": "ghost"
+        },
+        {
+          "x": 264,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "请求正常通过",
+            "en": "requests go through"
+          },
+          "sub": {
+            "zh": "配对完整",
+            "en": "every use is paired"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              45,
+              88
+            ],
+            [
+              45,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              118,
+              88
+            ],
+            [
+              118,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              191,
+              88
+            ],
+            [
+              191,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              378,
+              88
+            ],
+            [
+              378,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              248,
+              30
+            ],
+            [
+              248,
+              168
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        }
+      ],
+      "labels": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "一轮被 max_tokens 截断",
+            "en": "a round cut short by max_tokens"
+          }
+        },
+        {
+          "x": 262,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "流关闭后无条件清理",
+            "en": "cleaned up unconditionally once the stream closes"
+          }
+        },
+        {
+          "x": 0,
+          "y": 166,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "毒块落在回滚边界之前：折叠 / 裁剪 / 重启都够不着",
+            "en": "it lands before the rollback boundary — folding, trimming and restarts cannot reach it"
+          }
+        },
+        {
+          "x": 262,
+          "y": 166,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "wire 上补一条 err，客户端收掉半截气泡",
+            "en": "an err goes out on the wire; the client drops the half bubble"
+          }
+        }
+      ]
+    },
     "claim": {
-      "zh": "没有它，一轮被截断的输出能把整个 session 永久打死：模型已经吐完了一个完整的 tool_use 块，但 stopReason 不是 tool_use(max_tokens 截断，或者 refusal),分发从来没发生过 —— 这个没有配对 tool_result 的块留在历史里，之后每一次请求都被 API 400。清理把这种从未运行过的调用摘掉，因为它根本不算历史。",
-      "en": "Without it, one truncated round can brick a session permanently: the model emitted a complete tool_use block but stopped for some other reason (max_tokens mid-stream, or a refusal), so dispatch never happened — and that block, with no matching tool_result, rides into history and 400s every request from then on. The cleanup drops a call that never ran, because a call that never ran is not history."
+      "zh": "一轮输出被 max_tokens 或 refusal 截断时，模型可能已经吐完一个完整的 tool_use 块却从未被派发。这个没有配对 tool_result 的块会让此后每次请求都被 API 打回 400，而且它落在回滚边界之前，折叠、裁剪、重启都够不着。清理在流关闭后无条件把这类调用从 assistant 消息里剥掉。",
+      "en": "When a round is cut short by max_tokens or a refusal, the model may already have emitted a complete tool_use block that was never dispatched. That unpaired block makes every later request fail with a 400, and it lands before the rollback boundary, out of reach of folding, trimming and restarts. The cleanup unconditionally strips such calls from the assistant message once the stream closes."
     },
     "mechanism": {
       "zh": "要命的是毒块的位置：它落在这一轮 rollback 边界之前，所以按轮回滚、L1 折叠、窗口裁剪、乃至整个进程重启，全都够不着它 —— 线上唯一救回来的办法是手改数据库。修法是在流关闭后、判定 finishReason 之前无条件调一次 dropUndispatchedToolUse:只有 stopReason 为 tool_use 且确有 pendingToolUses 时才走分发，其余一律进清理。partitionToolUse 把最后一条 assistant 消息拆成 kept 与 dropped,她流出来的文字保留；整条消息只剩下这个调用，就把整条弹掉。每个被丢掉的调用还要在 wire 上补一条 tool.finished{err, recoverable} —— 客户端对以 err 收尾的消息预览的处理就是丢弃，而一个从未送达的半截气泡本来就该消失。",
@@ -3473,9 +6845,140 @@ window.LUNA_DECKS = {
         }
       ]
     },
+    "claimFigure": {
+      "w": 500,
+      "h": 254,
+      "boxes": [
+        {
+          "x": 4,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "被挡下的主动动作",
+            "en": "a proactive action blocked"
+          }
+        },
+        {
+          "x": 4,
+          "y": 96,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "被纠正的失约",
+            "en": "a broken promise corrected"
+          }
+        },
+        {
+          "x": 4,
+          "y": 152,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "被丢掉的悬空调用",
+            "en": "a dangling call dropped"
+          }
+        },
+        {
+          "x": 264,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "node / tool / outbound / decision",
+            "en": "node / tool / outbound / decision"
+          },
+          "sub": {
+            "zh": "finally 里一次事务写完",
+            "en": "one transaction inside the finally"
+          }
+        },
+        {
+          "x": 264,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": "/_trace",
+          "sub": {
+            "zh": "只读视图：turn 列表 + 事件流",
+            "en": "a read-only view: turns, then their events"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              378,
+              88
+            ],
+            [
+              378,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              248,
+              30
+            ],
+            [
+              248,
+              214
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        }
+      ],
+      "labels": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "闸的每一次开合只在 stdout",
+            "en": "every guard decision lives in stdout"
+          }
+        },
+        {
+          "x": 262,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "按 turn 落进 SQLite",
+            "en": "written to SQLite, one turn at a time"
+          }
+        },
+        {
+          "x": 0,
+          "y": 212,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "重启就没了",
+            "en": "gone on the next restart"
+          }
+        },
+        {
+          "x": 262,
+          "y": 212,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "flushTrace 自吞异常——观测不许弄坏被观测的事",
+            "en": "flushTrace swallows its own errors — observation must not break what it observes"
+          }
+        }
+      ]
+    },
     "claim": {
-      "zh": "没有它，前面五道闸每一次开合都是不可见的 —— 被挡下的主动动作、被纠正的失约、被丢掉的悬空调用，全部只留在 stdout 里，重启就没了。trace 把它们变成一本账：每次状态跃迁一行、每个工具事件一行、每条出站事件一行，再加上闸自己写的 decision 行，按 turn 落进 SQLite。",
-      "en": "Without it, every opening and closing of the five gates above is invisible — a blocked proactive action, a corrected broken promise, a dropped dangling call, all of it living in stdout and gone on restart. The trace turns them into a ledger: one row per graph transition, one per tool event, one per outbound event, plus the decision rows the gates write themselves, landed in SQLite per turn."
+      "zh": "一层可关闭的观测：每次节点转移、每个工具事件、每条出站事件各一行，加上各闸自己写的 decision 行，按 turn 在 finally 里一次事务写进 SQLite。trace() 在未配置 store 时是 no-op，所以调用点全部无条件；flushTrace 自吞异常，观测不许弄坏被观测的那件事。",
+      "en": "An observation layer that can be switched off: one row per node transition, per tool event and per outbound event, plus the decision rows the guards write themselves, committed per turn in a single transaction inside the finally. trace() is a no-op when no store is configured, so call sites are unconditional, and flushTrace swallows its own exceptions — observation must not break what it observes."
     },
     "mechanism": {
       "zh": "trace(event) 是唯一入口:store 没设或 LUNA_TRACE=0 时它是 no-op,所以调用点全部可以是无条件的,turn loop 里不用到处撒 if。事件按 turn_id 在内存里攒着，在 turn 的 finally 里一次事务写完 —— 而且完整性审计被刻意排在 flushTrace 之前，好让它那条 decision 和本轮其它事件原子地落在一起。图的 onTransition 钩子负责 node 行，其中 open_stream 那一跳额外带上 token 数、首 token 延迟和 thinking 摘要。",
@@ -3641,9 +7144,131 @@ window.LUNA_DECKS = {
         }
       ]
     },
+    "claimFigure": {
+      "w": 500,
+      "h": 208,
+      "boxes": [
+        {
+          "x": 4,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "L2 一行",
+            "en": "one L2 row"
+          },
+          "sub": "assistant_text = ''"
+        },
+        {
+          "x": 4,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "“你说了 X，我什么都没回”",
+            "en": "“you said X, I said nothing”"
+          }
+        },
+        {
+          "x": 264,
+          "y": 40,
+          "w": 110,
+          "h": 46,
+          "title": {
+            "zh": "非空",
+            "en": "non-empty"
+          },
+          "sub": "appendL2"
+        },
+        {
+          "x": 382,
+          "y": 40,
+          "w": 110,
+          "h": 46,
+          "title": {
+            "zh": "为空",
+            "en": "empty"
+          },
+          "sub": {
+            "zh": "history 截回起点",
+            "en": "history truncated back"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              118,
+              88
+            ],
+            [
+              118,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              248,
+              30
+            ],
+            [
+              248,
+              168
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        }
+      ],
+      "labels": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "空回合也落库",
+            "en": "an empty turn is persisted too"
+          }
+        },
+        {
+          "x": 262,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "realReply 非空才写",
+            "en": "written only when realReply is non-empty"
+          }
+        },
+        {
+          "x": 0,
+          "y": 166,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "跨重启一直在：断供期间看起来像失忆",
+            "en": "it survives every restart — which is what an outage looked like"
+          }
+        },
+        {
+          "x": 262,
+          "y": 166,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "说过话 ⇔ 有一行 L2。没有中间态",
+            "en": "spoke ⇔ one L2 row. There is no in-between"
+          }
+        }
+      ]
+    },
     "claim": {
-      "zh": "没有这道关口，一个什么都没说出口的回合照样在记忆里留下一条空记录：重建出来的窗口读起来是「你说了 X，我什么都没回」，而且自 v0.16.2 起 L2 才是真相源，这条空白会挺过每一次重启——一次 401 断供就足以让她看起来像失忆。realReply 关口只放真的说出话的回合落库，其余整轮回滚。",
-      "en": "Without this gate a turn that said nothing still leaves a row: the rebuilt window reads \"you said X, I said nothing\", and since v0.16.2 made L2 the source of truth that blank survives every reload — one 401 outage was enough to make her look amnesiac. The realReply gate lets only turns that actually spoke become durable; everything else is rolled back whole."
+      "zh": "回合唯一的持久化判据：message 模式下取 message 工具投递过的文本，text 模式下取流式累积文本，非空才写 L2；为空则把 session.history 截回回合开始时的长度，整轮不留痕。L2 自 v0.16.2 起是历史的真相源，一行空记录会跨重启一直存在。",
+      "en": "The single condition that decides whether a turn is persisted: in message mode the text actually delivered by the message tool, in text mode the accumulated stream. Non-empty writes an L2 row; empty truncates session.history back to its length at the start of the turn, leaving nothing behind. Since v0.16.2 L2 has been the source of truth for history, so one empty row would survive every restart."
     },
     "mechanism": {
       "zh": "realReply 在 message 模式下是 message 工具吐出的文本拼接，text 模式下是流式累积的 state.text，都 trim 过。非空才进 appendL2，写之前先 stripThinking，再 stripCorrectiveDirectives（把回合内为纠正而临时塞进去的 user 角色舞台指示删掉，免得下一轮把伪造的用户训话当真）。为空则执行 opts.session.history.length = historyStart，把这一整轮追加的消息从内存窗口截掉——长度回到回合开始时抄下的快照点，那条悬空的 user 消息一起消失，重试时不会顶两遍。落库的 assistantText 用的是 realReply 而不是 state.text：message 模式下 state.text 装的是模型在 message 工具外面漏出来的旁白，出错回合的 finalize 从没跑过，存 state.text 就会把那句旁白当成她的正式回复。整段包在 try/catch 里，SQLite 抛错只打日志加发一个 persistence_failed 事件，绝不让 runTurn 的 promise reject，也绝不跳过后面的 trace flush 和 fold。",
@@ -3794,9 +7419,190 @@ window.LUNA_DECKS = {
         }
       ]
     },
+    "claimFigure": {
+      "w": 500,
+      "h": 208,
+      "boxes": [
+        {
+          "x": 4,
+          "y": 40,
+          "w": 20,
+          "h": 30,
+          "title": ""
+        },
+        {
+          "x": 30,
+          "y": 40,
+          "w": 20,
+          "h": 30,
+          "title": ""
+        },
+        {
+          "x": 56,
+          "y": 40,
+          "w": 20,
+          "h": 30,
+          "title": ""
+        },
+        {
+          "x": 82,
+          "y": 40,
+          "w": 20,
+          "h": 30,
+          "title": ""
+        },
+        {
+          "x": 108,
+          "y": 40,
+          "w": 20,
+          "h": 30,
+          "title": ""
+        },
+        {
+          "x": 134,
+          "y": 40,
+          "w": 20,
+          "h": 30,
+          "title": ""
+        },
+        {
+          "x": 160,
+          "y": 40,
+          "w": 20,
+          "h": 30,
+          "title": ""
+        },
+        {
+          "x": 186,
+          "y": 40,
+          "w": 20,
+          "h": 30,
+          "title": ""
+        },
+        {
+          "x": 212,
+          "y": 40,
+          "w": 20,
+          "h": 30,
+          "title": ""
+        },
+        {
+          "x": 264,
+          "y": 40,
+          "w": 110,
+          "h": 46,
+          "title": {
+            "zh": "摘要",
+            "en": "summary"
+          },
+          "sub": {
+            "zh": "≤ 3000 字，每次重新推导",
+            "en": "≤ 3000 chars, re-derived"
+          }
+        },
+        {
+          "x": 382,
+          "y": 40,
+          "w": 110,
+          "h": 46,
+          "title": {
+            "zh": "100 轮",
+            "en": "100 turns"
+          },
+          "sub": {
+            "zh": "逐字保留",
+            "en": "kept verbatim"
+          }
+        },
+        {
+          "x": 264,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "提交走 CAS",
+            "en": "committed by compare-and-set"
+          },
+          "sub": {
+            "zh": "输掉竞争就整份丢弃",
+            "en": "losing the race discards the whole thing"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              378,
+              88
+            ],
+            [
+              378,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              248,
+              30
+            ],
+            [
+              248,
+              168
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        }
+      ],
+      "labels": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "逐字窗口只增不减",
+            "en": "the verbatim window only grows"
+          }
+        },
+        {
+          "x": 262,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "最老的一批换成结构化摘要",
+            "en": "the oldest batch becomes a structured summary"
+          }
+        },
+        {
+          "x": 0,
+          "y": 166,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "390K token 的单轮：账单是唯一的警报",
+            "en": "a 390K-token round — the bill was the only alarm"
+          }
+        },
+        {
+          "x": 262,
+          "y": 166,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "边界永远落在回合起点，绝不劈开工具消息对",
+            "en": "the boundary always lands on a turn start, never inside a tool pair"
+          }
+        }
+      ]
+    },
     "claim": {
-      "zh": "没有折叠，逐字窗口只会一直长，每一轮把整段历史重新发一遍——那次 390K token 的单轮就是这么来的（普通聊天约 1 美元一轮）。折叠把最老的一批回合换成一份结构化摘要，把窗口拉回 100 轮。",
-      "en": "Without the fold the verbatim window only grows, resending the whole history every turn — that is the 390K-token turn (~$1 a turn on plain chat). The fold swaps the oldest batch of turns for a structured digest and pulls the window back to 100 turns."
+      "zh": "把最老的一批回合换成一份结构化摘要，把逐字窗口拉回 100 轮。决策单位是回合而不是消息，边界永远落在回合起点，绝不劈开 tool_use / tool_result 对；提交是 CAS，输掉竞争就整份摘要丢弃。另有 hardTrimTail 按 300 条 / 120000 字符兜底。",
+      "en": "Replaces the oldest batch of turns with a structured summary, pulling the verbatim window back to 100 turns. The unit of decision is a turn rather than a message, the boundary always lands on a turn start, and a tool_use/tool_result pair is never split. The commit is a compare-and-set — losing the race discards the whole summary. hardTrimTail backstops at 300 messages and 120,000 characters."
     },
     "mechanism": {
       "zh": "决策单位是回合（一条 L2 行）不是消息：未折叠回合数超过 keep + batch（默认 100 + 10）才动手，一次折掉 unfolded - keep 条，边界永远落在回合起点，绝不劈开 tool_use 与 tool_result 的配对。压缩器拿到的是当前摘要加上新回合的逐字原文，重新推导出整份摘要而不是往后追加，所以反复折叠不会把摘要撑大；importance ≥ 4 的回合打上 [salient] 标记，要求近乎原样保留。提交是 CAS：maybeFold 在调 LLM 之前把 session.windowLowWater 抄进 expected，commitFold 的 UPDATE 带 WHERE window_low_water = expected，changes 不等于 1 就是输掉竞争——摘要整份丢弃，内存里的 rollingSummary 和 windowLowWater 一个字都不改，下一次 fold 从头再来。空摘要（模型只出了思考、或撞上 max_tokens）同样直接返回 false，绝不用空串覆盖并推进水位，那会悄悄缩小活动上下文。另有一道与折叠无关的硬网：hardTrimTail 在每次组装上下文时按 300 条消息和 120000 字符两个上限剪尾，切在同时满足两个预算的最早回合起点；一旦触发就说明折叠已经落后了，日志会喊 hard trim engaged。",
@@ -3986,9 +7792,148 @@ window.LUNA_DECKS = {
         }
       ]
     },
+    "claimFigure": {
+      "w": 500,
+      "h": 198,
+      "boxes": [
+        {
+          "x": 4,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "全带上",
+            "en": "carry all of it"
+          },
+          "sub": {
+            "zh": "贵，而且迟早超窗",
+            "en": "expensive, and eventually over the window"
+          }
+        },
+        {
+          "x": 4,
+          "y": 96,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "截断",
+            "en": "truncate"
+          },
+          "sub": {
+            "zh": "那就是忘了",
+            "en": "then it simply forgot"
+          }
+        },
+        {
+          "x": 264,
+          "y": 40,
+          "w": 79,
+          "h": 46,
+          "title": "L1",
+          "sub": {
+            "zh": "有界窗口",
+            "en": "bounded window"
+          }
+        },
+        {
+          "x": 351,
+          "y": 40,
+          "w": 141,
+          "h": 46,
+          "title": "L2",
+          "sub": {
+            "zh": "追加式时间线 · 真相源 · O(1)",
+            "en": "append-only · source of truth · O(1)"
+          }
+        },
+        {
+          "x": 264,
+          "y": 96,
+          "w": 110,
+          "h": 46,
+          "title": "L3",
+          "sub": {
+            "zh": "五类事实 · 软删除",
+            "en": "five classes · soft-deleted"
+          }
+        },
+        {
+          "x": 382,
+          "y": 96,
+          "w": 110,
+          "h": 46,
+          "title": {
+            "zh": "灵魂",
+            "en": "soul"
+          },
+          "sub": {
+            "zh": "固定核心：只有主人能改",
+            "en": "fixed core: owner only"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              248,
+              30
+            ],
+            [
+              248,
+              158
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        }
+      ],
+      "labels": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "一条逐字长河",
+            "en": "one long verbatim river"
+          }
+        },
+        {
+          "x": 262,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "四层，各有各的有界方式和写者",
+            "en": "four layers, each with its own bound and writer"
+          }
+        },
+        {
+          "x": 0,
+          "y": 156,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "只有这两个选项",
+            "en": "those are the only two options"
+          }
+        },
+        {
+          "x": 262,
+          "y": 156,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "梦够不到固定核心：没有任何代码路径",
+            "en": "no code path reaches the fixed core from the dream"
+          }
+        }
+      ]
+    },
     "claim": {
-      "zh": "不分层的话，记忆就只有一条逐字长河：要么全带上（贵，而且迟早超窗），要么截断（她就是忘了）。分成 L1 有界窗口 / L2 追加式回合时间线 / L3 结构化事实 / 灵魂四层之后，每层有自己的有界方式和自己的写者。",
-      "en": "Unlayered, memory is one verbatim river: carry all of it (expensive, and eventually over the window) or truncate it (she simply forgot). Split into L1 bounded window, L2 append-only turn timeline, L3 structured facts, and the soul, each layer gets its own bound and its own writer."
+      "zh": "记忆分四层，每层有自己的有界方式和自己的写者：L1 是有界窗口，L2 是追加式回合时间线（真相源，每轮写入 O(1)），L3 是五类结构化事实（软删除，可按时刻回看），灵魂是一张单行表——固定核心只有主人的编辑器能改，梦够不到。",
+      "en": "Memory has four layers, each with its own bound and its own writer: L1 is the bounded window; L2 is the append-only turn timeline (the source of truth, O(1) per turn); L3 is five classes of structured facts (soft-deleted, queryable as of a point in time); the soul is a single-row table whose fixed core only the owner's editor can write — no code path reaches it from the dream."
     },
     "mechanism": {
       "zh": "L2 是唯一的真相源：每条 raw_json 正好是那一轮往 history 追加的消息，按 t_ms 顺序拼起来就重建出完整历史，所以每轮持久化是 O(1)——sessions.history_json 现在只写一个常量 [] 占位，不再每轮重新序列化整段历史。L3 是五类结构化事实：core_facts、preferences、key_moments、active_threads、project_context；进系统提示时按类封顶（15 / 10 / 12 / 6 / 8），存储本身不封顶，靠梦里的 refine_semantic 修剪，active_threads 默认 14 天过期。forget 是软删除：只写 deleted_ms，行永远留着；listFacts 把 created_ms <= at、deleted_ms 为空或大于 at、expires_ms 为空或大于 at 三个条件合起来查，asOf 一给就是一句「那个时刻她记得什么」的回看。灵魂是一张单行表，分两半：fixed_text 是主人的（首次启动从 git 的 default.md 播种一次，之后只有工作区编辑器能改），evolving_self 与 evolving_bond 是她自己长的那半，梦的 persona_update 每次改都先往 soul_audit 写一条前值，restoreEvolving 靠这条审计回退。renderSoulBlock 把固定核心放最前，她的两段带小标题接在下面。",
@@ -4211,9 +8156,142 @@ window.LUNA_DECKS = {
         }
       ]
     },
+    "claimFigure": {
+      "w": 500,
+      "h": 208,
+      "boxes": [
+        {
+          "x": 4,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "一边回话",
+            "en": "replying"
+          }
+        },
+        {
+          "x": 4,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "一边打分 / 修记忆 / 写日记",
+            "en": "while scoring, refining memory, writing diaries"
+          }
+        },
+        {
+          "x": 264,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "八步固定顺序",
+            "en": "eight steps in a fixed order"
+          },
+          "sub": {
+            "zh": "rate_salience → … → rag_refresh",
+            "en": "rate_salience → … → rag_refresh"
+          }
+        },
+        {
+          "x": 264,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": "finished_idle",
+          "sub": {
+            "zh": "跑完停下来等唤醒",
+            "en": "it stops there and waits to be woken"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              118,
+              88
+            ],
+            [
+              118,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              378,
+              88
+            ],
+            [
+              378,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              248,
+              30
+            ],
+            [
+              248,
+              168
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        }
+      ],
+      "labels": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "整理发生在回合里",
+            "en": "the tidying happens inside the turn"
+          }
+        },
+        {
+          "x": 262,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "第二台状态机，同一个 runGraph",
+            "en": "a second state machine on the same runGraph"
+          }
+        },
+        {
+          "x": 0,
+          "y": 166,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "用户在等",
+            "en": "and the user is waiting"
+          }
+        },
+        {
+          "x": 262,
+          "y": 166,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "每步独立 try/catch 并单独 flush，崩了不丢已完成的步",
+            "en": "each step catches and flushes on its own — a crash keeps what finished"
+          }
+        }
+      ]
+    },
     "claim": {
-      "zh": "没有梦，整理只能发生在回合里：她一边回话一边给回合打分、修记忆、写日记，用户在等。梦把这些搬到第二台状态机上——八步固定顺序、优先走独立的 summarizer key、跑完停在 finished_idle 等唤醒。",
-      "en": "Without the dream, consolidation happens inside turns: rating, memory repair, and diary writing while the user waits. The dream moves all of it onto a second state machine — eight fixed steps, running first on a separate summarizer key, parking at finished_idle when done."
+      "zh": "第二台状态机，跑在同一个 runGraph 上：八个节点固定顺序执行（打分 → 语义整理 → 折叠 → 记忆审计 → 人格更新 → 日记 → 技能蒸馏 → 向量预热），每步独立 try/catch 并单独 flush trace，中途失败不打断后面的步。优先走独立的 summarizer key。",
+      "en": "A second state machine on the same runGraph: eight nodes in a fixed order — salience, semantic refine, fold, memory audit, persona update, diaries, skill distillation, vector refresh — each wrapped in its own try/catch and flushing trace separately, so a failed step does not stop the ones after it. It prefers a separate summarizer key."
     },
     "mechanism": {
       "zh": "梦复用回合那台 runGraph（一个编排形状、一条 trace 缝），只是把节点集换成 DreamNode 的八个，顺序写死在 ORDER 里：rate_salience、refine_semantic、refine_layer1、memory_audit、persona_update、run_diaries、distill_skills、rag_refresh。顺序不是随便排的：rate_salience 必须在 refine_layer1 之前，因为折叠要用 importance 给重要回合打 [salient] 锚，防止它们被过度概括；distill_skills 排在 run_diaries 之后、rag_refresh 之前，是为了让本轮新蒸馏出的技能在同一轮里被 rag_refresh 预热成向量，否则要等到下一次梦才可检索。每步被 runStep 包住：抛错记成 failed 但不中断整轮，发一条 dream.step 事件，并且每步都单独 flushTrace 一次——中途崩了，已完成的步不丢。LLM 走 dreamCall 的两跳级联：LUNA_SUMMARIZER_API_KEY 那个 provider 优先，空文本或异常才落回主 provider，失败被分类成 rate_limited、content_filter、auth、empty_text、exception。trigger 有三种来源写进 dream_reports：shutdown（退出路径）、manual（菜单 dream.enter）、self（她自己的 enter_dream）——在 v0.45.12 之前这三条路径在报告里完全分不出来。",
@@ -4381,9 +8459,143 @@ window.LUNA_DECKS = {
         }
       ]
     },
+    "claimFigure": {
+      "w": 500,
+      "h": 220,
+      "boxes": [
+        {
+          "x": 4,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "各自处理并发与崩溃恢复",
+            "en": "each handles concurrency and crash recovery"
+          }
+        },
+        {
+          "x": 4,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "四份半成品的持久化",
+            "en": "four half-built persistence layers"
+          },
+          "kind": "ghost"
+        },
+        {
+          "x": 264,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": "luna.sqlite",
+          "sub": {
+            "zh": "22 个迁移之后 18 张活着的表 · WAL",
+            "en": "18 live tables after 22 migrations · WAL"
+          }
+        },
+        {
+          "x": 264,
+          "y": 106,
+          "w": 228,
+          "h": 58,
+          "title": {
+            "zh": "一个事务一个迁移",
+            "en": "one transaction per migration"
+          },
+          "sub": {
+            "zh": "同一事务里推进 user_version：要么整体生效，要么完全不生效",
+            "en": "it advances user_version in the same transaction — all of it or none"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              118,
+              88
+            ],
+            [
+              118,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              378,
+              88
+            ],
+            [
+              378,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              248,
+              30
+            ],
+            [
+              248,
+              180
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        }
+      ],
+      "labels": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "每层自己挑存储",
+            "en": "every layer picks its own store"
+          }
+        },
+        {
+          "x": 262,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "仓库根上的一个文件",
+            "en": "one file at the repository root"
+          }
+        },
+        {
+          "x": 0,
+          "y": 178,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "没有一处能回答「她现在记得什么」",
+            "en": "no single place answers what is remembered"
+          }
+        },
+        {
+          "x": 262,
+          "y": 178,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "删掉这个文件 = 一次彻底的重生",
+            "en": "delete the file and everything starts over"
+          }
+        }
+      ]
+    },
     "claim": {
-      "zh": "没有它，上面每一层都得自己挑存储、自己处理并发和崩溃恢复。Luna 的全部状态就是仓库根上的一个文件 luna.sqlite：22 个迁移、18 张活着的表，WAL 模式。删掉这个文件等于让她彻底重生。",
-      "en": "Without it every layer above would pick its own storage and handle concurrency and crash recovery alone. All of Luna's state is one file at the repo root, luna.sqlite: 22 migrations, 18 live tables, in WAL mode. Deleting that file is a full rebirth."
+      "zh": "全部持久状态是仓库根上的一个文件：22 个迁移之后 18 张活着的表，WAL 模式，busy_timeout 5 秒。每个迁移在单个事务里执行并在同一事务里推进 user_version，所以不存在半张表；重复编号在跑之前就抛错。",
+      "en": "All persistent state is one file at the repository root: 18 live tables after 22 migrations, WAL mode, a 5-second busy timeout. Each migration runs inside a single transaction that also advances user_version, so a half-applied migration cannot exist, and a duplicate migration number throws before anything runs."
     },
     "mechanism": {
       "zh": "openDb 打开时固定三条 pragma：journal_mode = WAL、foreign_keys = ON、busy_timeout = 5000。migrate 读 migrations 目录下的 NNNN_*.sql，排序后跳过编号不大于当前 user_version 的，剩下的每个文件在一个事务里执行，并在同一个事务里把 user_version 顶到该编号——所以一个迁移要么整体生效要么整体不生效，不会留下半张表。真正跑之前还有一道守卫：同一个编号出现两次直接抛错，因为第二个文件本来会被静悄悄跳过。22 个文件里有 20 条 CREATE TABLE，0017 把 core_memory 与 core_memory_audit 两张退休表 DROP 掉，所以迁移跑完 user_version = 22、活着的表是 18 张。DB 路径钉死在仓库根（从 import.meta.dir 上溯三层），从子目录启动也不会另开一个空库；LUNA_DB_PATH 与 LUNA_MIGRATIONS_DIR 是给编译版 sidecar 的逃生口（bun build --compile 出来的二进制里 import.meta.dir 是虚的）。",
@@ -4511,9 +8723,171 @@ window.LUNA_DECKS = {
         }
       ]
     },
+    "claimFigure": {
+      "w": 500,
+      "h": 208,
+      "boxes": [
+        {
+          "x": 4,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "请求进来",
+            "en": "a request arrives"
+          }
+        },
+        {
+          "x": 4,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "一个回合",
+            "en": "one turn"
+          }
+        },
+        {
+          "x": 264,
+          "y": 40,
+          "w": 110,
+          "h": 46,
+          "title": {
+            "zh": "请求进来",
+            "en": "a request"
+          }
+        },
+        {
+          "x": 382,
+          "y": 40,
+          "w": 110,
+          "h": 46,
+          "title": {
+            "zh": "60s 定时器",
+            "en": "a 60s timer"
+          }
+        },
+        {
+          "x": 264,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "同一条回合路径",
+            "en": "the same turn path"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              118,
+              88
+            ],
+            [
+              118,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              305,
+              88
+            ],
+            [
+              305,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              378,
+              88
+            ],
+            [
+              378,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              451,
+              88
+            ],
+            [
+              451,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              248,
+              30
+            ],
+            [
+              248,
+              168
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        }
+      ],
+      "labels": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "只在被叫醒时存在",
+            "en": "it exists only when called"
+          }
+        },
+        {
+          "x": 262,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "两个入口",
+            "en": "two entry points"
+          }
+        },
+        {
+          "x": 0,
+          "y": 166,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "所有自主行为塌回成对请求的回应",
+            "en": "every autonomous act collapses into a response"
+          }
+        },
+        {
+          "x": 262,
+          "y": 166,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "定时器 unref：它永远不阻止进程退出",
+            "en": "the timer is unref’d — it never keeps the process alive"
+          }
+        }
+      ]
+    },
     "claim": {
-      "zh": "没有它，Luna 只在被叫醒时存在——所有自主行为都塌回成对请求的回应，第二个入口根本不存在。它是一个服务端的 60 秒 setInterval：每跳一次，就替每个活跃会话问一遍「现在要不要醒」。",
-      "en": "Without it Luna only exists when spoken to — every autonomous behavior collapses back into a response to a request, and the second entrance simply is not there. It is one server-side 60-second setInterval: on each beat it asks, once per active session, whether she should wake."
+      "zh": "一个服务端 setInterval，默认 60 秒、下限 5 秒，每跳替每个活跃会话问一次是否该醒。定时器建好后立刻 unref，不阻止进程退出；全仓没有任何一处对它调用 clearInterval——它的生命周期就是进程的生命周期。",
+      "en": "A server-side setInterval, 60 seconds by default and floored at 5, that asks once per tick per active session whether to wake. The timer is unref'd immediately so it never keeps the process alive, and nothing in the repository calls clearInterval on it: its lifetime is the process's lifetime."
     },
     "mechanism": {
       "zh": "tick 间隔读 LUNA_PROACTIVE_TICK_SECONDS，默认 60 秒，被 Math.max(5, …) 夹住下限。定时器建好后立刻 .unref()：它不再计入事件循环的存活引用，进程该退就退。全仓没有任何一处对这个定时器调用 clearInterval——v0.45.14 删掉了那个从未被调用过的 stopScheduler——所以它的完整生命周期就是：启动一次，随进程一起死，这正是设计意图。另有一个模块级 ticking 布尔把 tick 串起来，因为一次 tick 里的主动回合完全可能比 tick 间隔还长。",
@@ -4693,9 +9067,138 @@ window.LUNA_DECKS = {
         }
       ]
     },
+    "claimFigure": {
+      "w": 500,
+      "h": 208,
+      "boxes": [
+        {
+          "x": 4,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "投机式 LLM 调用",
+            "en": "a speculative model call"
+          }
+        },
+        {
+          "x": 4,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "多半换回一次沉默",
+            "en": "usually buys one more silence"
+          }
+        },
+        {
+          "x": 264,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": "effective_gap",
+          "sub": {
+            "zh": "min(频道最后发言, 上次主动开口)",
+            "en": "min(last message in channel, last proactive turn)"
+          }
+        },
+        {
+          "x": 264,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "5 相位 → 4 种场景，或什么都不做",
+            "en": "five phases → four scenarios, or nothing at all"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              118,
+              88
+            ],
+            [
+              118,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              378,
+              88
+            ],
+            [
+              378,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              248,
+              30
+            ],
+            [
+              248,
+              168
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        }
+      ],
+      "labels": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "每 60 秒问一次模型",
+            "en": "ask the model once a minute"
+          }
+        },
+        {
+          "x": 262,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "evaluateLadder · 一个纯函数",
+            "en": "evaluateLadder — a pure function"
+          }
+        },
+        {
+          "x": 0,
+          "y": 166,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "判断没有记忆，无法升级也无法退让",
+            "en": "a judgement with no memory — it can neither escalate nor back off"
+          }
+        },
+        {
+          "x": 262,
+          "y": 166,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "时钟与随机数注入：可单测，几毫秒说不，不花一分钱",
+            "en": "clock and RNG injected — testable, instant, and free"
+          }
+        }
+      ]
+    },
     "claim": {
-      "zh": "没有它，心跳每 60 秒就得投机地问模型一次「现在该说话吗」——一次 LLM 调用换一次沉默，而且判断毫无记忆、无法升级也无法退让。它是唤醒决策本身：一个纯函数，只看沉默了多久，返回该用哪一种场景开口，或者干脆什么都不返回。",
-      "en": "Without it the heartbeat would have to speculatively ask the model every 60 seconds whether now is the time to speak — one LLM call bought per silence — and the judgment would have no memory, no way to escalate and no way to back off. It is the wake decision itself: a pure function that looks only at how long it has been quiet and returns which scenario to open with, or nothing at all."
+      "zh": "唤醒决策本身是一个纯函数：只看 effective_gap（频道最后一次发言与上次主动开口，取较小者），在 5 个相位间迁移，产出 4 种场景之一或什么都不产出。时钟与随机数从参数注入，因此可被单测钉死，且不花一次模型调用。",
+      "en": "The waking decision is a pure function: it looks only at effective_gap — the smaller of time since the last message in the channel and time since the last proactive turn — moves between five phases, and returns one of four scenarios or nothing at all. Clock and RNG are injected as parameters, so it is unit-testable and costs no model call."
     },
     "mechanism": {
       "zh": "一个信号驱动全部：effective_gap = min(距离频道里最后一次有人说话, 距离她上一次主动开口)。取 min 是为了让她刚打破的沉默不算沉默——v0.29.0 之前这个 gap 只数用户与她的主动外联，她普通的回复推不动它，于是她会在回答完几秒后就插进一场活着的对话。相位机有 5 个相位：engaged / idle_watch / nudged / dormant / sleeping；产出 4 种场景框架：ambient / idle_nudge / renudge / leave_message。engaged 下 gap 过 10 分钟升 idle_watch；不到则以 6% 概率、且 gap ≥ 5 分钟时丢一句无重量的 ambient。nudged 里 renudge 按 [1.0, 2.4, 6.0] 的倍率退避，最多 3 次，之后落 leave_message → dormant；dormant 静默满 1 小时自动回 engaged；gap 超 18 小时进 sleeping，她等他回来，不往里推。函数是纯的：它把这一 tick 算出的相位迁移 return 出去，由 fire.ts 在每一条路径上落盘——包括「这一 tick 什么都没发生」那一条。丢掉它，dormant→engaged 的自动恢复就会被扔掉，她被永久锁死在 dormant。",
@@ -4863,9 +9366,139 @@ window.LUNA_DECKS = {
         }
       ]
     },
+    "claimFigure": {
+      "w": 500,
+      "h": 254,
+      "boxes": [
+        {
+          "x": 4,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "今天醒了 21 次",
+            "en": "woke 21 times today"
+          }
+        },
+        {
+          "x": 4,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "开口几次？",
+            "en": "and spoke how often?"
+          },
+          "kind": "ghost"
+        },
+        {
+          "x": 264,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": "spoke",
+          "sub": {
+            "zh": "发了消息",
+            "en": "a message was sent"
+          }
+        },
+        {
+          "x": 264,
+          "y": 96,
+          "w": 228,
+          "h": 46,
+          "title": "quiet",
+          "sub": {
+            "zh": "没发消息，但调过 message 之外的工具",
+            "en": "no message, but some other tool ran"
+          }
+        },
+        {
+          "x": 264,
+          "y": 152,
+          "w": 228,
+          "h": 46,
+          "title": "nothing",
+          "sub": {
+            "zh": "两样都没有",
+            "en": "neither"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              118,
+              88
+            ],
+            [
+              118,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              248,
+              30
+            ],
+            [
+              248,
+              214
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        }
+      ],
+      "labels": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "沉默率不可见",
+            "en": "the silence rate is invisible"
+          }
+        },
+        {
+          "x": 262,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "每次唤醒落一行账",
+            "en": "one row per waking"
+          }
+        },
+        {
+          "x": 0,
+          "y": 212,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "一次行为上的修复只能是氛围",
+            "en": "a behavioural fix can only ever be a vibe"
+          }
+        },
+        {
+          "x": 262,
+          "y": 212,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "「不说话」不是失败分支，它和 spoke 一样是正常取值",
+            "en": "staying quiet is not a failure branch — it is a normal value"
+          }
+        }
+      ]
+    },
     "claim": {
-      "zh": "没有它，「她今天醒了 21 次、开口 5 次」这句话没有任何东西能验证——沉默率是不可见的，于是一次行为上的修复就只是氛围。它把每一次主动醒来落成一行账：说话 / 安静地干活 / 什么也没做。",
-      "en": "Without it, a sentence like \"she woke 21 times today and spoke 5 of them\" has nothing behind it — the silent rate is invisible, and a behavioral fix is a vibe rather than a result. It writes every proactive waking down as one row: spoke / quiet work / nothing."
+      "zh": "每次主动唤醒落一行账，按两个事实分类：发了消息记 spoke；没发消息但调用过 message 之外的工具记 quiet；两样都没有记 nothing。quiet 被压成一行说明，同时用作前端展示文案；用过 web 工具的另计一次 wander，受日配额限制。",
+      "en": "Every proactive waking is recorded as one row, classified on two facts: a message was sent (spoke); no message but some non-message tool was called (quiet); neither (nothing). A quiet outcome is compressed into a one-line note that also serves as the client-facing text, and a waking that used a web tool additionally counts as a wander against a daily quota."
     },
     "mechanism": {
       "zh": "分类只看两件事：这一回合有没有发出消息，以及调过哪些工具名。发了消息 = spoke；没发消息但调过 message 之外的任何工具 = quiet；两样都没有 = nothing。这就是「安静地干活」得以成为一种合法结局的全部判据——工具调用本身就是行动。quiet 会被 compressNote 压成一行人话（同一个动词按次数合并，硬截到 140 字），这一行同时是账本里的 note、和前端那片叶子逐字显示的文案（proactive.finished 事件上的可选 quiet_note 字段）。用了 web_search 或 web_fetch 的算一次 wander，按本地午夜起算日配额（默认 4 次），而剩余配额又被写回下一次唤醒的提示词里——账本因此不只是记录，它还闭了一个小环。写库整段包在 try/catch 里：账本永远不许弄坏这一回合。",
@@ -5031,9 +9664,146 @@ window.LUNA_DECKS = {
         }
       ]
     },
+    "claimFigure": {
+      "w": 500,
+      "h": 220,
+      "boxes": [
+        {
+          "x": 4,
+          "y": 40,
+          "w": 228,
+          "h": 58,
+          "title": {
+            "zh": "用户消息 · 心跳 · 梦",
+            "en": "a message · the heartbeat · a dream"
+          },
+          "sub": {
+            "zh": "同时在跑各自的回合",
+            "en": "each running its own turn"
+          }
+        },
+        {
+          "x": 4,
+          "y": 118,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "共享同一段 history",
+            "en": "sharing one history"
+          },
+          "sub": {
+            "zh": "和同一个模型连接",
+            "en": "and one model connection"
+          }
+        },
+        {
+          "x": 264,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "activeTurn · is_dreaming · inFlight",
+            "en": "activeTurn · is_dreaming · inFlight"
+          }
+        },
+        {
+          "x": 264,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": "withProactiveLock",
+          "sub": {
+            "zh": "四道检查与一次 add 之间没有任何 await",
+            "en": "four checks and one add, with no await between"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              118,
+              100
+            ],
+            [
+              118,
+              116
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              378,
+              88
+            ],
+            [
+              378,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              248,
+              30
+            ],
+            [
+              248,
+              180
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        }
+      ],
+      "labels": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "三个入口互相踩",
+            "en": "three entry points stepping on each other"
+          }
+        },
+        {
+          "x": 262,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "三个状态，11 处守卫",
+            "en": "three pieces of state, eleven guards"
+          }
+        },
+        {
+          "x": 0,
+          "y": 178,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "冲突靠时序侥幸不发生",
+            "en": "collisions avoided only by luck of timing"
+          }
+        },
+        {
+          "x": 262,
+          "y": 178,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "一次只做一件事",
+            "en": "one thing at a time"
+          }
+        }
+      ]
+    },
     "claim": {
-      "zh": "没有它，三个入口会在同一个会话上互相踩：用户发来的消息、心跳自己醒来、以及一场梦，可能同时在跑各自的回合，共享同一段历史和同一个模型连接。它保证她一次只做一件事。",
-      "en": "Without it three entrances trample each other on one session: a message from the user, a waking of her own from the heartbeat, and a dream — each could be running its own turn at once, over the same history and the same model connection. It guarantees she does one thing at a time."
+      "zh": "三个入口——用户消息、心跳唤醒、梦——不能在同一会话上重叠。互斥由三个状态被 11 处守卫共同读出：session.activeTurn、进程级 is_dreaming、以及主动路径的 inFlight 集合。withProactiveLock 把四道检查和一次 add 放在任何 await 之前同步完成。",
+      "en": "Three entry points — a user message, a scheduled waking, a dream — must not overlap on one session. Mutual exclusion comes from three pieces of state read by eleven guards: session.activeTurn, the process-wide is_dreaming flag, and the proactive path's inFlight set. withProactiveLock performs its four checks and its add synchronously, before any await."
     },
     "mechanism": {
       "zh": "互斥不是一把锁，是三个状态被多处守卫共同读出来的。session.activeTurn（runTurn 在自己第一个 await 之前同步置上、finally 里清掉）被 4 处读；is_dreaming（dreamState 的模块级标志，写穿到 SQLite，所以重启后仍然成立）在互斥路径上被 5 处读；再加 fire.ts 里那个只属于主动路径的 inFlight 集合，和 enterDream 自己的 already_dreaming 自查——一共 11 处守卫，分布在 4 个文件。withProactiveLock 是其中最密的一处：四道检查一次做完，并且在任何 await 之前同步 add，所以四个赛跑的调用者（心跳 tick、天气事件钩子、continuation、开发者强制触发）不可能有两个同时通过。两道闸给用户的回执是不同的：撞上回合冲突回 turn_in_progress，消息是 turn <id> is still running，等一会儿重发即可；撞上做梦回 dreaming，消息是 Luna is dreaming — send dream.wake to wake her——它不是「稍后重试」，它要求你显式把她叫醒，而且 wake() 还会拒绝叫醒一场没跑到 finished_idle 的梦。",
@@ -5189,9 +9959,139 @@ window.LUNA_DECKS = {
         }
       ]
     },
+    "claimFigure": {
+      "w": 500,
+      "h": 208,
+      "boxes": [
+        {
+          "x": 4,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "服务端加一种事件",
+            "en": "the server adds an event type"
+          }
+        },
+        {
+          "x": 4,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "网页端不知道",
+            "en": "the web client never hears about it"
+          },
+          "kind": "ghost"
+        },
+        {
+          "x": 264,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "8 种 ClientEvent · 14 种 ServerEvent",
+            "en": "8 ClientEvent types · 14 ServerEvent types"
+          }
+        },
+        {
+          "x": 264,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": "assertNever",
+          "sub": {
+            "zh": "漏一支就是一个编译错误",
+            "en": "miss a variant and it is a compile error"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              118,
+              88
+            ],
+            [
+              118,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              378,
+              88
+            ],
+            [
+              378,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              248,
+              30
+            ],
+            [
+              248,
+              168
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        }
+      ],
+      "labels": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "两端各写一份 schema",
+            "en": "a schema written twice, once per side"
+          }
+        },
+        {
+          "x": 262,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "一份 Zod，两端 import 同一份源码",
+            "en": "one Zod file, imported as source by both sides"
+          }
+        },
+        {
+          "x": 0,
+          "y": 166,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "漂移是一次运行时惊喜",
+            "en": "the drift surfaces as a runtime surprise"
+          }
+        },
+        {
+          "x": 262,
+          "y": 166,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "每一条出站帧都过一次 ServerEvent.parse",
+            "en": "every outbound frame passes ServerEvent.parse"
+          }
+        }
+      ]
+    },
     "claim": {
-      "zh": "一条消息的一生只经过一个客户端接口：一条 WebSocket。用户这一侧能说的话是 8 种 ClientEvent，她能回的话是 14 种 ServerEvent —— 两个联合写在 packages/protocol 的同一份 Zod 文件里，被服务端和网页端 import 同一份源码。",
-      "en": "A message's whole life passes through exactly one client-facing interface: one WebSocket. This side can say 8 kinds of ClientEvent; she can answer with 14 kinds of ServerEvent — both unions live in a single Zod file under packages/protocol, and the server and the web page import that same source."
+      "zh": "客户端接口只有一条 WebSocket：入站 8 种 ClientEvent，出站 14 种 ServerEvent，两个联合定义在 packages/protocol 的同一份 Zod 文件里，服务端与网页端 import 同一份源码。每一条出站帧都经 ServerEvent.parse 才上线。",
+      "en": "There is a single client interface: one WebSocket carrying 8 inbound ClientEvent types and 14 outbound ServerEvent types. Both unions live in one Zod file in packages/protocol that the server and the web client import as the same source, and every outbound frame passes ServerEvent.parse before it goes out."
     },
     "mechanism": {
       "zh": "这一刻的帧要过四道校验，两端各两道：网页端 send 只做类型约束，不做运行时校验；服务端 handleMessage 对每一帧 ClientEvent.safeParse，不合就回一条 error 事件而不是断连；服务端每一条出站帧都经 outbound 的 ServerEvent.parse（严格 parse，会抛 —— 所以 ws 那侧把 emit 包成 safeEmit，socket 没了就吞掉，回合照跑）；网页端每一条入站帧 ServerEvent.safeParse，不成功就不进 onEvent。断线之后：网页端指数退避重连，间隔是 1500ms × 2^n 封顶 15 秒再加 0–250ms 抖动，而且连上之后要稳稳撑满 5 秒才把退避计数清零 —— 一个 accept 完立刻 close 的服务端仍然会被逐步退避，而不是被以基础间隔猛敲。断线期间要发的帧进 outbox（上限 100 条，满了从队头丢最老的），重连后一次性 flush。历史不是浏览器里缓着的：连接一建立，handleOpen 就从 SQLite 的 L2 时间线拉最多 2000 行，滤掉两侧都空的行，取最后 300 行，作为一条 history 事件推过去，紧跟着再推一条 settings.state。所以刷新之后看到的对话是从库里重放出来的。",
@@ -5360,9 +10260,139 @@ window.LUNA_DECKS = {
         }
       ]
     },
+    "claimFigure": {
+      "w": 500,
+      "h": 208,
+      "boxes": [
+        {
+          "x": 4,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "模型 / 工具 / 存储各持一份",
+            "en": "the model, the tools and the store each hold some"
+          }
+        },
+        {
+          "x": 4,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "「现在在做什么」没有唯一答案",
+            "en": "no single answer to what is happening now"
+          },
+          "kind": "ghost"
+        },
+        {
+          "x": 264,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "模型无状态 · 工具只拿一次入参 · 存储只被写行",
+            "en": "stateless model · one call’s args · rows written to the store"
+          }
+        },
+        {
+          "x": 264,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": "runTurn",
+          "sub": {
+            "zh": "只决定顺序、轮数、和什么时候停",
+            "en": "it decides order, rounds, and when to stop"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              118,
+              88
+            ],
+            [
+              118,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              378,
+              88
+            ],
+            [
+              378,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              248,
+              30
+            ],
+            [
+              248,
+              168
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        }
+      ],
+      "labels": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "状态散在四方",
+            "en": "state scattered across all four"
+          }
+        },
+        {
+          "x": 262,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "状态只留在 harness",
+            "en": "state stays in the harness"
+          }
+        },
+        {
+          "x": 0,
+          "y": 166,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "每加一方，同步成本再涨一次",
+            "en": "every new party raises the cost of keeping them in sync"
+          }
+        },
+        {
+          "x": 262,
+          "y": 166,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "全仓只有一个地方能回答那个问题",
+            "en": "exactly one place in the repository can answer it"
+          }
+        }
+      ]
+    },
     "claim": {
-      "zh": "五条泳道里只有这一条同时持有状态与模型调用权。其余四方都是无状态的被调用者：模型每一轮拿到的是全量重发的上下文，工具只拿到一次调用的入参和一个 abort 信号，存储只认写进去的行，用户那条线只认帧。所以「一条消息的一生」这句话有主语，主语是它。",
-      "en": "Of the five lanes only this one both holds state and owns the call to the model. The other four are stateless callees: the model gets the whole context resent every round, a tool gets one call's input and an abort signal, the store knows only the rows written to it, and the user lane knows only frames. So \"the life of a message\" has a subject, and this is it."
+      "zh": "五方之中只有这一条同时持有会话状态与模型调用权。模型每轮拿到全量重发的上下文，工具只拿到一次调用的入参和一个 abort 信号，存储只认写进去的行。runTurn 决定的只有顺序、轮数，和什么时候停。",
+      "en": "Of the five lanes, only this one holds both session state and the right to call the model. The model receives the full context re-sent each round, a tool receives one call's arguments and an abort signal, and the store only knows the rows written to it. runTurn decides order, round count and when to stop — nothing more."
     },
     "mechanism": {
       "zh": "这一刻的时间边界是两行赋值：进图之前同步写下 session.activeTurn = turnId，finally 里再清成 null。这两行之间的整段时间里，chat.send、dream.enter、proactive.fire 三个入口都会被顶回一条 turn_in_progress 的 error —— 不是排队，是拒绝。同一处还记下 historyStart（进图前 history 的长度），它是整段回合唯一的回滚锚点。整张图跑在一个 try 里：任何节点抛出，finishReason 变成 error、发一条 turn_failure 出去，然后照样落进 finally —— 「回合失败」在这里不是进程事件，只是一次状态转移。finally 按固定顺序做四件事：清 activeTurn、turnSeq 自增、持久化（自己再套一层 try，SQLite 抛了只记日志加一条 persistence_failed，不致命也不跳过后面）、决策审计与 flushTrace，最后 fire-and-forget 一次折叠。它还刻意不认识 socket：emit 是注入进来的一个函数，反应式回合传的是 ws 那侧包好的 safeEmit，主动回合和梦传的是 broadcast —— 一个没有任何监听者的主动回合照样跑完、照样落库。",
@@ -5513,9 +10543,146 @@ window.LUNA_DECKS = {
         }
       ]
     },
+    "claimFigure": {
+      "w": 500,
+      "h": 208,
+      "boxes": [
+        {
+          "x": 4,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": "if (model.startsWith('gpt'))"
+        },
+        {
+          "x": 4,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "每加一个模型改一处调用点",
+            "en": "every new model edits another call site"
+          }
+        },
+        {
+          "x": 264,
+          "y": 40,
+          "w": 110,
+          "h": 46,
+          "title": {
+            "zh": "请求",
+            "en": "request"
+          },
+          "sub": "ProviderRequest · 4"
+        },
+        {
+          "x": 382,
+          "y": 40,
+          "w": 110,
+          "h": 46,
+          "title": {
+            "zh": "事件",
+            "en": "events"
+          },
+          "sub": "ProviderEvent · 5"
+        },
+        {
+          "x": 264,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "换模型 = 注册表加一条",
+            "en": "a new model is one registry entry"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              118,
+              88
+            ],
+            [
+              118,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              378,
+              88
+            ],
+            [
+              378,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              248,
+              30
+            ],
+            [
+              248,
+              168
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        }
+      ],
+      "labels": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "在调用点按 model id 分支",
+            "en": "branching on the model id at the call site"
+          }
+        },
+        {
+          "x": 262,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "差异全部吃在 provider 内部",
+            "en": "the differences are absorbed inside the provider"
+          }
+        },
+        {
+          "x": 0,
+          "y": 166,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "上游的差异漏进 harness",
+            "en": "the upstream's quirks leak into the harness"
+          }
+        },
+        {
+          "x": 262,
+          "y": 166,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "stopReason 是 string 不是枚举，未知值一律落到 end_turn",
+            "en": "stopReason is a string, not an enum — unknown values fall to end_turn"
+          }
+        }
+      ]
+    },
     "claim": {
-      "zh": "这一刻是整条线上唯一一次跨出进程的调用，也是唯一一段我们不控制的时间。我们对这个黑盒的全部知识写在两个类型里：送进去的 ProviderRequest 四个字段，收回来的 ProviderEvent 五种。图上那个盒子点不开，是因为里面确实没有我们的代码。",
-      "en": "This moment is the only call on the whole line that leaves the process, and the only stretch of time we do not control. Everything we know about the black box fits in two types: four fields going in as a ProviderRequest, five event kinds coming back as ProviderEvent. The box in the diagram does not open because there is genuinely none of our code inside it."
+      "zh": "整条路径上唯一一次跨出进程的调用。对这个外部服务的全部假设写在两个类型里：送出的 ProviderRequest 四个字段，收回的 ProviderEvent 五种。stopReason 的类型是 string 而不是枚举，未知值一律落到 end_turn；协议差异全部吃在 provider 内部，harness 一次也没有按 model id 分支过。",
+      "en": "The one call on this path that leaves the process. Every assumption about this external service is expressed in two types: a four-field ProviderRequest going out and five ProviderEvent variants coming back. stopReason is typed as string rather than an enum and unknown values fall through to end_turn; protocol differences are absorbed inside the provider, and the harness never branches on a model id."
     },
     "mechanism": {
       "zh": "送什么：system（一个字符串，或带 cache_control 断点的 TextBlockParam[]）、messages（全量重发）、tools（由注册表直接映射，没挂载的组连 JSON schema 都生成不出来）、一个可选的 signal。就这四项 —— 没有 session、没有 turn_id、没有除工具结果之外的任何服务端状态。收什么：text_delta、thinking_delta、tool_use_start、tool_input_delta、message_stop 五种。最后那种里的 assistantContent 刻意用 ContentBlockParam[]（入参类型）而不是响应类型，好让非 Anthropic 的 provider 能自己合成一段可回放的 assistant 轮，而不必伪造只在响应里存在的字段。不假设什么：stopReason 的类型是 string，不是枚举 —— 我们不假设黑盒只会说我们见过的那几个词，open_stream 只认 tool_use / max_tokens / refusal 三个已知值，其余一律落到 end_turn。也不假设它给的入参是干净的：有些网关会把自己没能映射的工具入参包成 {\"_noargs\": \"<原始文本>\"}，unwrapGatewayInput 在 message_stop 之前试着拆开；拆不出来就原样放过，交给分发器的 Zod 校验回一条 recoverable 的错，让模型下一轮自己改。缝抹平了什么：走 OpenAI 协议时，systemToOpenAI 把 cache_control 断点直接不读（那边没有显式缓存控制），thinking 块在回放时丢掉，一条带 tool_result 的 user 轮拆成多条 tool 消息，SSE 分片里 id 为空时按 index 合成一个稳定 id —— 否则下一轮请求会因为空的 tool_call_id 直接 400。",
@@ -5694,9 +10861,146 @@ window.LUNA_DECKS = {
         }
       ]
     },
+    "claimFigure": {
+      "w": 500,
+      "h": 220,
+      "boxes": [
+        {
+          "x": 4,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "一轮被最长的那个拖住",
+            "en": "the round waits on its slowest call"
+          }
+        },
+        {
+          "x": 4,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "一个看不见的队列",
+            "en": "an invisible queue"
+          },
+          "kind": "ghost"
+        },
+        {
+          "x": 264,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "recoverable err",
+            "en": "a recoverable error"
+          },
+          "sub": {
+            "zh": "模型下一轮自己重发",
+            "en": "the model reissues it next round"
+          }
+        },
+        {
+          "x": 264,
+          "y": 106,
+          "w": 228,
+          "h": 58,
+          "title": {
+            "zh": "timeoutMs：1 秒 ─ 30 分钟",
+            "en": "timeoutMs: 1 second to 30 minutes"
+          },
+          "sub": {
+            "zh": "message / enter_dream … shell / save_skill",
+            "en": "message, enter_dream … shell, save_skill"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              118,
+              88
+            ],
+            [
+              118,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              378,
+              88
+            ],
+            [
+              378,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              248,
+              30
+            ],
+            [
+              248,
+              180
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        }
+      ],
+      "labels": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "超出的调用排队",
+            "en": "queue whatever exceeds the batch"
+          }
+        },
+        {
+          "x": 262,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "一批最多 8 个，超出当场退回",
+            "en": "at most 8 per batch; the rest come straight back"
+          }
+        },
+        {
+          "x": 0,
+          "y": 178,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "而模型本来就有下一轮",
+            "en": "and the model already has a next round"
+          }
+        },
+        {
+          "x": 262,
+          "y": 178,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "abort 与生成器的下一个事件竞速，清理最多再等 100ms",
+            "en": "the abort races the generator; cleanup waits 100ms at most"
+          }
+        }
+      ]
+    },
     "claim": {
-      "zh": "这一刻是整条线上唯一一次真正的并发。模型一轮可以发出多个 tool_use，分发器在这里把它们摊成三条流同时跑 —— 而这一方怎么被调度，完全由工具自己在定义处声明的三个属性决定：concurrency、timeoutMs、proactiveRisk。调度器不认识任何一个具体工具。",
-      "en": "This moment is the only genuine concurrency on the line. The model can emit several tool_uses in one round, and the dispatcher fans them into three streams that run at once — and how this party gets scheduled is decided entirely by three properties each tool declares at its own definition site: concurrency, timeoutMs, proactiveRisk. The scheduler knows no individual tool."
+      "zh": "整条路径上唯一真正并发的一段。一批最多 8 个调用，超出的当场回一条 recoverable 的错误而不排队；其余按工具自己声明的 concurrency 分三桶，各带自己的 AbortController 与 timeoutMs（从 1 秒到 30 分钟）。分发器不认识任何一个具体工具。",
+      "en": "The only genuinely concurrent segment of the path. A batch holds at most 8 calls and anything beyond that gets an immediate recoverable error rather than a queue slot; the rest are bucketed by each tool's declared concurrency, each with its own AbortController and timeoutMs, ranging from 1 second to 30 minutes. The dispatcher knows nothing about any specific tool."
     },
     "mechanism": {
       "zh": "先砍：一批里超过 8 个的调用当场回一条 recoverable 的 err，不排队 —— 模型下一轮可以自己重发。再分桶：28 个工具每一个都声明了档位，15 个 safe-parallel、12 个 session-serial、1 个 global-serial（music_control，因为播放器是跨会话共享的那一个外部世界）。safe-parallel 每个调用起一条独立流；session-serial 整组排进这个会话自己的 mutex，组内按数组顺序逐个过；global-serial 排进 dispatcher 模块里的那个进程级单例。三条流交给 mergeAsync 竞速合并 —— 所以「串行」只发生在组内，组与组之间照样并发。锁在这里争：Mutex 是 acquire/release 两段，等待者排 FIFO 队列；持锁期间的执行包在 try/finally 里，工具抛异常也一定 release。超时：每次调用起一个自己的 AbortController，setTimeout(tool.timeoutMs) 到点 abort。这个跨度很大 —— message 和 enter_dream 是 1 000 毫秒，shell 和 save_skill 是 1 800 000 毫秒（30 分钟）。abort 与 iter.next() 竞速：abort 赢了就回一条 timeout 的 err 然后 return，finally 里给生成器的 iter.return() 最多 100 毫秒收尾，收不完就不等了。中断要说准一件事：客户端断开触发的那个 AbortController 不在这里。ws.handleClose 在最后一个监听者消失时 abort 的是 session.activeTurnAbort，它经 runTurn 的 signal 送进 provider.chatStream —— 断的是上游那条流。dispatchToolCalls 的上下文只有 { sessionId, sessionMutex }，没有 signal：这一刻已经开跑的工具，只会被它自己的 timeoutMs 停下来。",
@@ -5847,9 +11151,143 @@ window.LUNA_DECKS = {
         }
       ]
     },
+    "claimFigure": {
+      "w": 500,
+      "h": 232,
+      "boxes": [
+        {
+          "x": 4,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": "sessions.history_json",
+          "sub": {
+            "zh": "仓库里最后一处 O(N²) 的写",
+            "en": "the last O(N²) write in the repository"
+          }
+        },
+        {
+          "x": 4,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "轮数越多，每一轮越慢",
+            "en": "the more turns, the slower each turn"
+          }
+        },
+        {
+          "x": 264,
+          "y": 40,
+          "w": 228,
+          "h": 58,
+          "title": {
+            "zh": "每行 = 那一轮追加的消息",
+            "en": "one row is what that turn appended"
+          },
+          "sub": "O(1)"
+        },
+        {
+          "x": 264,
+          "y": 118,
+          "w": 228,
+          "h": 58,
+          "title": {
+            "zh": "flatMap 重建完整历史",
+            "en": "flatMap rebuilds the whole history"
+          },
+          "sub": {
+            "zh": "进程死过一次之后",
+            "en": "after the process has died once"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              118,
+              88
+            ],
+            [
+              118,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              378,
+              100
+            ],
+            [
+              378,
+              116
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              248,
+              30
+            ],
+            [
+              248,
+              192
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        }
+      ],
+      "labels": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "每轮重新序列化整段历史",
+            "en": "the whole history re-serialised every turn"
+          }
+        },
+        {
+          "x": 262,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "L2 追加式时间线",
+            "en": "the append-only L2 timeline"
+          }
+        },
+        {
+          "x": 0,
+          "y": 190,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "代价随对话长度平方增长",
+            "en": "the cost grows with the square of the conversation"
+          }
+        },
+        {
+          "x": 262,
+          "y": 190,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "全仓只有一个写者：runTurn 的 finally",
+            "en": "exactly one writer in the repository: runTurn’s finally"
+          }
+        }
+      ]
+    },
     "claim": {
-      "zh": "前面四方都是易失的：socket 会断，harness 的 session 活在进程里，模型不记得上一轮，工具跑完就忘。存储是唯一跨进程活着的一方，也是反应式路径与主动/梦路径之间唯一的持久交接面 —— 两条路径从不互相持有对象，它们只在这里碰面。",
-      "en": "The other four parties are all volatile: the socket drops, the harness's session lives inside a process, the model does not remember last round, and a tool forgets the moment it finishes. The store is the only party that survives the process, and the only durable handoff surface between the reactive path and the proactive/dream path — the two never hold each other's objects; they meet only here."
+      "zh": "唯一跨进程存活的一方，也是反应式路径与主动 / 梦路径之间唯一的持久交接面。L2 时间线全仓只有一个写者（runTurn 的 finally），读者散在历史重放、会话重建、折叠、召回与梦里。存储不主动通知任何人：没有触发器、没有监听，上层要知道发生了什么只能自己读。",
+      "en": "The only party that survives the process, and the only persistent handover point between the reactive path and the proactive and dream paths. The L2 timeline has exactly one writer — runTurn's finally — while readers are spread across history replay, session rebuild, folding, recall and the dream. The store notifies nobody: there are no triggers and no listeners, so every layer above it has to read."
     },
     "mechanism": {
       "zh": "谁在写：L2 时间线只有一个写者。appendL2 全仓只有一处调用点，在 runTurn 的 finally 里，而且只有 realReply 非空才写；否则 history 整段回滚到 historyStart，一个字都不落 —— 一条空的助手行会同时毒化召回和重建出来的窗口。主动回合走的是同一个 runTurn，所以它也从这一处落库，只是 user_text 存空串。谁在读：读者是散开的 —— 连接时的历史重放（最近 300 轮）、进程重启后的会话重建、L1 折叠（按绝对偏移索引，所以这一处必须不带 limit 地读整条时间线）、召回的候选集（最近 500 行）、主动路径的「上一次用户回合是什么时候」锚点、梦里四处读。全仓有 21 个非测试模块直接持有 db 句柄，但往 l2_turns 写的只有那一处。交接的形状：进程重启后内存里的 session 全没了，loadSession 不读 sessions.history_json（那一列自 v0.16.2 起只写一个常量 [] 占位），而是把 l2_turns 每行的 raw_json 按时间顺序 flatMap 起来 —— 每一行正好是那一轮往 history 追加的消息，拼起来就是完整历史。降级路径要说实话：boot 时 initCustomSqlite() 在任何 Database 构造之前跑一次，按 LUNA_SQLITE_LIB 再加 6 个 Unix 候选路径找一个能加载扩展的 libsqlite3；win32 的候选列表是空的（系统 winsqlite3.dll 编译时就关掉了扩展加载），只认那个覆盖变量。找不到就返回 false，不抛。但今天这条降级路径没有可降的东西 —— tryLoadVec 在生产代码里没有任何调用点，vec0 / vec_cache 虚拟表在 v0.16.2 已经随「只写不读」的死路径一起删掉，检索本来就是 recall.ts 里的 TS 余弦。扩展加载器和 sqlite-vec 依赖是被有意留着的空位，不是正在工作的快路径。",
@@ -6049,9 +11487,148 @@ window.LUNA_DECKS = {
         }
       ]
     },
+    "claimFigure": {
+      "w": 500,
+      "h": 278,
+      "boxes": [
+        {
+          "x": 4,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "没解析的 JSON / 超长正文",
+            "en": "unparsed JSON, an oversized body"
+          }
+        },
+        {
+          "x": 4,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "做梦中 / provider 没配 / 已有回合在跑",
+            "en": "mid-dream, no provider, a turn already running"
+          },
+          "kind": "ghost"
+        },
+        {
+          "x": 264,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "JSON · Zod",
+            "en": "JSON · Zod"
+          },
+          "sub": {
+            "zh": "住在 protocol 包里，正文上限 8000 字",
+            "en": "in the protocol package — 8000-character body cap"
+          }
+        },
+        {
+          "x": 264,
+          "y": 96,
+          "w": 228,
+          "h": 58,
+          "title": {
+            "zh": "做梦 · provider · 回合占用",
+            "en": "dreaming · provider · turn in flight"
+          },
+          "sub": {
+            "zh": "住在 ws.ts，只问状态",
+            "en": "in ws.ts — it only asks about state"
+          }
+        },
+        {
+          "x": 264,
+          "y": 164,
+          "w": 228,
+          "h": 58,
+          "title": {
+            "zh": "五道全过才拨两个时钟",
+            "en": "only then are the two clocks advanced"
+          },
+          "sub": {
+            "zh": "闸排在时间戳前面",
+            "en": "the gates come before the timestamps"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              118,
+              88
+            ],
+            [
+              118,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              248,
+              30
+            ],
+            [
+              248,
+              238
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        }
+      ],
+      "labels": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "帧直接进回合",
+            "en": "the frame goes straight into a turn"
+          }
+        },
+        {
+          "x": 262,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "五道闸，顺序有意义",
+            "en": "five checks, in a deliberate order"
+          }
+        },
+        {
+          "x": 0,
+          "y": 236,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "错误发生在回合内部，而不是入口",
+            "en": "the failure lands inside the turn instead of at the door"
+          }
+        },
+        {
+          "x": 262,
+          "y": 236,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "一条被弹回的消息不会污染沉默计时器",
+            "en": "a bounced message never touches the silence timer"
+          }
+        }
+      ]
+    },
     "claim": {
-      "zh": "「一条消息」不是从模型那里开始的，是从一个 WebSocket 帧开始的。这一帧要连过五道闸——JSON 能不能解析、schema 认不认（正文上限 8000 字符）、她是不是在做梦、provider 配没配、这个会话是不是已经有一轮在跑——五道全过，服务端才在这一刻打上两个时间戳、new 一个 AbortController，然后把回合甩出去（void runTurn），处理函数当场返回。",
-      "en": "A message does not begin at the model; it begins as a WebSocket frame. That frame passes five gates in a row — does the JSON parse, does the schema accept it (the body caps at 8000 characters), is she dreaming, is a provider configured at all, is a turn already running in this session — and only when all five pass does the server stamp two timestamps, create an AbortController and fire the turn off with void runTurn, returning from the handler immediately."
+      "zh": "入口是一个 WebSocket 帧，要过五道闸：JSON 能否解析、Zod schema 是否通过（正文上限 8000 字符）、是否正在做梦、provider 是否配好、该会话是否已有回合在跑。五道全过，服务端才拨两个时钟、new 一个 AbortController，然后 void runTurn 并当场返回。",
+      "en": "The entry point is a WebSocket frame that must clear five checks: does the JSON parse, does the Zod schema accept it (8,000-character body cap), is a dream running, is a provider configured, and does this session already have a turn in flight. Only after all five does the server advance two clocks, create an AbortController, and return immediately after `void runTurn`."
     },
     "mechanism": {
       "zh": "五道闸的顺序是有意义的。前两道住在 protocol 包里：JSON.parse 失败回 invalid_event、文案「invalid JSON」；Zod 不过也回 invalid_event，但文案是 Zod 自己的报错串。8000 字符的上限就钉在这一层——z.string().min(1).max(CHAT_SEND_MAX_CHARS)——外面还罩着一层 1 MiB 的帧上限。后三道住在 ws.ts：中间那道是 runtime_not_configured（provider 压根没配，文案「no provider configured; chat.send unavailable」），另外两道则是两种截然不同的拒绝——做梦时回 dreaming，文案「Luna is dreaming — send dream.wake to wake her」，与其说是错误不如说是指路牌，直接告诉客户端该改发哪个事件；正忙时回 turn_in_progress，文案是模板串 `turn ${session.activeTurn} is still running`，把正在跑的那一轮的 id 原样念回去。两者都不排队。五道全过之后，lastUserMs 和 markActivity 分头拨两个时钟（前者是升级阶梯的复位锚，后者是沉默计时器），turn_id 允许客户端自己起名，不起就落到「会话 id:turn:序号」。",
@@ -6230,9 +11807,138 @@ window.LUNA_DECKS = {
         }
       ]
     },
+    "claimFigure": {
+      "w": 500,
+      "h": 208,
+      "boxes": [
+        {
+          "x": 4,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "8 轮 × 召回 + 天气 + 音乐",
+            "en": "8 rounds × recall + weather + music"
+          }
+        },
+        {
+          "x": 4,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "8 次打分，8 次网络等待",
+            "en": "eight scorings, eight network waits"
+          }
+        },
+        {
+          "x": 264,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": "parse_input",
+          "sub": {
+            "zh": "召回是唯一需要 await 的一步",
+            "en": "recall is the only step that awaits"
+          }
+        },
+        {
+          "x": 264,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "后续迭代从 ② 重新进入",
+            "en": "later iterations re-enter at ②"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              118,
+              88
+            ],
+            [
+              118,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              378,
+              88
+            ],
+            [
+              378,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              248,
+              30
+            ],
+            [
+              248,
+              168
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        }
+      ],
+      "labels": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "每轮重装一次感知",
+            "en": "perception rebuilt on every round"
+          }
+        },
+        {
+          "x": 262,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "整轮只装一次",
+            "en": "assembled once per turn"
+          }
+        },
+        {
+          "x": 0,
+          "y": 166,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "反应路径上不该有这些",
+            "en": "none of it belongs on the reactive path"
+          }
+        },
+        {
+          "x": 262,
+          "y": 166,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "第 8 轮读到的时间，还是第 1 轮那一份",
+            "en": "the time seen on round 8 is the one assembled on round 1"
+          }
+        }
+      ]
+    },
     "claim": {
-      "zh": "整轮里只有这一刻会装感知。parse_input 是图的入口节点，后面每一次工具迭代都从 ②schema 重新进入——所以这条最多七块的 user 消息一整轮只装一次：她在第 8 轮读到的时间、天气、在放的歌，还是第 1 轮那一份。",
-      "en": "Perception is assembled at this moment and at no other. parse_input is the graph's entry node, and every later tool round re-enters at ② schema — so this user message of at most seven blocks is built exactly once per turn: the time, weather and current track she reads in round 8 are still the ones from round 1."
+      "zh": "图的入口节点，整轮只跑一次。召回是这一步唯一需要 await 的部分，其余感知块都是同步读后台已经热好的快照。开机醒来场景和整首歌词也在这一刻被消费掉。后续每次工具迭代都从 ② 重新进入，所以第 8 轮读到的时间仍是第 1 轮那一份。",
+      "en": "The graph's entry node, run once per turn. Recall is the only part of it that awaits; the other perception blocks read snapshots already kept warm in the background. The boot wake scenario and the one-shot lyrics are consumed here too. Later tool iterations re-enter at ②, so the time the model sees on round 8 is still the one assembled on round 1."
     },
     "mechanism": {
       "zh": "这一刻的先后里只有一处需要等：召回。await retrieve(...) 要算这句话的向量、跟四个源打分；其余每一块都是同步地读一份后台早就热好的缓存（天气快照、常驻音乐 provider 的内存），反应路径上不发一个网络请求。还有两件事在这一刻被「烧掉」：开机后第一条真实用户回合消费掉醒来场景（wakePending 置 false），换歌后第一轮消费掉整首歌词，并把是哪一首记在 lyricsBurnedFor 上——万一这一轮被回滚，这一口还能还回去。每个可选块各自包在 try/catch 里，任何一块的构造函数抛了，只丢那一块、warn 一行、回合继续。最后才 push 用户原话，整条消息进 history，turn.started 到这时候才发出去。",
@@ -6362,8 +12068,8 @@ window.LUNA_DECKS = {
       ]
     },
     "claim": {
-      "zh": "六行，一个 if，一次赋值。这个节点只做一件事：把注册表里每个工具的 Zod schema 转成模型读得懂的 JSON Schema——而且一整轮只做一次。守卫是 length === 0，结果缓存在这一轮的 state 上。",
-      "en": "Six lines, one if, one assignment. This node does exactly one thing: turn every tool's Zod schema in the registry into JSON Schema the model can read — once per turn. The guard is length === 0 and the result is cached on this turn's state."
+      "zh": "六行、一个守卫、一次赋值：把注册表里每个工具的 Zod 入参转成 JSON Schema，结果缓存在本轮 state 上，守卫是数组长度而不是内容比对。之所以拆成独立节点，是为了让 trace 里存在「装配结束、请求未发」这条边。",
+      "en": "Six lines, one guard, one assignment: each registered tool's Zod input is converted to JSON Schema and cached on the turn's state, guarded by an array-length check rather than a content diff. It is a separate node so that the trace contains an edge for \"assembled, not yet requested\"."
     },
     "mechanism": {
       "zh": "它之所以是一个独立节点、而不是 open_stream 开头的两行，有两个可查的后果。其一是可观测：图的每一次节点转移都由 onTransition 记一条 kind 为 node 的 trace，于是 parse_input → build_request → open_stream 之间，「装配完了、还没发请求」这个瞬间有了一根带时间戳的界桩。其二是重入：append_results 跑完返回的是 build_request 而不是 open_stream，所以一轮里这个节点最多被进 8 次，但 zodToJsonSchema 只在第一次真的跑。缓存挂在 TurnState 而不是模块级，是因为 registry 是按回合传进来的——换一套工具集，自然就重算。",
@@ -6514,8 +12220,8 @@ window.LUNA_DECKS = {
       ]
     },
     "claim": {
-      "zh": "到这一刻才有字节离开进程。真正发出去的请求只有四个字段，而这四个字段来自四种不同的寿命：system 是跨轮记忆化的，messages 是每一轮现算的，tools 是上一步建好之后整轮不动的，signal 是 chat.send 那一刻就 new 出来的。",
-      "en": "Only at this moment do bytes leave the process. The request that actually goes out has four fields, and those four come from four different lifetimes: system is memoized across rounds, messages is recomputed every round, tools was built one step ago and never moves again, and signal was created back at chat.send."
+      "zh": "字节在这一刻离开进程。请求只有四个字段，寿命各不相同：system 跨轮记忆化，messages 每轮由 buildActiveContext 重算，tools 整轮不变，signal 在 chat.send 那一刻就已创建。所有窗口裁剪都落在回合起点，绝不从一对工具消息中间切开。",
+      "en": "This is where bytes leave the process. The request has four fields with four different lifetimes: system is memoized across rounds, messages is recomputed each round by buildActiveContext, tools is fixed for the turn, and signal was created back at chat.send. Every trim lands on a turn boundary and never cuts through a tool message pair."
     },
     "mechanism": {
       "zh": "system 在这一刻先读一次 memoryEpoch()：epoch 没动就直接复用上一轮那份人格前缀，动了就在这里重建——所以「上一轮她刚 remember 了一件事」这件事，是在这一刻、赶在下一次请求发出之前生效的，不必等到下一回合。messages 恰好相反，每一轮都从 session.history 重走一遍 buildActiveContext：按低水位切尾 → 若切点落在一对 tool_use/tool_result 中间就往后挪到下一个回合起点 → 折叠旧的工具结果 → 用 300 条 / 120 000 字符的硬上限从尾部往前裁 → 有摘要就在最前面拼一条 <conversation_summary>。所有裁剪只落在回合起点上：从别处切会把 tool_result 和它的 tool_use 拆散，请求当场被 API 打回。signal 则是一路从 WebSocket 传到这里的那一个——最后一个监听者断开时，这条流就在这里被掐断。",
@@ -6675,8 +12381,8 @@ window.LUNA_DECKS = {
       ]
     },
     "claim": {
-      "zh": "并发在这一刻才真的发生，而它前面还有一段完全串行的判定。dispatch_tools 先用一个纯判定的循环把这一批调用逐个过一遍——名字认不认、主动回合的安全门放不放——过关的攒成一个数组，然后整批一次性交给 dispatcher，锁在那里争。",
-      "en": "Concurrency actually happens at this moment, and a fully serial pass comes first. dispatch_tools walks the batch with a pure decision loop — is the name known, does the proactive safety gate allow it — collects the survivors into one array, and only then hands the whole batch to the dispatcher, where the locks are contended."
+      "zh": "两段式：先用一个纯判定的循环逐个过滤（名字是否在枚举里、主动安全门是否放行），过关的攒成一个数组；再把整批交给 dispatcher，锁在那里争。被挡下的调用不执行、不计预算，但仍然必须拿到一条 tool_result。",
+      "en": "Two stages: a pure decision loop filters the batch call by call — is the name in the enum, does the proactive safety gate allow it — and collects what passes; then the whole batch goes to the dispatcher, where the locks are contended. A blocked call neither runs nor counts against the budget, but it still has to receive a tool_result."
     },
     "mechanism": {
       "zh": "判定循环开始之前，surfacedBefore 就已经取好快照了（messageTexts.length > 0），而这一轮自己的 message 调用要等下面真的 dispatch 完才写得进 messageTexts——所以「先说后做」被强制跨轮：同一轮里的一次 message，解锁不了它旁边那个动作。被门挡下的调用走 continue：它既不进 calls（不执行），也不进 toolNamesThisTurn（不计入预算——主动回合的动作预算在 append_results 里读的正是 toolNamesThisTurn.length），但它仍然必须拿到一条 tool_result 回填，否则下一轮请求里就会留下一个没有结果的 tool_use。第二段把整批交出去时才出现真正的并发：会话 mutex 是从这个 session 上取的（所以两个会话互不阻塞），全局 mutex 在 dispatcher 模块里，几条流被 mergeAsync 竞速合并，事件按到达顺序 yield 回来。",
@@ -6845,8 +12551,8 @@ window.LUNA_DECKS = {
       "labels": []
     },
     "claim": {
-      "zh": "这一刻，模型写下的一句 tool_use 才第一次变成真在跑的东西。四件事同时开始：一轮最多 8 个调用被切成三桶，后两桶各排在一把互斥锁后面；每个调用带上自己的 AbortController 和倒计时；工具自己 yield 的进度从这里流回前端。",
-      "en": "This is the moment a tool_use the model merely wrote becomes something actually running. Four things start at once: at most 8 calls per round are sorted into three buckets, two of which queue behind a mutex; every call carries its own AbortController and countdown; and whatever progress a tool yields flows back to the frontend from here."
+      "zh": "模型写下的 tool_use 到这一刻才真的运行。锁按单个调用持有，而且因为 runOne 是异步生成器，yield* 会一直持锁到这个调用的最后一个事件被上游消费完。超时是一场赛跑：setTimeout 触发的 abort 与生成器的下一个事件竞速，之后的清理最多再等 100 毫秒。",
+      "en": "This is where a tool_use written by the model actually runs. A lock is held per call, and because runOne is an async generator, `yield*` keeps holding it until that call's last event has been consumed upstream. The timeout is a race: the abort fired by setTimeout races the generator's next event, and cleanup afterwards waits at most another 100 milliseconds."
     },
     "mechanism": {
       "zh": "时机上有一件事容易搞反:message 的字并不是在这一刻才出去的。它在 ③ 的流里就靠 tool_input_delta 一路流成气泡了——所以执行这一刻不是「开始说话」,而是「这句话被承认」:Zod 校验过了才有 tool.started 与 tool.finished。校验没过的那种(比如一句话切出的从句超长)根本不发 tool.started,前端就把那个已经半流出去的气泡静默丢掉，用户看到的是它自己消失。\n\n争抢发生在两处。超出 8 个的调用在跑之前就被判成可恢复的 execution_exception,模型下一轮再发一遍即可；剩下的按工具声明的并发档分桶:safe-parallel 各自开一条流,session-serial 排会话锁,global-serial 排进程锁。三类流由 mergeAsync 交错，所以事件到达顺序是「谁先出谁先到」,不是模型写下的顺序——把顺序拼回去是下一步 ⑤ 的活。\n\n锁按单个调用持有，而且因为 runOne 是异步生成器,yield* 会一直持锁到这个工具的最后一个事件被上游消费完：上游处理得慢，锁就多握一会儿。倒计时是一场赛跑——setTimeout 触发 abort,与生成器的下一个事件 race,abort 赢了就落成不可恢复的 timeout;之后清理生成器最多只等 100 毫秒就走人。",
@@ -7034,8 +12740,8 @@ window.LUNA_DECKS = {
       ]
     },
     "claim": {
-      "zh": "结果按模型发起的顺序拼回一条 user 消息——不是按完成顺序。拼完的这一刻决定还转不转：两个预算各自能把回合停下，再加一条 is_final 短路，能直接跳过一整次模型往返。",
-      "en": "The results are stitched back into a single user message in the order the model issued them — not the order they finished. The instant that is done, this node decides whether to go round again: two budgets can each end the turn, and an is_final short-circuit can skip a whole model round-trip."
+      "zh": "结果按模型发起的顺序拼回一条 user 消息，不按完成顺序。拼完之后三道判断依次决定还转不转：轮数上限、主动回合的调用数上限、以及 is_final 短路。出这一步只有两条边——回 ② 再来一轮，或进 ⑥ 收尾。",
+      "en": "Results are assembled back into one user message in the order the model issued them, not the order they finished. Three checks then decide whether the loop continues: the round cap, the proactive call cap, and the is_final short-circuit. There are exactly two edges out — back to ② for another round, or on to ⑥ to close."
     },
     "mechanism": {
       "zh": "顺序是用请求去索引结果的：拿 pendingToolUses 逐个去 toolResultBlocks 里找自己的那块，所以跑得快的工具不会插到前面。对不上的丢掉——这一步是防御性的，正常情况下每个 tool_use 都有块：名字不认识的、被主动安全门拦下的、超出并发上限的，在 ④ 里都已经推了一块错误结果进去。\n\n然后是三道判断，顺序固定。第一道:iteration 加一，到 8 轮(默认值,LUNA_MAX_TOOL_ITERATIONS 可调)就把 finishReason 写成 max_iterations 进 finalize——它数的是轮。第二道只对主动回合：这一轮累计的工具调用数到 8(默认)也停——它数的是调用，不是轮，两把闸管的是两件事。第三道就是短路。\n\n短路要同时满足四件事：不是主动回合、跑在 message 模式、最后一次 message 带 is_final:true、并且这一轮的 tool_use 全是 message(混进一次 web_search 就不行，那个结果必须喂回去)。满足了就直接 finalize——省下的那次往返本来只是让模型再确认一遍「我说完了」,而在那次往返里 activeTurn 还锁着，用户这时发的消息会被 turn_in_progress 弹回，屏幕上却已经是一条看起来说完了的回复。",
@@ -7213,8 +12919,8 @@ window.LUNA_DECKS = {
       ]
     },
     "claim": {
-      "zh": "轮转全部结束，才轮到闸。两道闸依次问两个问题：她开口了吗；开了口的话，有没有食言。任何一道拦下，都不是抛错——是往 history 里塞一条 user 角色的舞台提示，然后 return build_request:回 ②,再走一遍。",
-      "en": "Only when the rounds are over does it become the guards turn. Two of them ask two questions in order: did she speak at all; and if she did, did she break a promise. Neither stops the turn by throwing — each pushes a user-role stage direction into history and returns build_request: back to ②, one more pass."
+      "zh": "轮转全部结束之后才判两件事：这一轮有没有开口，开了口有没有食言。任何一道拦下都不是抛错，而是往 history 压一条 user 角色的舞台指示并回到 ②。两道闸判的都是「整轮结束时」才成立的事实，提前判必然误伤。",
+      "en": "Only once the loop has ended are two questions asked: did this turn say anything, and if it did, did it follow through. Neither guard raises — each appends a user-role stage direction and returns to ②. Both judge facts that only hold when the turn is over, which is why they cannot run any earlier."
     },
     "mechanism": {
       "zh": "为什么在这里而不是更早：两道闸判的都是「整轮结束时」才成立的事实——messageTexts 是不是还空着、finishReason 是不是干净的 end_turn。中间任何一轮，她都还可能再开口、再动手，提前判必然误伤。\n\n顺序也是有意的。空回复闸先：她一个字都没说，那就给一条最直白的提示——「你没说话，现在调 message 工具」。主动回合跳过这一道，沉默是它的合法结局。完整性闸后：她说了话且干净地结束了,detectDefection 才去判她有没有食言。它有三档，只有前两档能驱动重来——结构档(最后一条气泡标了 is_final:false,却把回合停了，这是机械确定的，不查词典)和文本档(气泡里承诺了要做某事，而这一轮除了 message 没调过任何工具)。第三档只从 thinking 里读，是被总结过的低置信内容，永远只进审计、绝不重来。\n\n每一种原因一生只用一次:correctionUsed 里各占一个键('empty'、'promise'、'intent')。同一个原因第二次成立，不再回，而是降级并留一条 degraded 的 trace——闸宁可放过，也不打转。\n\n回的是 ②,不是 ③,这一点值得说清：回 ② 走的是 build_request,它只在工具 schema 还没转过时转一次，然后进 open_stream;真正被重算的是 open_stream 里的 buildActiveContext——刚推进去的那条舞台提示，正是靠这一步进入下一次请求。它不回 ①:召回、感知、窗口都不重建，用户那条消息也不重新解析。所以一次纠正的账单就是一整次模型往返，仅此而已。\n\n还有一条约束定了提示词的写法：气泡在 ③ 就流出去了。纠正只能「接着说」,不能撤回——所以两条提示都写成继续或跟上，而不是改口。意图那一条更给了双出口(能做就现在做；真做不到就自然地继续),因为意图检测本来就是启发式，一次假阳性只该值一次温和的再提示，而不是一次强行的自我否定。",
@@ -7385,9 +13091,139 @@ window.LUNA_DECKS = {
         }
       ]
     },
+    "claimFigure": {
+      "w": 500,
+      "h": 208,
+      "boxes": [
+        {
+          "x": 4,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "等回合结束才显示",
+            "en": "nothing shows until the turn ends"
+          }
+        },
+        {
+          "x": 4,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": {
+            "zh": "用户盯着一个转圈的圈",
+            "en": "the user watches a spinner"
+          }
+        },
+        {
+          "x": 264,
+          "y": 40,
+          "w": 228,
+          "h": 46,
+          "title": "tool.progress / tool.finished",
+          "sub": {
+            "zh": "逐字送达",
+            "en": "delivered character by character"
+          }
+        },
+        {
+          "x": 264,
+          "y": 106,
+          "w": 228,
+          "h": 46,
+          "title": "turn.result",
+          "sub": {
+            "zh": "权威文本 + 网页来源 + 结束信号",
+            "en": "the authoritative text, the sources, the end signal"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "pts": [
+            [
+              118,
+              88
+            ],
+            [
+              118,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              378,
+              88
+            ],
+            [
+              378,
+              104
+            ]
+          ]
+        },
+        {
+          "pts": [
+            [
+              248,
+              30
+            ],
+            [
+              248,
+              168
+            ]
+          ],
+          "style": "tick",
+          "head": false
+        }
+      ],
+      "labels": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "把 turn.result 当成交付",
+            "en": "treating turn.result as the delivery"
+          }
+        },
+        {
+          "x": 262,
+          "y": 0,
+          "w": 230,
+          "tone": "edge",
+          "text": {
+            "zh": "气泡在 ③ 的流里就送达了",
+            "en": "the bubbles were streamed out back at ③"
+          }
+        },
+        {
+          "x": 0,
+          "y": 166,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "一句话的等待 = 一整轮",
+            "en": "waiting for one sentence costs the whole turn"
+          }
+        },
+        {
+          "x": 262,
+          "y": 166,
+          "w": 230,
+          "tone": "red",
+          "text": {
+            "zh": "主动回合不发这条，走 proactive.finished",
+            "en": "proactive turns emit proactive.finished instead"
+          }
+        }
+      ]
+    },
     "claim": {
-      "zh": "turn.result 发出的这一刻，用户其实早就把这句话看完了——气泡在 ③ 的流里就一个字一个字出去了。这条事件不是交付，是收尾：文本的权威版本、这一轮用过的网页来源、以及「回合结束」这个信号本身。",
-      "en": "By the time turn.result goes out, the user has long since finished reading the reply — the bubbles streamed out character by character back in ③. This event is not delivery; it is closure: the canonical text, the web sources used this turn, and the end-of-turn signal itself."
+      "zh": "turn.result 不是交付——气泡在 ③ 的流里就已经逐字送达了。它是收尾：文本的权威版本（message 模式下等于各气泡的拼接，流式过程中漏出的顶层文本被丢弃）、本轮用过的网页来源，以及回合结束这个信号本身。主动回合不发这条，走 proactive.finished。",
+      "en": "turn.result is not the delivery — the bubbles were already streamed out at ③. It is the close: the authoritative text (in message mode, the delivered bubbles joined, with top-level text that leaked during streaming discarded), the web sources used this turn, and the end-of-turn signal itself. Proactive turns do not emit it; they emit proactive.finished."
     },
     "mechanism": {
       "zh": "text 从哪来，是这一步最容易看错的地方。事件里写的是 s.text,但 finalize 在发出前刚刚把 s.text 整个覆盖掉了:message 模式下它等于 messageTexts.join('\\n')——一行一个气泡，来源是 message 工具真正投递过的那些字。流式过程中累积进 s.text 的顶层文本(模型在工具外面自言自语的那部分)到这一刻被丢弃，只留在 history 和 trace 里当作泄漏信号。唯一的例外是双次沉默的降级路径:messageTexts 是空的，那段泄漏文本原样成为回复，并被记一条 empty_turn,让这次失败是可数的。\n\n引用是在 ④ 顺手收的:web_search 结果里的 url、web_fetch 的 final_url,在工具的 final 事件里就被收进 citations,这里去重挂上；一条来源都没有时整个字段不出现，而不是发一个空数组。\n\n前端拿到它做三件事：把来源渲染成可点的 chip(url 走 href,不拼进标签文字);只有 text 模式才用它 finalize 那个合成气泡——message 模式的气泡在各自的 tool.finished 时就已经定稿了；然后清空回合状态、打字点收起、Live2D 回 neutral。\n\n还有一条不对称：主动回合根本不发 turn.result。它走 proactive.finished,所以前端必须在那条分支里再清一次状态，否则她主动说完话之后打字点会永远悬着。",
@@ -7560,8 +13396,8 @@ window.LUNA_DECKS = {
       ]
     },
     "claim": {
-      "zh": "这一步不在状态图上——它在 finally 里。不管前面是干净收尾、抛了错、还是被客户端断线 abort 掉，它都会走一遍。而它做的第一件事是问一个问题：这一轮到底说出话了没有。答案是「没有」,这一轮就整个不存在。",
-      "en": "This step is not in the graph — it lives in the finally. It runs whether the turn ended cleanly, threw, or was aborted by a client disconnect. And the first thing it does is ask one question: did this turn actually say anything. If the answer is no, the turn ceases to have happened at all."
+      "zh": "这一步不在状态图上，在 finally 里：干净收尾、抛错、被客户端断线 abort，都会走一遍。顺序固定——放开 activeTurn、真回复关口、剥 thinking、摘纠正指令、写 L2、会话快照、审计与 flush trace，最后把折叠踢出去不等它。整块包在自己的 try 里，SQLite 抛错不会吃掉后面的步骤。",
+      "en": "This step is not on the state graph — it is in the finally, and it runs whether the turn closed cleanly, threw, or was aborted by a client disconnect. The order is fixed: release activeTurn, apply the real-reply gate, strip thinking, remove corrective directives, write L2, snapshot the session, run the audit and flush the trace, then fire the fold without waiting for it. The block has its own try, so a SQLite error does not consume the steps after it."
     },
     "mechanism": {
       "zh": "finally 里的顺序是固定的：先放开 activeTurn、turnSeq 加一，再进真回复关口 → 剥 thinking → 摘纠正指令 → appendL2 → persistSession → 旁路审计 → flushTrace → 最后把折叠踢出去(不等)。\n\n真回复关口就是那一行 realReply:message 模式下取 messageTexts.join('\\n').trim(),text 模式下取 state.text.trim()。非空，这一轮才配落库。\n\n非空那一支还顺手做了一件不显眼的事:markActivity。这是每一种会说话的回合——反应、续说、主动——都必经的唯一一个点，所以沉默计时是从她最后一句话开始算的，不是从用户那条消息。空回合走另一支，不打这个点：它什么都没说。\n\n落库前有两次清洗。剥 thinking 只对这一轮(historyStart 之后)做，而且只能在回合结束后做——在飞的签名 thinking 被改会直接 400。摘纠正指令是另一回事:⑥ 推进去的那些 user 角色舞台提示按引用记在 directiveMessages 里，这里从 history 里删掉，再把因此相邻的同角色消息合并回合法的交替。这一步跟 LUNA_CLEAN_HISTORY 无关——它是正确性，不是省 token。\n\nappendL2 里有两处替换。主动回合的 user_text 存空字符串：它的「用户消息」其实是内部舞台提示，原样存进去会在聊天记录里长出一个幽灵用户气泡。assistant_text 存 realReply 而不是 state.text——因为一个出错或短路的回合上 finalize 根本没跑过，那时 state.text 里还是那段顶层泄漏。\n\n空回合那一支只有两行，却是整个回滚:session.history.length = historyStart,内存历史整段砍回回合开始之前，连那条用户消息一起——不然一次重试会让它在窗口里出现两遍。然后把这一轮烧掉的整首歌词额度还回去。\n\n整个持久化块包在自己的 try 里:SQLite 抛错(锁死、只读、磁盘满)只记日志加发一条 persistence_failed,绝不吃掉后面的审计、trace flush 和折叠。\n\n这条关口历史上修过三件事，都写在代码注释里：一，空 assistant 行会毒化召回和重建出来的窗口(「你说了 X,我什么都没说」),而且 A3 之后它每次重载都还在——这就是 401 断供期间她看起来失忆的原因。二，错误或短路的回合上 state.text 里那段顶层泄漏被当成可见回复存了下去。三,v0.45.17:回滚把歌词块带走了，但「已送达」的标记还留着——那首歌的词既不在提示里也不在过去里，而「她读过这首歌」是假的；回滚现在是对称的。",
@@ -7728,8 +13564,8 @@ window.LUNA_DECKS = {
       ]
     },
     "claim": {
-      "zh": "落库不是终点。同一个 finally 的最后一行把 L1 折叠踢出去就不再管它——那是一整次模型调用，不该挂在这条线上。梦更不是这条线的下一步：它是另一台状态机、另一把 key、另一个触发器。",
-      "en": "Persisting is not the end. The last line of the same finally kicks the L1 fold out and stops caring — it is a whole model call, and it does not belong on this line. The dream is not the next step on this line at all: another state machine, another key, another trigger."
+      "zh": "折叠是 finally 最后一行 void 出去的一次模型调用，不挂在这一轮的延迟上。梦不是这条线的下一步：它是另一台状态机、另一把 key、三个独立触发器（退出、菜单手动、Luna 自己调用 enter_dream）。两者共用同一段 maybeFold 实现——回合的尾巴，和梦的第三步。",
+      "en": "The fold is one model call fired with `void` on the last line of the finally, so it never sits on this turn's latency. The dream is not the next step of this line: it is a separate state machine with a separate key and three independent triggers — shutdown, the manual menu entry, and Luna's own enter_dream call. Both share the same maybeFold implementation: the tail of a turn, and the dream's third step."
     },
     "mechanism": {
       "zh": "那个 void 不是装饰。它是「我知道这是个 Promise,而且我故意不等它」的显式记号——去掉它，这一行就变成一个没人管的 Promise,读代码的人分不清是忘了 await 还是有意为之。后面挂的 .catch 干的是另一件事：让它被拒绝时不成为未处理的拒绝。两个记号各管一头，缺一不可。\n\n为什么必须是不等：折叠本身是一整次模型往返(压缩器 prompt,maxTokens 1024)。反应式路径上 ws.ts 用的是 void runTurn(...),本来就没人等；但主动路径是 await runTurn(...),而且整个主动回合跑在主动锁里面——真去 await 折叠，那把锁就要多握住一次压缩往返。\n\n折叠这一刻在算什么:planFold 按 L2 的整轮切，只有「未折叠轮数 > 保留轮数 + 一批」才动手(默认保留 100 轮、一批 10 轮),边界永远落在轮起点，绝不切开 tool_use / tool_result 对。压缩器拿到「当前摘要 + 这批旧对话」重新推导一份带硬上限的摘要(默认 3000 字符),重要度 ≥ 4 的轮被标成 [salient],细节要原样保住。空摘要不写——那会悄悄缩掉活动上下文，留到下次再折。提交是带期望值的：低水位还是折叠开始时那个值才落，所以两条路径撞上也不会互相盖掉。\n\n梦怎么开始：三个触发器——shutdown(退出路径)、manual(菜单里的 dream.enter)、self(她自己在主动回合里调 enter_dream 之后的交接)。enterDream() 是同步的门，在第一个 await 之前就设好，所以并发的调用者不会重叠成两场梦。\n\n梦跑的是同一套 runGraph,八个节点按固定顺序:rate_salience → refine_semantic → refine_layer1 → memory_audit → persona_update → run_diaries → distill_skills → rag_refresh。每一步自己 try/catch,失败只留一条 dream.step,不打断后面的步；每步跑完立刻 flushTrace,中途崩了也不丢已完成的那些。\n\n另一把 key 在 dreamCall 里：两次尝试的级联，先走 summarizer key 那个 provider(梦的活不跟主回复抢配额),空文本或异常才落回默认 provider。而 refine_layer1 调的就是同一个 maybeFold——同一段折叠逻辑，两个入口：回合的尾巴，和梦的第三步。",

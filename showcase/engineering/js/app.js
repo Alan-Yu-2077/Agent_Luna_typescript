@@ -91,8 +91,11 @@
         `<span class="mf-title">${t(b.title)}</span>` + (b.sub ? `<span class="mf-sub">${t(b.sub)}</span>` : ''), d0 + 0.1);
     });
 
+    /* 边一多（主张图里成排的 tick），固定 0.06 的间隔会让最后一笔等到两秒后。
+       ≤20 条边时结果与原来逐字相同，只有超过才压缩。 */
+    const eStep = Math.min(0.06, 1.2 / Math.max(1, (fig.edges || []).length));
     (fig.edges || []).forEach((e, i) => {
-      const d0 = 0.3 + i * 0.06;
+      const d0 = 0.3 + i * eStep;
       const p = e.pts;
       const d = p.length > 2 ? S.elbow(p.map((q) => q.slice()), s(), 1.2) : S.line(p[0][0], p[0][1], p[1][0], p[1][1], s(), 1.2);
       wire(svg, d, 'edge ' + (e.style || ''), d0);
@@ -330,12 +333,17 @@
     } else {
       deckBody.innerHTML = pages
         .map((p, n) => {
-          const fig = p.key === 'mechanism' && d.figure ? '<div class="mf-stage" data-fig="1"></div>' : '';
-          return `<section class="slide"><h3><i>0${n + 1}</i>${t(p.title)}</h3>${fig}${renderPage(p.key, d[p.key])}</section>`;
+          /* 机制图在正文之前（先看形状再读解释）；主张图在正文之后
+             ——那句话是结论，图是紧跟着的举证。 */
+          const mech = p.key === 'mechanism' && d.figure ? '<div class="mf-stage" data-fig="mech"></div>' : '';
+          const claimFig =
+            p.key === 'claim' && d.claimFigure ? '<div class="mf-stage cf-stage" data-fig="claim"></div>' : '';
+          return `<section class="slide"><h3><i>0${n + 1}</i>${t(p.title)}</h3>${mech}${renderPage(p.key, d[p.key])}${claimFig}</section>`;
         })
         .join('');
-      const figHost = deckBody.querySelector('[data-fig]');
-      if (figHost && d.figure) figHost.__fig = d.figure; // 翻到时才画
+      deckBody.querySelectorAll('[data-fig]').forEach((h) => {
+        h.__fig = h.dataset.fig === 'claim' ? d.claimFigure : d.figure; // 翻到时才画
+      });
       pager.innerHTML = pages
         .map((p, n) => `<button class="pdot" type="button" data-p="${n}" title="${t(p.title)}">0${n + 1}</button>`)
         .join('');
@@ -349,7 +357,10 @@
     deck.hidden = false;
     scrim.hidden = false;
     deck.classList.add('enter');
+    /* rAF 在后台标签页里不保证触发——只靠它的话，切走再切回来会看到一个
+       opacity:0 的空面板。补一个定时器兜底，两条路径都只是移除同一个类。 */
     requestAnimationFrame(() => requestAnimationFrame(() => deck.classList.remove('enter')));
+    setTimeout(() => deck.classList.remove('enter'), 120);
     fitAll();
     document.getElementById('deckClose').focus();
   }

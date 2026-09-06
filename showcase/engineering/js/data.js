@@ -1,11 +1,10 @@
 /* ═══════════════════════════════════════════════════════════════
    Luna · 工程图谱 —— 内容层（唯一需要改文案的文件）
 
-   主题：agent harness —— 环绕在 LLM 之外的那套基础设施。
-   不是自创说法：Wikipedia 有词条，LangChain / Databricks 都在用，
-   各家分解高度一致 —— 上下文 / 循环 / 工具 / 控制 / 状态。
-   Luna 在这五支之外多一支「时钟」：标准 harness 只有一个入口
-   （请求进来），她有两个 —— 她自己会醒。
+   主题：agent harness —— 调用 LLM 的那一层基础设施。
+   前五支（上下文 / 循环 / 工具 / 控制 / 状态）沿用通行分解；
+   第六支「时钟」是本项目特有的：除请求驱动之外，还有一个
+   服务端定时器可以发起回合。
 
    分级展开（C4 的做法）：
      L1  一屏：黑盒 + harness + 六个支名
@@ -19,79 +18,79 @@ window.LUNA_MAP = (function () {
   return {
     /* 界面固定文案（data-i18n 取用） */
     ui: {
-      tagline: { zh: '黑盒之外的一切 · agent harness', en: 'Everything outside the black box · agent harness' },
+      tagline: { zh: 'agent harness · 上下文 / 循环 / 工具 / 控制 / 状态 / 时钟', en: 'agent harness · context / loop / tools / control / state / clock' },
       navTree: { zh: '结构', en: 'Structure' },
       navFlow: { zh: '时序', en: 'Sequence' },
-      navStory: { zh: '开发故事 →', en: 'Dev stories →' },
+      navStory: { zh: '开发故事 →', en: 'Dev stories →' }, /* TODO: story/ 仍是占位稿，未定稿前不要挂在顶栏 */
       reopen: { zh: '重看扉页', en: 'Cover' },
-      flip: { zh: '翻开图谱 →', en: 'Open the map →' },
+      flip: { zh: '进入图谱 →', en: 'Open the map →' },
       fig1no: { zh: '图一', en: 'Fig. 1' },
-      fig1title: { zh: '结构 · 黑盒之外有什么', en: 'Structure · what surrounds the box' },
+      fig1title: { zh: '结构 · 系统由哪些构件组成', en: 'Structure · what the system is made of' },
       fig1lede: {
-        zh: '根是一对：点不开的 LLM，和被分解的 Agent system。六支从后者向下扇开，全部展开——叶子点开是构件详页。',
-        en: 'The root is a pair: an LLM you cannot open, and the Agent system that gets decomposed. Six branches fan down from the latter, fully expanded — every leaf opens a component page.',
+        zh: '两个根节点：LLM 是外部服务，没有详页；Agent system 向下展开成六支。叶子是构件，点开是它的详页。',
+        en: 'Two root nodes: the LLM is an external service and has no detail page; the agent system fans out into six branches. Leaves are components, and each opens its own page.',
       },
       fig2no: { zh: '图二', en: 'Fig. 2' },
-      fig2title: { zh: '时序 · 一条消息的一生', en: 'Sequence · the life of one message' },
+      fig2title: { zh: '时序 · 一条消息的处理路径', en: 'Sequence · how one message is processed' },
       fig2lede: {
-        zh: '结构图说「有哪些部件」，这张说「谁在什么时候跟谁讲话」——五条泳道，两条回边。泳道名和每个步骤同样可以点开。',
-        en: 'The structure map says which parts exist; this one says who talks to whom, and when — five lanes, two return edges. Lane names and steps open too.',
+        zh: '五条泳道：一条用户消息从进入到落库的完整路径，含两条回边。泳道名和每个步骤同样可以点开。',
+        en: 'Five lanes: one user message from arrival to persistence, including two return edges. Lane names and steps open too.',
       },
     },
 
     prologue: {
       eyebrow: { zh: '扉页', en: 'Cover' },
-      heading: { zh: '黑盒之外的一切', en: 'Everything outside<br>the black box' },
+      heading: { zh: 'Luna · 工程图谱', en: 'Luna<br>an engineering map' },
       sub: {
-        zh: '模型换得掉，这套东西换不掉 —— 它有个名字：agent harness',
-        en: 'The model is swappable. This part is not. It has a name: the agent harness.',
+        zh: 'TypeScript 单仓，5 个包，约 3.5 万行生产代码与 190 个测试文件（v0.45.18）',
+        en: 'A TypeScript monorepo — 5 packages, ~35k lines of production code, 190 test files (v0.45.18).',
       },
       lead: {
-        zh: '推理是买来的。让它记得住昨天、伸得出手、并且知道什么时候该闭嘴的那一层，是写出来的——这份图谱讲的就是那一层。',
-        en: 'The inference is bought. The layer that lets it remember yesterday, reach into the world, and know when to keep quiet is written — and that layer is what this map is about.',
+        zh: '模型本身是外部服务，不在图上。图上是调用它的那一层：上下文怎么装配、工具循环怎么组织、无人值守时由什么约束它、状态存在哪里。',
+        en: 'The model itself is an external service and is not on the map. What is on the map is the layer that calls it: how context is assembled, how the tool loop is organised, what constrains it when nobody is watching, and where state lives.',
       },
       cards: [
         {
           title: { zh: '怎么读', en: 'How to read it' },
           body: {
-            zh: '两张图：结构与时序。图上带虚下划线的都能点开，是五页以内的构件详页（主张 / 机制 / 契约 / 代码 / 决策），页数因件而异。',
-            en: 'Two figures: structure and sequence. Anything dashed-underlined opens a component page — at most five slides (claim / mechanism / contract / code / decision), fewer where there is less to say.',
+            zh: '两张图：结构（有哪些构件）与时序（一条消息经过哪些步骤）。带虚下划线的节点可以点开，每件一页，分主张 / 机制 / 契约 / 代码 / 决策五屏。',
+            en: 'Two figures: structure (what the parts are) and sequence (what one message goes through). Any dashed-underlined node opens a component page of five slides: claim, mechanism, contract, code, decision.',
           },
         },
         {
-          title: { zh: '六支从哪来', en: 'Where the six come from' },
+          title: { zh: '六支怎么分的', en: 'How the six are divided' },
           body: {
-            zh: '前五支是 agent harness 的通行分解（上下文 · 循环 · 工具 · 控制 · 状态）。第六支「时钟」是 Luna 多出来的——标准 harness 只有一个入口，她有两个。',
-            en: 'Five are the common harness decomposition (context · loop · tools · control · state). The sixth, the clock, is hers — a standard harness has one entry; she has two.',
+            zh: '前五支（上下文 · 循环 · 工具 · 控制 · 状态）沿用 agent harness 的通行分解。第六支「时钟」是本项目特有的：除了请求驱动，还有一个 60 秒的服务端定时器可以发起回合。',
+            en: 'Five (context · loop · tools · control · state) follow the common harness decomposition. The sixth — the clock — is specific to this project: besides request-driven turns, a 60-second server-side timer can start one.',
           },
         },
       ],
       tail: {
-        zh: '每一条主张下面都压着一段真代码。翻开看。',
-        en: 'Every claim here sits on top of real code. Open it.',
+        zh: '每个构件页附一段来自仓库的代码，逐行核对过。',
+        en: 'Every component page carries a verbatim excerpt from the repository, checked line by line.',
       },
     },
 
-    /* 数字口径写在明面上：会数的人一定会数。 */
+    /* 数字口径写在明面上。改图或改代码之后，这一段要跟着核。 */
     footnote: {
-      zh: '数字口径：工具数 = protocol/src/tools.ts 里 ToolName 枚举的成员数（不含注释里出现的字符串）。构件详页 47 个，每一个都带逐字代码片段，全部与仓库当前提交逐行比对通过；其中 31 个另配机制图。图谱随代码走，不随文案走。',
-      en: 'How the numbers are counted: the tool count is the number of members in the ToolName enum in protocol/src/tools.ts — strings appearing in comments do not count. All 47 component pages carry a verbatim code excerpt, each checked line by line against the current commit; 31 of them also carry a mechanism figure. The map follows the code, not the prose.',
+      zh: '计数口径：工具数 28 = packages/protocol/src/tools.ts 中 ToolName 枚举的成员数。构件详页 47 个 = 31 个结构构件 + 5 条泳道 + 11 个时序步骤（「推理」那一步没有详页，它不是本仓库的代码）。每页附一段逐字代码片段并配一张机制图，代码片段已与当前提交逐行比对。仓库：v0.45.18，5 个包。',
+      en: 'How things are counted: 28 tools = members of the ToolName enum in packages/protocol/src/tools.ts. 47 component pages = 31 structural components + 5 lanes + 11 sequence steps (the inference step has no page — it is not this repository\'s code). Each page carries a verbatim code excerpt and a mechanism figure, checked line by line against the current commit. Repository: v0.45.18, 5 packages.',
     },
 
     root: {
-      llm: { label: 'LLM', sub: { zh: '换不掉 · 改不了 · 按 token 付钱', en: 'not swappable here · not editable · billed by token' } },
-      agent: { label: 'Agent system', sub: { zh: '黑盒之外的一切，全是我写的', en: 'everything outside the box — all of it written' } },
+      llm: { label: 'LLM', sub: { zh: '外部服务 · 内部不可见 · 按 token 计费', en: 'external service · internals not visible · billed by token' } },
+      agent: { label: 'Agent system', sub: { zh: '调用模型的那一层 —— 本仓库的代码', en: 'the layer that calls it — this repository' } },
       inLabel: 'IN',
       inSub: { zh: '上下文 + 工具 schema', en: 'context + tool schemas' },
       outLabel: 'OUT',
       outSub: { zh: '文字 · 思考 · 工具调用', en: 'text · thinking · tool calls' },
-      aside: { zh: '整棵树只有 LLM 点不开——那正是「黑盒」的意思。', en: 'The LLM is the one node that will not open. That is what "black box" means.' },
+      aside: { zh: '整棵树只有 LLM 没有详页：它不是本仓库的代码。', en: 'The LLM is the only node without a detail page: it is not this repository\'s code.' },
     },
 
     branches: [
       { id: 'ctx', name: { zh: '上下文', en: 'Context' }, en: 'context management',
         dim: 'CONTEXT ENGINEERING · RAG · VECTOR DB',
-        gist: { zh: '决定什么进得了那扇窗', en: 'what gets through the window' },
+        gist: { zh: '决定每次请求发送哪些内容', en: 'what goes into each request' },
         leaves: [
           { id: 'cached', label: { zh: '缓存前缀', en: 'cached prefix' } },
           { id: 'tail', label: { zh: '未缓存尾部', en: 'uncached tail' } },
@@ -102,7 +101,7 @@ window.LUNA_MAP = (function () {
         ] },
       { id: 'loop', name: { zh: '循环', en: 'Loop' }, en: 'agent loop',
         dim: 'AI WORKFLOWS · AGENT',
-        gist: { zh: '推理 → 行动 → 观察，直到不用再转', en: 'reason → act → observe, until it need not' },
+        gist: { zh: '推理 → 工具 → 结果回灌，至多 8 轮', en: 'reason → tools → results, up to 8 rounds' },
         leaves: [
           { id: 'graph', label: { zh: '六节点状态图', en: 'six-node graph' } },
           { id: 'edge1', label: { zh: '回边 ①', en: 'return edge ①' } },
@@ -112,7 +111,7 @@ window.LUNA_MAP = (function () {
         ] },
       { id: 'tools', name: { zh: '工具', en: 'Tools' }, en: 'tool interface',
         dim: 'TOOL USE · FUNCTION CALLING',
-        gist: { zh: '她伸手够得着的世界', en: 'the world she can reach' },
+        gist: { zh: '28 个工具的定义、并发与调度', en: '28 tools: definition, concurrency, dispatch' },
         leaves: [
           { id: 'count', label: { zh: '工具总数', en: 'the tool surface' } },
           { id: 'speak', label: { zh: '说话也是工具调用', en: 'speaking is a tool call' } },
@@ -122,7 +121,7 @@ window.LUNA_MAP = (function () {
         ] },
       { id: 'guard', name: { zh: '控制', en: 'Control' }, en: 'control mechanisms',
         dim: 'GUARDRAILS · OBSERVABILITY',
-        gist: { zh: '可信 · 可审 · 关得住', en: 'trustworthy · auditable · contained' },
+        gist: { zh: '能力门、安全闸、护栏与审计轨', en: 'capability gates, safety gates, guardrails, audit trail' },
         leaves: [
           { id: 'capgate', label: { zh: '能力门', en: 'capability gates' } },
           { id: 'proactgate', label: { zh: '主动安全门', en: 'proactive safety gate' } },
@@ -133,7 +132,7 @@ window.LUNA_MAP = (function () {
         ] },
       { id: 'state', name: { zh: '状态', en: 'State' }, en: 'state persistence',
         dim: 'MEMORY · COST OPTIMIZATION',
-        gist: { zh: '她凭什么记得昨天', en: 'how she remembers yesterday' },
+        gist: { zh: '四层记忆，一个 SQLite 文件', en: 'four memory layers, one SQLite file' },
         leaves: [
           { id: 'realreply', label: { zh: '真回复关口', en: 'the real-reply gate' } },
           { id: 'fold', label: { zh: 'L1 折叠', en: 'L1 fold' } },
@@ -141,9 +140,9 @@ window.LUNA_MAP = (function () {
           { id: 'dream', label: { zh: '梦', en: 'the dream' } },
           { id: 'sqlite', label: { zh: 'SQLite', en: 'SQLite' } },
         ] },
-      { id: 'clock', name: { zh: '时钟', en: 'Clock' }, en: "Luna's own", star: true,
+      { id: 'clock', name: { zh: '时钟', en: 'Clock' }, en: 'scheduled wakings', star: true,
         dim: 'AUTOMATION',
-        gist: { zh: '标准 harness 只有一个入口，她有两个', en: 'a standard harness has one entry; she has two' },
+        gist: { zh: '服务端定时器：回合的第二个入口', en: 'a server-side timer: the second entry to a turn' },
         leaves: [
           { id: 'beat', label: { zh: '60s 心跳', en: 'the heartbeat' } },
           { id: 'ladder', label: { zh: '沉默阶梯', en: 'the silence ladder' } },
@@ -153,8 +152,8 @@ window.LUNA_MAP = (function () {
     ],
 
     /* ══ 图二 · 一条消息的一生（时序泳道）══════════════════
-       五条泳道。只画一条消息的一生——主动回合是另一条消息的
-       一生，塞进来只会在左上角打结。
+       五条泳道，只画反应式路径。主动回合是另一条路径，画进来
+       会与这一条在左上角重叠。
        两条回边都回到 ②（代码里 append_results 与 finalize 都
        return 'build_request'），画成上方两道嵌套的弧，不与任何
        斜线相交。                                            */
@@ -162,15 +161,15 @@ window.LUNA_MAP = (function () {
       w: 1560,
       h: 680,
       laneX0: 224,
-      /* 五条泳道本身也是构件——每一条都能点开详页。
-         LLM 那条讲的是**边界**（我们对黑盒知道的全部），
-         不是黑盒内部：图上那个盒子仍然点不开。 */
+      /* 五条泳道本身也是构件，每一条都能点开详页。
+         LLM 那条讲的是接口边界（ProviderRequest / ProviderEvent），
+         不是模型内部：图上那个盒子仍然没有详页。 */
       lanes: [
-        { id: 'lane-user', y: 104, name: { zh: '用户 · WS', en: 'User · WS' }, sub: 'chat.send / turn.result', deck: { zh: '泳道 · 一条 WebSocket，一份 Zod 契约', en: 'Lane · one socket, one Zod contract' } },
-        { id: 'lane-harness', y: 300, name: 'Harness', sub: { zh: '我写的那套', en: 'the part I wrote' }, deck: { zh: '泳道 · 六节点状态图与两条回边', en: 'Lane · six nodes, two return edges' } },
-        { id: 'lane-llm', y: 424, name: 'LLM', sub: { zh: '黑盒', en: 'black box' }, deck: { zh: '泳道 · 边界——我们对黑盒知道的全部', en: 'Lane · the boundary, all we know of it' } },
+        { id: 'lane-user', y: 104, name: { zh: '用户 · WS', en: 'User · WS' }, sub: 'chat.send / turn.result', deck: { zh: '泳道 · WebSocket 与 Zod 契约', en: 'Lane · the socket and its Zod contract' } },
+        { id: 'lane-harness', y: 300, name: 'Harness', sub: { zh: '本仓库', en: 'this repository' }, deck: { zh: '泳道 · 六节点状态图与两条回边', en: 'Lane · six nodes, two return edges' } },
+        { id: 'lane-llm', y: 424, name: 'LLM', sub: { zh: '外部服务', en: 'external service' }, deck: { zh: '泳道 · provider 接口边界', en: 'Lane · the provider boundary' } },
         { id: 'lane-tools', y: 516, name: { zh: '工具', en: 'Tools' }, sub: '28', deck: { zh: '泳道 · 并发策略与安全门', en: 'Lane · concurrency and the safety gate' } },
-        { id: 'lane-store', y: 600, name: { zh: '存储', en: 'Store' }, sub: 'SQLite', deck: { zh: '泳道 · 一个文件装下她的全部', en: 'Lane · one file holds all of her' } },
+        { id: 'lane-store', y: 600, name: { zh: '存储', en: 'Store' }, sub: 'SQLite', deck: { zh: '泳道 · SQLite：唯一的持久层', en: 'Lane · SQLite, the only persistent layer' } },
       ],
       steps: [
         { id: 'msg', x: 306, y: 104, label: { zh: '一条消息', en: 'a message' }, meta: 'chat.send' },
@@ -212,12 +211,12 @@ window.LUNA_MAP = (function () {
           at: [600, 140],
         },
       ],
-      note: { x: 224, y: 644, text: { zh: '这条线只走一次；两条回边让它在中间打转，直到不用再转。', en: 'The line runs once; two return edges keep it circling in the middle until it need not.' } },
+      note: { x: 224, y: 644, text: { zh: '主路径走一次；两条回边在中段循环，受轮数与调用数上限约束。', en: 'The main path runs once; two return edges loop in the middle, bounded by the round and call caps.' } },
     },
 
     /* ══ L3 · 构件详页 ══════════════════════════════════════
-       由 js/decks.js 填充（六支各一个 agent 核实代码后写成）。
-       缺哪一页就不出哪一页——页数因件而异是预期行为。 */
+       由 js/decks.js 填充，每一件都对着仓库代码核实后写成。
+       缺哪一页就不出哪一页（目前 45/47 是满 5 页）。 */
     decks: window.LUNA_DECKS || {},
   };
 })();

@@ -882,3 +882,17 @@ body {
 .fig-lede { font-size: 15px; }
 .pro-body { font-size: 15px; }
 .pro-card p { font-size: 14px; }
+
+/* ═══ 主张页的对照图 ══════════════════════════════════════════
+   跟在结论后面，不在前面：那句话是主张，这张图是紧跟着的举证。
+   ghost = 不存在 / 被撤掉的那个块（刻意不复用 blackbox 的斜纹，
+   斜纹在这套图里已经专指「点不开的外部服务」）。 */
+.cf-stage {
+  margin: 20px 0 2px;
+}
+.wires .box-ghost {
+  stroke: var(--pencil-2);
+  stroke-width: 1.4;
+  stroke-dasharray: 7 5;
+  opacity: 0.72;
+}
